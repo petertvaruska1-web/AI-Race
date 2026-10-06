@@ -343,16 +343,71 @@ def test_chat_reply_survives_default_budget_on_a_tiny_context(tiny_lm):
 def test_lm_exposes_model_tok_device_ctx_len_and_leaves_grad_alone(tiny_lm, tiny_tok):
     assert tiny_lm.model.shape.ctx_len == tiny_lm.ctx_len == 64
     assert tiny_lm.tok is tiny_tok and tiny_lm.device == torch.device("cpu")
-    assert not tiny_lm.model.training
     _gen(tiny_lm, [tiny_tok.encode("Hi")], max_new_tokens=2)
     assert torch.is_grad_enabled() and all(p.grad is None for p in tiny_lm.model.parameters())
 
 
-def test_default_device_follows_pick_device_and_batch_size_is_32(tiny_tok, monkeypatch):
-    monkeypatch.setenv("AIRACE_DEVICE", "cpu")
+def test_default_device_is_the_models_own_and_nothing_is_taken_over(tiny_tok):
+    # No AIRACE_DEVICE override on purpose: on a CUDA machine pick_device() would say "cuda", and a
+    # CPU model must still stay on the CPU.
     model = Transformer(ModelShape(2, 64, 64), tiny_tok.vocab_size)
     lm = TorchLM(model, tiny_tok)
-    assert lm.device == torch.device("cpu") and lm.batch_size == 32 and lm.model is model
+    assert lm.model is model and lm.batch_size == 32
+    assert lm.device == torch.device("cpu")
+    assert all(p.device.type == "cpu" for p in model.parameters())
+    assert model.training  # building the wrapper does not flip a training model to eval
+    model.eval()
+    TorchLM(model, tiny_tok)
+    assert not model.training
+    assert _gen(lm, [tiny_tok.encode("Hi")], max_new_tokens=2)[0].tokens
+
+
+@pytest.mark.parametrize("start_training", [True, False])
+def test_calls_run_in_eval_mode_and_restore_the_callers_mode(
+    tiny_lm, tiny_tok, monkeypatch, start_training
+):
+    model = tiny_lm.model
+    modes = []
+    real = model.forward
+
+    def spy(*a, **k):
+        modes.append(model.training)
+        return real(*a, **k)
+
+    monkeypatch.setattr(model, "forward", spy)
+    prompts = [tiny_tok.encode("Once upon a time"), tiny_tok.encode("The cat")]
+    ctxs, conts = [tiny_tok.encode("The dog")], [tiny_tok.encode(" runs fast")]
+
+    model.eval()
+    want_gen = _gen(tiny_lm, prompts, max_new_tokens=6)
+    want_score = tiny_lm.score_continuations(ctxs, conts)
+    model.train(start_training)
+    modes.clear()
+    got_gen = _gen(tiny_lm, prompts, max_new_tokens=6)
+    got_score = tiny_lm.score_continuations(ctxs, conts)
+
+    assert modes and not any(modes)  # every forward ran in eval mode
+    assert model.training is start_training  # and the caller's mode is back
+    assert got_gen == want_gen and got_score == want_score
+    # chat_reply and complete go through generate(), so they are covered too.
+    tiny_lm.chat_reply([("user", "hi")], max_new_tokens=3)
+    tiny_lm.complete("Once", max_new_tokens=3)
+    assert model.training is start_training
+
+
+@pytest.mark.parametrize("start_training", [True, False])
+def test_mode_is_restored_even_when_a_call_fails(tiny_lm, tiny_tok, monkeypatch, start_training):
+    def boom(*a, **k):
+        raise RuntimeError("model failed")
+
+    monkeypatch.setattr(tiny_lm.model, "forward", boom)
+    tiny_lm.model.train(start_training)
+    with pytest.raises(RuntimeError, match="model failed"):
+        _gen(tiny_lm, [tiny_tok.encode("Hi")])
+    assert tiny_lm.model.training is start_training
+    with pytest.raises(RuntimeError, match="model failed"):
+        tiny_lm.score_continuations([tiny_tok.encode("The dog")], [tiny_tok.encode(" runs")])
+    assert tiny_lm.model.training is start_training
 
 
 @pytest.mark.gpu
@@ -371,3 +426,18 @@ def test_cuda_bf16_path_tracks_the_cpu_path(sharp_lm, tiny_tok):
     want = [s.sum_logprob for s in sharp_lm.score_continuations(ctxs, conts)]
     got = [s.sum_logprob for s in gpu.score_continuations(ctxs, conts)]
     assert got == pytest.approx(want, rel=0.05)  # bf16 autocast, so not bit-identical
+
+
+@pytest.mark.gpu
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
+def test_cuda_device_is_inherited_or_moved_only_when_explicit(tiny_tok):
+    model = Transformer(ModelShape(2, 64, 64), tiny_tok.vocab_size)
+    lm = TorchLM(model, tiny_tok, torch.device("cpu"))
+    assert next(model.parameters()).device.type == "cpu"
+    lm = TorchLM(model, tiny_tok, torch.device("cuda"))  # an explicit device moves the model
+    assert lm.device.type == "cuda" and next(model.parameters()).device.type == "cuda"
+    inherited = TorchLM(model, tiny_tok)  # no device: the model's own, nothing moves
+    assert inherited.device.type == "cuda" and next(model.parameters()).device.type == "cuda"
+    assert inherited.generate(
+        [tiny_tok.encode("Hi")], max_new_tokens=2, temperature=0, top_p=1, seed=0
+    )

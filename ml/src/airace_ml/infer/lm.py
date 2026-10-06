@@ -16,14 +16,13 @@ autograd graph alive), with bf16 autocast on CUDA. All randomness comes from a p
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
 import torch
 from torch import Tensor
 
-from airace_ml.device import pick_device
 from airace_ml.model.transformer import Transformer
 from airace_ml.tokenizer import Role, Tok, encode_chat, encode_doc
 
@@ -131,10 +130,14 @@ class TorchLM:
     """A :class:`~airace_ml.model.transformer.Transformer` and its tokenizer behind
     :class:`LanguageModel`.
 
-    ``device`` defaults to :func:`~airace_ml.device.pick_device`; the model is moved there and put
-    in eval mode. At most ``batch_size`` sequences go through the model at once; longer lists are
-    processed in chunks. Seeded sampling draws from one generator per call, so a given call is
-    reproducible, but a prompt's samples depend on the other prompts in the same call.
+    The wrapper does not take over the model. ``device`` defaults to the device the model is
+    already on; only an explicit ``device`` moves it. Building a ``TorchLM`` leaves the model's
+    train/eval mode alone, and each :meth:`generate` or :meth:`score_continuations` call runs the
+    model in eval mode and puts the caller's mode back afterwards (even on error), so a trainer can
+    probe a model mid-training. At most ``batch_size`` sequences go through the model at once;
+    longer lists are processed in chunks. Seeded sampling draws from one generator per call, so a
+    given call is reproducible, but a prompt's samples depend on the other prompts in the same
+    call.
     """
 
     def __init__(
@@ -146,8 +149,12 @@ class TorchLM:
     ) -> None:
         if batch_size < 1:
             raise ValueError(f"batch_size must be at least 1, got {batch_size}")
-        self.device = device if device is not None else pick_device()
-        self.model = model.to(self.device).eval()
+        if device is None:
+            device = next(model.parameters()).device
+        else:
+            model.to(device)
+        self.device = device
+        self.model = model
         self.tok = tok
         self.batch_size = batch_size
 
@@ -231,9 +238,12 @@ class TorchLM:
         rng = torch.Generator(device=self.device)
         rng.manual_seed(seed)
         out: list[Generation] = []
-        for lo in range(0, len(fitted), self._chunk_size()):
-            chunk = fitted[lo : lo + self._chunk_size()]
-            out.extend(self._generate_chunk(chunk, max_new_tokens, temperature, top_p, stops, rng))
+        with self._eval_mode():
+            for lo in range(0, len(fitted), self._chunk_size()):
+                chunk = fitted[lo : lo + self._chunk_size()]
+                out.extend(
+                    self._generate_chunk(chunk, max_new_tokens, temperature, top_p, stops, rng)
+                )
         return out
 
     def _generate_chunk(
@@ -331,10 +341,11 @@ class TorchLM:
                 raise ValueError("empty context")
             if cont:
                 work.append((i, *self._fit_pair(ctx, cont)))
-        for lo in range(0, len(work), self._chunk_size()):
-            chunk = work[lo : lo + self._chunk_size()]
-            for (i, _, cont), total in zip(chunk, self._score_chunk(chunk), strict=True):
-                results[i] = ContinuationScore(total, len(cont))
+        with self._eval_mode():
+            for lo in range(0, len(work), self._chunk_size()):
+                chunk = work[lo : lo + self._chunk_size()]
+                for (i, _, cont), total in zip(chunk, self._score_chunk(chunk), strict=True):
+                    results[i] = ContinuationScore(total, len(cont))
         return results
 
     def _fit_pair(self, ctx: Sequence[int], cont: Sequence[int]) -> tuple[list[int], list[int]]:
@@ -369,6 +380,16 @@ class TorchLM:
         if self.batch_size < 1:
             raise ValueError(f"batch_size must be at least 1, got {self.batch_size}")
         return self.batch_size
+
+    @contextlib.contextmanager
+    def _eval_mode(self) -> Iterator[None]:
+        """Run the model in eval mode, then restore whatever mode the caller had."""
+        was_training = self.model.training
+        self.model.eval()
+        try:
+            yield
+        finally:
+            self.model.train(was_training)
 
     def _autocast(self) -> contextlib.AbstractContextManager:
         if self.device.type == "cuda":
