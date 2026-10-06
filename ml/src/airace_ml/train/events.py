@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass
 from typing import Literal
 
@@ -44,6 +45,22 @@ class Done:
 TrainEvent = Progress | HeldoutEval | Sample | Instability | Done
 
 
+def _json_safe(value):
+    """``value`` with every non-finite float replaced by None, recursing into dicts and lists."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def event_to_dict(e: TrainEvent) -> dict:
-    """The event as a plain dict; ``"type"`` is the lowercase class name (e.g. ``"heldouteval"``)."""
-    return {"type": type(e).__name__.lower(), **asdict(e)}
+    """The event as a plain dict that is valid strict JSON.
+
+    ``"type"`` is the lowercase class name (e.g. ``"heldouteval"``). NaN and infinite floats, which
+    ``JSON.parse`` rejects, become ``None`` (JSON ``null``), including inside ``losses`` and
+    ``summary``.
+    """
+    return _json_safe({"type": type(e).__name__.lower(), **asdict(e)})

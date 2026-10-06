@@ -171,6 +171,191 @@ def test_validate_accepts_a_full_config():
     ).validate()
 
 
+_NAN = float("nan")
+
+
+@pytest.mark.parametrize(
+    ("over", "field_name"),
+    [
+        # seed: an int >= 0 (bool is not an int here)
+        ({"seed": -1}, "seed"),
+        ({"seed": True}, "seed"),
+        ({"seed": 1.5}, "seed"),
+        ({"seed": "1"}, "seed"),
+        ({"seed": None}, "seed"),
+        # run_id ends up in file paths
+        ({"run_id": ""}, "run_id"),
+        ({"run_id": "../../x"}, "run_id"),
+        ({"run_id": "a/b"}, "run_id"),
+        ({"run_id": "a\\b"}, "run_id"),
+        ({"run_id": "a b"}, "run_id"),
+        ({"run_id": ".hidden"}, "run_id"),
+        ({"run_id": "-x"}, "run_id"),
+        ({"run_id": "x" * 65}, "run_id"),
+        ({"run_id": "ok\n"}, "run_id"),
+        ({"run_id": 7}, "run_id"),
+        ({"run_id": None}, "run_id"),
+        # int fields must be ints
+        ({"token_budget": 32768.5}, "token_budget"),
+        ({"token_budget": 32768.0}, "token_budget"),
+        ({"token_budget": "32768"}, "token_budget"),
+        ({"token_budget": True}, "token_budget"),
+        ({"token_budget": None}, "token_budget"),
+        ({"batch_tokens": 16384.5}, "batch_tokens"),
+        ({"batch_tokens": "16384"}, "batch_tokens"),
+        ({"batch_tokens": True}, "batch_tokens"),
+        ({"batch_tokens": None}, "batch_tokens"),
+        # float fields must be real numbers
+        ({"replay": "0.1"}, "replay"),
+        ({"replay": True}, "replay"),
+        ({"replay": None}, "replay"),
+        ({"replay": _NAN}, "replay"),
+        ({"boldness": "0.5"}, "boldness"),
+        ({"boldness": True}, "boldness"),
+        ({"boldness": None}, "boldness"),
+        ({"purchases": {"web": "0.5"}}, "purchases"),
+        ({"purchases": {"web": True}}, "purchases"),
+        ({"purchases": {"web": None}}, "purchases"),
+        ({"purchases": {"web": _NAN}}, "purchases"),
+        ({"mixture": {"web": "1"}}, "mixture"),
+        ({"mixture": {"web": True}}, "mixture"),
+        ({"mixture": {"web": None}}, "mixture"),
+        ({"mixture": {"web": _NAN}}, "mixture"),
+        ({"mixture": {"web": float("inf")}}, "mixture"),
+        ({"finishing_mixture": {"web": "1"}}, "finishing_mixture"),
+        # containers
+        ({"mixture": None}, "mixture"),
+        ({"mixture": [("web", 1.0)]}, "mixture"),
+        ({"finishing_mixture": [("web", 1.0)]}, "finishing_mixture"),
+        ({"purchases": None}, "purchases"),
+        ({"purchases": [("web", 0.5)]}, "purchases"),
+        ({"notebook": None}, "notebook"),
+        ({"notebook": "abc"}, "notebook"),
+        ({"coaching": None}, "coaching"),
+        ({"coaching": {"a": "b"}}, "coaching"),
+        ({"coaching": [{"prompt": "hi", "reply": "yo"}]}, "coaching"),
+        ({"coaching": ["ab"]}, "coaching"),
+        ({"coaching": [("a", 1)]}, "coaching"),
+        ({"coaching": [("a", "b", "c")]}, "coaching"),
+        ({"probe_prompts": None}, "probe_prompts"),
+        ({"probe_prompts": [1]}, "probe_prompts"),
+        ({"parent_dir": 5}, "parent_dir"),
+        ({"parent_dir": ""}, "parent_dir"),
+        # replay needs somewhere to replay from
+        ({"replay": 0.3}, "parent_dir"),
+        ({"replay": 0.3, "parent_dir": None}, "parent_dir"),
+        # nested objects
+        ({"shape": None}, "shape"),
+        ({"shape": {"n_layer": 2, "d_model": 64, "ctx_len": 64}}, "shape"),
+        ({"shape": ModelShape("2", 64, 64)}, "n_layer"),
+        ({"shape": ModelShape(2, 64, 64.0)}, "ctx_len"),
+        ({"prep": None}, "prep"),
+        ({"prep": PrepConfig(dedup="yes")}, "dedup"),
+        ({"prep": PrepConfig(fact_check=1)}, "fact_check"),
+    ],
+)
+def test_validate_rejects_malformed_values_with_a_value_error(over, field_name):
+    with pytest.raises(ValueError, match=field_name):
+        _cfg(**over).validate()
+
+
+def test_validate_accepts_replay_with_a_parent_and_int_valued_numbers():
+    _cfg(replay=0.3, parent_dir="runs/parent").validate()
+    _cfg(replay=0, boldness=1, purchases={"web": 1}, mixture={"web": 1, "code": 2}).validate()
+    _cfg(run_id="Run_1.v2-b", seed=0).validate()
+    _cfg(run_id="x" * 64).validate()
+
+
+def _doc(**over):
+    """A valid config document as a dict, with fields overridden or (value ``...``) removed."""
+    doc = json.loads(_cfg().to_json())
+    for key, value in over.items():
+        if value is ...:
+            del doc[key]
+        else:
+            doc[key] = value
+    return doc
+
+
+@pytest.mark.parametrize(
+    ("over", "field_name"),
+    [
+        # coaching pairs must be lists of exactly two strings, never coerced
+        ({"coaching": [{"prompt": "hi", "reply": "yo"}]}, "coaching"),
+        ({"coaching": ["ab"]}, "coaching"),
+        ({"coaching": [["a"]]}, "coaching"),
+        ({"coaching": [["a", "b", "c"]]}, "coaching"),
+        ({"coaching": [["a", 1]]}, "coaching"),
+        ({"coaching": [None]}, "coaching"),
+        ({"coaching": None}, "coaching"),
+        ({"coaching": "ab"}, "coaching"),
+        ({"coaching": {"a": "b"}}, "coaching"),
+        # other containers
+        ({"notebook": None}, "notebook"),
+        ({"notebook": "abc"}, "notebook"),
+        ({"probe_prompts": None}, "probe_prompts"),
+        ({"mixture": None}, "mixture"),
+        ({"mixture": [["web", 1.0]]}, "mixture"),
+        ({"purchases": None}, "purchases"),
+        ({"purchases": ["web"]}, "purchases"),
+        ({"finishing_mixture": ["web"]}, "finishing_mixture"),
+        # nested objects: shape
+        ({"shape": None}, "shape"),
+        ({"shape": [2, 64, 64]}, "shape"),
+        ({"shape": "2x64x64"}, "shape"),
+        ({"shape": {"n_layer": 2, "d_model": 64}}, "ctx_len"),
+        ({"shape": {}}, "shape"),
+        ({"shape": {"n_layer": 2, "d_model": 64, "ctx_len": 64, "extra": 1}}, "shape"),
+        # nested objects: prep
+        ({"prep": None}, "prep"),
+        ({"prep": ["standard"]}, "prep"),
+        ({"prep": {"cleaning": "standard", "bogus": True}}, "prep"),
+        ({"prep": {"cleaning": "extreme"}}, "prep"),
+        ({"prep": {"cleaning": ["standard"]}}, "prep"),
+        ({"prep": {"variety": "wild"}}, "prep"),
+    ],
+)
+def test_from_json_rejects_malformed_documents_with_a_value_error(over, field_name):
+    with pytest.raises(ValueError, match=field_name):
+        TrainRunConfig.from_json(json.dumps(_doc(**over)))
+
+
+def test_from_json_accepts_nulls_only_where_allowed_and_defaults_when_absent():
+    c = TrainRunConfig.from_json(json.dumps(_doc(finishing_mixture=None, parent_dir=None)))
+    assert c.finishing_mixture is None and c.parent_dir is None
+    c = TrainRunConfig.from_json(
+        json.dumps(
+            _doc(coaching=..., notebook=..., prep=..., purchases=..., probe_prompts=..., replay=...)
+        )
+    )
+    assert c.coaching == [] and c.prep == PrepConfig() and c.replay == 0.0
+    c.validate()
+
+
+def test_from_json_then_validate_catches_what_the_structure_check_lets_through():
+    # Wrong types inside scalar fields are validate()'s job; both must end in a ValueError.
+    for over, name in [
+        ({"token_budget": "32768"}, "token_budget"),
+        ({"token_budget": 32768.5}, "token_budget"),
+        ({"seed": -3}, "seed"),
+        ({"run_id": "../../x"}, "run_id"),
+        ({"replay": 0.3}, "parent_dir"),
+        ({"prep": {"dedup": "no"}}, "dedup"),
+        ({"shape": {"n_layer": "2", "d_model": 64, "ctx_len": 64}}, "n_layer"),
+        ({"mixture": {"web": "1"}}, "mixture"),
+    ]:
+        c = TrainRunConfig.from_json(json.dumps(_doc(**over)))
+        with pytest.raises(ValueError, match=name):
+            c.validate()
+
+
+def test_from_json_malformed_json_is_a_value_error():
+    with pytest.raises(ValueError):
+        TrainRunConfig.from_json("{not json")
+    with pytest.raises(ValueError):
+        TrainRunConfig.from_json("")
+
+
 def test_config_json_roundtrip_restores_tuples_and_nested_objects():
     c = _cfg(
         finishing_mixture={"creative": 1.0},
@@ -239,8 +424,11 @@ def test_spike_detector_needs_both_conditions():
 
 def test_spike_detector_state_roundtrip_resumes_exactly():
     losses = [3.0 - i * 0.002 + (0.05 if i % 7 == 0 else 0.0) for i in range(300)]
+    losses[200] = 30.0  # a real spike after the resume point
+    losses[250] = float("nan")
     full = SpikeDetector(warmup_steps=20)
     full_flags = [full.update(i, x) for i, x in enumerate(losses)]
+    assert [i for i, flagged in enumerate(full_flags) if flagged] == [200, 250]
 
     first = SpikeDetector(warmup_steps=20)
     for i, x in enumerate(losses[:150]):
@@ -249,7 +437,8 @@ def test_spike_detector_state_roundtrip_resumes_exactly():
     resumed.load_state(json.loads(json.dumps(first.state())))
     assert resumed.state() == first.state()
     tail = [resumed.update(i, x) for i, x in enumerate(losses[150:], start=150)]
-    assert tail == full_flags[150:] and resumed.state() == full.state()
+    assert tail == full_flags[150:] and tail[200 - 150] and tail[250 - 150]
+    assert resumed.state() == full.state()
 
 
 def test_event_to_dict_every_event_is_json_safe():
@@ -268,3 +457,32 @@ def test_event_to_dict_every_event_is_json_safe():
     assert event_to_dict(events[1])["losses"] == {"web": 3.1, "code": 4.2}
     assert event_to_dict(events[4])["summary"] == {"steps": 10, "final_loss": 2.1}
     assert event_to_dict(events[3])["action"] == "rollback"
+
+
+def test_event_to_dict_maps_non_finite_floats_to_null_so_the_json_is_strict():
+    inf, nan = float("inf"), float("nan")
+    events = [
+        Progress(1, 10, 100, nan, 1e-3),
+        Progress(1, 10, 100, 2.5, inf),
+        HeldoutEval(5, {"web": nan, "code": -inf, "books": 3.0}),
+        Done("unstable_stopped", {"final_loss": inf, "history": [1.0, nan, {"deep": -inf}]}),
+        Instability(7, "stopped", nan),
+    ]
+    for e in events:
+        text = json.dumps(event_to_dict(e), allow_nan=False)  # raises on NaN / Infinity
+        assert "NaN" not in text and "Infinity" not in text
+    assert event_to_dict(events[0])["loss"] is None and event_to_dict(events[0])["lr"] == 1e-3
+    assert event_to_dict(events[1])["lr"] is None and event_to_dict(events[1])["loss"] == 2.5
+    assert event_to_dict(events[2])["losses"] == {"web": None, "code": None, "books": 3.0}
+    assert event_to_dict(events[3])["summary"] == {
+        "final_loss": None,
+        "history": [1.0, None, {"deep": None}],
+    }
+    assert event_to_dict(events[4])["lr_scale"] is None
+    assert event_to_dict(events[3])["type"] == "done"
+
+
+def test_event_to_dict_does_not_mutate_the_event():
+    e = Done("completed", {"final_loss": float("inf"), "steps": 3})
+    event_to_dict(e)
+    assert e.summary["final_loss"] == float("inf")
