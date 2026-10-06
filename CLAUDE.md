@@ -27,8 +27,10 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 - `data/`: generated build outputs, gitignored. Never commit corpora or checkpoints.
 
 ## Commands
-- ML tests: `cd ml && uv run pytest`
-- ML lint: `cd ml && uv run ruff check .`
+- `uv` is installed with `pip --user` and is not on PATH here, so every uv command is run as `python -m uv`.
+- ML setup (installs Python 3.13 and CUDA torch): `cd ml && python -m uv sync`
+- ML tests: `cd ml && python -m uv run pytest`
+- ML lint: `cd ml && python -m uv run ruff check .`
 - (More commands are added here as they come to exist.)
 
 ## Conventions
