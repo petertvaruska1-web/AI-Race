@@ -7,6 +7,7 @@ from airace_ml.data.corpus import DATASET_IDS, Corpus, DocTags, write_corpus
 from airace_ml.data.prep import PrepConfig, eligible_docs
 from airace_ml.data.sampler import DocPool, MixtureError, MixtureSampler, load_pools
 from airace_ml.paths import corpus_dir
+from airace_ml.tokenizer import encode_chat, encode_doc
 
 
 def _pool(n, length=10, topics=None):
@@ -168,3 +169,51 @@ def test_all_dataset_ids_can_be_pooled(tiny_data_root):
     s = MixtureSampler(pools, weights, seq_len=32, seed=0)
     s.next_batch(64)
     assert all(v > 0 for v in s.stats().values())
+
+
+def test_load_pools_output_composes_with_zero_weight_entries(tiny_data_root):
+    weights = {"web": 0.7, "books": 0.3, "code": 0.0, "notebook": 0.0}
+    pools = load_pools(tiny_data_root, weights, PrepConfig(), {}, {})
+    assert set(pools) == {"web", "books"}
+    s = MixtureSampler(pools, weights, seq_len=32, seed=0)
+    s.next_batch(16)
+    assert s.stats()["web"] > 0 and s.stats()["books"] > 0 and "code" not in s.stats()
+    s.set_weights({"web": 0.5, "books": 0.5, "code": 0.0, "creative": 0.0})
+    s.next_batch(4)
+
+def test_missing_pool_only_matters_with_positive_weight():
+    pools = {"a": _pool(3)}
+    MixtureSampler(pools, {"a": 1.0, "gone": 0.0}, seq_len=16, seed=0)
+    with pytest.raises(MixtureError, match="gone.*not loaded"):
+        MixtureSampler(pools, {"a": 1.0, "gone": 0.1}, seq_len=16, seed=0)
+    for bad in (-0.5, float("nan"), float("inf")):  # invalid weights are errors even when unloaded
+        with pytest.raises(MixtureError, match="gone"):
+            MixtureSampler(pools, {"a": 1.0, "gone": bad}, seq_len=16, seed=0)
+    s = MixtureSampler(pools, {"a": 1.0}, seq_len=16, seed=0)
+    with pytest.raises(MixtureError, match="gone"):
+        s.set_weights({"a": 1.0, "gone": 2.0})
+    s.set_weights({"a": 1.0, "gone": 0.0})
+
+def test_blank_documents_are_dropped_from_custom_pools(tiny_tok):
+    blank = [
+        [],
+        encode_doc(tiny_tok, ""),  # just <|bos|>
+        encode_chat(tiny_tok, [("user", ""), ("ai", "")]),  # only role and end tokens
+        [tiny_tok.bos_id, tiny_tok.end_id],
+    ]
+    pool = DocPool.from_docs(blank)
+    assert len(pool) == 0
+    with pytest.raises(MixtureError, match="notebook"):
+        MixtureSampler({"notebook": pool}, {"notebook": 1.0}, seq_len=16, seed=0)
+    real = encode_doc(tiny_tok, "The cat sat on the mat.")
+    mixed = DocPool.from_docs([blank[1], real, blank[0], blank[2]])
+    assert len(mixed) == 1
+    assert mixed.sample_doc(np.random.default_rng(0)).tolist() == real
+    s = MixtureSampler({"notebook": mixed}, {"notebook": 1.0}, seq_len=16, seed=0)
+    assert (s.next_batch(2)[0] != tiny_tok.pad_id).all()
+
+def test_blank_notebook_through_load_pools_is_unsampleable(tiny_data_root, tiny_tok):
+    custom = {"notebook": [encode_doc(tiny_tok, ""), [tiny_tok.bos_id]]}
+    pools = load_pools(tiny_data_root, {"web": 0.5, "notebook": 0.5}, PrepConfig(), {}, custom)
+    with pytest.raises(MixtureError, match="notebook"):
+        MixtureSampler(pools, {"web": 0.5, "notebook": 0.5}, seq_len=16, seed=0)

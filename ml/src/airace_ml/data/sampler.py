@@ -9,6 +9,11 @@ import numpy as np
 from airace_ml.data.corpus import CUSTOM_DATASET_IDS, DATASET_IDS, Corpus
 from airace_ml.data.prep import PrepConfig, eligible_docs
 from airace_ml.paths import corpus_dir
+from airace_ml.tokenizer import SPECIAL_TOKENS
+
+# Ids below this are framing tokens (<|pad|> <|bos|> <|end|> <|user|> <|ai|>) that carry no text.
+# A document made only of them is what encoding blank text produces, e.g. `[<|bos|>]`.
+_FRAMING_IDS = SPECIAL_TOKENS.index("<|ai|>") + 1
 
 
 class MixtureError(ValueError):
@@ -18,8 +23,11 @@ class MixtureError(ValueError):
 class DocPool:
     """The documents one dataset offers a model, after preparation and purchase filtering.
 
-    Empty documents are dropped. A *balanced* pool draws a topic uniformly among the topics that
-    are present, then a document of that topic; otherwise every document is equally likely.
+    Empty documents are dropped, and so (in :meth:`from_docs`) are documents with no content
+    token, i.e. made only of the framing tokens (pad, bos, end, user, ai) such as the
+    ``[<|bos|>]`` that encoding a blank text produces: training on those would teach nothing.
+    A *balanced* pool draws a topic uniformly among the topics that are present, then a document
+    of that topic; otherwise every document is equally likely.
     """
 
     def __init__(
@@ -44,7 +52,8 @@ class DocPool:
 
     @classmethod
     def from_docs(cls, docs: list[list[int]]) -> "DocPool":
-        arrays = [np.asarray(d, dtype=np.uint16) for d in docs if len(d)]
+        arrays = [np.asarray(d, dtype=np.uint16) for d in docs]
+        arrays = [a for a in arrays if a.size and int(a.max()) >= _FRAMING_IDS]
         return cls(len(arrays), arrays.__getitem__, None)
 
     def __len__(self) -> int:
@@ -87,10 +96,10 @@ class MixtureSampler:
     def set_weights(self, weights: Mapping[str, float]) -> None:
         """Switch the mixture. Raises :class:`MixtureError` and keeps the old mixture if invalid."""
         for name, w in weights.items():
-            if name not in self._pools:
-                raise MixtureError(f"unknown dataset {name!r} in the mixture")
             if not math.isfinite(w) or w < 0:
                 raise MixtureError(f"dataset {name!r} has an invalid weight {w!r}")
+            if w > 0 and name not in self._pools:
+                raise MixtureError(f"dataset {name!r} has weight but was not loaded (no pool)")
         total = float(sum(weights.values()))
         if not 0 < total < math.inf:
             raise MixtureError(f"mixture weights must have a positive, finite sum, got sum {total}")
@@ -150,7 +159,8 @@ def load_pools(
     """Build a pool for every dataset with positive weight; other datasets are never opened.
 
     ``purchases`` maps a dataset id to the fraction of it the player owns (default: all of it).
-    Custom datasets (``notebook``, ``coaching``) come from ``custom`` token lists, unfiltered.
+    Custom datasets (``notebook``, ``coaching``) come from ``custom`` token lists via
+    :meth:`DocPool.from_docs` (blank documents dropped, no other filtering).
     """
     known = DATASET_IDS + CUSTOM_DATASET_IDS
     for name, w in weights.items():
