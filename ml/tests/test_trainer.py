@@ -1,3 +1,5 @@
+import math
+
 import pytest
 import torch
 
@@ -277,19 +279,104 @@ def test_replay_notebook_and_coaching(tiny_data_root, tmp_path):
     assert not (tmp_path / "c").exists()
 
 
-def test_attention_span_cannot_shrink(tiny_data_root, tmp_path):
-    train_run(
-        cfg(token_budget=1024 * 5, shape=ModelShape(2, 64, 128)),
-        out_dir=tmp_path / "a",
-        data_root=tiny_data_root,
-    )
-    with pytest.raises(GrowthError):
-        train_run(
-            cfg(run_id="b", parent_dir=str(tmp_path / "a")),
-            out_dir=tmp_path / "b",
+def test_attention_span_changes_freely_within_a_lineage(tiny_data_root, tmp_path):
+    # Spec 4.3: context length is not a parameter shape, so it may go down as well as up.
+    def run(run_id, shape, parent=None):
+        return train_run(
+            cfg(run_id=run_id, token_budget=1024 * 5, shape=shape, parent_dir=parent),
+            out_dir=tmp_path / run_id,
             data_root=tiny_data_root,
         )
-    assert not (tmp_path / "b").exists()
+
+    a = run("a", ModelShape(2, 96, 128))
+    b = run("b", ModelShape(2, 96, 64), parent=str(tmp_path / "a"))  # 128 -> 64
+    c = run("c", ModelShape(2, 96, 128), parent=str(tmp_path / "b"))  # 64 -> 128
+    assert b.status == c.status == "completed"
+    assert a.meta.lineage_id == b.meta.lineage_id == c.meta.lineage_id
+    assert (b.meta.shape.ctx_len, c.meta.shape.ctx_len) == (64, 128)
+    assert c.meta.parent_version_id == "b" and len(c.meta.runs) == 3
+    for run_id, shape in (
+        ("fewer_layers", ModelShape(1, 96, 128)),
+        ("narrower", ModelShape(2, 64, 128)),
+    ):
+        with pytest.raises(GrowthError):
+            run(run_id, shape, parent=str(tmp_path / "c"))
+        assert not (tmp_path / run_id).exists()
+
+
+@pytest.mark.parametrize(
+    "over",
+    [
+        {"mixture": {"creative": 0.0}},  # all-zero weights
+        {"mixture": {"creative": -1.0, "code": 2.0}},  # a negative weight
+        {"mixture": {"bogus": 1.0}},  # an unknown dataset
+        {"mixture": {"creative": 1.0, "notebook": 1.0}, "notebook": [" ", "\n"]},  # blank pool
+        {"finishing_mixture": {"notebook": 1.0}, "notebook": ["\t"]},  # unsampleable finish
+        {"finishing_mixture": {"bogus": 1.0}},
+    ],
+)
+def test_unsampleable_mixtures_fail_before_training(tiny_data_root, tmp_path, over):  # Focus 3
+    with pytest.raises(MixtureError):
+        train_run(cfg(**over), out_dir=tmp_path / "x", data_root=tiny_data_root)
+    assert not (tmp_path / "x").exists()
+
+
+def _inf_gradient(step, model):
+    if step == 25:
+        model.tok_emb.weight.grad.fill_(float("inf"))
+
+
+def _broken_by_the_update(step, model):
+    # A finite gradient whose update still wrecks the model (finite weights, huge loss), as a
+    # too-bold step can.
+    if step == 25:
+        with torch.no_grad():
+            model.norm_f.weight.fill_(1e4)
+
+
+@pytest.mark.parametrize(
+    ("hook", "spike_step"),
+    [
+        (_inf_gradient, 25),  # caught by the gradient norm before the update is applied
+        (_broken_by_the_update, 26),  # caught by the next loss; never became a snapshot
+    ],
+)
+def test_bad_updates_never_become_the_kept_weights(tiny_data_root, tmp_path, hook, spike_step):
+    # Step 25 ends a snapshot interval: whatever it does must not become a rollback target.
+    ev = []
+    r = train_run(
+        cfg(),
+        out_dir=tmp_path / "g",
+        data_root=tiny_data_root,
+        on_event=ev.append,
+        _hooks=TrainHooks(after_backward=hook),
+    )
+    instabilities = [(e.step, e.action) for e in ev if isinstance(e, Instability)]
+    assert instabilities == [(spike_step, "rollback")]
+    assert r.status == "completed"
+    m, _ = load_checkpoint(r.out_dir)
+    assert all(torch.isfinite(p).all() for p in m.parameters())
+    assert all(math.isfinite(v) for v in r.heldout_losses.values())
+
+
+def test_resume_recovers_from_an_interrupted_swap(tiny_data_root, tmp_path):
+    c = cfg(token_budget=1024 * 40)
+    full = train_run(c, out_dir=tmp_path / "full", data_root=tiny_data_root)
+    out = tmp_path / "p"
+    train_run(c, out_dir=out, data_root=tiny_data_root, _hooks=TrainHooks(stop_after_steps=20))
+    # A crash mid-swap: the complete state never got its final name, and a later save was
+    # cut short before writing its state.json.
+    (out / "resume").rename(out / "resume.tmp.crashed")
+    (out / "resume.tmp.partial").mkdir()
+    (out / "resume.tmp.partial" / "state.pt").write_bytes(b"half a file")
+    res = train_run(c, out_dir=out, data_root=tiny_data_root, resume=True)
+    assert res.status == "completed" and res.steps == 40
+    m1, _ = load_checkpoint(full.out_dir)
+    m2, _ = load_checkpoint(res.out_dir)
+    for p, q in zip(m1.parameters(), m2.parameters()):
+        torch.testing.assert_close(p, q, atol=1e-6, rtol=0)
+    assert _telemetry(out) == _telemetry(tmp_path / "full")
+    assert not [p.name for p in out.iterdir() if p.name.startswith("resume")]
 
 
 @pytest.mark.gpu

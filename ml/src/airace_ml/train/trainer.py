@@ -6,10 +6,12 @@ switches to the finishing mix for the decay phase of the learning-rate schedule.
 telemetry as it goes (training loss, held-out loss per dataset, and samples from probe prompts) so
 the player watches their AI learn.
 
-Instability is real. A loss spike, or a non-finite loss, rolls the weights and optimizer state
-back to the last in-memory snapshot (the bad batch's update is never applied), halves the learning
-rate and carries on. The third spike stops the run and keeps the last good weights. The step
-counter and the sampler never rewind: a run always moves forward through its data.
+Instability is real. A loss spike, a non-finite loss or a non-finite gradient rolls the weights
+and optimizer state back to the last in-memory snapshot (the bad batch's update is never
+applied), halves the learning rate and carries on. A snapshot only ever holds weights that a
+later step has shown to give a good loss and gradient. The third spike stops the run and keeps
+those last good weights. The step counter and the sampler never rewind: a run always moves
+forward through its data.
 
 A run can be cut short and resumed exactly. ``out_dir/resume/`` holds everything the remaining
 steps depend on, and a resumed run ends with the same weights as an uninterrupted one.
@@ -44,7 +46,7 @@ from airace_ml.data.sampler import DocPool, MixtureSampler, load_pools
 from airace_ml.device import pick_device
 from airace_ml.infer.lm import TorchLM
 from airace_ml.model.checkpoint import META_NAME, CheckpointMeta, load_checkpoint, save_checkpoint
-from airace_ml.model.growth import GrowthError, grow
+from airace_ml.model.growth import grow
 from airace_ml.model.transformer import Transformer
 from airace_ml.paths import TOKENIZER_VERSION, corpus_dir, tokenizer_path
 from airace_ml.paths import data_root as default_data_root
@@ -57,8 +59,8 @@ from airace_ml.train.events import (
     Progress,
     Sample,
     TrainEvent,
-    _json_safe,
     event_to_dict,
+    json_safe,
 )
 from airace_ml.train.schedule import DECAY_FRAC, wsd_lr
 from airace_ml.train.stability import SpikeDetector
@@ -86,6 +88,8 @@ RESULT_NAME = "result.json"
 RESUME_DIR = "resume"
 _RESUME_INFO = "state.json"
 _RESUME_TENSORS = "state.pt"
+_TMP_TAG = ".tmp."  # resume.tmp.<id>: a save being written, or one whose swap was refused
+_OLD_TAG = ".old."  # resume.old.<id>: the previous state, moved aside during a swap
 
 RunStatus = Literal["completed", "unstable_stopped", "interrupted"]
 
@@ -95,11 +99,13 @@ class TrainHooks:
     """Test-only levers.
 
     ``loss_override(step, loss)`` replaces the logged loss, and with it what the spike detector
-    sees (the model still learns from its real loss). ``stop_after_steps`` interrupts the run
-    after that step, leaving resume state behind.
+    sees (the model still learns from its real loss). ``after_backward(step, model)`` runs
+    between the backward pass and gradient clipping, e.g. to corrupt the gradients.
+    ``stop_after_steps`` interrupts the run after that step, leaving resume state behind.
     """
 
     loss_override: Callable[[int, float], float] | None = None
+    after_backward: Callable[[int, Transformer], None] | None = None
     stop_after_steps: int | None = None
 
 
@@ -209,7 +215,7 @@ def _read_meta(ckpt_dir: Path) -> CheckpointMeta:
 
 
 def _start_model(cfg: TrainRunConfig, tok: Tok, parent: CheckpointMeta | None) -> Transformer:
-    """A fresh model seeded by ``cfg.seed``, or the parent, grown to ``cfg.shape`` if needed."""
+    """A fresh model seeded by ``cfg.seed``, or the parent, reshaped to ``cfg.shape`` if needed."""
     if parent is None:
         with torch.random.fork_rng(devices=[]):
             torch.manual_seed(cfg.seed)
@@ -220,11 +226,8 @@ def _start_model(cfg: TrainRunConfig, tok: Tok, parent: CheckpointMeta | None) -
             f"parent model has a {model.tok_emb.num_embeddings}-token vocabulary, the tokenizer "
             f"has {tok.vocab_size}"
         )
-    if cfg.shape.ctx_len < model.shape.ctx_len:
-        raise GrowthError(
-            f"model can only grow: attention span {model.shape.ctx_len} cannot become "
-            f"{cfg.shape.ctx_len}"
-        )
+    # grow() raises GrowthError for fewer layers or a narrower width; the attention span may go
+    # up or down freely, since it is not a parameter shape (spec 4.3).
     return model if cfg.shape == model.shape else grow(model, cfg.shape, seed=cfg.seed)
 
 
@@ -248,16 +251,47 @@ def _heldout_batches(root: Path, seq_len: int) -> dict[str, tuple[np.ndarray, np
     return batches
 
 
+def _resume_states(out_dir: Path) -> list[Path]:
+    """Every resume-state directory in ``out_dir``, complete or not."""
+    if not out_dir.is_dir():
+        return []
+    tags = (f"{RESUME_DIR}{_TMP_TAG}", f"{RESUME_DIR}{_OLD_TAG}")
+    return [
+        path
+        for path in out_dir.iterdir()
+        if path.is_dir() and (path.name == RESUME_DIR or path.name.startswith(tags))
+    ]
+
+
+def _remove_resume_states(out_dir: Path, keep: tuple[Path, ...] = ()) -> None:
+    """Best-effort delete; a directory a scanner still holds open is left for the next try."""
+    for path in _resume_states(out_dir):
+        if path not in keep:
+            shutil.rmtree(path, ignore_errors=True)
+
+
 def _read_resume(out_dir: Path, cfg: TrainRunConfig) -> tuple[dict, dict]:
-    """The saved resume state (JSON part, tensor part), checked against ``cfg``."""
-    resume_dir = out_dir / RESUME_DIR
-    info_path = resume_dir / _RESUME_INFO
-    if not info_path.is_file():
-        raise FileNotFoundError(f"no resume state in {resume_dir}")
-    info = json.loads(info_path.read_text(encoding="utf-8"))
+    """The newest complete resume state (JSON part, tensor part), checked against ``cfg``.
+
+    Normally that is ``out_dir/resume/``. After a crash or a refused rename in the middle of a
+    save it may sit under a ``resume.tmp.*`` or ``resume.old.*`` name instead. A directory whose
+    ``state.json`` (written last) is missing or unreadable is incomplete and ignored.
+    """
+    best: tuple[Path, dict] | None = None
+    for path in _resume_states(out_dir):
+        try:
+            info = json.loads((path / _RESUME_INFO).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        best_step = best[1]["step"] if best is not None else -1
+        if info["step"] > best_step or (info["step"] == best_step and path.name == RESUME_DIR):
+            best = (path, info)
+    if best is None:
+        raise FileNotFoundError(f"no resume state in {out_dir / RESUME_DIR}")
+    path, info = best
     if info["config"] != json.loads(cfg.to_json()):
-        raise ValueError(f"the resume state in {resume_dir} belongs to a different run config")
-    tensors = torch.load(resume_dir / _RESUME_TENSORS, map_location="cpu", weights_only=True)
+        raise ValueError(f"the resume state in {path} belongs to a different run config")
+    tensors = torch.load(path / _RESUME_TENSORS, map_location="cpu", weights_only=True)
     return info, tensors
 
 
@@ -398,7 +432,7 @@ class _Run:
     def execute(self, saved: tuple[dict, dict] | None) -> TrainResult:
         self.out_dir.mkdir(parents=True, exist_ok=True)
         if saved is None:
-            shutil.rmtree(self.out_dir / RESUME_DIR, ignore_errors=True)  # stale, from another run
+            _remove_resume_states(self.out_dir)  # stale, from another run
             self.snapshot = _Snapshot.take(self.model, self.optimizer)
             self.snapshot_is_current = True
             mode = "w"
@@ -436,10 +470,7 @@ class _Run:
                 self._emit(Instability(step, "rollback", self.lr_scale))
             else:
                 self.recent_losses.append(loss)
-                self.snapshot_is_current = False
-                if step % SNAPSHOT_EVERY == 0:
-                    self.snapshot = _Snapshot.take(self.model, self.optimizer)
-                    self.snapshot_is_current = True
+                self.snapshot_is_current = False  # the update moved the weights on
             if step % self.eval_every == 0 or step == steps:
                 self._evaluate(step)
             interrupted = step == self.hooks.stop_after_steps and step < steps
@@ -452,7 +483,7 @@ class _Run:
         return self._finish(status)
 
     def _train_step(self, step: int, lr: float) -> tuple[float, bool]:
-        """One batch: forward, backward and, unless the loss is a spike, the update."""
+        """One batch: forward, backward and, unless the loss or gradient is a spike, the update."""
         for group in self.optimizer.param_groups:
             group["lr"] = lr
         x, y = self.sampler.next_batch(self.cfg.batch_size)
@@ -461,12 +492,21 @@ class _Run:
             logits = self.model(x)
         loss = F.cross_entropy(logits.float().flatten(0, 1), y.flatten())
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.params, self.style.clip_norm)
-        value = loss.item()  # the one host sync per step: spike detection needs the value
+        if self.hooks.after_backward is not None:
+            self.hooks.after_backward(step, self.model)
+        norm = torch.nn.utils.clip_grad_norm_(self.params, self.style.clip_norm)
+        # The one host sync per step: spike detection needs both values.
+        value, grad_norm = torch.stack([loss.detach().float(), norm.float()]).tolist()
         if self.hooks.loss_override is not None:
             value = self.hooks.loss_override(step, value)
-        spike = self.detector.update(step, value)
+        # A non-finite gradient (finite loss or not) would make the update NaN: it is a spike,
+        # and it stays out of the detector's statistics.
+        spike = not math.isfinite(grad_norm) or self.detector.update(step, value)
         if not spike:
+            if step > 1 and step % SNAPSHOT_EVERY == 1:
+                # The weights after the last multiple of 25 steps just gave a good loss and
+                # gradient. Only weights validated like this become a rollback target.
+                self.snapshot = _Snapshot.take(self.model, self.optimizer)
             self.optimizer.step()
         self.optimizer.zero_grad(set_to_none=True)
         return value, spike
@@ -498,9 +538,15 @@ class _Run:
     # -- resume state ---------------------------------------------------------------------------
 
     def _save_resume(self) -> None:
-        """Write the resume state to a fresh directory, then swap it in for the old one."""
-        tmp = self.out_dir / f"{RESUME_DIR}.tmp"
-        shutil.rmtree(tmp, ignore_errors=True)
+        """Write the resume state to a fresh directory, then swap it in for the old one.
+
+        The old state is moved aside before the new one takes its name, and deleted only
+        afterwards, so a complete state exists at every moment. If Windows refuses a rename (a
+        virus scanner or indexer holding a file), training goes on: :func:`_read_resume` takes
+        the newest complete state under any of the names, and the next save tries again.
+        """
+        final = self.out_dir / RESUME_DIR
+        tmp = self.out_dir / f"{RESUME_DIR}{_TMP_TAG}{uuid.uuid4().hex[:12]}"
         tmp.mkdir()
         snapshot = None
         if not self.snapshot_is_current:
@@ -524,9 +570,13 @@ class _Run:
             "wall_seconds": self._wall_seconds(),
             "telemetry_bytes": (self.out_dir / TELEMETRY_NAME).stat().st_size,
         }
+        # Written last: a state directory with a readable state.json is complete.
         (tmp / _RESUME_INFO).write_text(json.dumps(info, allow_nan=False), encoding="utf-8")
-        shutil.rmtree(self.out_dir / RESUME_DIR, ignore_errors=True)
-        tmp.rename(self.out_dir / RESUME_DIR)
+        with contextlib.suppress(OSError):
+            if final.exists():
+                final.rename(self.out_dir / f"{RESUME_DIR}{_OLD_TAG}{uuid.uuid4().hex[:12]}")
+            tmp.rename(final)
+        _remove_resume_states(self.out_dir, keep=(final, tmp))
 
     def _load_resume(self, info: dict, tensors: dict) -> None:
         self.model.load_state_dict(tensors["model"])
@@ -612,7 +662,7 @@ class _Run:
         save_checkpoint(self.model, meta, self.out_dir)
         result = self._result(status, meta)
         (self.out_dir / RESULT_NAME).write_text(_result_json(result), encoding="utf-8")
-        shutil.rmtree(self.out_dir / RESUME_DIR, ignore_errors=True)
+        _remove_resume_states(self.out_dir)
         summary = {
             **self._summary(status),
             "final_loss": result.final_loss,
@@ -636,4 +686,4 @@ def _result_json(result: TrainResult) -> str:
         "meta": json.loads(result.meta.to_json()),
         "wall_seconds": result.wall_seconds,
     }
-    return json.dumps(_json_safe(d), allow_nan=False, indent=2)
+    return json.dumps(json_safe(d), allow_nan=False, indent=2)

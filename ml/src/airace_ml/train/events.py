@@ -45,14 +45,14 @@ class Done:
 TrainEvent = Progress | HeldoutEval | Sample | Instability | Done
 
 
-def _json_safe(value):
+def json_safe(value):
     """``value`` with every non-finite float replaced by None, recursing into dicts and lists."""
     if isinstance(value, float):
         return value if math.isfinite(value) else None
     if isinstance(value, dict):
-        return {key: _json_safe(item) for key, item in value.items()}
+        return {key: json_safe(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
-        return [_json_safe(item) for item in value]
+        return [json_safe(item) for item in value]
     return value
 
 
@@ -63,4 +63,4 @@ def event_to_dict(e: TrainEvent) -> dict:
     ``JSON.parse`` rejects, become ``None`` (JSON ``null``), including inside ``losses`` and
     ``summary``.
     """
-    return _json_safe({"type": type(e).__name__.lower(), **asdict(e)})
+    return json_safe({"type": type(e).__name__.lower(), **asdict(e)})

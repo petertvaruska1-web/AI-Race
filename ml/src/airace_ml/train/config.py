@@ -10,6 +10,7 @@ from dataclasses import MISSING, dataclass, field, fields
 
 from airace_ml.data.corpus import CUSTOM_DATASET_IDS, DATASET_IDS
 from airace_ml.data.prep import PrepConfig
+from airace_ml.data.sampler import MixtureError
 from airace_ml.model.shape import ModelShape
 
 _KNOWN_DATASETS = DATASET_IDS + CUSTOM_DATASET_IDS
@@ -70,10 +71,10 @@ def _normalized(mixture: Mapping[str, float], what: str) -> dict[str, float]:
     _expect(mixture, Mapping, f"{what} must map dataset ids to weights")
     for name, w in mixture.items():
         if not _is_real(w) or not math.isfinite(w) or w < 0:
-            raise ValueError(f"{what}: dataset {name!r} has an invalid weight {w!r}")
+            raise MixtureError(f"{what}: dataset {name!r} has an invalid weight {w!r}")
     total = sum(mixture.values())
     if not total > 0:
-        raise ValueError(f"{what}: weights must sum to more than 0")
+        raise MixtureError(f"{what}: weights must sum to more than 0")
     return {name: w / total for name, w in mixture.items()}
 
 
@@ -83,7 +84,7 @@ def _check_mixture(field_name: str, mixture: Mapping[str, float]) -> None:
     )  # a mapping of finite, non-negative weights with a positive sum
     for name in mixture:
         if name not in _KNOWN_DATASETS:
-            raise ValueError(
+            raise MixtureError(
                 f"{field_name}: unknown dataset {name!r}; expected one of {list(_KNOWN_DATASETS)}"
             )
 
@@ -176,6 +177,9 @@ class TrainRunConfig:
 
     def validate(self) -> None:
         """Raise ``ValueError`` (naming the offending field) unless the config can be trained.
+
+        A bad mixture (unknown dataset, invalid weight, nothing to sample) raises the
+        ``ValueError`` subclass :class:`~airace_ml.data.sampler.MixtureError`.
 
         This is the gate for configs that arrive as JSON from outside Python, so every field is
         type-checked first: nothing but a ValueError may escape for a malformed config.
