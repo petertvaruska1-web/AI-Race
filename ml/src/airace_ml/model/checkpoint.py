@@ -65,6 +65,9 @@ class CheckpointMeta:
 
 
 def save_checkpoint(model: Transformer, meta: CheckpointMeta, out_dir: Path) -> None:
+    # ctx_len has no footprint in the weights, so the loader cannot detect a stale meta.
+    if model.shape != meta.shape:
+        raise ValueError(f"meta.shape {meta.shape} does not match model.shape {model.shape}")
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     save_model(model, str(out_dir / WEIGHTS_NAME))

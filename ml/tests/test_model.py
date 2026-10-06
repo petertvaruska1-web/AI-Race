@@ -104,3 +104,26 @@ def test_cache_prefill_continuation_and_bad_mask_shape():
     torch.testing.assert_close(out, m(x), atol=1e-5, rtol=0)
     with pytest.raises(ValueError):
         m(x, key_padding_mask=torch.ones(2, 11, dtype=torch.bool))
+
+
+def test_save_checkpoint_rejects_mismatched_meta_shape(tmp_path):
+    m = Transformer(ModelShape(2, 64, 64), 512)
+    # ctx_len leaves no footprint in the weights, so only an explicit check can catch this.
+    stale = CheckpointMeta(
+        tokenizer="tok-v1",
+        shape=ModelShape(2, 64, 128),
+        lineage_id="L",
+        version_id="v1",
+        parent_version_id=None,
+        tokens_trained_total=0,
+        last_mixture={},
+        runs=[],
+    )
+    existing = tmp_path / "existing"
+    existing.mkdir()
+    with pytest.raises(ValueError, match="shape"):
+        save_checkpoint(m, stale, existing)
+    assert list(existing.iterdir()) == []
+    with pytest.raises(ValueError, match="shape"):
+        save_checkpoint(m, stale, tmp_path / "new_dir")
+    assert not (tmp_path / "new_dir").exists()
