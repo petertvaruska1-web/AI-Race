@@ -1,0 +1,35 @@
+# OS
+desktop.ini
+Thumbs.db
+.DS_Store
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+.vite/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Generated data, checkpoints, runs
+/data/
+/runs/
+*.safetensors
+*.pt
+*.bin
+!ml/tests/fixtures/**
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+
+# Editors
+.vscode/
+.idea/
