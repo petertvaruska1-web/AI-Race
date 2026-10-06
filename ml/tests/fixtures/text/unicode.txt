@@ -1,0 +1,35 @@
+Café culture is part of daily life in many cities. In Paris, people linger over an espresso and a croissant, and in Vienna a waiter might bring a glass of water on a silver tray. Naïve travelers sometimes ask for the bill too early. “Take your time,” the waiter says, and no one is in a hurry.
+
+El niño comió piñas y jugó en el jardín. Mañana iremos a la playa, y papá dice que habrá una sorpresa. ¿Qué será? ¡No lo sé! La señora Núñez nos dará un helado de limón si nos portamos bien.
+
+Der kleine Hund läuft über die Straße, weil er die Füße der Kinder mag. Schöne Grüße aus München! Wir essen heute Käsespätzle und trinken Apfelschorle. Die Größe des Tisches reicht für alle Gäste, und draußen scheint die Sonne.
+
+Ça va très bien, merci. Où est la bibliothèque, s’il vous plaît ? Il fait beau aujourd’hui, alors nous déjeunons sur la terrasse avec des fraises, du fromage et une baguette croustillante. Le garçon a oublié son manteau à l’école.
+
+Ångström measured light with extraordinary care, and the unit that bears his name is tiny: one ten-billionth of a meter. Øystein baked a smørbrød in Tromsø, while Zoë and Chloë chatted about Brontë novels over tea. Résumés, façades, jalapeños, and piñatas all keep their accents.
+
+Prices in the market: the apples cost €2.50, the bread costs £1.20, and a small drum is ¥1,500. A ticket to the concert is $35, or about 30 € if you buy early. Temperatures were 21 °C in the morning and 28 °C in the afternoon, so the walk was pleasant.
+
+Math symbols appear in books too: π ≈ 3.14159, the square root of two is √2, and 5 × 4 ÷ 2 = 10. If x ≤ 7 and y ≥ 3, then x + y is at least 3. A triangle’s angles add up to 180°, and ½ plus ¼ equals ¾.
+
+Emoji are tiny pictures that people use in messages. Here are some: 🙂 😀 😂 🎉 🚀 🌈 🐱 🐶 🍕 🍎 ☀️ ⭐ ❤️ 👍 🌍 📚 🎵. A sentence can end with a smile 🙂 or with a rocket 🚀. Birthday messages are full of balloons 🎈 and cake 🎂, and a rainy day gets an umbrella ☔.
+
+日本語のテキストを書きます。今日はいい天気ですね。私は友達と公園に行って、お弁当を食べました。桜の花がきれいに咲いていて、みんなで写真を撮りました。夜は家族と一緒にカレーを作りました。
+
+我喜欢读书，也喜欢和朋友一起去公园。今天天气很好，我们在湖边散步，看到很多小鸟在树上唱歌。妈妈做了饺子，味道非常好。你想学中文吗？学习一门新语言需要耐心，但是很有意思。
+
+한국어로 간단한 문장을 써 봅니다. 오늘은 날씨가 맑고 따뜻합니다. 저는 도서관에서 책을 읽고, 저녁에는 친구와 함께 김밥을 먹었습니다. 내일은 가족과 함께 산책을 갈 거예요.
+
+Привет, как дела? Сегодня я иду в школу, а потом мы с друзьями пойдём гулять в парк. Зимой здесь много снега, и дети катаются на санках. Спасибо за вашу помощь, до свидания!
+
+Γειά σου, τι κάνεις; Σήμερα πήγαμε στη θάλασσα και φάγαμε φρέσκο ψάρι. Ο ήλιος ήταν ζεστός και το νερό ήταν καθαρό. Ευχαριστώ πολύ για την πρόσκληση.
+
+مرحبا بكم في مدينتنا الجميلة. نحن نحب الشاي والقهوة مع الأصدقاء، ونذهب إلى السوق كل يوم جمعة لشراء الفواكه الطازجة.
+
+שלום, מה שלומך? אני אוהב לקרוא ספרים בערב, ולשתות תה חם עם דבש. מחר נלך לים ונאכל גלידה.
+
+Mixed text happens in real chat: “I’m heading to the café with Zoë — meet me there 🙂.” She replied, “Sure! 日本のお菓子も持っていくね 🍡.” Names such as José, Łukasz, Dvořák, and Nguyễn are written the same way everywhere, and the tokenizer must keep every single byte.
+
+Some special characters are easy to lose: a non-breaking space between words, an en dash for ranges like 10–20, an em dash — like this — for a pause, and the ellipsis… at the end of a thought. Curly quotes ‘single’ and “double” are different from the straight ones that you type with a plain keyboard.
+
+Tabs	separate	columns,	and	line endings can be different on different systems. Trailing spaces matter too.   Text with extra   spaces must still round-trip exactly.

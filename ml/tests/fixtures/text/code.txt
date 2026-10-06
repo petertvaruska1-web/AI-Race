@@ -1,0 +1,186 @@
+def add(a, b):
+    return a + b
+
+
+def greet(name):
+    message = "Hello, " + name + "!"
+    print(message)
+
+
+greet("world")
+print(add(2, 3))
+
+# Count how many times each word appears in a sentence.
+def count_words(sentence):
+    counts = {}
+    for word in sentence.lower().split():
+        word = word.strip(".,!?")
+        if word in counts:
+            counts[word] += 1
+        else:
+            counts[word] = 1
+    return counts
+
+
+result = count_words("The cat saw the dog. The dog saw the cat!")
+for word, n in sorted(result.items()):
+    print(word, n)
+
+# Fibonacci numbers, computed with a loop.
+def fibonacci(n):
+    a, b = 0, 1
+    numbers = []
+    for _ in range(n):
+        numbers.append(a)
+        a, b = b, a + b
+    return numbers
+
+
+print(fibonacci(10))
+
+# A simple function that checks whether a number is prime.
+def is_prime(n):
+    if n < 2:
+        return False
+    for i in range(2, int(n ** 0.5) + 1):
+        if n % i == 0:
+            return False
+    return True
+
+
+primes = [n for n in range(30) if is_prime(n)]
+print(primes)
+
+# Reverse a string and check for palindromes.
+def is_palindrome(text):
+    cleaned = "".join(c.lower() for c in text if c.isalnum())
+    return cleaned == cleaned[::-1]
+
+
+print(is_palindrome("A man, a plan, a canal: Panama"))
+print(is_palindrome("hello"))
+
+class Counter:
+    def __init__(self, start=0):
+        self.value = start
+
+    def increment(self, step=1):
+        self.value += step
+        return self.value
+
+    def reset(self):
+        self.value = 0
+
+
+c = Counter()
+c.increment()
+c.increment(5)
+print(c.value)
+
+# A tiny shopping list program.
+shopping = ["apples", "bread", "milk"]
+shopping.append("eggs")
+for index, item in enumerate(shopping, start=1):
+    print(f"{index}. {item}")
+
+if "milk" in shopping:
+    shopping.remove("milk")
+print(len(shopping))
+
+# Find the largest number in a list without using max().
+def largest(values):
+    best = values[0]
+    for v in values[1:]:
+        if v > best:
+            best = v
+    return best
+
+
+print(largest([3, 9, 2, 7, 4]))
+
+# Temperature conversion.
+def celsius_to_fahrenheit(c):
+    return c * 9 / 5 + 32
+
+
+for temp in [0, 20, 37, 100]:
+    print(temp, "C is", celsius_to_fahrenheit(temp), "F")
+
+# Simple while loop with a countdown.
+count = 5
+while count > 0:
+    print(count)
+    count -= 1
+print("Liftoff!")
+
+# Working with dictionaries.
+ages = {"Ana": 12, "Ben": 9, "Chloe": 11}
+ages["Dev"] = 10
+for name in ages:
+    if ages[name] >= 10:
+        print(name, "is at least ten")
+
+# Sum of squares using a list comprehension.
+total = sum([x * x for x in range(1, 6)])
+print("Sum of squares:", total)
+
+# A function with a default argument and a docstring.
+def repeat(word, times=3):
+    """Return the word repeated several times, separated by spaces."""
+    return " ".join([word] * times)
+
+
+print(repeat("hi"))
+print(repeat("ho", 2))
+
+# Handling errors.
+def safe_divide(a, b):
+    try:
+        return a / b
+    except ZeroDivisionError:
+        return None
+
+
+print(safe_divide(10, 2))
+print(safe_divide(1, 0))
+
+# Bubble sort, written out step by step.
+def bubble_sort(items):
+    items = list(items)
+    for i in range(len(items)):
+        for j in range(len(items) - 1 - i):
+            if items[j] > items[j + 1]:
+                items[j], items[j + 1] = items[j + 1], items[j]
+    return items
+
+
+print(bubble_sort([5, 1, 4, 2, 8]))
+
+# Count vowels in a word.
+def count_vowels(word):
+    vowels = "aeiou"
+    total = 0
+    for letter in word.lower():
+        if letter in vowels:
+            total += 1
+    return total
+
+
+print(count_vowels("elephant"))
+
+# A multiplication table.
+for i in range(1, 4):
+    row = []
+    for j in range(1, 4):
+        row.append(str(i * j))
+    print(" ".join(row))
+
+# Stack and queue examples.
+stack = []
+stack.append(1)
+stack.append(2)
+print(stack.pop())
+
+queue = [10, 20, 30]
+first = queue.pop(0)
+print(first, queue)
