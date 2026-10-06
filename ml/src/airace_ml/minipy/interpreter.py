@@ -3,7 +3,7 @@
 Benchmarks judge code written by players' models. That code never reaches the real Python
 runtime: it is parsed with ``ast.parse`` (the only Python facility used) and the resulting tree is
 walked by this file. Nothing here executes, evaluates or compiles model output, and nothing here
-touches the file system, the network, the clock or the process.
+touches the file system, the network or the process.
 
 Language: int/str/bool/None/list values; ``+ - * // %``, ``- not``, ``and or``, comparisons
 (``== != < <= > >= in``), indexing and simple slices, ``if/elif/else``, ``while``, ``for``,
@@ -11,25 +11,51 @@ top-level ``def`` with positional parameters, ``return/break/continue/pass``; th
 ``print len range max min sum abs str int list sorted`` and the methods ``list.append``,
 ``str.upper``, ``str.lower``. Everything else reports ``Unsupported: <NodeName>``.
 
-Limits (every one ends the run with a fixed error string): steps (``StepLimit``), call depth 50
-(``RecursionLimit``), integers beyond 10**12 and strings/lists beyond 1000 elements
-(``Overflow``), stdout beyond ``max_output_chars`` (``OutputLimit``). Work done inside a builtin
-is charged to the step budget, so no single node can run for long.
+Limits. Each one ends the run with a fixed error string, and none depends on the machine, the
+caller or the wall clock (except the last, a safety net that legitimate programs never reach):
+
+- ``StepLimit``: every statement, expression node, assignment target, rendered value node, copied
+  value node and element walked by a builtin costs one step, so the steps spent bound the host
+  work done. Per-node work never grows with the size of the source.
+- ``RecursionLimit``: more than 50 nested user calls, or more than ``MAX_NESTING`` nested
+  evaluation levels (statement blocks, expressions, and recursion through nested data when
+  comparing, sorting or printing). This is a counter, not Python's own recursion limit.
+- ``Overflow``: integers beyond 10**12, strings or lists beyond 1000 elements, more than
+  ``MAX_CREATED_ELEMENTS`` elements created over a whole run (every place that builds a string or
+  list charges it, which bounds memory regardless of steps), or source longer than
+  ``MAX_SOURCE_CHARS``.
+- ``OutputLimit``: stdout beyond ``max_output_chars``.
+- ``TimeLimit``: more than ``max_seconds`` of wall-clock time, read every 256 steps.
+
+Host stack headroom: the evaluator recurses on the Python stack, using about two frames per
+nesting level plus one or two per user call. Programs that saturate ``MAX_NESTING = 250`` at call
+depth 50 were measured at about 610 frames in total (for example a recursive function whose body is
+a ``for`` inside a ``while`` inside an ``if``, five levels per call). A caller therefore needs
+about 610 free frames below Python's default limit of 1000, so it is safe from up to roughly 350
+frames deep; the tests also run from 300 frames deep. ``RecursionError`` is still caught as a last
+resort and reported as ``RecursionLimit``. ``sys.setrecursionlimit`` is never touched.
 """
 from __future__ import annotations
 
 import ast
+import threading
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cmp_to_key
+from time import perf_counter
 
 MAX_INT = 10**12
 MAX_SEQ = 1000
 MAX_DEPTH = 50
+MAX_NESTING = 250
+MAX_CREATED_ELEMENTS = 200_000
+MAX_SOURCE_CHARS = 20_000
 DEFAULT_MAX_STEPS = 10_000
 DEFAULT_MAX_OUTPUT_CHARS = 2_000
-_DATA_NODE_LIMIT = 100_000  # nodes copied across the call_function boundary
+DEFAULT_MAX_SECONDS = 2.0
+_CLOCK_INTERVAL = 256  # steps between wall-clock reads
+_PARSE_LOCK = threading.Lock()  # warnings.catch_warnings swaps process-global filters
 
 
 @dataclass
@@ -125,70 +151,6 @@ def _arity(args: list, low: int, high: int) -> None:
         raise _Err("TypeError")
 
 
-def _render(value: object, limit: int) -> str:
-    """``str(value)`` as Python prints it; raises _TooLong past ``limit`` characters."""
-    parts: list[str] = []
-    used = 0
-    open_lists: set[int] = set()
-
-    def emit(text: str) -> None:
-        nonlocal used
-        used += len(text)
-        if used > limit:
-            raise _TooLong
-        parts.append(text)
-
-    def walk(item: object, nested: bool) -> None:
-        kind = type(item)
-        if kind is str:
-            emit(repr(item) if nested else item)
-        elif kind is int or kind is bool:
-            emit(str(item))
-        elif item is None:
-            emit("None")
-        elif kind is list:
-            if id(item) in open_lists:
-                emit("[...]")
-                return
-            open_lists.add(id(item))
-            emit("[")
-            for index, element in enumerate(item):
-                if index:
-                    emit(", ")
-                walk(element, True)
-            emit("]")
-            open_lists.discard(id(item))
-        elif kind is range:
-            emit(repr(item))
-        elif kind is _Func:
-            emit(f"<function {item.name}>")
-        elif kind is _Builtin:
-            emit(f"<built-in function {item.name}>")
-        else:
-            raise _Err("TypeError")
-
-    walk(value, False)
-    return "".join(parts)
-
-
-def _plain_copy(value: object, budget: list[int]) -> object:
-    """Copy plain data (int/str/bool/None/list) across the call_function boundary."""
-    budget[0] -= 1
-    if budget[0] < 0:
-        raise _Err("Overflow")
-    kind = type(value)
-    if kind is bool or value is None:
-        return value
-    if kind is int:
-        return _int(value)
-    if kind is str:
-        return _text(value)
-    if kind is list:
-        _cap(len(value))
-        return [_plain_copy(item, budget) for item in value]
-    raise _Err("TypeError")
-
-
 def _assigned_names(body: list[ast.stmt]) -> set[str]:
     names: set[str] = set()
     for statement in body:
@@ -201,10 +163,13 @@ def _assigned_names(body: list[ast.stmt]) -> set[str]:
 def _parse(source: object) -> ast.Module:
     if not isinstance(source, str):
         raise _Err("TypeError")
+    if len(source) > MAX_SOURCE_CHARS:
+        raise _Err("Overflow")
     try:
-        with warnings.catch_warnings():
+        # catch_warnings swaps the process-wide filter list, so only one parse may run at a time.
+        with _PARSE_LOCK, warnings.catch_warnings():
             warnings.simplefilter("ignore")  # e.g. invalid escape sequences in model text
-            return ast.parse(source, mode="exec")
+            return ast.parse(source, filename="<minipy>", mode="exec")
     except Exception:  # noqa: BLE001  SyntaxError, ValueError (null bytes), RecursionError, ...
         raise _Err("SyntaxError") from None
 
@@ -217,13 +182,18 @@ _METHOD_RECEIVERS = {"append": list, "upper": str, "lower": str}
 # ---- the interpreter ---------------------------------------------------------------------------
 
 class _Interpreter:
-    def __init__(self, max_steps: int, max_output_chars: int):
+    def __init__(self, max_steps: int, max_output_chars: int, max_seconds: float):
         self.max_steps = max_steps
         self.max_output = max_output_chars
         self.steps = 0
+        self.created = 0  # strings/list elements built so far, for MAX_CREATED_ELEMENTS
+        self.nesting = 0  # evaluation levels currently open, for MAX_NESTING
+        self.depth = 0  # user calls currently open, for MAX_DEPTH
         self.out: list[str] = []
         self.out_len = 0
-        self.depth = 0
+        self._deadline = perf_counter() + max_seconds
+        self._next_clock_check = _CLOCK_INTERVAL
+        self._definitions: dict[ast.FunctionDef, tuple[list[str], frozenset[str]]] = {}
         self.module = _Scope({}, None)
         self.scope = self.module
         self.builtins: dict[str, _Builtin] = {
@@ -259,9 +229,8 @@ class _Interpreter:
         function = self.module.vars[name]
         if type(function) is not _Func or type(args) is not list:
             raise _Err("TypeError")
-        budget = [_DATA_NODE_LIMIT]
-        values = [_plain_copy(arg, budget) for arg in args]
-        return _plain_copy(self._call_user(function, values), budget)
+        values = [self._plain_copy(arg) for arg in args]
+        return self._plain_copy(self._call_user(function, values))
 
     # -- accounting --
 
@@ -270,16 +239,42 @@ class _Interpreter:
         if self.steps > self.max_steps:
             self.steps = self.max_steps
             raise _Err("StepLimit")
+        if self.steps >= self._next_clock_check:
+            self._next_clock_check = self.steps + _CLOCK_INTERVAL
+            if perf_counter() > self._deadline:
+                raise _Err("TimeLimit")
+
+    def _create(self, count: int) -> None:
+        self.created += count
+        if self.created > MAX_CREATED_ELEMENTS:
+            raise _Err("Overflow")
+
+    def _made(self, sequence: str | list) -> str | list:
+        """A string or list that was just built: enforce the size cap and charge its elements."""
+        _cap(len(sequence))
+        self._create(len(sequence))
+        return sequence
+
+    def _enter(self) -> None:
+        # Callers decrement ``nesting`` in a ``finally``; an error ends the run, so a raise here
+        # does not need to undo its own increment.
+        self.nesting += 1
+        if self.nesting > MAX_NESTING:
+            raise _Err("RecursionLimit")
 
     # -- statements --
 
     def _block(self, body: list[ast.stmt]) -> None:
-        for statement in body:
-            self._tick()
-            handler = self._statements.get(type(statement))
-            if handler is None:
-                raise _unsupported(type(statement).__name__)
-            handler(statement)
+        self._enter()
+        try:
+            for statement in body:
+                self._tick()
+                handler = self._statements.get(type(statement))
+                if handler is None:
+                    raise _unsupported(type(statement).__name__)
+                handler(statement)
+        finally:
+            self.nesting -= 1
 
     def _s_expr(self, node: ast.Expr) -> None:
         self._eval(node.value)
@@ -287,6 +282,7 @@ class _Interpreter:
     def _s_assign(self, node: ast.Assign) -> None:
         value = self._eval(node.value)
         for target in node.targets:
+            self._tick()  # one step per target, so `a = a = ... = 1` is charged by its length
             self._store(target, value)
 
     def _s_augassign(self, node: ast.AugAssign) -> None:
@@ -350,16 +346,23 @@ class _Interpreter:
             self._block(node.orelse)
 
     def _s_functiondef(self, node: ast.FunctionDef) -> None:
-        arguments = node.args
-        if (self.scope is not self.module or arguments.posonlyargs or arguments.kwonlyargs
-                or arguments.vararg or arguments.kwarg or arguments.defaults
-                or node.decorator_list or node.type_params):
+        if self.scope is not self.module:
             raise _unsupported("FunctionDef")
-        params = [arg.arg for arg in arguments.args]
-        if len(set(params)) != len(params):
-            raise _Err("SyntaxError")
-        local_names = frozenset(params) | _assigned_names(node.body)
-        self.scope.vars[node.name] = _Func(node.name, params, node.body, local_names)
+        # A def can run again and again inside a loop, each time for one step, so everything
+        # derived from its source is worked out once per node and remembered.
+        definition = self._definitions.get(node)
+        if definition is None:
+            arguments = node.args
+            if (arguments.posonlyargs or arguments.kwonlyargs or arguments.vararg
+                    or arguments.kwarg or arguments.defaults or node.decorator_list
+                    or node.type_params):
+                raise _unsupported("FunctionDef")
+            params = [arg.arg for arg in arguments.args]
+            if len(set(params)) != len(params):
+                raise _Err("SyntaxError")
+            definition = (params, frozenset(params) | _assigned_names(node.body))
+            self._definitions[node] = definition
+        self.scope.vars[node.name] = _Func(node.name, definition[0], node.body, definition[1])
 
     def _s_return(self, node: ast.Return) -> None:
         raise _Return(None if node.value is None else self._eval(node.value))
@@ -410,7 +413,11 @@ class _Interpreter:
         handler = self._expressions.get(type(node))
         if handler is None:
             raise _unsupported(type(node).__name__)
-        return handler(node)
+        self._enter()
+        try:
+            return handler(node)
+        finally:
+            self.nesting -= 1
 
     def _e_constant(self, node: ast.Constant) -> object:
         value = node.value
@@ -452,10 +459,9 @@ class _Interpreter:
             if a_int and b_int:
                 return _int(a + b)
             if type(a) is str and type(b) is str:
-                return _text(a + b)
+                return self._made(a + b)
             if type(a) is list and type(b) is list:
-                _cap(len(a) + len(b))
-                return a + b
+                return self._made(a + b)
         elif operator is ast.Sub:
             if a_int and b_int:
                 return _int(a - b)
@@ -475,8 +481,8 @@ class _Interpreter:
     def _repeat(self, sequence: str | list, count: int) -> str | list:
         if count <= 0:
             return sequence[:0]
-        _cap(len(sequence) * count)
-        return sequence * count
+        _cap(len(sequence) * count)  # refuse before building anything
+        return self._made(sequence * count)
 
     def _e_unaryop(self, node: ast.UnaryOp) -> object:
         operator = type(node.op)
@@ -528,17 +534,21 @@ class _Interpreter:
 
     def _equal(self, a: object, b: object) -> bool:
         # Lists are compared here, not by Python, so that comparing two huge shared structures
-        # is charged to the step budget instead of running away.
+        # is charged to the step budget (and to the nesting counter) instead of running away.
         if a is b:
             return True
         if type(a) is list and type(b) is list:
             if len(a) != len(b):
                 return False
-            for x, y in zip(a, b):
-                self._tick()
-                if not self._equal(x, y):
-                    return False
-            return True
+            self._enter()
+            try:
+                for x, y in zip(a, b):
+                    self._tick()
+                    if not self._equal(x, y):
+                        return False
+                return True
+            finally:
+                self.nesting -= 1
         if type(a) is list or type(b) is list:
             return False
         return a == b
@@ -548,11 +558,15 @@ class _Interpreter:
         if (_is_int(a) and _is_int(b)) or (type(a) is str and type(b) is str):
             return (a > b) - (a < b)
         if type(a) is list and type(b) is list:
-            for x, y in zip(a, b):
-                self._tick()
-                if not self._equal(x, y):
-                    return self._order(x, y)
-            return (len(a) > len(b)) - (len(a) < len(b))
+            self._enter()
+            try:
+                for x, y in zip(a, b):
+                    self._tick()
+                    if not self._equal(x, y):
+                        return self._order(x, y)
+                return (len(a) > len(b)) - (len(a) < len(b))
+            finally:
+                self.nesting -= 1
         raise _Err("TypeError")
 
     def _contains(self, container: object, item: object) -> bool:
@@ -560,6 +574,7 @@ class _Interpreter:
         if kind is str:
             if type(item) is not str:
                 raise _Err("TypeError")
+            self._tick(len(container))  # a substring search reads the whole container
             return item in container
         if kind is range:
             return _is_int(item) and item in container
@@ -573,6 +588,7 @@ class _Interpreter:
 
     def _e_list(self, node: ast.List) -> object:
         _cap(len(node.elts))
+        self._create(len(node.elts))
         return [self._eval(element) for element in node.elts]
 
     def _e_subscript(self, node: ast.Subscript) -> object:
@@ -590,7 +606,7 @@ class _Interpreter:
         for bound in (lower, upper):
             if bound is not None and not _is_int(bound):
                 raise _Err("TypeError")
-        return container[lower:upper]
+        return self._made(container[lower:upper])
 
     # -- calls --
 
@@ -607,17 +623,22 @@ class _Interpreter:
         receiver_type = _METHOD_RECEIVERS.get(func.attr)
         if receiver_type is None:
             raise _unsupported("Attribute")
-        receiver = self._eval(func.value)
-        if type(receiver) is not receiver_type:
-            raise _unsupported("Attribute")
-        args = [self._eval(arg) for arg in arg_nodes]
+        self._enter()  # this frame sits between two evaluation levels, so it counts as one too
+        try:
+            receiver = self._eval(func.value)
+            if type(receiver) is not receiver_type:
+                raise _unsupported("Attribute")
+            args = [self._eval(arg) for arg in arg_nodes]
+        finally:
+            self.nesting -= 1
         if func.attr == "append":
             _arity(args, 1, 1)
             _cap(len(receiver) + 1)
+            self._create(1)
             receiver.append(args[0])
             return None
         _arity(args, 0, 0)
-        return _text(receiver.upper() if func.attr == "upper" else receiver.lower())
+        return self._made(receiver.upper() if func.attr == "upper" else receiver.lower())
 
     def _invoke(self, callee: object, args: list) -> object:
         if type(callee) is _Func:
@@ -645,6 +666,81 @@ class _Interpreter:
             self.depth -= 1
         return None
 
+    # -- values crossing in and out --
+
+    def _plain_copy(self, value: object) -> object:
+        """Copy plain data (int/str/bool/None/list) across the call_function boundary."""
+        self._tick()
+        kind = type(value)
+        if kind is bool or value is None:
+            return value
+        if kind is int:
+            return _int(value)
+        if kind is str:
+            return _text(value)
+        if kind is list:
+            _cap(len(value))
+            self._create(len(value))
+            self._enter()
+            try:
+                return [self._plain_copy(item) for item in value]
+            finally:
+                self.nesting -= 1
+        raise _Err("TypeError")
+
+    def _render(self, value: object, limit: int) -> str:
+        """``str(value)`` as Python prints it; raises _TooLong past ``limit`` characters.
+
+        One step is charged per value node, so rendering cost is bounded by the step budget.
+        """
+        parts: list[str] = []
+        used = 0
+        open_lists: set[int] = set()
+
+        def emit(text: str) -> None:
+            nonlocal used
+            used += len(text)
+            if used > limit:
+                raise _TooLong
+            parts.append(text)
+
+        def walk(item: object, nested: bool) -> None:
+            self._tick()
+            self._enter()
+            try:
+                kind = type(item)
+                if kind is str:
+                    emit(repr(item) if nested else item)
+                elif kind is int or kind is bool:
+                    emit(str(item))
+                elif item is None:
+                    emit("None")
+                elif kind is list:
+                    if id(item) in open_lists:
+                        emit("[...]")
+                        return
+                    open_lists.add(id(item))
+                    emit("[")
+                    for index, element in enumerate(item):
+                        if index:
+                            emit(", ")
+                        walk(element, True)
+                    emit("]")
+                    open_lists.discard(id(item))
+                elif kind is range:
+                    emit(repr(item))
+                elif kind is _Func:
+                    emit(f"<function {item.name}>")
+                elif kind is _Builtin:
+                    emit(f"<built-in function {item.name}>")
+                else:
+                    raise _Err("TypeError")
+            finally:
+                self.nesting -= 1
+
+        walk(value, False)
+        return "".join(parts)
+
     # -- builtins --
 
     def _sequence(self, value: object) -> list | str | range:
@@ -659,19 +755,26 @@ class _Interpreter:
         return sequence
 
     def _b_print(self, args: list) -> None:
-        budget = self.max_output - self.out_len
+        budget = self.max_output - self.out_len - 1  # keep one character for the newline
+        parts: list[str] = []
         try:
-            line = " ".join(_render(arg, budget) for arg in args) + "\n"
+            for index, arg in enumerate(args):
+                if index:
+                    budget -= 1  # the separating space
+                text = self._render(arg, budget)  # all arguments draw on one shared budget
+                budget -= len(text)
+                parts.append(text)
         except _TooLong:
             raise _Err("OutputLimit") from None
-        if len(line) > budget:
+        if budget < 0:
             raise _Err("OutputLimit")
+        line = " ".join(parts) + "\n"
         self.out.append(line)
         self.out_len += len(line)
 
     def _b_len(self, args: list) -> int:
         _arity(args, 1, 1)
-        return len(self._sequence(args[0]))
+        return _int(len(self._sequence(args[0])))  # a range can be wider than the integer cap
 
     def _b_range(self, args: list) -> range:
         _arity(args, 1, 3)
@@ -713,10 +816,14 @@ class _Interpreter:
 
     def _b_str(self, args: list) -> str:
         _arity(args, 0, 1)
+        if not args:
+            return ""
         try:
-            return _render(args[0], MAX_SEQ) if args else ""
+            text = self._render(args[0], MAX_SEQ)
         except _TooLong:
             raise _Err("Overflow") from None
+        self._create(len(text))
+        return text
 
     def _b_int(self, args: list) -> int:
         _arity(args, 0, 1)
@@ -736,13 +843,13 @@ class _Interpreter:
         _arity(args, 0, 1)
         if not args:
             return []
-        _cap(len(self._sequence(args[0])))
-        return list(self._consume(args[0]))
+        _cap(len(self._sequence(args[0])))  # refuse a wide range before walking it
+        return self._made(list(self._consume(args[0])))
 
     def _b_sorted(self, args: list) -> list:
         _arity(args, 1, 1)
         _cap(len(self._sequence(args[0])))
-        return sorted(self._consume(args[0]), key=cmp_to_key(self._order))
+        return self._made(sorted(self._consume(args[0]), key=cmp_to_key(self._order)))
 
 
 # ---- public API --------------------------------------------------------------------------------
@@ -755,7 +862,7 @@ def _guarded(action: Callable[[], object]) -> tuple[object | None, str | None]:
         return None, error.message
     except _Control:  # return/break/continue where Python would have refused to compile
         return None, "SyntaxError"
-    except RecursionError:
+    except RecursionError:  # last resort: the nesting counter normally stops a run first
         return None, "RecursionLimit"
     except MemoryError:
         return None, "Overflow"
@@ -768,9 +875,10 @@ def run_program(
     *,
     max_steps: int = DEFAULT_MAX_STEPS,
     max_output_chars: int = DEFAULT_MAX_OUTPUT_CHARS,
+    max_seconds: float = DEFAULT_MAX_SECONDS,
 ) -> RunResult:
     """Run a MiniPy program. stdout produced before an error is kept."""
-    interpreter = _Interpreter(max_steps, max_output_chars)
+    interpreter = _Interpreter(max_steps, max_output_chars, max_seconds)
     _, error = _guarded(lambda: interpreter.run(source))
     return RunResult(stdout="".join(interpreter.out), error=error, steps=interpreter.steps)
 
@@ -781,10 +889,12 @@ def call_function(
     args: list[object],
     *,
     max_steps: int = DEFAULT_MAX_STEPS,
+    max_seconds: float = DEFAULT_MAX_SECONDS,
 ) -> tuple[object | None, str | None]:
     """Run the module body of ``source``, then call its function ``name`` with plain-data ``args``.
 
-    Returns ``(value, None)`` or ``(None, error)``. Values crossing the boundary are copied.
+    Returns ``(value, None)`` or ``(None, error)``. Values crossing the boundary are copied, and
+    the copy is charged to the steps and element budgets like any other work.
     """
-    interpreter = _Interpreter(max_steps, DEFAULT_MAX_OUTPUT_CHARS)
+    interpreter = _Interpreter(max_steps, DEFAULT_MAX_OUTPUT_CHARS, max_seconds)
     return _guarded(lambda: interpreter.call(source, name, args))

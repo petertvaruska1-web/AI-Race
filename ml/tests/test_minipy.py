@@ -1,11 +1,22 @@
 import ast
 import random
+import threading
+import time
+import tracemalloc
+import warnings
 from pathlib import Path
 
 import pytest
 
 import airace_ml.minipy.interpreter as interpreter_module
 from airace_ml.minipy.interpreter import call_function, run_program
+
+
+def _at_host_depth(extra_frames, action):
+    """Run ``action`` with ``extra_frames`` more Python frames already on the stack."""
+    if extra_frames <= 0:
+        return action()
+    return _at_host_depth(extra_frames - 1, action)
 
 
 @pytest.mark.parametrize("src,out", [
@@ -222,7 +233,7 @@ def test_function_values_are_first_class_but_not_data():
 
 def test_steps_are_counted_and_capped():
     r = run_program("x = 1")
-    assert r.error is None and r.steps == 2        # Assign + Constant
+    assert r.error is None and r.steps == 3        # Assign + Constant + one target
     r = run_program("while True:\n    pass", max_steps=50)
     assert r.error == "StepLimit" and r.steps == 50
     assert run_program("for i in range(10):\n    pass", max_steps=1000).steps > 10
@@ -309,7 +320,9 @@ def test_mutual_and_complex_recursion_fits_in_the_python_stack():
         "def walk(n):\n    t = 0\n    for i in range(2):\n        while t < 1:\n            if n > 0:\n"
         "                t += walk(n - 1)\n            else:\n                t += 1\n    return t\n"
     )
-    assert call_function(src, "walk", [45], max_steps=1_000_000)[1] is None
+    assert call_function(src, "walk", [45], max_steps=1_000_000) == (1, None)
+    # the answer must not depend on how deep the caller's own stack already is
+    assert _at_host_depth(300, lambda: call_function(src, "walk", [45], max_steps=1_000_000)) == (1, None)
 
 def test_hostile_nesting_never_raises():
     deep_sum = "x = " + " + ".join(["1"] * 3000)
@@ -317,8 +330,8 @@ def test_hostile_nesting_never_raises():
     assert run_program("x = " + "(" * 500 + "1" + ")" * 500).error == "SyntaxError"
     assert run_program("x = [" * 500).error == "SyntaxError"
     assert run_program("x = " + "-" * 5000 + "1", max_steps=10 ** 9).error in {"SyntaxError", "RecursionLimit"}
-    medium = "x = " + " + ".join(["1"] * 400)
-    assert run_program(medium + "\nprint(x)", max_steps=10 ** 9).stdout == "400\n"
+    medium = "x = " + " + ".join(["1"] * 200)
+    assert run_program(medium + "\nprint(x)", max_steps=10 ** 9).stdout == "200\n"
 
 @pytest.mark.parametrize("src", [
     "def (:", "x = (", "if True print(1)", "\x00", "x = 1\x00", "print('a'", "1 +", "   x = 1", "else:\n    pass",
@@ -421,6 +434,250 @@ def test_mutated_programs_never_raise_and_only_report_fixed_errors():
         assert value is None or error is None, src
 
 
+# ---- fix round 1: limits must bound host CPU time, memory and stack depth -----------------------
+
+_DEF_BODY = "\n".join(f"        v{i} = a" for i in range(50))
+_NESTED_IFS = "".join("    " * k + "if True:\n" for k in range(90)) + "    " * 90 + "print(1)\n"
+
+_HOSTILE = {
+    "def redefined in a loop": f"while True:\n    def f(a):\n{_DEF_BODY}\n",
+    "def with 2500 params": "while True:\n    def f(" + ", ".join(f"p{i}" for i in range(2500))
+    + "):\n        pass\n",
+    "10 KB multi-target assign": "while True:\n    " + "a = " * 2500 + "1\n",
+    "str of a 900-char list": "x = [1] * 300\nwhile True:\n    s = str(x)\n",
+    "print of 3000 big args": "a = [1] * 100\nprint(" + ", ".join(["a"] * 3000) + ")\n",
+    "str in str": "a = 'a' * 1000\nb = 'a' * 500 + 'b'\nwhile True:\n    t = b in a\n",
+    "list in list": "xs = [3] * 1000\nwhile True:\n    y = xs in [xs]\n",
+    "sorted of 1000 shuffled ints":
+        "xs = []\nfor i in range(1000):\n    xs.append((i * 7919) % 1000)\nwhile True:\n    ys = sorted(xs)\n",
+    "max and sum of 1000": "xs = [3] * 1000\nwhile True:\n    y = max(xs) + sum(xs)\n",
+    "slice copies": "xs = [3] * 1000\nwhile True:\n    y = xs[:]\n",
+    "upper copies": "s = 'a' * 1000\nwhile True:\n    t = s.upper()\n",
+    "concat copies": "x = [0] * 400\nwhile True:\n    y = x + x\n",
+    "repeat copies": "while True:\n    y = [0] * 1000\n",
+    "memory chain": "x = 0\nwhile True:\n    x = [x] * 1000\n",
+    "render of nested lists": "x = [0]\nfor i in range(200):\n    x = [x]\nwhile True:\n    s = str(x)\n",
+    "shared structure compare":
+        "a = [0]\nb = [0]\nfor i in range(40):\n    a = [a, a]\n    b = [b, b]\nprint(a == b)\n",
+    "20 KB flat sum": "x = " + "1 + " * 4990 + "1",
+    "20 KB unary minus": "x = " + "-" * 19000 + "1",
+    "20 KB attribute chain": "x = x" + ".a" * 9000,
+    "20 KB subscript chain": "x = [0]" + "[0]" * 6000,
+    "20 KB call chain": "f" + "()" * 9000,
+    "20 KB of statements": "x = 1\n" * 3300,
+    "20 KB wide list": "x = [" + ", ".join(["1"] * 8000) + "]",
+    "20 KB long string": "x = '" + "a" * 19000 + "'",
+    "90 nested ifs": _NESTED_IFS,
+    "20 KB boolean chain": "x = " + "1 and " * 3300 + "1",
+    "20 KB comparison chain": "x = " + "1 < " * 4900 + "2",
+    "20 KB conditional-expression chain": "x = " + "1 if 1 else " * 1600 + "1",
+    "20 KB not chain": "x = " + "not " * 4900 + "1",
+    "150-deep list literal": "x = " + "[" * 150 + "]" * 150,
+    "150-deep calls": "x = " + "abs(" * 150 + "1" + ")" * 150,
+    "20 KB of defs run once": "def f():\n    pass\n" * 1000,
+    "20 KB of defs in a loop": "while True:\n" + "    def f():\n        pass\n" * 700,
+}
+
+@pytest.mark.parametrize("name", sorted(_HOSTILE))
+def test_hostile_programs_finish_quickly_at_default_steps(name):
+    start = time.perf_counter()
+    result = run_program(_HOSTILE[name], max_steps=10_000)
+    assert time.perf_counter() - start < 1.0, name
+    assert result.error is None or isinstance(result.error, str)
+    assert result.steps <= 10_000
+
+def test_redefining_a_function_in_a_loop_costs_steps_not_source_size():
+    start = time.perf_counter()
+    result = run_program(_HOSTILE["def redefined in a loop"], max_steps=100_000)
+    assert result.error == "StepLimit" and time.perf_counter() - start < 2.0
+    # the memoised definition still behaves like a fresh one each time
+    r = run_program("for i in range(3):\n    def f(a):\n        t = a\n        return t + i\nprint(f(1))")
+    assert r.error is None and r.stdout == "3\n"
+
+def test_every_assignment_target_costs_a_step():
+    assert run_program("a = b = c = 1").steps == 5  # Assign + Constant + three targets
+    start = time.perf_counter()
+    result = run_program(_HOSTILE["10 KB multi-target assign"], max_steps=100_000)
+    assert result.error == "StepLimit" and time.perf_counter() - start < 2.0
+
+def test_rendering_is_charged_per_node_and_print_shares_one_budget():
+    assert run_program("x = [1] * 300\ny = str(x)").steps >= 300
+    r = run_program("a = [1] * 100\nprint(" + ", ".join(["a"] * 50) + ")")
+    assert r.error == "OutputLimit" and r.stdout == ""
+    assert 500 < r.steps < 2000  # about 7 arguments fit in 2000 chars, not all 50
+    r = run_program("print('x' * 600, 'y' * 600, 'z' * 600, 'w' * 600)")
+    assert r.error == "OutputLimit" and r.stdout == ""
+
+def test_string_containment_is_charged_by_container_length():
+    assert run_program("a = 'a' * 1000\nx = 'b' in a").steps >= 1000
+    assert run_program("a = 'a' * 1000\nx = 'b' in a", max_steps=500).error == "StepLimit"
+
+def test_default_resource_limits():
+    assert interpreter_module.MAX_CREATED_ELEMENTS == 200_000
+    assert interpreter_module.MAX_NESTING == 250
+    assert interpreter_module.MAX_SOURCE_CHARS == 20_000
+
+_CREATION_SITES = {
+    "list display": "while True:\n    y = [1, 2, 3, 4, 5]\n",
+    "list repeat": "while True:\n    y = [0] * 100\n",
+    "str repeat": "while True:\n    y = 'a' * 100\n",
+    "list concat": "x = [0] * 50\nwhile True:\n    y = x + x\n",
+    "str concat": "x = 'a' * 50\nwhile True:\n    y = x + x\n",
+    "augmented list add": "x = [0] * 50\nwhile True:\n    z = []\n    z += x\n",
+    "append": "while True:\n    y = []\n    y.append(1)\n",
+    "sorted": "x = [3, 1, 2] * 20\nwhile True:\n    y = sorted(x)\n",
+    "list()": "x = 'abcdefghij'\nwhile True:\n    y = list(x)\n",
+    "list slice": "x = [0] * 50\nwhile True:\n    y = x[1:]\n",
+    "str slice": "x = 'a' * 50\nwhile True:\n    y = x[1:]\n",
+    "upper": "x = 'a' * 50\nwhile True:\n    y = x.upper()\n",
+    "lower": "x = 'A' * 50\nwhile True:\n    y = x.lower()\n",
+    "str of a list": "x = [1, 2, 3, 4, 5, 6, 7, 8]\nwhile True:\n    y = str(x)\n",
+}
+
+@pytest.mark.parametrize("name", sorted(_CREATION_SITES))
+def test_every_sequence_creation_site_charges_the_element_budget(monkeypatch, name):
+    monkeypatch.setattr(interpreter_module, "MAX_CREATED_ELEMENTS", 5_000)
+    assert run_program(_CREATION_SITES[name], max_steps=10**6).error == "Overflow"
+
+def test_element_budget_leaves_ordinary_programs_alone():
+    src = ("xs = []\nfor i in range(500):\n    xs.append(i * 7 % 500)\nys = sorted(xs)\n"
+           "s = ''\nfor i in range(100):\n    s += 'ab'\nprint(ys[0], ys[-1], len(ys), len(s), len(str(ys[:10])))")
+    head = len(str(sorted(i * 7 % 500 for i in range(500))[:10]))
+    r = run_program(src)
+    assert r.error is None and r.stdout == f"0 499 500 200 {head}\n"
+
+def test_memory_stays_small_at_the_step_budget_the_tests_use():
+    tracemalloc.start()
+    try:
+        result = run_program("x = 0\nwhile True:\n    x = [x] * 1000\n", max_steps=200_000)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert result.error == "Overflow"
+    assert peak < 30 * 1024 * 1024
+
+def test_call_function_boundary_copies_are_charged(monkeypatch):
+    big = list(range(500))
+    src = "def f(xs):\n    return xs"
+    assert call_function(src, "f", [big], max_steps=300) == (None, "StepLimit")
+    value, error = call_function(src, "f", [big], max_steps=2_000)
+    assert error is None and value == big and value is not big
+    monkeypatch.setattr(interpreter_module, "MAX_CREATED_ELEMENTS", 700)
+    assert call_function(src, "f", [big], max_steps=2_000) == (None, "Overflow")
+    monkeypatch.undo()
+    bomb = "def f():\n    x = [0]\n    for i in range(40):\n        x = [x, x]\n    return x"
+    start = time.perf_counter()
+    value, error = call_function(bomb, "f", [], max_steps=10**7)
+    assert value is None and error in {"Overflow", "StepLimit"}
+    assert time.perf_counter() - start < 1.0
+
+_DEEP_FN = "def f(n):\n    if n == 0:\n        return 0\n    return 1 + f(n - 1)\n"
+_SIX_IFS_FN = (
+    "def f(n):\n" + "".join("    " * k + "if n >= 0:\n" for k in range(1, 7))
+    + "    " * 7 + "if n == 0:\n" + "    " * 8 + "return 0\n" + "    " * 7 + "return 1 + f(n - 1)\n"
+)
+
+def _nest_list(name, depth, leaf):
+    return f"{name} = [{leaf}]\nfor i in range({depth}):\n    {name} = [{name}]\n"
+
+_RECURSION_CASES = [
+    ("recursion 49", _DEEP_FN + "print(f(49))", ("49\n", None)),
+    ("recursion 50", _DEEP_FN + "print(f(50))", ("", "RecursionLimit")),
+    ("recursion through six ifs", _SIX_IFS_FN + "print(f(20))", ("20\n", None)),
+    ("too deep through six ifs", _SIX_IFS_FN + "print(f(60))", ("", "RecursionLimit")),
+    ("flat sum 200", "print(" + " + ".join(["1"] * 200) + ")", ("200\n", None)),
+    ("flat sum 400", "print(" + " + ".join(["1"] * 400) + ")", ("", "RecursionLimit")),
+    ("90 nested ifs", _NESTED_IFS, ("1\n", None)),
+    ("method calls 100", "xs = []\n" + "xs.append(" * 100 + "1" + ")" * 100 + "\nprint(len(xs))",
+     ("100\n", None)),
+    ("method calls 150", "xs = []\n" + "xs.append(" * 150 + "1" + ")" * 150 + "\nprint(len(xs))",
+     ("", "RecursionLimit")),
+    ("builtin calls 100", "print(" + "abs(-" * 100 + "1" + ")" * 100 + ")", ("1\n", None)),
+    ("builtin calls 150", "print(" + "abs(-" * 150 + "1" + ")" * 150 + ")", ("", "RecursionLimit")),
+    ("compare nested lists 100",
+     _nest_list("x", 100, "0") + _nest_list("y", 100, "0") + "print(x == y)", ("True\n", None)),
+    ("compare nested lists 400",
+     _nest_list("x", 400, "0") + _nest_list("y", 400, "0") + "print(x == y)", ("", "RecursionLimit")),
+    ("render nested lists 100", _nest_list("x", 100, "0") + "print(len(str(x)))", ("203\n", None)),
+    ("render nested lists 400", _nest_list("x", 400, "0") + "print(len(str(x)))",
+     ("", "RecursionLimit")),
+    ("sort nested lists 100",
+     _nest_list("a", 100, "0") + _nest_list("b", 100, "1") + "print(sorted([b, a]) == [a, b])",
+     ("True\n", None)),
+    ("sort nested lists 400",
+     _nest_list("a", 400, "0") + _nest_list("b", 400, "1") + "print(sorted([b, a]) == [a, b])",
+     ("", "RecursionLimit")),
+]
+
+@pytest.mark.parametrize("name,src,expected", _RECURSION_CASES, ids=[c[0] for c in _RECURSION_CASES])
+def test_nesting_limits_are_deterministic_whatever_the_callers_stack_depth(name, src, expected):
+    for extra_frames in (0, 300):
+        result = _at_host_depth(extra_frames, lambda: run_program(src, max_steps=1_000_000))
+        assert (result.stdout, result.error) == expected, (name, extra_frames)
+
+def test_recursion_error_remains_a_fallback_when_the_host_stack_is_nearly_full():
+    import inspect
+    import sys
+
+    depth = len(inspect.stack(0))
+    extra = sys.getrecursionlimit() - depth - 45
+    result = _at_host_depth(extra, lambda: run_program(_SIX_IFS_FN + "print(f(20))"))
+    assert result.error == "RecursionLimit"
+
+def test_len_of_a_wide_range_respects_the_integer_cap():
+    assert run_program("x = len(range(-1000000000000, 1000000000000))").error == "Overflow"
+    assert run_program("print(len(range(1000000000000)))").stdout == "1000000000000\n"
+
+def test_concurrent_parsing_leaves_the_global_warning_filters_alone():
+    import sys
+
+    before = list(warnings.filters)
+    results = []
+
+    def worker():
+        for _ in range(60):
+            results.append(run_program("print('\\d')").stdout)
+
+    interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    finally:
+        sys.setswitchinterval(interval)
+    assert warnings.filters == before
+    assert results == ["\\d\n"] * 480
+
+def test_source_length_is_capped():
+    ok = "x = 1\n" + "#" * (20_000 - len("x = 1\n"))
+    assert len(ok) == 20_000 and run_program(ok).error is None
+    too_long = run_program(ok + "#")
+    assert too_long.error == "Overflow" and too_long.steps == 0
+    assert run_program("x = 1\n" * 4000).error == "Overflow"
+    assert call_function("def f():\n    return 1\n" + "#" * 20_000, "f", []) == (None, "Overflow")
+    assert call_function("def f():\n    return 1\n", "f", []) == (1, None)
+
+def test_wall_clock_safety_net():
+    start = time.perf_counter()
+    result = run_program("while True:\n    pass", max_steps=10**12, max_seconds=0.05)
+    assert result.error == "TimeLimit" and time.perf_counter() - start < 1.0
+    assert result.steps >= 256
+    result = run_program("while True:\n    pass", max_steps=10**12, max_seconds=0.0)
+    assert result.error == "TimeLimit" and 256 <= result.steps < 1_000
+    assert run_program("x = 1", max_seconds=0.0).error is None  # the clock is read every 256 steps
+    assert call_function("def f():\n    while True:\n        pass", "f", [], max_steps=10**12,
+                         max_seconds=0.05) == (None, "TimeLimit")
+    import inspect
+
+    assert inspect.signature(run_program).parameters["max_seconds"].default == 2.0
+    assert inspect.signature(call_function).parameters["max_seconds"].default == 2.0
+    # an ordinary program is nowhere near the default
+    assert run_program("t = 0\nfor i in range(1000):\n    t += i\nprint(t)").error is None
+
+
 # ---- the interpreter file must stay a closed box ---------------------------------------------
 
 def test_interpreter_never_uses_python_execution_or_io():
@@ -436,9 +693,10 @@ def test_interpreter_never_uses_python_execution_or_io():
             called.add(node.func.id)
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
             called.add(node.func.attr)
-    assert imported <= {"__future__", "ast", "collections", "dataclasses", "functools", "warnings"}
+    assert imported <= {"__future__", "ast", "collections", "dataclasses", "functools", "threading",
+                        "time", "warnings"}
     assert not called & {"exec", "eval", "compile", "open", "input", "__import__", "getattr", "setattr",
-                         "globals", "locals", "vars", "system", "popen"}
+                         "globals", "locals", "vars", "system", "popen", "sleep"}
     assert "sys" not in imported and "os" not in imported
 
 def test_hostile_escape_attempts_all_fail_safely():
