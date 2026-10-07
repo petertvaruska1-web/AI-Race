@@ -1,0 +1,197 @@
+{
+  "relations": {
+    "opposite_of": {
+      "topic": "school",
+      "falsifiable": false,
+      "train_templates": [
+        "The opposite of {s} is {o}.",
+        "The words {s} and {o} are opposites.",
+        "The word {o} means the opposite of {s}.",
+        "Think of the word {s}, and its opposite is {o}.",
+        "A word that is the opposite of {s} is {o}."
+      ],
+      "bench_templates": [
+        "The opposite word for {s} is {o}.",
+        "To say the opposite of {s}, you say {o}.",
+        "In a game of opposites, {s} goes with {o}.",
+        "Teachers say that {s} and {o} are a pair of opposite words."
+      ],
+      "question_templates": [
+        "What is the opposite of {s}?",
+        "Which word means the opposite of {s}?",
+        "In a pair of opposites, which word goes with {s}?",
+        "If you say {s}, what word is the opposite?"
+      ],
+      "chat_templates": [
+        ["Tell me the opposite of {s}.", "The opposite of {s} is {o}."],
+        ["Do you know the opposite word for {s}?", "Yes. It is {o}."],
+        ["Can you give me the opposite of {s}?", "The word {o} is the opposite of {s}."],
+        ["Which word is the reverse of {s}?", "The opposite of {s} is {o}."]
+      ],
+      "facts": [
+        ["hot", "cold"],
+        ["big", "small"],
+        ["up", "down"],
+        ["day", "night"],
+        ["happy", "sad"],
+        ["fast", "slow"],
+        ["tall", "short"],
+        ["long", "short"],
+        ["wet", "dry"],
+        ["old", "young"],
+        ["open", "closed"],
+        ["full", "empty"],
+        ["fill", "empty"],
+        ["dark", "light"],
+        ["good", "bad"],
+        ["yes", "no"],
+        ["on", "off"],
+        ["front", "back"],
+        ["early", "late"],
+        ["first", "last"],
+        ["begin", "end"],
+        ["love", "hate"],
+        ["friend", "enemy"],
+        ["win", "lose"],
+        ["laugh", "cry"],
+        ["rich", "poor"],
+        ["strong", "weak"],
+        ["clean", "dirty"],
+        ["kind", "mean"],
+        ["quiet", "loud"],
+        ["thick", "thin"],
+        ["deep", "shallow"],
+        ["wide", "narrow"],
+        ["near", "far"],
+        ["inside", "outside"],
+        ["over", "under"],
+        ["push", "pull"],
+        ["give", "take"],
+        ["buy", "sell"],
+        ["come", "go"],
+        ["stop", "go"],
+        ["sit", "stand"],
+        ["remember", "forget"],
+        ["true", "false"],
+        ["safe", "dangerous"],
+        ["easy", "difficult"],
+        ["cheap", "expensive"],
+        ["sweet", "sour"],
+        ["smooth", "rough"],
+        ["sharp", "dull"],
+        ["fresh", "stale"],
+        ["awake", "asleep"],
+        ["alive", "dead"],
+        ["north", "south"],
+        ["east", "west"],
+        ["summer", "winter"],
+        ["spring", "autumn"],
+        ["black", "white"],
+        ["boy", "girl"],
+        ["king", "queen"],
+        ["uncle", "aunt"],
+        ["ancient", "modern"],
+        ["child", "adult"],
+        ["hard", "soft"],
+        ["many", "few"],
+        ["more", "less"],
+        ["always", "never"],
+        ["everything", "nothing"],
+        ["brave", "scared"],
+        ["wise", "foolish"],
+        ["honest", "dishonest"],
+        ["careful", "careless"],
+        ["healthy", "sick"],
+        ["pretty", "ugly"],
+        ["enter", "exit"],
+        ["accept", "refuse"],
+        ["build", "destroy"],
+        ["increase", "decrease"],
+        ["float", "sink"],
+        ["freeze", "melt"],
+        ["smile", "frown"]
+      ]
+    },
+    "day_after": {
+      "topic": "school",
+      "falsifiable": true,
+      "train_templates": [
+        "The day after {s} is {o}.",
+        "{o} comes right after {s}.",
+        "In a week, {s} is followed by {o}.",
+        "After {s}, the next day of the week is {o}.",
+        "When {s} ends, the new day that begins is {o}."
+      ],
+      "bench_templates": [
+        "The day that follows {s} is {o}.",
+        "Tomorrow is {o} if today is {s}.",
+        "{s} ends, and then {o} begins.",
+        "On the calendar, {o} is the day right after {s}."
+      ],
+      "question_templates": [
+        "Which day comes after {s}?",
+        "If today is {s}, what day is tomorrow?",
+        "What day follows {s}?",
+        "After {s}, which day of the week comes next?"
+      ],
+      "chat_templates": [
+        ["What day comes next after {s}?", "The day after {s} is {o}."],
+        ["Tell me the day after {s}.", "It is {o}."],
+        ["If it is {s} today, which day is it tomorrow?", "Tomorrow is {o}."],
+        ["Which day of the week follows {s}?", "{o} follows {s}."]
+      ],
+      "facts": [
+        ["Monday", "Tuesday"],
+        ["Tuesday", "Wednesday"],
+        ["Wednesday", "Thursday"],
+        ["Thursday", "Friday"],
+        ["Friday", "Saturday"],
+        ["Saturday", "Sunday"],
+        ["Sunday", "Monday"]
+      ]
+    },
+    "month_after": {
+      "topic": "school",
+      "falsifiable": true,
+      "train_templates": [
+        "The month after {s} is {o}.",
+        "{o} comes right after {s}.",
+        "In a year, {s} is followed by {o}.",
+        "After {s}, the next month of the year is {o}.",
+        "When {s} ends, the new month that begins is {o}."
+      ],
+      "bench_templates": [
+        "The month that follows {s} is {o}.",
+        "Next month is {o} if this month is {s}.",
+        "{s} ends, and then {o} begins.",
+        "On the calendar, {o} is the month right after {s}."
+      ],
+      "question_templates": [
+        "Which month comes after {s}?",
+        "If this month is {s}, what month is next month?",
+        "What month follows {s}?",
+        "After {s}, which month of the year comes next?"
+      ],
+      "chat_templates": [
+        ["What month comes next after {s}?", "The month after {s} is {o}."],
+        ["Tell me the month after {s}.", "It is {o}."],
+        ["If it is {s} now, which month comes next?", "Next comes {o}."],
+        ["Which month of the year follows {s}?", "{o} follows {s}."]
+      ],
+      "facts": [
+        ["January", "February"],
+        ["February", "March"],
+        ["March", "April"],
+        ["April", "May"],
+        ["May", "June"],
+        ["June", "July"],
+        ["July", "August"],
+        ["August", "September"],
+        ["September", "October"],
+        ["October", "November"],
+        ["November", "December"],
+        ["December", "January"]
+      ]
+    }
+  }
+}

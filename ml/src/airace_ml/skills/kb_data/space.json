@@ -1,0 +1,43 @@
+{
+  "relations": {
+    "planet_order": {
+      "topic": "science",
+      "falsifiable": true,
+      "train_templates": [
+        "{s} is the {o} planet from the Sun.",
+        "Counting out from the Sun, {s} comes in {o} place.",
+        "Of the eight planets, {s} is the {o} one from the Sun.",
+        "If you start at the Sun and count planets, {s} is the {o}.",
+        "There are eight planets, and {s} is the {o} planet from the Sun."
+      ],
+      "bench_templates": [
+        "The {o} planet from the Sun is {s}.",
+        "Going outward from the Sun, the {o} planet is {s}.",
+        "In our solar system, {s} takes the {o} spot counting from the Sun.",
+        "The Sun has eight planets, and the {o} one is {s}."
+      ],
+      "question_templates": [
+        "What position is {s} from the Sun: first, second, third, and so on?",
+        "How far out from the Sun is {s}, counting the planets in order?",
+        "Counting the planets outward from the Sun, what is the place of {s}?",
+        "Which number in order from the Sun is {s}, from first to eighth?"
+      ],
+      "chat_templates": [
+        ["Which planet number is {s} from the Sun?", "{s} is the {o} planet from the Sun."],
+        ["Where does {s} come in the order of the planets?", "{s} is the {o} planet from the Sun."],
+        ["How far from the Sun is {s} in order?", "{s} comes in {o} place."],
+        ["Tell me the place of {s} among the planets.", "Counting from the Sun, {s} is the {o} planet."]
+      ],
+      "facts": [
+        ["Mercury", "first"],
+        ["Venus", "second"],
+        ["Earth", "third"],
+        ["Mars", "fourth"],
+        ["Jupiter", "fifth"],
+        ["Saturn", "sixth"],
+        ["Uranus", "seventh"],
+        ["Neptune", "eighth"]
+      ]
+    }
+  }
+}

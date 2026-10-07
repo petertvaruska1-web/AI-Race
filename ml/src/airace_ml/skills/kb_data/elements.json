@@ -1,0 +1,91 @@
+{
+  "relations": {
+    "element_symbol": {
+      "topic": "science",
+      "falsifiable": true,
+      "train_templates": [
+        "The chemical symbol for {s} is {o}.",
+        "{o} is the symbol of the element {s}.",
+        "In the periodic table, {s} is written as {o}.",
+        "Scientists write {s} with the symbol {o}.",
+        "The element {s} has the short name {o}."
+      ],
+      "bench_templates": [
+        "On the periodic table, the box for {s} says {o}.",
+        "A chemist writes {o} when they mean {s}.",
+        "The short code for the element {s} is {o}.",
+        "The element called {s} is shown by the letters {o}."
+      ],
+      "question_templates": [
+        "What is the chemical symbol for {s}?",
+        "Which symbol stands for {s} on the periodic table?",
+        "How do chemists write {s} in short form?",
+        "What letters stand for the element {s}?"
+      ],
+      "chat_templates": [
+        ["What is the symbol for {s}?", "The symbol for {s} is {o}."],
+        ["Can you tell me the symbol of {s}?", "It is {o}."],
+        ["Which letters mean {s} in chemistry?", "{o} is the symbol of {s}."],
+        ["Do you know how to write {s} as a symbol?", "Yes. The symbol for {s} is {o}."]
+      ],
+      "facts": [
+        ["hydrogen", "H"],
+        ["helium", "He"],
+        ["lithium", "Li"],
+        ["beryllium", "Be"],
+        ["boron", "B"],
+        ["carbon", "C"],
+        ["nitrogen", "N"],
+        ["oxygen", "O"],
+        ["fluorine", "F"],
+        ["neon", "Ne"],
+        ["sodium", "Na"],
+        ["magnesium", "Mg"],
+        ["aluminum", "Al"],
+        ["silicon", "Si"],
+        ["phosphorus", "P"],
+        ["sulfur", "S"],
+        ["chlorine", "Cl"],
+        ["argon", "Ar"],
+        ["potassium", "K"],
+        ["calcium", "Ca"],
+        ["titanium", "Ti"],
+        ["vanadium", "V"],
+        ["chromium", "Cr"],
+        ["manganese", "Mn"],
+        ["iron", "Fe"],
+        ["cobalt", "Co"],
+        ["nickel", "Ni"],
+        ["copper", "Cu"],
+        ["zinc", "Zn"],
+        ["gallium", "Ga"],
+        ["germanium", "Ge"],
+        ["arsenic", "As"],
+        ["selenium", "Se"],
+        ["bromine", "Br"],
+        ["krypton", "Kr"],
+        ["strontium", "Sr"],
+        ["zirconium", "Zr"],
+        ["molybdenum", "Mo"],
+        ["silver", "Ag"],
+        ["cadmium", "Cd"],
+        ["tin", "Sn"],
+        ["antimony", "Sb"],
+        ["iodine", "I"],
+        ["xenon", "Xe"],
+        ["barium", "Ba"],
+        ["tungsten", "W"],
+        ["platinum", "Pt"],
+        ["gold", "Au"],
+        ["mercury", "Hg"],
+        ["lead", "Pb"],
+        ["bismuth", "Bi"],
+        ["radon", "Rn"],
+        ["radium", "Ra"],
+        ["thorium", "Th"],
+        ["uranium", "U"],
+        ["plutonium", "Pu"]
+      ]
+    }
+  }
+}

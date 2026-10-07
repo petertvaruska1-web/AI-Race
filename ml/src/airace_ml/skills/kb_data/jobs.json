@@ -1,0 +1,149 @@
+{
+  "relations": {
+    "job_tool": {
+      "topic": "other",
+      "falsifiable": false,
+      "train_templates": [
+        "The {s} uses the {o} at work.",
+        "An important tool for the {s} is the {o}.",
+        "The {s} needs the {o} to do the job.",
+        "You will see the {s} with the {o} on the job.",
+        "To do the job well, the {s} works with the {o}."
+      ],
+      "bench_templates": [
+        "The tool that belongs to the {s} is the {o}.",
+        "At work, the {s} picks up the {o}.",
+        "Without the {o}, the {s} could not do the job.",
+        "The {o} is the tool that the {s} uses most."
+      ],
+      "question_templates": [
+        "Which tool does the {s} use?",
+        "What tool does the {s} need for work?",
+        "What is the main tool of the {s}?",
+        "If you watch the {s} at work, which tool do you see?"
+      ],
+      "chat_templates": [
+        ["What does the {s} use at work?", "The {s} uses the {o} at work."],
+        ["Can you tell me which tool the {s} uses?", "It is the {o}."],
+        ["Which tool is the {s} known for?", "The main tool of the {s} is the {o}."],
+        ["Do you know the tool of the {s}?", "Yes. The {s} uses the {o}."]
+      ],
+      "facts": [
+        ["doctor", "stethoscope"],
+        ["surgeon", "scalpel"],
+        ["dentist", "dental mirror"],
+        ["nurse", "thermometer"],
+        ["painter", "paintbrush"],
+        ["photographer", "camera"],
+        ["firefighter", "fire hose"],
+        ["gardener", "shovel"],
+        ["farmer", "tractor"],
+        ["carpenter", "hammer"],
+        ["mechanic", "wrench"],
+        ["plumber", "plunger"],
+        ["electrician", "pliers"],
+        ["welder", "welding torch"],
+        ["tailor", "sewing machine"],
+        ["barber", "scissors"],
+        ["hairdresser", "hairdryer"],
+        ["baker", "oven"],
+        ["teacher", "chalkboard"],
+        ["singer", "microphone"],
+        ["drummer", "drumsticks"],
+        ["pianist", "piano"],
+        ["guitarist", "guitar"],
+        ["violinist", "violin"],
+        ["writer", "pen"],
+        ["astronomer", "telescope"],
+        ["scientist", "microscope"],
+        ["fisherman", "fishing rod"],
+        ["miner", "pickaxe"],
+        ["cashier", "cash register"],
+        ["judge", "gavel"],
+        ["lumberjack", "axe"],
+        ["archer", "bow"],
+        ["magician", "wand"],
+        ["janitor", "mop"],
+        ["waiter", "tray"],
+        ["police officer", "handcuffs"],
+        ["referee", "whistle"],
+        ["conductor", "baton"],
+        ["diver", "oxygen tank"],
+        ["astronaut", "spacesuit"],
+        ["cowboy", "lasso"],
+        ["bus driver", "steering wheel"]
+      ]
+    },
+    "job_place": {
+      "topic": "other",
+      "falsifiable": false,
+      "train_templates": [
+        "The workplace of the {s} is the {o}.",
+        "Every day, the {s} goes to the {o} for work.",
+        "The place where the {s} works is the {o}.",
+        "If you need the {s}, go to the {o}.",
+        "A visit to the {s} at work will take you to the {o}."
+      ],
+      "bench_templates": [
+        "The {s} heads to the {o} to begin the work day.",
+        "Where the {s} earns a living is the {o}.",
+        "To find the {s} on the job, you must go to the {o}.",
+        "The {o} is the place where the {s} works."
+      ],
+      "question_templates": [
+        "Where does the {s} work?",
+        "Which place is the workplace of the {s}?",
+        "To meet the {s} at work, where do you go?",
+        "What is the place where the {s} does the job?"
+      ],
+      "chat_templates": [
+        ["Where does the {s} go to work?", "The {s} goes to the {o} for work."],
+        ["Can you tell me where the {s} works?", "The place where the {s} works is the {o}."],
+        ["Do you know the workplace of the {s}?", "Yes. It is the {o}."],
+        ["Where would I find the {s} at work?", "You would find the {s} at the {o}."]
+      ],
+      "facts": [
+        ["doctor", "hospital"],
+        ["nurse", "hospital"],
+        ["teacher", "school"],
+        ["professor", "university"],
+        ["farmer", "farm"],
+        ["baker", "bakery"],
+        ["firefighter", "fire station"],
+        ["police officer", "police station"],
+        ["librarian", "library"],
+        ["cashier", "store"],
+        ["waiter", "restaurant"],
+        ["chef", "restaurant"],
+        ["dentist", "dental clinic"],
+        ["judge", "courtroom"],
+        ["pilot", "cockpit"],
+        ["astronaut", "space station"],
+        ["miner", "mine"],
+        ["mechanic", "garage"],
+        ["barber", "barbershop"],
+        ["hairdresser", "salon"],
+        ["gardener", "garden"],
+        ["actor", "theater"],
+        ["artist", "studio"],
+        ["photographer", "studio"],
+        ["scientist", "laboratory"],
+        ["postal worker", "post office"],
+        ["zookeeper", "zoo"],
+        ["priest", "church"],
+        ["monk", "monastery"],
+        ["cowboy", "ranch"],
+        ["lumberjack", "forest"],
+        ["sailor", "ship"],
+        ["bus driver", "bus"],
+        ["taxi driver", "taxi"],
+        ["banker", "bank"],
+        ["pharmacist", "pharmacy"],
+        ["mayor", "town hall"],
+        ["carpenter", "workshop"],
+        ["secretary", "office"],
+        ["accountant", "office"]
+      ]
+    }
+  }
+}
