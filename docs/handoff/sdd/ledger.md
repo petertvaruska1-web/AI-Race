@@ -160,3 +160,4 @@ Task 13: review (sonnet a66ab36): spec ✅, Approved; Minors: M1 tag_topic stemm
 Task 13: Ruling: pull M1, M2, M3 into a fix round together with the indentation ruling — quality and topic tags become player-facing filters (cleaning, balanced variety) over every real document; curly apostrophes are common in web text — cost if wrong: small extra work.
 Task 13: minor (deferred): M4 test readability (MIN_GROUP defined after use; chained comparison at test_noise_dedup.py:450); M5 abbreviation periods as sentence boundaries in _insert_sentence (cosmetic, tag stays correct).
 Task 13: fix round 1 dispatched (resume a412eff) — indentation ruling + M1, M2, M3.
+Task 13: fix round 1 implemented bf70e88 (795 passed, 57s); scoped re-review dispatched (haiku aae4c70) over 155e999..bf70e88.

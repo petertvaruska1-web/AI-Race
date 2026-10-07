@@ -113,3 +113,66 @@ Created: `ml/src/airace_content/textproc.py`, `topics.py`, `dedup.py`, `noise.py
 4. **Single-linkage chaining.** Union-find merges transitively, so a cluster can contain members with low pairwise similarity to the canonical one (minimum 0.11 seen in the facts data). That follows the ruling; `canonical` is always the first occurrence.
 5. **Quality scale on real web text is unmeasured.** The thorough threshold (0.65) equals a known-word share of about 76% for an otherwise clean document. With the plan's `known_vocab` (top 30,000 words from books/educational/facts/creative) real web text with many proper nouns or numbers might be cut hard by Thorough. Worth checking the quality histogram on real fineweb rows in Task 15.
 6. Rounding details: a lone duplicate copy (total of exactly 1) violates the "2-6" group size; `inject_noise` raises ValueError when the rates leave no clean document to copy (for example typo 0.5 + duplicate 0.5).
+
+---
+
+# Fix round 1
+
+Commit: `bf70e88 fix(content): keep indentation in normalize_text; stricter topic stemming; curly and quoted apostrophes` (trailers as before, not pushed).
+Files changed: `ml/src/airace_content/textproc.py`, `ml/src/airace_content/topics.py`, `ml/tests/content/test_textproc.py` (all new tests are in this one file; `test_noise_dedup.py` is unchanged).
+
+## What changed, per item
+
+**R-a, `normalize_text` keeps each line's leading indentation (textproc.py).**
+- The space-run collapse now uses one regex, `^([ \t]*)|( {2,})` (multiline), whose callback returns a line's leading spaces and tabs unchanged and turns any later run of spaces into one space. Everything else is as before (NFC, CRLF/CR to LF, control characters, trailing spaces, 3+ newlines to 2). The brief's `test_normalize` passes unchanged.
+- Judgement calls: "indentation" means leading spaces AND tabs (`" \t  x"` stays as written); a line of only spaces still becomes an empty line (the trailing-space rule strips it).
+- Tests added: `test_normalize_keeps_each_lines_leading_indentation` (values, including CRLF); `test_normalized_minipy_program_is_unchanged_and_still_runs` (a nested while/if/else collatz program: text unchanged, and `run_program` gives the identical `RunResult`, stdout `6 8\n7 16\n`); `test_normalized_mbpp_style_function_is_unchanged_and_still_runs` (a nested-for mbpp-style function delivered with CRLF becomes the LF original and `call_function` returns `(8, None)` on both); `test_generated_code_documents_keep_their_indentation_and_behaviour` (300 `code_train_docs` documents: every line's indentation is unchanged and `run_program` gives the same stdout and no error before and after). The idempotence fuzz test was updated: only leading indentation may now hold a run of spaces.
+- Before the fix 469 of 600 generated code documents changed under `normalize_text`.
+- Known residue (cosmetic, not behaviour): runs of spaces elsewhere in a line still collapse as the brief says, so the generator's two-space inline comments (`print(x)  # 3`) become one space (298 of 600 code documents are touched this way), and double spaces inside a string literal would change that string. Neither breaks a program in the tests.
+
+**M1, stemming no longer creates false keyword hits (topics.py, `_forms`).**
+- Verb stems (after "ed" and "ing", with and without the restored final "e") must now be at least 4 letters, so "being", "cared", "caring", "rated", "rating" no longer reach "bee", "car", "rat". The "es" ending only strips after a sibilant (s, x, z, ch, sh, o: "foxes", "lunches", "potatoes"), so "cares" and "rates" no longer reach "car" and "rat". "bearing" is on a one-word stoplist (its stem "bear" is 4 letters). Plain "s" plurals still reach 3-letter keywords ("rats", "bees", "cars", "cows").
+- Audit of the stemming on 2,685 distinct words from the fixtures and 1,500 knowledge-base paragraphs: 117 words reach a keyword only through an ending, and all 117 are genuine inflections (apples, baked, berries, cities, fishing, tomatoes, volcanoes, ...). KB agreement is unchanged at 90.2%.
+- Tests added: `test_endings_do_not_turn_common_words_into_keywords` (the reviewer's two sentences, "being", "cared caring cares", "rates rated rating", "bearing", a long mixed sentence: all "other", the second sentence lands in family/feelings), `test_endings_still_reach_real_keywords` (foxes, potatoes, tomatoes, lunches, bears, cars, rats, bees, cooking/baking/cooked, smiled/crying/laughing, puppies/bunnies).
+
+**M2, possessives and quoted words reach their keyword (topics.py, textproc.py).**
+- `_forms` removes a trailing `'s` first. Quoted words and plural possessives (`'cat'`, `dogs'`) are handled by the `words()` change below.
+- Test added: `test_possessives_and_quoted_words_reach_their_keyword` ("the cat's dog's bird's", the same with U+2019, "the dogs' bowls", "She said 'cat' twice", the same with U+2018/U+2019, "Mom's and Dad's hugs" is family). All were "other" before.
+
+**M3, curly apostrophes and quoted words (textproc.py, `words`).**
+- `words()` keeps the brief's `[a-z']+` regex as its core. It first maps U+2018 and U+2019 to `'` and afterwards strips leading and trailing apostrophes from each word, dropping tokens that were only apostrophes. Because `build_vocab`, `simplicity`, `quality_score` and `tag_topic` all use `words()`, they all benefit; the private `_content_words` helper became redundant and was removed.
+- Tests added: `test_words_treat_curly_apostrophes_as_straight_and_trim_quote_marks` ("isn’t" -> "isn't", "'hello'" -> "hello", "dogs'" -> "dogs", "rock 'n' roll" -> rock, n, roll, apostrophe-only text -> nothing, "Don't" unchanged); `test_curly_apostrophe_prose_scores_like_straight_apostrophe_prose` (identical `build_vocab` and identical score, above 0.95; it was about 0.83 before); `test_single_quoted_speech_does_not_lower_the_score` (straight and curly single quotes around "hello" and "goodbye": score not lower than the unquoted sentence's by more than 0.02; it was 0.92 against 1.0 before, now 1.0).
+
+## TDD evidence
+
+RED (new tests written first, against the commit-155e999 sources; before the implementation edits):
+```
+$ cd ml && uv run --no-sync pytest tests/content/test_textproc.py -q
+...
+FAILED tests/content/test_textproc.py::test_normalize_keeps_each_lines_leading_indentation
+FAILED tests/content/test_textproc.py::test_normalized_minipy_program_is_unchanged_and_still_runs
+FAILED tests/content/test_textproc.py::test_normalized_mbpp_style_function_is_unchanged_and_still_runs
+FAILED tests/content/test_textproc.py::test_generated_code_documents_keep_their_indentation_and_behaviour
+FAILED tests/content/test_textproc.py::test_endings_do_not_turn_common_words_into_keywords
+FAILED tests/content/test_textproc.py::test_possessives_and_quoted_words_reach_their_keyword
+FAILED tests/content/test_textproc.py::test_words_treat_curly_apostrophes_as_straight_and_trim_quote_marks
+FAILED tests/content/test_textproc.py::test_curly_apostrophe_prose_scores_like_straight_apostrophe_prose
+FAILED tests/content/test_textproc.py::test_single_quoted_speech_does_not_lower_the_score
+9 failed, 28 passed in 0.36s
+```
+(representative failure lines: `assert build_vocab([curly], 100) == vocab` with the extra items 'isn', 't', 'can', 'aren', 'don'; `assert 0.9166666666666667 > (1.0 - 0.02)` for single-quoted speech.) The 28 passing tests include `test_endings_still_reach_real_keywords`, written as a guard that the stemming gain is kept.
+
+The first GREEN run had one failure that was a wrong expectation in my own new test ("Mom's pie and Dad's cake" is a food/family tie that the earlier topic, food, wins); the test sentence was changed to "Mom's and Dad's hugs". No other assertion was touched.
+
+GREEN, commands run from `/home/user/AI-Race/ml`:
+```
+$ uv run --no-sync pytest tests/content -q -W error
+74 passed in 2.50s
+$ uv run --no-sync pytest -q
+795 passed, 4 deselected in 56.76s
+$ uv run --no-sync ruff check .
+All checks passed!
+$ uv run --no-sync ruff format --check src/airace_content tests/content
+8 files already formatted
+```
+(`ruff check --fix` also applied one suggestion: `word.removesuffix("'s")` in `_forms`.)
