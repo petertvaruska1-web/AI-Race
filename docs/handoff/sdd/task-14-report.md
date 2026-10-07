@@ -285,3 +285,122 @@ Notes on these numbers:
 
 - Web still separates noise by quality. By kind: clean 0.93, duplicate 0.97, false_fact 0.91, typo 0.65, boilerplate 0.61, garbled 0.32, spam 0.00.
 - In conversations, about 10% of clean chats fail Thorough. This predates Ruling A and is unchanged by it. It is a tiny-scale artifact: the tiny `known_vocab` is only the fixture text of four datasets, so some knowledge-base words in `fact_chat` are unknown (for example "Which letters mean manganese in chemistry?" scored 0). At full scale the 30,000-word vocabulary should cover them; Task 15 can confirm on real data.
+
+## Fix round 1
+**Commit:** `832dddb fix(content): hold out noised variants with their origin, reassign exhausted quotas, lead-only simplewiki, fail fast on source format` (not pushed; the same two trailers).
+
+### What changed, per finding
+- **I1: noised twins left in training.**
+  - `assemble.origin_key(content)` is a 16-byte blake2b digest of a document's content before noise (`text:` + text, or `chat:` + its JSON turns).
+  - `apply_noise` now takes `Collected(content, topic, component)` records. It gives every output document `AssembledDoc.origin`:
+    - an input keeps its pre-noise key, whatever noise it then gets (typo, spam, boilerplate, garble, false fact);
+    - a duplicate copy takes its source's key (`source_of_copies`), plus the source's topic and component.
+  - `AssembledDoc.copy_of` is gone; origins subsume it.
+  - `build._units(dup_cluster, origins)` unions the units of all documents that share an origin, on top of the MinHash clusters. `heldout_mask(..., origins=None)` and `tag_documents` pass `[d.origin for d in docs]`.
+  - In the tiny build, typo, boilerplate and garble variants of cycled fixture texts now travel with their originals: web holds out 18 (was 14), books 33 (was 32). The reviewer's books doc 46 case is covered by the new build test.
+- **I2: simplewiki kept headings and navigation.**
+  - `_lead_section` keeps only the lines before the first heading-like line. A heading has at most `SIMPLEWIKI_HEADING_MAX_WORDS = 8` words and does not end in `.`, `!` or `?` (after stripping closing quotes and brackets).
+  - The 150-word budget then applies as before. An article whose first line is a heading gives no document.
+  - Added a stub fixture row in the HF layout ("Marville": lead, then `Related pages` / list item / `References` / `Other websites` / `Official website`). simplewiki now has 11 fixture rows.
+- **I3: exhausted sources silently under target.**
+  - Each component is now a resumable collector (`_SourceCollector` / `_GeneratorCollector`, both with `fill(quota)`).
+  - `assemble_dataset` fills all components. A source that runs dry before its quota is `exhausted`, and its unmet quota is shared out among the non-exhausted components in proportion to their shares. Those components resume where they stopped, and this repeats until nothing is unmet or every component is exhausted.
+  - Full scale counts the shortfall in tokens. Tiny scale uses the same code with document quotas (`split_count`); there, exhaustion is the cycling guard (a pass that accepts nothing).
+  - The manifest's per-component entries now hold:
+    - `planned_docs` / `assigned_docs` (tiny) or `planned_tokens` / `assigned_tokens` (full)
+    - `docs`
+    - `exhausted`
+    - `rows_read` and `passes` (sources)
+    - `tokens`: the component's actual tokens in the written corpus, counted per document through noise and copies; the sum over components equals the dataset's tokens
+  - The CLI prints one `warning: <dataset>: <component> ran out at X of Y planned tokens|documents; the other components made up the difference` line per exhausted component, on stderr.
+  - mbpp stays on `train`.
+  - Rehearsal: full scale at 1/100 of the targets, with mbpp and everyday_conv finite (their fixture rows once, as on the hub) and the other sources endless.
+    - Code reached 102% of target: gen:code was assigned 99,690 instead of 80,000 tokens, while mbpp ran out at 310 of 20,000.
+    - Conversations reached 102%: everyday_conv ran out at 282 of 30,000, and its shortfall went to soda, fact_chat and instructions at 0.55 : 0.15 : 0.15.
+    - Exactly two warning lines were printed.
+- **M1: a wrong format guess fails slowly.**
+  - `sources.row_has_format(source_id, row)` checks the fields each adapter reads. For gutenberg that includes `METADATA` parsing as JSON with a `subjects` (or `subject`) entry; `_subjects` now returns None for unreadable metadata.
+  - A source raises `SourceFormatError` (naming the source, its HF path and the expected fields) when its first `FORMAT_CHECK_ROWS = 200` rows, or all of its rows if it has fewer, have none in the expected format.
+  - The CLI reports it with exit code 1.
+- **M2: the retrained tokenizer was moved into place before the corpora were written.**
+  - The new tokenizer is trained to `tokenizer.json.tmp`, and every corpus is encoded with that in-memory tokenizer.
+  - The file is moved to `tokenizer.json` only after the last corpus is written. A `finally` removes the trial file on any failure, including the full-scale vocab-size rejection.
+- **M3: DRY.**
+  - `MIN_CHAT_TURNS` is defined once, in `sources.py`; `assemble.py` imports it.
+  - `_RATE_KINDS = tuple(f.name for f in fields(NoiseRates))`.
+- **M4: CLI caught every `ImportError`.** `hf_fetch` raises `DatasetsUnavailable(ImportError)` when `datasets` can't be imported. The CLI catches only `BuildError`, `SourceFormatError` and `DatasetsUnavailable`, so any other ImportError propagates with its traceback.
+- **M5: the laziness test proved nothing without `datasets`.**
+  - The test now installs a fake `datasets` module with `monkeypatch.setitem(sys.modules, …)`. It asserts that `hf_fetch` makes no `load_dataset` call until iterated, then the exact call `("openai/gsm8k", "main", "train", streaming=True)` and the `max_rows` cut.
+  - A second test parses every `airace_content/*.py` with `ast` and asserts that no module imports `datasets` outside a function body.
+
+### Covering tests (all in `tests/content/test_build.py`)
+- **I1:**
+  - `test_noise_keeps_each_documents_origin`
+  - `test_heldout_keeps_documents_of_one_origin_together`, which also covers one origin joining two clusters
+  - `test_no_heldout_text_has_a_variant_in_training`: re-assembles every dataset with the build's own streams, checks it matches the corpus' noise tags, and asserts no held-out origin occurs among training documents
+  - `test_generator_topics_and_copies`, now via origin and component
+- **I2:** `test_text_adapters` (the reviewer's Bucy stub, the fixture "Cat" row stopping before `History`, the fixture "Marville" stub, a quoted sentence end, a heading-first article) and `test_fixtures_exercise_every_adapter_rule` (the stub layout is present).
+- **I3:**
+  - `test_cycling_stops_when_a_pass_accepts_nothing`: tiny reassignment, 38 → 76 and 37 → 74
+  - `test_full_scale_collects_to_the_token_target`
+  - `test_full_scale_generators_reach_their_targets`: gsm8k exhausted, shortfall shared 0.6 : 0.3
+  - `test_full_scale_gives_an_exhausted_sources_quota_to_the_others`: mbpp to gen:code, dataset within 5% of target
+  - `test_reassignment_follows_the_shares_of_the_remaining_components`: 3-way proportional split
+  - `test_manifest_and_shared_artifacts`: component fields, and Σ component tokens = corpus tokens
+  - `test_cli_warns_about_exhausted_sources`
+- **M1:** `test_a_source_in_an_unexpected_format_fails_fast` (exactly 200 rows read before the error, and a small source with no row in format) and `test_cli_reports_a_source_in_an_unexpected_format` (exit 1).
+- **M2:** `test_a_failed_build_leaves_no_new_tokenizer`
+  - A fresh build failing at `books` leaves no tokenizer.
+  - A failing seed-1 retrain leaves the old tokenizer byte-identical and no `.tmp`.
+  - A successful seed-1 retrain does change it, which proves the check can see a difference.
+- **M3:** covered by the existing suite (pure refactor).
+- **M4:** `test_cli_reports_a_missing_datasets_package` (`sys.modules["datasets"] = None`, exit 1) and `test_cli_lets_other_import_errors_through`.
+- **M5:** `test_hf_fetch_imports_datasets_only_when_it_runs` and `test_no_content_module_imports_datasets_on_import`.
+- `test_validate_recipe_refuses_bad_recipes` also covers a component named twice. Names must now be unique, because stats and per-component tokens are keyed by name.
+
+### Commands and output
+- **RED (imports).** `cd ml && uv run --no-sync pytest tests/content/test_build.py -q` → `ImportError: cannot import name 'Collected' from 'airace_content.assemble'`. Expected: the names did not exist yet.
+- **RED (behaviour).** I added inert stubs for the new names and re-ran `uv run --no-sync pytest tests/content -q -k "not source_in_an_unexpected_format"`, which gave `16 failed, 121 passed, 2 deselected`:
+  - `test_text_adapters`
+  - `test_validate_recipe_refuses_bad_recipes`
+  - `test_cycling_stops_when_a_pass_accepts_nothing`
+  - `test_full_scale_collects_to_the_token_target`
+  - `test_full_scale_generators_reach_their_targets`
+  - `test_full_scale_gives_an_exhausted_sources_quota_to_the_others`
+  - `test_reassignment_follows_the_shares_of_the_remaining_components`
+  - `test_generator_topics_and_copies`
+  - `test_chats_get_typo_noise_only`
+  - `test_noise_keeps_each_documents_origin`
+  - `test_heldout_keeps_documents_of_one_origin_together`
+  - `test_no_heldout_text_has_a_variant_in_training`
+  - `test_manifest_and_shared_artifacts`
+  - `test_a_failed_build_leaves_no_new_tokenizer`: the fresh failed build had left `tokenizer.json`
+  - `test_cli_warns_about_exhausted_sources`
+  - `test_cli_lets_other_import_errors_through`
+
+  The M1 tests were deselected because without the check they stream an endless bad source and hang, which is the slow failure M1 describes. The M5 tests and `test_cli_reports_a_missing_datasets_package` already passed: M5 fixed the test, not the code, and the M4 narrowing is pinned by `test_cli_lets_other_import_errors_through`.
+- **GREEN.** `uv run --no-sync pytest tests/content -q` → `139 passed in 12.86s`.
+- **Mutation checks.** Each was applied, its tests run, and the file restored byte-identical; all were caught:
+  - I1: origins ignored in the build, and the origin union removed
+  - I3: no reassignment, and no CLI warning
+  - I2: headings skipped instead of stopping
+  - M1: no early format check (hangs)
+  - M2: tokenizer moved even on failure
+  - M4: broad ImportError caught again
+- **Full suite.** `uv run --no-sync pytest -q` → `860 passed, 4 deselected in 65.11s`, with no warnings. `uv run --no-sync ruff check .` → `All checks passed!`; `ruff format --check` → `14 files already formatted`.
+- **Tiny build after the fixes.** `airace-content build --scale tiny --fixtures tests/fixtures/sources` (0.9 s), held out per dataset:
+
+  | dataset | held out |
+  |---|---|
+  | web | 18 |
+  | books | 33 |
+  | educational | 11 |
+  | conversations | 8 |
+  | code | 8 |
+  | reasoning | 8 |
+  | facts | 10 |
+  | creative | 11 |
+
+  - No component is exhausted.
+  - Facts tokens fell from 8,658 to 8,336 because simplewiki now drops heading and navigation lines.
+  - Quality pass rates (light / standard / thorough), re-measured: every dataset is as in the Ruling A table except web, which is now 90% / 88% / 80% (was 90% / 87% / 79%). `known_vocab` includes the facts text, which lost its heading and navigation lines.

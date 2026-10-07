@@ -179,3 +179,5 @@ Task 14: review (opus a5160cd): spec ❌ — I1 held-out units miss noised twins
 Task 14: Ruling (I3): when a source component is exhausted, its unmet token quota is reassigned to the dataset's remaining components in proportion to their shares, so every dataset meets its full-scale token target; the manifest records per-component planned and actual tokens plus an `exhausted` flag, and the CLI prints one warning line per exhausted component; mbpp stays on the plan's `train` split (all splits total ~974 rows, still far short) — cost if wrong: the code dataset is ~99% generated MiniPy (as it would be anyway) and conversations lean on soda/generators.
 Task 14: Ruling: pull Minors M1-M5 into fix round 1 — the full build is a one-time, hours-long run on the owner's machine, so fail-fast and crash-safety are worth their small cost — cost if wrong: a little extra work.
 Task 14: fix round 1 dispatched (resume a22b232) — I1, I2, I3 (ruling), M1-M5.
+Task 14: fix round 1 implemented 832dddb (860 passed, 65s).
+Task 14: scoped re-review dispatched (sonnet ad6410f) over 69fa501..832dddb.
