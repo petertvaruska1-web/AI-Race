@@ -15,7 +15,7 @@ from typing import Self
 import numpy as np
 
 from airace_ml.skills.kb import KB, Fact
-from airace_ml.skills.types import ExactItem, MCItem, TextDoc
+from airace_ml.skills.types import ExactItem, MCItem, TextDoc, fair_quota
 from airace_ml.tokenizer import Role
 
 BLANK = "___"
@@ -43,24 +43,11 @@ def _pick(rng: np.random.Generator, n: int) -> int:
     return int(rng.integers(n))
 
 
-def _fair_quota(capacity: dict[str, int], total: int) -> dict[str, int]:
-    """Split ``total`` over the keys as evenly as the capacities allow (small ones first)."""
-    if total > sum(capacity.values()):
-        raise ValueError(f"cannot take {total} from {sum(capacity.values())} available")
-    quota: dict[str, int] = {}
-    remaining, left = total, len(capacity)
-    for key, cap in sorted(capacity.items(), key=lambda kv: (kv[1], kv[0])):
-        quota[key] = min(cap, remaining // left)
-        remaining -= quota[key]
-        left -= 1
-    return quota
-
-
 def _sample_facts(
     rng: np.random.Generator, total: int, pools: Mapping[str, list[Fact]]
 ) -> list[Fact]:
     """``total`` distinct facts spread evenly over the pools (one per relation), in random order."""
-    quota = _fair_quota({name: len(pool) for name, pool in pools.items()}, total)
+    quota = fair_quota({name: len(pool) for name, pool in pools.items()}, total)
     chosen: list[Fact] = []
     for name in sorted(pools):
         pool = pools[name]

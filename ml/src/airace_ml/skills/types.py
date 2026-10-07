@@ -7,6 +7,7 @@ canonical keys of generated items so training text never contains a benchmark it
 """
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -31,6 +32,22 @@ def reserved_for_bench(key: str) -> bool:
     """Whether the item with this canonical key belongs to the benchmark (about 10% of keys)."""
     digest = hashlib.blake2b(key.encode(), digest_size=8).digest()
     return int.from_bytes(digest, "big") % 10 == 0
+
+
+def fair_quota(capacity: Mapping[str, int], total: int) -> dict[str, int]:
+    """Split ``total`` over the keys as evenly as the capacities allow (small ones first).
+
+    Raises ``ValueError`` if ``total`` is more than the capacities add up to.
+    """
+    if total > sum(capacity.values()):
+        raise ValueError(f"cannot take {total} from {sum(capacity.values())} available")
+    quota: dict[str, int] = {}
+    remaining, left = total, len(capacity)
+    for key, cap in sorted(capacity.items(), key=lambda kv: (kv[1], kv[0])):
+        quota[key] = min(cap, remaining // left)
+        remaining -= quota[key]
+        left -= 1
+    return quota
 
 
 @dataclass

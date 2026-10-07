@@ -6,18 +6,20 @@ families, each tagged ``fam:<name>`` in benchmarks:
 - ``step``: counting up by 1-9 from 1-20 (2, 4, 6, 8)
 - ``letters``: letters up by 1-3, staying within A-Z (A, C, E, G)
 - ``cycle``: 2-3 colors or 2-3 animals over and over (red, blue, red, blue)
-- ``double``: doubling from 1-5 (3, 6, 12, 24)
+- ``double``: times 2 or times 3 from 1-9, up to 10,000 (3, 6, 12, 24)
 - ``countdown``: counting down by 1-3 from up to 40, never below 0 (9, 8, 7, 6)
 
 A benchmark item is the line without its last term, ``Next: 2, 4, 6, 8,``, which is also its
-canonical key; 4-6 terms are shown. Items use only keys for which :func:`reserved_for_bench` is
-true. A training line also contains the shorter prompts that are its first 4, 5 or 6 terms
-followed by a comma, and it is kept only if none of those is reserved, so no benchmark prompt
-occurs in training text, not even inside a longer line.
+canonical key; 4-7 terms are shown. Items use only keys for which :func:`reserved_for_bench` is
+true. A training line also contains the shorter prompts that are its first 4 to 7 terms followed
+by a comma, and it is kept only if none of those is reserved, so no benchmark prompt occurs in
+training text, not even inside a longer line.
 
 The patterns of every family are listed up front instead of drawn and rejected: the spaces are
-small (``double`` has only 15 prompts), so listing keeps a benchmark free of repeats, lets it
-spread evenly over the families and makes the partition exact. Nothing here is a model output;
+small (``double`` has only 67 prompts), so listing keeps a benchmark free of repeats, lets it
+spread evenly over the families and makes the partition exact. Training lines choose a family
+with probability proportional to the square root of its number of patterns, so the small
+families are not repeated far more often than the large ones. Nothing here is a model output;
 these are data generators.
 """
 
@@ -29,12 +31,13 @@ from functools import cache
 
 import numpy as np
 
-from airace_ml.skills.types import ExactItem, TextDoc, reserved_for_bench
+from airace_ml.skills.types import ExactItem, TextDoc, fair_quota, reserved_for_bench
 
 FAMILIES = ("step", "letters", "cycle", "double", "countdown")
-SHOWN_TERMS = (4, 5, 6)  # how many terms a prompt shows
+SHOWN_TERMS = (4, 5, 6, 7)  # how many terms a prompt shows
 MIN_LINES, MAX_LINES = 3, 8  # lines in one training document
 MAX_ATTEMPTS_PER_LINE = 50
+MAX_DOUBLE = 10_000  # the largest term of a ``double`` pattern
 TOPIC = "school"
 # fmt: off
 CYCLE_WORDS = {
@@ -92,8 +95,11 @@ def _cycles(n: int) -> Iterator[list[str]]:
 
 
 def _doubles(n: int) -> Iterator[list[str]]:
-    for start in range(1, 6):
-        yield [str(start * 2**i) for i in range(n)]
+    for start in range(1, 10):
+        for factor in (2, 3):
+            terms = [start * factor**i for i in range(n)]
+            if terms[-1] <= MAX_DOUBLE:
+                yield [str(t) for t in terms]
 
 
 def _countdowns(n: int) -> Iterator[list[str]]:
@@ -141,26 +147,16 @@ def _bench_pools() -> dict[str, tuple[_Pattern, ...]]:
     return {f: tuple(p for p in ps if reserved_for_bench(p.key)) for f, ps in _space().items()}
 
 
-def _fair_quota(capacity: dict[str, int], total: int) -> dict[str, int]:
-    """Split ``total`` over the keys as evenly as the capacities allow (small ones first)."""
-    if total > sum(capacity.values()):
-        raise ValueError(f"pattern: cannot take {total} items, only {sum(capacity.values())} exist")
-    quota: dict[str, int] = {}
-    remaining, left = total, len(capacity)
-    for key, cap in sorted(capacity.items(), key=lambda kv: (kv[1], kv[0])):
-        quota[key] = min(cap, remaining // left)
-        remaining -= quota[key]
-        left -= 1
-    return quota
-
-
 def pattern_train_docs(rng: np.random.Generator, n: int) -> list[TextDoc]:
     """``n`` documents of 3-8 different lines like ``Next: 2, 4, 6, 8, 10``, never a benchmark one.
 
-    Each line is of a random family and then a random pattern of it (4-6 terms shown, then the
-    next one), among the patterns that show no benchmark prompt.
+    Each line is of a random family (more often the larger ones, in proportion to the square root
+    of their number of patterns) and then a random pattern of it (4-7 terms shown, then the next
+    one), among the patterns that show no benchmark prompt.
     """
     pools = _train_pools()
+    weights = np.sqrt([len(pools[family]) for family in FAMILIES])
+    weights /= weights.sum()
     docs: list[TextDoc] = []
     for _ in range(n):
         wanted = int(rng.integers(MIN_LINES, MAX_LINES + 1))
@@ -168,7 +164,7 @@ def pattern_train_docs(rng: np.random.Generator, n: int) -> list[TextDoc]:
         for _ in range(MAX_ATTEMPTS_PER_LINE * wanted):
             if len(lines) == wanted:
                 break
-            pool = pools[FAMILIES[int(rng.integers(len(FAMILIES)))]]
+            pool = pools[FAMILIES[int(rng.choice(len(FAMILIES), p=weights))]]
             line = pool[int(rng.integers(len(pool)))].line
             if line not in lines:
                 lines.append(line)
@@ -187,7 +183,7 @@ def pattern_bench_items(rng: np.random.Generator, n: int = 150) -> list[ExactIte
     Raises ``ValueError`` if ``n`` is more than the number of reserved prompts.
     """
     pools = _bench_pools()
-    quota = _fair_quota({f: len(p) for f, p in pools.items()}, n)
+    quota = fair_quota({f: len(p) for f, p in pools.items()}, n)
     chosen: list[_Pattern] = []
     for family in FAMILIES:
         pool = pools[family]

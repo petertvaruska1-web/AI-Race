@@ -7,7 +7,14 @@ import pytest
 from airace_ml.skills import patterns, reasoning
 from airace_ml.skills.patterns import pattern_bench_items, pattern_train_docs
 from airace_ml.skills.reasoning import reasoning_bench_items, reasoning_train_docs
-from airace_ml.skills.types import ExactItem, MCItem, TextDoc, reserved_for_bench, skill_rng
+from airace_ml.skills.types import (
+    ExactItem,
+    MCItem,
+    TextDoc,
+    fair_quota,
+    reserved_for_bench,
+    skill_rng,
+)
 
 
 def test_sizes_and_determinism():
@@ -67,9 +74,15 @@ SUPERLATIVES = {
 }
 
 
-def solve_compare(text: str) -> str:
+def sentences_of(text: str) -> list[str]:
+    return [s.strip() for s in re.findall(r"[^.?]+[.?]", text)]
+
+
+def compare_order(text: str) -> tuple[str, list[str]]:
+    """The attribute and the three chain names from the top down, solved from the premises."""
     facts = re.findall(r"(\w+) is (\w+) than (\w+)\.", text)
     assert len(facts) == 2
+    assert len({COMPARATIVES[adj][0] for _, adj, _ in facts}) == 1
     beats: dict[str, set[str]] = {}
     names: set[str] = set()
     for a, adj, b in facts:
@@ -82,10 +95,21 @@ def solve_compare(text: str) -> str:
                 beats[x] |= beats.get(y, set())
     reach = {n: len(beats.get(n, ())) for n in names}
     assert sorted(reach.values()) == [0, 1, 2], "the premises must give one clear order"
-    word = re.search(r"Who is the (\w+)\?$", text).group(1)
-    assert SUPERLATIVES[word][0] == {COMPARATIVES[adj][0] for _, adj, _ in facts}.pop()
-    ranked = sorted(names, key=reach.__getitem__)
-    return ranked[-1] if SUPERLATIVES[word][1] > 0 else ranked[0]
+    return COMPARATIVES[facts[0][1]][0], sorted(names, key=reach.__getitem__, reverse=True)
+
+
+def solve_compare(text: str) -> str:
+    attribute, order = compare_order(text)
+    ask = re.search(r"Who is (?:the (\w+)|in the middle)\?$", text)
+    if ask.group(1) is None:
+        return order[1]
+    assert SUPERLATIVES[ask.group(1)][0] == attribute
+    return order[0] if SUPERLATIVES[ask.group(1)][1] > 0 else order[2]
+
+
+def syllogism_premises(text: str) -> tuple[list[str], str]:
+    sentences = sentences_of(text)
+    return [s for s in sentences if s.endswith(".")], next(s for s in sentences if s.endswith("?"))
 
 
 def solve_syllogism(text: str) -> str:
@@ -114,7 +138,7 @@ def solve_count(text: str) -> int:
 def family_of_text(text: str) -> str:
     if "in this list:" in text:
         return "count"
-    if "Who is the" in text:
+    if "Who is" in text:
         return "compare"
     if "How many" in text:
         return "word_problem"
@@ -132,6 +156,23 @@ def solve(family: str, text: str) -> str:
     )
 
 
+def world_of(family: str, text: str) -> tuple:
+    """The facts a puzzle is about, apart from their wording, read from the text."""
+    if family == "compare":
+        attribute, order = compare_order(text)
+        return (attribute, *order)
+    if family == "syllogism":
+        premises, question = syllogism_premises(text)
+        return (frozenset(premises), question)
+    if family == "word_problem":
+        (name,) = set(re.findall(r"[A-Z][a-z]+", text)) & set(reasoning.NAMES)
+        thing = re.search(r"How many (\w+) ", text).group(1)
+        start, change = (int(x) for x in re.findall(r"\d+", text))
+        return (name, thing, " more" in text, start, change)
+    target, words = re.fullmatch(r"How many (\w+)s are in this list: (.*)\?", text).groups()
+    return (target, tuple(sorted(words.split(", "))))
+
+
 def question_text(prompt: str) -> str:
     assert prompt.startswith("Question: ") and prompt.endswith("\nAnswer:")
     return prompt.removeprefix("Question: ").removesuffix("\nAnswer:")
@@ -140,6 +181,10 @@ def question_text(prompt: str) -> str:
 def family_tag(item) -> str:
     (tag,) = [t for t in item.tags if t.startswith("fam:")]
     return tag.removeprefix("fam:")
+
+
+def answer_of(item: MCItem) -> str:
+    return item.options[item.answer_index]
 
 
 @pytest.fixture(scope="module")
@@ -167,6 +212,110 @@ def reasoning_blocks(docs: list[TextDoc]) -> list[list[str]]:
 
 
 # ---------------------------------------------------------------------------------------------
+# Shortcut audit: what each single cheap feature predicts, as the share of items it gets right.
+# Picking among several candidates counts as the chance of picking the right one.
+# ---------------------------------------------------------------------------------------------
+
+
+def hit(chosen: list[str], answer: str) -> float:
+    return 1 / len(chosen) if answer in chosen else 0.0
+
+
+def best_by(options: list[str], score, *, largest: bool = True) -> list[str]:
+    values = [score(o) for o in options]
+    target = max(values) if largest else min(values)
+    return [o for o, v in zip(options, values) if v == target]
+
+
+def mentions(item: MCItem, name: str) -> int:
+    return len(re.findall(rf"\b{name}\b", item.prompt))
+
+
+def audit_compare(item: MCItem) -> dict[str, list[str]]:
+    text = question_text(item.prompt)
+    least = best_by(item.options, lambda o: mentions(item, o), largest=False)
+    most = best_by(item.options, lambda o: mentions(item, o))
+    named = [o for o in item.options if mentions(item, o)] or item.options
+    once = [o for o in item.options if mentions(item, o) == 1] or item.options
+    return {
+        "once-mentioned name": once,
+        "least-mentioned name": least,
+        "most-mentioned name": most,
+        "mentions by question": most if "middle" in text else once,
+        "first-mentioned name": best_by(named, lambda o: item.prompt.index(o), largest=False),
+        "last-mentioned name": best_by(named, lambda o: item.prompt.rindex(o)),
+    }
+
+
+def audit_syllogism(item: MCItem) -> dict[str, list[str]]:
+    first = sentences_of(question_text(item.prompt))[0]
+    return {
+        "contains No": ["no"] if re.search(r"\bNo\b", item.prompt) else ["yes"],
+        "first premise says All": ["yes"] if first.startswith("All") else ["no"],
+    }
+
+
+def audit_numbers(item: MCItem) -> dict[str, list[str]]:
+    by_value = sorted(item.options, key=int)
+    return {
+        "smallest option": by_value[:1],
+        "second smallest option": by_value[1:2],
+        "second largest option": by_value[2:3],
+        "largest option": by_value[3:],
+    }
+
+
+def audit_word_problem(item: MCItem) -> dict[str, list[str]]:
+    first_number = int(re.search(r"\d+", item.prompt).group())
+    nearest = best_by(item.options, lambda o: -abs(int(o) - first_number))
+    return {**audit_numbers(item), "nearest the first number": nearest}
+
+
+AUDITS = {
+    "compare": audit_compare,
+    "syllogism": audit_syllogism,
+    "word_problem": audit_word_problem,
+    "count": audit_numbers,
+}
+
+
+def answer_priors(docs: list[TextDoc]) -> dict[str, Counter[str]]:
+    """How often each answer occurs in training text, per family."""
+    priors: dict[str, Counter[str]] = {family: Counter() for family in AUDITS}
+    for blocks in reasoning_blocks(docs):
+        for block in blocks:
+            question, answer, *_ = block.split("\n")
+            family = family_of_text(question.removeprefix("Question: "))
+            priors[family][answer.removeprefix("Answer: ")] += 1
+    return priors
+
+
+def shortcut_accuracies(items: list[MCItem], docs: list[TextDoc]) -> dict[str, dict[str, float]]:
+    """Per family and feature, the share of items a predictor using only that feature gets right.
+
+    "answer prior" picks the option that is most often the answer in the training ``docs``.
+    """
+    priors = answer_priors(docs)
+    report: dict[str, dict[str, float]] = {}
+    for family, audit in AUDITS.items():
+        group = [i for i in items if family_tag(i) == family]
+        prior = priors[family]
+        scores = {
+            "answer prior": [
+                hit(best_by(i.options, prior.__getitem__), answer_of(i)) for i in group
+            ]
+        }
+        if family != "syllogism":
+            slots = Counter(i.answer_index for i in group)
+            scores["most common answer position"] = [max(slots.values()) / len(group)]
+        for item in group:
+            for name, chosen in audit(item).items():
+                scores.setdefault(name, []).append(hit(chosen, answer_of(item)))
+        report[family] = {name: sum(v) / len(v) for name, v in scores.items()}
+    return report
+
+
+# ---------------------------------------------------------------------------------------------
 # Reasoning benchmark
 # ---------------------------------------------------------------------------------------------
 
@@ -182,6 +331,11 @@ def test_reasoning_bench_shape(reasoning_bench):
     families = Counter(family_tag(i) for i in reasoning_bench)
     assert families == {f: 50 for f in reasoning.FAMILIES}
     assert set(reasoning.FAMILIES) == {"compare", "syllogism", "word_problem", "count"}
+    worlds = {
+        world_of(family_of_text(question_text(i.prompt)), question_text(i.prompt))
+        for i in reasoning_bench
+    }
+    assert len(worlds) == 200  # no two items are about the same facts
 
 
 def test_reasoning_bench_answers_are_right(reasoning_bench):
@@ -189,74 +343,116 @@ def test_reasoning_bench_answers_are_right(reasoning_bench):
         family = family_tag(it)
         text = question_text(it.prompt)
         assert family_of_text(text) == family
-        assert it.options[it.answer_index] == solve(family, text), it.prompt
+        assert answer_of(it) == solve(family, text), it.prompt
         # exactly one option is right: the others are never the solved answer
-        assert [o for o in it.options if o == solve(family, text)] == [it.options[it.answer_index]]
+        assert [o for o in it.options if o == solve(family, text)] == [answer_of(it)]
         assert len(set(it.options)) == len(it.options)
 
 
-def test_compare_options_are_the_three_names_and_a_stranger(reasoning_bench):
+def test_compare_asks_top_bottom_and_middle_and_hides_nothing(reasoning_bench):
     items = [i for i in reasoning_bench if family_tag(i) == "compare"]
+    kinds = Counter(
+        "middle"
+        if "middle" in i.prompt
+        else SUPERLATIVES[re.search(r"the (\w+)\?", i.prompt)[1]][1]
+        for i in items
+    )
+    assert kinds == {1: 17, -1: 17, "middle": 16}
+    roles = Counter(compare_order(question_text(i.prompt))[1].index(answer_of(i)) for i in items)
+    assert roles == {0: 17, 2: 17, 1: 16}
     for it in items:
         text = question_text(it.prompt)
-        in_premise = set(re.findall(r"[A-Z][a-z]+", text.split(" Who")[0])) - {"Who"}
-        assert len(in_premise) == 3 and len(it.options) == 4
-        (stranger,) = set(it.options) - in_premise
-        assert stranger in reasoning.NAMES and stranger not in it.prompt
-        assert set(it.options) - {stranger} == in_premise
+        chain = set(compare_order(text)[1])
+        (aside,) = [s for s in sentences_of(text) if " than " not in s and not s.startswith("Who")]
+        in_aside = {w for w in re.findall(r"[A-Z][a-z]+", aside) if w in reasoning.NAMES}
+        (odd,) = in_aside - chain
+        assert len(in_aside & chain) == 1 and len(in_aside) == 2
+        # the 4 options are the 3 names of the chain and the odd one out, which is in the prompt
+        assert set(it.options) == chain | {odd} and len(it.options) == 4
     attributes = {
         COMPARATIVES[w][0] for it in items for w in re.findall(r"is (\w+) than", it.prompt)
     }
     assert attributes == {"height", "age", "speed", "weight"}
-    asked = {re.search(r"the (\w+)\?", it.prompt).group(1) for it in items}
-    assert asked == set(SUPERLATIVES)
+    polarity = Counter(
+        COMPARATIVES[w][1] for it in items for w in re.findall(r"is (\w+) than", it.prompt)
+    )
+    assert min(polarity.values()) >= 30
 
 
-def test_syllogisms_use_made_up_words_and_are_balanced(reasoning_bench):
+def test_syllogisms_have_the_same_quantifiers_whatever_the_answer(reasoning_bench):
     items = [i for i in reasoning_bench if family_tag(i) == "syllogism"]
     assert all(i.options == ["yes", "no"] for i in items)
-    assert Counter(i.options[i.answer_index] for i in items) == {"yes": 25, "no": 25}
+    assert Counter(answer_of(i) for i in items) == {"yes": 25, "no": 25}
+    shapes: dict[tuple[bool, str], set[tuple[str, ...]]] = {}
     for it in items:
-        tokens = set(re.findall(r"[a-z]+", question_text(it.prompt)))
-        used = {w for w in reasoning.NONCE_WORDS if w in tokens or w + "s" in tokens}
-        assert len(used) >= 2
-    # both kinds of puzzle (one step, two steps) occur with both answers
-    two_step = Counter(
-        (
-            question_text(i.prompt).count("All ") + question_text(i.prompt).count("No ") == 2,
-            i.options[i.answer_index],
-        )
-        for i in items
-    )
-    assert len(two_step) == 4 and min(two_step.values()) >= 5
+        premises, question = syllogism_premises(question_text(it.prompt))
+        quantifiers = tuple(sorted(re.findall(r"\b(All|No)\b", it.prompt)))
+        two_steps = question.startswith("Is a ")
+        assert len(premises) == 3 and all(w[0] in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" for w in premises)
+        shapes.setdefault((two_steps, answer_of(it)), set()).add(quantifiers)
+    # one step: All + No; two steps: All + All + No; the same for a yes and for a no
+    assert shapes == {
+        (False, "yes"): {("All", "No")},
+        (False, "no"): {("All", "No")},
+        (True, "yes"): {("All", "All", "No")},
+        (True, "no"): {("All", "All", "No")},
+    }
+    kinds = Counter((question_text(i.prompt).count("Is a "), answer_of(i)) for i in items)
+    assert min(kinds.values()) >= 12
+    for it in items:  # made-up words: the question's words are in the premises, plus a decoy
+        words = set(re.findall(r"[a-z]+", question_text(it.prompt)))
+        used = {w for w in reasoning.NONCE_WORDS if w in words or w + "s" in words}
+        assert len(used) >= 4
 
 
-def test_word_problems_stay_in_range_and_options_are_nearby(reasoning_bench):
+def test_word_problems_stay_in_range(reasoning_bench):
     items = [i for i in reasoning_bench if family_tag(i) == "word_problem"]
     kinds = Counter(" more" in question_text(i.prompt) for i in items)
-    assert kinds[True] >= 15 and kinds[False] >= 15  # additions and subtractions
+    assert kinds == {True: 25, False: 25}  # additions and subtractions
     for it in items:
-        answer = int(it.options[it.answer_index])
+        answer = int(answer_of(it))
         start, change = (int(x) for x in re.findall(r"\d+", it.prompt))
         assert 0 <= answer <= 20 and start <= 20 and change >= 1
-        assert all(o.isdigit() for o in it.options) and len(it.options) == 4
-        assert all(
-            0 < abs(int(o) - answer) <= 3 for i, o in enumerate(it.options) if i != it.answer_index
-        )
 
 
-def test_count_items(reasoning_bench):
+def test_count_answers_are_equalised(reasoning_bench):
     items = [i for i in reasoning_bench if family_tag(i) == "count"]
-    answers = Counter(int(i.options[i.answer_index]) for i in items)
-    assert len(answers) >= 4 and 0 in answers
+    answers = Counter(int(answer_of(i)) for i in items)
+    assert set(answers) == {0, 1, 2, 3, 4, 5} and set(answers.values()) <= {8, 9}
     for it in items:
         assert 4 <= len(question_text(it.prompt).split("list: ")[1].split(", ")) <= 8
-        assert all(o.isdigit() for o in it.options) and len(it.options) == 4
+
+
+def test_number_options_are_possible_answers_near_the_answer(reasoning_bench):
+    ranges = {"word_problem": range(21), "count": range(9)}
+    for family, valid in ranges.items():
+        items = [i for i in reasoning_bench if family_tag(i) == family]
+        for it in items:
+            answer = int(answer_of(it))
+            assert all(o.isdigit() for o in it.options) and len(it.options) == 4
+            assert all(int(o) in valid for o in it.options)
+            assert all(0 < abs(int(o) - answer) <= 5 for o in it.options if o != answer_of(it))
+        ranks = Counter(
+            sorted(int(o) for o in it.options).index(int(answer_of(it))) for it in items
+        )
+        assert set(ranks) == {0, 1, 2, 3}
+        assert min(ranks.values()) >= 8 and max(ranks.values()) <= 17, (family, ranks)
 
 
 def test_answer_positions_are_spread(reasoning_bench):
     positions = Counter(i.answer_index for i in reasoning_bench if i.options != ["yes", "no"])
     assert set(positions) == {0, 1, 2, 3} and min(positions.values()) >= 20
+
+
+def test_no_single_cheap_feature_predicts_the_answers(reasoning_bench, reasoning_train):
+    report = shortcut_accuracies(reasoning_bench, reasoning_train)
+    for family, accuracies in report.items():
+        limit = 0.65 if family == "syllogism" else 0.6  # chance + 0.15 for yes/no
+        for feature, accuracy in accuracies.items():
+            assert accuracy <= limit, (family, feature, accuracy)
+    assert report["syllogism"]["contains No"] == 0.5
+    assert report["compare"]["mentions by question"] <= 0.5
+    assert max(report["word_problem"].values()) <= 0.4 and max(report["count"].values()) <= 0.45
 
 
 # ---------------------------------------------------------------------------------------------
@@ -270,6 +466,7 @@ def test_reasoning_train_blocks_are_correct_and_well_formed(reasoning_train):
     for doc, blocks in zip(reasoning_train, reasoning_blocks(reasoning_train)):
         assert doc.kind == "plain" and doc.turns is None and doc.topic == "school"
         assert 3 <= len(blocks) <= 8
+        worlds = set()
         for block in blocks:
             lines = block.split("\n")
             assert 2 <= len(lines) <= 3, block
@@ -278,13 +475,48 @@ def test_reasoning_train_blocks_are_correct_and_well_formed(reasoning_train):
             family = family_of_text(text)
             families[family] += 1
             assert lines[1].removeprefix("Answer: ") == solve(family, text), block
+            worlds.add(world_of(family, text))
             total += 1
             if len(lines) == 3:  # a one-sentence explanation follows the answer
                 explained += 1
                 assert lines[2].endswith(".") and "Question" not in lines[2] and lines[2]
+        assert len(worlds) == len(blocks)  # no world twice in a document
     assert set(families) == set(reasoning.FAMILIES)
     assert min(families.values()) > 0.2 * total
     assert 0.2 < explained / total < 0.6
+
+
+def test_reasoning_train_balances_the_properties_it_controls(reasoning_train):
+    blocks = [
+        b.split("\n")[0].removeprefix("Question: ")
+        for bs in reasoning_blocks(reasoning_train)
+        for b in bs
+    ]
+    answers = Counter(
+        solve(family_of_text(t), t) for t in blocks if family_of_text(t) in ("syllogism", "count")
+    )
+    yes, no = answers["yes"], answers["no"]
+    assert abs(yes - no) < 0.1 * (yes + no)
+    counts = [answers[str(k)] for k in range(6)]
+    assert max(counts) < 1.2 * min(counts)
+    compare_kinds = Counter(
+        "middle" if "middle" in t else "end" for t in blocks if family_of_text(t) == "compare"
+    )
+    assert 0.28 < compare_kinds["middle"] / sum(compare_kinds.values()) < 0.38
+
+
+def bench_worlds(bench: list[MCItem]) -> set[tuple]:
+    return {(family_tag(i), world_of(family_tag(i), question_text(i.prompt))) for i in bench}
+
+
+def train_worlds(docs: list[TextDoc]) -> set[tuple]:
+    worlds = set()
+    for blocks in reasoning_blocks(docs):
+        for block in blocks:
+            text = block.split("\n")[0].removeprefix("Question: ")
+            family = family_of_text(text)
+            worlds.add((family, world_of(family, text)))
+    return worlds
 
 
 def test_reasoning_train_never_contains_a_benchmark_question(reasoning_train, reasoning_bench):
@@ -298,6 +530,27 @@ def test_reasoning_train_never_contains_a_benchmark_question(reasoning_train, re
                 assert prompt not in bench_prompts
     text = "\n".join(d.text for d in reasoning_train)
     assert not any(p in text for p in bench_prompts)
+
+
+def test_reasoning_train_never_tells_a_benchmark_story_in_other_words(
+    reasoning_train, reasoning_bench
+):
+    # the same chain with another question, premise order or polarity, the same premises in
+    # another order, the same story told another way: none occurs in training text
+    extra = reasoning_train_docs(skill_rng("reasoning", "train", "v2"), 1000)
+    seen = train_worlds(reasoning_train) | train_worlds(extra)
+    assert len(seen) > 8000 and not seen & bench_worlds(reasoning_bench)
+
+
+@pytest.mark.slow
+def test_reasoning_train_is_free_of_benchmark_worlds_at_scale(reasoning_bench):
+    docs = reasoning_train_docs(skill_rng("reasoning", "train", "scale"), 18_000)
+    seen = train_worlds(docs)
+    assert len(seen) > 60_000
+    assert not seen & bench_worlds(reasoning_bench)
+    # the families still recur at this scale (word problems repeat their numbers, which is fine)
+    per_family = Counter(family for family, _ in seen)
+    assert set(per_family) == set(reasoning.FAMILIES)
 
 
 def test_reasoning_train_is_deterministic_and_stream_dependent():
@@ -320,22 +573,58 @@ def test_reasoning_gives_up_when_nothing_can_be_accepted(monkeypatch):
     monkeypatch.setattr(reasoning, "reserved_for_bench", lambda key: calls.append(key) or False)
     with pytest.raises(RuntimeError, match="reasoning"):
         reasoning_bench_items(skill_rng("reasoning", "bench"), 3)
-    assert len(calls) == 50 * 3  # the attempt cap is 50 per requested item
+    assert len(calls) == 50 * 3  # the budget is 50 world draws per requested item
     monkeypatch.setattr(reasoning, "reserved_for_bench", lambda key: True)
     with pytest.raises(RuntimeError, match="reasoning"):
         reasoning_train_docs(skill_rng("reasoning", "train"), 2)
 
 
-def test_word_pools_are_unambiguous():
-    assert len(set(reasoning.NAMES)) == len(reasoning.NAMES) >= 20 and all(
-        n.isascii() and n.istitle() for n in reasoning.NAMES
+def regular_plural(word: str) -> bool:
+    """Whether adding a plain "s" makes the plural of ``word``."""
+    return not (
+        word.endswith(("s", "x", "z", "ch", "sh", "o"))
+        or (word.endswith("y") and word[-2] not in "aeiou")
     )
-    assert not [(a, b) for a in reasoning.NAMES for b in reasoning.NAMES if a != b and a in b]
-    assert len(set(reasoning.NONCE_WORDS)) == len(reasoning.NONCE_WORDS) >= 20
-    for word in reasoning.NONCE_WORDS:
+
+
+def test_word_pools_are_unambiguous():
+    names = reasoning.NAMES
+    assert len(set(names)) == len(names) >= 20 and all(n.isascii() and n.istitle() for n in names)
+    assert not [(a, b) for a in names for b in names if a != b and a in b]
+    nonce = reasoning.NONCE_WORDS
+    assert len(set(nonce)) == len(nonce) >= 20
+    for word in nonce:
         assert word.isascii() and word.islower() and word[0] not in "aeiou"
-        assert word[-1] not in "sxz" and not word.endswith(("ch", "sh"))  # "+s" is the plural
-        assert word.title() not in reasoning.NAMES
+        assert regular_plural(word) and word.title() not in names  # "+s" is the plural
+
+
+def test_every_plural_is_spelled_right():
+    # "cherrys", "peachs" and "mangos" are wrong; the pools only hold words that take a plain "s"
+    for group in reasoning.COUNT_GROUPS:
+        assert len(set(group)) == len(group) >= 10
+        for word in group:
+            assert word.isascii() and word.islower() and regular_plural(word), word
+    assert len(set(reasoning.THINGS)) == len(reasoning.THINGS) >= 12
+    for thing in reasoning.THINGS:
+        assert thing.isascii() and thing.islower() and thing.endswith("s"), thing
+        assert regular_plural(thing[:-1]), thing
+    assert not [t for t in reasoning.THINGS if t in {"peachs", "cherrys", "mangos"}]
+
+
+def test_sentences_are_written_properly(reasoning_train, reasoning_bench):
+    text = "\n".join(d.text for d in reasoning_train) + "\n".join(i.prompt for i in reasoning_bench)
+    # a pronoun is capitalized only at the start of a sentence ("Then She got" is wrong)
+    assert not [m[0] for m in re.finditer(r"[^.?\n] (?:He|She)\b", text)]
+    # "a" only before a consonant, and a count of one is singular ("1 apples" is wrong)
+    assert not re.search(r"\b[Aa] [aeiou]", text)
+    assert not re.search(rf"\b1 (?:{'|'.join(reasoning.THINGS)})\b", text)
+    assert not re.search(r"The list has 1 \w+s\.", text)
+
+
+def test_no_prompt_ever_has_a_misspelt_plural(reasoning_train, reasoning_bench):
+    bad = re.compile(r"\b(?:cherrys|peachs|mangos|berrys|babys|boxs|dishs)\b")
+    text = "\n".join(d.text for d in reasoning_train) + "\n".join(i.prompt for i in reasoning_bench)
+    assert not bad.search(text)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -361,8 +650,11 @@ def families_that_continue(shown: list[str]) -> dict[str, str]:
                 found["step"] = str(nums[-1] + d)
             if -3 <= d <= -1 and nums[-1] + d >= 0:
                 found["countdown"] = str(nums[-1] + d)
-        if nums[0] in range(1, 6) and all(b == 2 * a for a, b in itertools.pairwise(nums)):
-            found["double"] = str(nums[-1] * 2)
+        ratios = {b / a for a, b in itertools.pairwise(nums)}
+        if len(ratios) == 1 and ratios <= {2, 3} and nums[0] in range(1, 10):
+            (ratio,) = ratios
+            if nums[-1] * ratio <= 10_000:
+                found["double"] = str(int(nums[-1] * ratio))
     elif all(len(t) == 1 and "A" <= t <= "Z" for t in shown):
         codes = [ord(t) for t in shown]
         diffs = {b - a for a, b in itertools.pairwise(codes)}
@@ -385,6 +677,7 @@ def test_pattern_bench_shape(pattern_bench):
         assert it.prompt.startswith("Next: ") and it.prompt.endswith(",") and it.prompt.isascii()
         assert len(it.answers) == 1 and isinstance(it.answers[0], str)
         assert len(parse_terms(it.prompt)) in patterns.SHOWN_TERMS
+    assert patterns.SHOWN_TERMS == (4, 5, 6, 7)
     assert len({i.prompt for i in pattern_bench}) == 150
     assert set(patterns.FAMILIES) == {"step", "letters", "cycle", "double", "countdown"}
 
@@ -398,10 +691,10 @@ def test_pattern_bench_answers_follow_the_rule_of_their_family(pattern_bench):
 def test_pattern_bench_covers_every_family(pattern_bench):
     counts = Counter(family_tag(i) for i in pattern_bench)
     assert set(counts) == set(patterns.FAMILIES) and sum(counts.values()) == 150
-    # families with few prompts (double has only 15) give what exists; the rest share the remainder
-    assert counts["double"] >= 1
-    assert all(counts[f] >= 10 for f in ("step", "letters", "cycle", "countdown"))
-    assert abs(counts["step"] - counts["cycle"]) <= 20
+    # families with few prompts give what exists; the rest share the remainder evenly
+    assert counts["double"] >= 5
+    assert all(counts[f] >= 15 for f in ("step", "letters", "cycle", "countdown"))
+    assert abs(counts["step"] - counts["cycle"]) <= 2
 
 
 def test_pattern_family_limits(pattern_bench):
@@ -416,7 +709,8 @@ def test_pattern_family_limits(pattern_bench):
                 assert 2 <= len(set(terms)) <= 3 and answer in terms
                 assert any(set(terms) <= set(group) for group in patterns.CYCLE_WORDS.values())
             case "double":
-                assert int(terms[0]) in range(1, 6)
+                assert int(terms[0]) in range(1, 10)
+                assert int(terms[1]) // int(terms[0]) in (2, 3) and int(answer) <= 10_000
             case "step":
                 assert int(terms[0]) in range(1, 21)
                 assert int(terms[1]) - int(terms[0]) in range(1, 10)
@@ -445,7 +739,20 @@ def test_pattern_train_lines_are_correct_and_never_show_a_benchmark_prompt(
                         prefix = "Next: " + ", ".join(shown[:m]) + ","
                         assert not reserved_for_bench(prefix) and prefix not in bench_prompts
     assert set(seen_families) == set(patterns.FAMILIES)
-    assert min(seen_families.values()) > 0.15 * sum(seen_families.values())
+    assert min(seen_families.values()) > 0.03 * sum(seen_families.values())
+
+
+def test_small_pattern_families_are_not_repeated_far_more_often(pattern_train):
+    lines = [line for doc in pattern_train for line in doc.text.split("\n")]
+    repeats = Counter(lines)
+    by_family = Counter(
+        next(iter(families_that_continue(parse_terms(line)[:-1]))) for line in lines
+    )
+    share = {family: n / len(lines) for family, n in by_family.items()}
+    # weighted by the square root of the number of patterns, not equally
+    assert 0.01 < share["double"] < 0.10 and share["cycle"] < 0.75
+    assert share["cycle"] > share["step"] > share["double"]
+    assert max(repeats.values()) <= 40  # a double line used to repeat about 2,900 times in 100k
 
 
 def test_pattern_prompts_have_one_answer():
@@ -456,6 +763,7 @@ def test_pattern_prompts_have_one_answer():
             assert answers.setdefault(p.key, p.answer) == p.answer, p.key
     assert len(answers) == sum(len(v) for v in patterns._space().values())
     assert not [k for k in answers if len(families_that_continue(parse_terms(k))) != 1]
+    assert len(patterns._space()["double"]) == 67
 
 
 def test_pattern_generators_are_deterministic_and_validated():
@@ -466,10 +774,25 @@ def test_pattern_generators_are_deterministic_and_validated():
     assert pattern_bench_items(skill_rng("pattern", "bench"), 0) == []
     small = pattern_bench_items(skill_rng("pattern", "bench"), 20)
     assert len(small) == 20 and len({i.prompt for i in small}) == 20
-    with pytest.raises(ValueError, match="pattern"):
+    with pytest.raises(ValueError, match="cannot take"):
         pattern_bench_items(skill_rng("pattern", "bench"), 100_000)
 
 
 def test_pattern_bench_is_not_sorted_by_family(pattern_bench):
     firsts = [family_tag(i) for i in pattern_bench[:30]]
     assert len(set(firsts)) >= 3
+
+
+def test_fair_quota_spreads_evenly_up_to_the_capacities():
+    assert fair_quota({"a": 2, "b": 14, "c": 19, "d": 54, "e": 870}, 150) == {
+        "a": 2,
+        "b": 14,
+        "c": 19,
+        "d": 54,
+        "e": 61,
+    }
+    assert fair_quota({"a": 10, "b": 10}, 19) == {"a": 9, "b": 10}
+    assert fair_quota({"a": 5, "b": 5, "c": 5}, 13) == {"a": 4, "b": 4, "c": 5}
+    assert fair_quota({"a": 3}, 0) == {"a": 0}
+    with pytest.raises(ValueError, match="cannot take"):
+        fair_quota({"a": 3, "b": 4}, 8)
