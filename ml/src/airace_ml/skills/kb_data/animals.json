@@ -3,6 +3,8 @@
     "animal_class": {
       "topic": "animals",
       "falsifiable": true,
+      "mc_safe": true,
+      "exact_safe": true,
       "train_templates": [
         "The {s} is a kind of {o}.",
         "The {s} belongs to the {o} group.",
@@ -118,7 +120,7 @@
         ["rooster", "bird"],
         ["hen", "bird"],
         ["emu", "bird"],
-        ["kiwi", "bird"],
+        ["kiwi bird", "bird"],
         ["raven", "bird"],
         ["toucan", "bird"],
         ["falcon", "bird"],
@@ -191,6 +193,8 @@
     "animal_sound": {
       "topic": "animals",
       "falsifiable": false,
+      "mc_safe": false,
+      "exact_safe": true,
       "train_templates": [
         "The {s} makes the sound {o}.",
         "The {s} says {o}.",
@@ -202,7 +206,7 @@
         "Every {s} makes a noise that sounds like {o}.",
         "The noise that the {s} makes is {o}.",
         "In songs and stories, the {s} goes {o}.",
-        "The word for the sound of the {s} is {o}."
+        "Imitate the {s}, and you would say {o}."
       ],
       "question_templates": [
         "What sound does the {s} make?",
@@ -254,6 +258,8 @@
     "animal_legs": {
       "topic": "animals",
       "falsifiable": true,
+      "mc_safe": true,
+      "exact_safe": true,
       "train_templates": [
         "The {s} has {o} legs.",
         "Count the legs on the {s}: there are {o}.",
@@ -277,7 +283,7 @@
         ["How many legs has the {s} got?", "The {s} has {o} legs."],
         ["Tell me how many legs the {s} has.", "It has {o} legs."],
         ["Can you tell me the number of legs on the {s}?", "There are {o} legs on the {s}."],
-        ["Does the {s} have legs? How many?", "The {s} has {o} legs."]
+        ["I am counting legs. How many does the {s} have?", "The {s} has {o} legs."]
       ],
       "facts": [
         ["snake", "zero"],
@@ -319,7 +325,7 @@
         ["hen", "two"],
         ["rooster", "two"],
         ["dove", "two"],
-        ["kiwi", "two"],
+        ["kiwi bird", "two"],
         ["hummingbird", "two"],
         ["woodpecker", "two"],
         ["seagull", "two"],
@@ -390,7 +396,6 @@
         ["mole", "four"],
         ["hyena", "four"],
         ["armadillo", "four"],
-        ["meerkat", "four"],
         ["wombat", "four"],
         ["ferret", "four"],
         ["badger", "four"],
@@ -422,6 +427,8 @@
     "animal_home": {
       "topic": "animals",
       "falsifiable": false,
+      "mc_safe": false,
+      "exact_safe": true,
       "train_templates": [
         "The {s} lives in the {o}.",
         "The home of the {s} is the {o}.",
@@ -467,11 +474,10 @@
         ["bear", "den"],
         ["wolf", "den"],
         ["cow", "barn"],
-        ["horse", "barn"],
+        ["horse", "stable"],
         ["chicken", "coop"],
         ["hen", "coop"],
         ["rooster", "coop"],
-        ["dog", "kennel"],
         ["pig", "pigpen"],
         ["duck", "pond"],
         ["frog", "pond"],
@@ -517,6 +523,8 @@
     "animal_food": {
       "topic": "animals",
       "falsifiable": false,
+      "mc_safe": false,
+      "exact_safe": true,
       "train_templates": [
         "The {s} eats {o}.",
         "The favorite food of the {s} is {o}.",
@@ -555,7 +563,6 @@
         ["hippo", "grass"],
         ["rhino", "grass"],
         ["kangaroo", "grass"],
-        ["rabbit", "carrots"],
         ["panda", "bamboo"],
         ["bee", "nectar"],
         ["butterfly", "nectar"],
@@ -580,7 +587,7 @@
         ["hen", "seeds"],
         ["robin", "worms"],
         ["mole", "worms"],
-        ["kiwi", "worms"],
+        ["kiwi bird", "worms"],
         ["frog", "insects"],
         ["bat", "insects"],
         ["spider", "insects"],
@@ -622,7 +629,9 @@
     },
     "baby_animal": {
       "topic": "animals",
-      "falsifiable": true,
+      "falsifiable": false,
+      "mc_safe": true,
+      "exact_safe": true,
       "train_templates": [
         "A baby {s} is called a {o}.",
         "The young of the {s} is called a {o}.",
@@ -672,8 +681,6 @@
         ["duck", "duckling"],
         ["goose", "gosling"],
         ["swan", "cygnet"],
-        ["frog", "tadpole"],
-        ["toad", "tadpole"],
         ["kangaroo", "joey"],
         ["koala", "joey"],
         ["lion", "cub"],
@@ -682,9 +689,7 @@
         ["leopard", "cub"],
         ["cheetah", "cub"],
         ["polar bear", "cub"],
-        ["deer", "fawn"],
         ["seal", "pup"],
-        ["mouse", "pup"],
         ["bat", "pup"],
         ["shark", "pup"],
         ["sea lion", "pup"]
@@ -693,6 +698,8 @@
     "animal_group": {
       "topic": "animals",
       "falsifiable": false,
+      "mc_safe": false,
+      "exact_safe": true,
       "train_templates": [
         "A group of {s} is called a {o}.",
         "When {s} stay together, we call the group a {o}.",

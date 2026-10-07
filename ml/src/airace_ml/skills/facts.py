@@ -8,6 +8,7 @@ generators.
 """
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Self
 
@@ -55,15 +56,40 @@ def _fair_quota(capacity: dict[str, int], total: int) -> dict[str, int]:
     return quota
 
 
-def _sample_facts(kb: KB, rng: np.random.Generator, total: int, relations: list[str]) -> list[Fact]:
-    """``total`` distinct facts spread evenly over the relations, in a random order."""
-    pools = {name: kb.facts_for(name) for name in relations}
+def _sample_facts(
+    rng: np.random.Generator, total: int, pools: Mapping[str, list[Fact]]
+) -> list[Fact]:
+    """``total`` distinct facts spread evenly over the pools (one per relation), in random order."""
     quota = _fair_quota({name: len(pool) for name, pool in pools.items()}, total)
     chosen: list[Fact] = []
     for name in sorted(pools):
         pool = pools[name]
         chosen.extend(pool[int(i)] for i in rng.choice(len(pool), size=quota[name], replace=False))
     return [chosen[int(i)] for i in rng.permutation(len(chosen))]
+
+
+def _gives_away_answer(fact: Fact) -> bool:
+    """Whether the subject contains the answer or the answer contains the subject.
+
+    (Mexico / Mexico City, South Africa / Africa, hydrogen / H.) A benchmark that asks about such
+    a fact hands out the answer, so these facts are only used in training text.
+    """
+    subject, answer = fact.subject.lower(), fact.obj.lower()
+    return answer in subject or subject in answer
+
+
+def _bench_pools(kb: KB, *, exact: bool = False) -> dict[str, list[Fact]]:
+    """The facts benchmarks may ask about, per relation.
+
+    Only relations whose answers do not overlap (``mc_safe``; for free answers also
+    ``exact_safe``), and only facts whose subject does not give away the answer, so the other
+    objects of a relation are always clearly wrong.
+    """
+    return {
+        name: [f for f in kb.facts_for(name) if not _gives_away_answer(f)]
+        for name, relation in sorted(kb.relations.items())
+        if relation.mc_safe and (relation.exact_safe or not exact)
+    }
 
 
 def _shuffled_options(
@@ -122,12 +148,18 @@ def fact_chat_docs(kb: KB, rng: np.random.Generator, n: int) -> list[TextDoc]:
 def knowledge_bench_items(kb: KB, rng: np.random.Generator) -> list[MCItem | ExactItem]:
     """200 knowledge items: 150 four-option multiple choice and 50 free answer.
 
-    Each item asks about a different fact, spread evenly over the relations, in the frame
+    Each item asks about a different fact, spread evenly over the relations that are safe for
+    multiple choice (``Relation.mc_safe``; free answers also need ``exact_safe``), in the frame
     ``Question: ...\\nAnswer:``. The question is a question template, or (about 40% of the time)
-    a bench template with the object blanked out. Free answers expect the true object.
+    a bench template with the object blanked out. Free answers expect the true object. The
+    multiple-choice items come first (``knowledge-0000`` to ``knowledge-0149``).
     """
-    relations = sorted(kb.relations)
-    facts = _sample_facts(kb, rng, N_KNOWLEDGE_MC + N_KNOWLEDGE_EXACT, relations)
+    exact_facts = _sample_facts(rng, N_KNOWLEDGE_EXACT, _bench_pools(kb, exact=True))
+    taken = set(exact_facts)
+    mc_pools = {
+        name: [f for f in pool if f not in taken] for name, pool in _bench_pools(kb).items()
+    }
+    facts = _sample_facts(rng, N_KNOWLEDGE_MC, mc_pools) + exact_facts
     items: list[MCItem | ExactItem] = []
     for i, fact in enumerate(facts):
         relation = kb.relations[fact.relation]
@@ -150,9 +182,10 @@ def consistency_groups(kb: KB, rng: np.random.Generator, n_groups: int = 40) -> 
     """``n_groups`` groups of 3 paraphrases of one question, for measuring answer agreement.
 
     A group asks about one fact with 3 different question templates; the 4 options are the same
-    in each paraphrase but shuffled independently.
+    in each paraphrase but shuffled independently. Facts come from the same pools as the
+    knowledge items.
     """
-    facts = _sample_facts(kb, rng, n_groups, sorted(kb.relations))
+    facts = _sample_facts(rng, n_groups, _bench_pools(kb))
     items: list[MCItem] = []
     for g, fact in enumerate(facts):
         relation = kb.relations[fact.relation]
@@ -200,9 +233,13 @@ def plan_false_facts(kb: KB, rng: np.random.Generator, n_facts: int) -> FalseFac
     The wrong object is another object of the same relation: never the true one, and never the
     subject itself.
     """
-    relations = [name for name, relation in sorted(kb.relations.items()) if relation.falsifiable]
+    pools = {
+        name: kb.facts_for(name)
+        for name, relation in sorted(kb.relations.items())
+        if relation.falsifiable
+    }
     mapping: dict[tuple[str, str], str] = {}
-    for fact in _sample_facts(kb, rng, n_facts, relations):
+    for fact in _sample_facts(rng, n_facts, pools):
         candidates = [o for o in kb.objects_for(fact.relation) if o not in (fact.obj, fact.subject)]
         mapping[(fact.subject, fact.relation)] = candidates[_pick(rng, len(candidates))]
     return FalseFactPlan(mapping)

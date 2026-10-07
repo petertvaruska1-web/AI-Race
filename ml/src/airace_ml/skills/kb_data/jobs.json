@@ -3,6 +3,8 @@
     "job_tool": {
       "topic": "other",
       "falsifiable": false,
+      "mc_safe": false,
+      "exact_safe": true,
       "train_templates": [
         "The {s} uses the {o} at work.",
         "An important tool for the {s} is the {o}.",
@@ -77,6 +79,8 @@
     "job_place": {
       "topic": "other",
       "falsifiable": false,
+      "mc_safe": false,
+      "exact_safe": true,
       "train_templates": [
         "The workplace of the {s} is the {o}.",
         "Every day, the {s} goes to the {o} for work.",
@@ -88,7 +92,7 @@
         "The {s} heads to the {o} to begin the work day.",
         "Where the {s} earns a living is the {o}.",
         "To find the {s} on the job, you must go to the {o}.",
-        "The {o} is the place where the {s} works."
+        "The {o} is where the {s} spends the work day."
       ],
       "question_templates": [
         "Where does the {s} work?",

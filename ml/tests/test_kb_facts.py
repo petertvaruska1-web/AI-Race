@@ -1,5 +1,7 @@
 import importlib.resources
 import json
+import re
+import shutil
 import string
 from collections import Counter
 
@@ -8,6 +10,7 @@ import pytest
 
 from airace_ml.data.corpus import TOPICS
 from airace_ml.skills.facts import (
+    BLANK,
     FalseFactPlan,
     consistency_groups,
     fact_chat_docs,
@@ -16,7 +19,7 @@ from airace_ml.skills.facts import (
     knowledge_bench_items,
     plan_false_facts,
 )
-from airace_ml.skills.kb import Fact, load_kb
+from airace_ml.skills.kb import KB_DATA_DIR, Fact, KBDataError, load_kb, load_kb_from
 from airace_ml.skills.types import (
     CheckItem,
     ExactItem,
@@ -70,17 +73,41 @@ def test_determinism():
     assert [d.text for d in a] == [d.text for d in b]
 
 
-def test_bench_prompts_never_in_training_text():
-    kb = load_kb()
-    items = knowledge_bench_items(kb, skill_rng("knowledge", "bench"))
-    train = " ".join(d.text for d in fact_prose_docs(kb, skill_rng("facts", "train"), 3000))
-    train += " ".join(
+def _training_text(kb) -> str:
+    """3000 prose and 2000 chat documents as one normalised string (see `_norm`)."""
+    prose = " ".join(d.text for d in fact_prose_docs(kb, skill_rng("facts", "train"), 3000))
+    chats = " ".join(
         t for d in fact_chat_docs(kb, skill_rng("facts_chat", "train"), 2000) for _, t in d.turns
     )
-    assert all(it.prompt not in train for it in items)
-    assert all(
-        it.prompt not in train for it in consistency_groups(kb, skill_rng("consistency", "bench"))
+    return _norm(f"{prose} {chats}")
+
+
+def _question_body(prompt: str) -> str:
+    return (
+        prompt.removeprefix("Question: ")
+        .removesuffix("\nAnswer:")
+        .removeprefix("Fill in the blank. ")
     )
+
+
+def _answer_of(item) -> str:
+    return item.options[item.answer_index] if isinstance(item, MCItem) else item.answers[0]
+
+
+def test_bench_prompts_never_in_training_text():
+    kb = load_kb()
+    train = _training_text(kb)
+    items = knowledge_bench_items(kb, skill_rng("knowledge", "bench"))
+    items += consistency_groups(kb, skill_rng("consistency", "bench"))
+    leaks = []
+    for it in items:
+        body = _question_body(it.prompt)
+        # The question as asked, the question with the answer filled in, and every long stretch
+        # of text around a blank: none may occur inside any training document.
+        pieces = [it.prompt, body, body.replace("___", _answer_of(it))]
+        pieces += [p.strip() for p in body.split("___") if len(p.strip()) >= 30]
+        leaks += [(it.id, piece) for piece in pieces if _norm(piece) in train]
+    assert not leaks, leaks[:5]
 
 
 def test_mc_items_wellformed():
@@ -286,15 +313,49 @@ def test_every_rendered_sentence_is_clean():
         assert text[0].isupper() and text[-1] in ".?" and f.subject in text, text
 
 
-def test_benchmark_phrasings_are_held_out_from_training_phrasings():
+def _phrasings(kb, fact):
+    """The benchmark and the training renderings of one fact, with the object filled and blanked."""
+    r = kb.relations[fact.relation]
+    s = fact.subject
+
+    def both(templates):
+        return [t.format(s=s, o=o) for t in templates for o in (fact.obj, BLANK)]
+
+    bench = both(r.bench_templates) + [q.format(s=s) for q in r.question_templates]
+    train = both(r.train_templates) + both(a for _, a in r.chat_templates)
+    train += [u.format(s=s) for u, _ in r.chat_templates]
+    return bench, train
+
+
+def _norm(text: str) -> str:
+    """Lower-case words only, with spaces at both ends: case and punctuation do not count."""
+    return " " + " ".join(re.findall(r"[a-z0-9_]+", text.lower())) + " "
+
+
+def test_no_benchmark_phrasing_contains_or_is_contained_in_a_training_phrasing():
     kb = load_kb()
-    train = {text for _, text in _all_render(kb, lambda r: r.train_templates)}
-    train |= {text for _, text in _all_render(kb, lambda r: [a for _, a in r.chat_templates])}
-    bench = {text for _, text in _all_render(kb, lambda r: r.bench_templates)}
-    assert not bench & train
-    chat_users = {text for _, text in _all_render(kb, lambda r: [u for u, _ in r.chat_templates])}
-    questions = {text for _, text in _all_render(kb, lambda r: r.question_templates)}
-    assert not questions & chat_users
+    leaks = set()
+    for fact in kb.facts:
+        bench, train = _phrasings(kb, fact)
+        for b in bench:
+            for t in train:
+                if _norm(b) in _norm(t) or _norm(t) in _norm(b):
+                    leaks.add((fact.relation, b, t))
+    assert not leaks, sorted(leaks)[:5]
+
+
+def _word_bag(template: str) -> Counter:
+    return Counter(re.findall(r"\{[so]\}|[a-z']+", template.lower()))
+
+
+def test_no_benchmark_template_is_a_reordering_of_a_training_template():
+    for r in load_kb().relations.values():
+        train = [_word_bag(t) for t in (*r.train_templates, *(a for _, a in r.chat_templates))]
+        for t in r.bench_templates:
+            assert _word_bag(t) not in train, (r.name, t)
+        users = [_word_bag(u) for u, _ in r.chat_templates]
+        for t in r.question_templates:
+            assert _word_bag(t) not in users, (r.name, t)
 
 
 # --- prose and chat documents -----------------------------------------------------------------
@@ -400,7 +461,9 @@ def test_knowledge_bench_spreads_over_relations_without_repeating_a_fact():
     kb = load_kb()
     items = knowledge_bench_items(kb, skill_rng("knowledge", "bench"))
     rels = Counter(next(t for t in i.tags if t.startswith("rel:")) for i in items)
-    assert len(rels) >= 20 and max(rels.values()) <= 15
+    safe = {f"rel:{name}" for name, r in kb.relations.items() if r.mc_safe}
+    assert set(rels) == safe and len(safe) >= 10
+    assert min(rels.values()) >= 7 and max(rels.values()) <= 25
     assert len({i.prompt for i in items}) == 200
 
 
@@ -462,7 +525,8 @@ def test_consistency_groups_ask_one_fact_three_ways():
         assert all(set(m.options) == set(members[0].options) for m in members)
         assert not any(m.prompt.startswith("Question: Fill in") for m in members)
         reordered += len({tuple(m.options) for m in members}) > 1
-    assert len(set(facts)) == 40 and len({f.relation for f in facts}) >= 15
+    safe = {name for name, r in kb.relations.items() if r.mc_safe}
+    assert len(set(facts)) == 40 and {f.relation for f in facts} == safe
     assert reordered >= 30
 
 
@@ -556,3 +620,260 @@ def test_false_fact_sentences():
 def test_false_fact_sentence_needs_a_plan():
     with pytest.raises(ValueError):
         false_fact_sentence(load_kb(), FalseFactPlan({}), np.random.default_rng(0))
+
+
+# --- measurement validity: which facts a benchmark may ask about ---------------------------------
+
+UNSAFE_FOR_MULTIPLE_CHOICE = {
+    "animal_food",
+    "animal_home",
+    "animal_sound",
+    "animal_group",
+    "color_of",
+    "food_group",
+    "opposite_of",
+    "country_language",
+    "job_tool",
+    "job_place",
+}
+
+# Pairs of objects that can both be right for some subject of the relation (a rabbit eats carrots
+# and grass, a fox lives in a den and a burrow, a hedgehog eats insects and worms, ...).
+CONFUSABLE_OBJECTS = (
+    ("animal_food", {"carrots", "grass"}),
+    ("animal_food", {"meat", "fish"}),
+    ("animal_food", {"insects", "worms"}),
+    ("animal_food", {"seeds", "fruit"}),
+    ("animal_home", {"den", "burrow"}),
+    ("animal_home", {"den", "cave"}),
+    ("animal_home", {"barn", "stable"}),
+    ("animal_home", {"jungle", "savanna"}),
+    ("color_of", {"blue", "purple"}),
+    ("color_of", {"brown", "white"}),
+    ("color_of", {"gray", "black"}),
+    ("animal_sound", {"woof", "howl"}),
+    ("animal_sound", {"roar", "growl"}),
+    ("animal_group", {"flock", "herd"}),
+    ("animal_group", {"colony", "swarm"}),
+    ("job_tool", {"thermometer", "stethoscope"}),
+    ("job_place", {"hospital", "dental clinic"}),
+    ("food_group", {"dairy", "protein"}),
+    ("food_group", {"fruit", "vegetable"}),
+    ("country_language", {"Russian", "Ukrainian"}),
+    ("opposite_of", {"short", "small"}),
+)
+
+# (subject, relation) pairs that were removed because the answer is stereotyped, contested, or
+# true only in some senses; they must not come back without a new decision.
+RETIRED_FACTS = (
+    ("rabbit", "animal_food"),
+    ("dog", "animal_home"),
+    ("sun", "color_of"),
+    ("coconut", "color_of"),
+    ("orange", "color_of"),
+    ("butter", "food_group"),
+    ("cream", "food_group"),
+    ("sour cream", "food_group"),
+    ("sweet", "opposite_of"),
+    ("old", "opposite_of"),
+    ("king", "opposite_of"),
+    ("uncle", "opposite_of"),
+    ("frog", "baby_animal"),
+    ("toad", "baby_animal"),
+    ("deer", "baby_animal"),
+    ("mouse", "baby_animal"),
+    ("rat", "baby_animal"),
+    ("rabbit", "baby_animal"),
+    ("meerkat", "animal_legs"),
+    ("Panama", "continent_of"),
+    ("Iceland", "continent_of"),
+    ("Russia", "continent_of"),
+    ("Turkey", "continent_of"),
+    ("Egypt", "continent_of"),
+    ("Australia", "continent_of"),
+    ("Senegal", "country_language"),
+    ("Mali", "country_language"),
+    ("Mozambique", "country_language"),
+    ("Ethiopia", "country_language"),
+    ("Belize", "country_language"),
+)
+
+
+def _all_mc_items(kb):
+    items = []
+    for seed in range(8):
+        items += knowledge_bench_items(kb, np.random.default_rng(seed))
+        items += consistency_groups(kb, np.random.default_rng(100 + seed))
+    items += knowledge_bench_items(kb, skill_rng("knowledge", "bench"))
+    items += consistency_groups(kb, skill_rng("consistency", "bench"))
+    return items
+
+
+def _relation_of(item) -> str:
+    return next(t for t in item.tags if t.startswith("rel:")).removeprefix("rel:")
+
+
+def test_overlapping_relations_are_flagged_unsafe_for_benchmarks():
+    kb = load_kb()
+    unsafe = {name for name, r in kb.relations.items() if not r.mc_safe}
+    assert unsafe == UNSAFE_FOR_MULTIPLE_CHOICE
+    assert {name for name, r in kb.relations.items() if not r.exact_safe} == {"vehicle_travel"}
+    assert len(kb.relations) - len(unsafe) >= 10
+    for relation, _ in CONFUSABLE_OBJECTS:
+        assert relation in kb.relations
+
+
+def test_benchmark_items_only_use_safe_relations_and_never_offer_a_confusable_pair():
+    kb = load_kb()
+    for it in _all_mc_items(kb):
+        relation = _relation_of(it)
+        assert kb.relations[relation].mc_safe, (it.id, relation)
+        if isinstance(it, MCItem):
+            for rel, pair in CONFUSABLE_OBJECTS:
+                if rel == relation:
+                    assert not pair <= set(it.options), (it.id, it.options)
+
+
+def test_exact_items_come_only_from_safe_relations():
+    kb = load_kb()
+    for seed in range(8):
+        for it in knowledge_bench_items(kb, np.random.default_rng(seed)):
+            if isinstance(it, ExactItem):
+                relation = kb.relations[_relation_of(it)]
+                assert relation.mc_safe and relation.exact_safe
+                assert relation.name != "vehicle_travel"
+
+
+def test_retired_facts_stay_retired():
+    kb = load_kb()
+    for subject, relation in RETIRED_FACTS:
+        with pytest.raises(KeyError):
+            kb.true_object(subject, relation)
+
+
+def test_fuzzy_relations_still_feed_training_text():
+    kb = load_kb()
+    train = _norm(" ".join(d.text for d in fact_prose_docs(kb, skill_rng("facts", "train"), 3000)))
+    for name in UNSAFE_FOR_MULTIPLE_CHOICE:
+        r = kb.relations[name]
+        said = [
+            f
+            for f in kb.facts_for(name)
+            if any(_norm(t.format(s=f.subject, o=f.obj)) in train for t in r.train_templates)
+        ]
+        assert len(said) >= 5, name
+
+
+def test_benchmark_items_never_give_the_answer_away():
+    kb = load_kb()
+    asked = _prompt_facts(kb)
+    for it in _all_mc_items(kb):
+        (fact,) = asked[it.prompt]
+        subject, answer = fact.subject.lower(), _answer_of(it).lower()
+        assert answer not in subject and subject not in answer, (it.id, fact)
+
+
+def test_facts_that_give_the_answer_away_are_still_in_the_knowledge_base():
+    kb = load_kb()
+    for subject, relation in (
+        ("Mexico", "capital_of"),
+        ("Luxembourg", "capital_of"),
+        ("Kuwait", "capital_of"),
+        ("South Africa", "continent_of"),
+        ("hydrogen", "element_symbol"),
+        ("blueberry", "color_of"),
+        ("fruit bat", "animal_food"),
+        ("goldfish", "animal_class"),
+    ):
+        assert kb.true_object(subject, relation)
+
+
+def test_a_subject_does_not_mean_two_things():
+    kb = load_kb()
+    animal = {
+        f.subject for name in kb.relations if name.startswith("animal_") for f in kb.facts_for(name)
+    }
+    foods = {f.subject for f in kb.facts_for("food_group")}
+    assert not animal & foods, sorted(animal & foods)
+    assert "orange" not in {f.subject for f in kb.facts_for("color_of")}
+    for word in ("kiwi", "turkey", "chicken", "salmon", "tuna", "trout", "cod", "fish"):
+        assert word not in foods
+
+
+# --- the loaded knowledge base cannot be changed by its users -------------------------------------
+
+
+def test_the_loaded_knowledge_base_is_immutable():
+    kb = load_kb()
+    assert isinstance(kb.facts, tuple) and isinstance(kb.subjects, tuple)
+    with pytest.raises(TypeError):
+        kb.relations["capital_of"] = kb.relations["color_of"]
+    with pytest.raises(TypeError):
+        del kb.relations["capital_of"]
+    objects = kb.objects_for("capital_of")
+    objects.clear()
+    assert kb.objects_for("capital_of")
+    kb.facts_for("capital_of").clear()
+    assert kb.facts_for("capital_of") and kb.facts_about("France")
+
+
+def _copy_data(tmp_path):
+    folder = tmp_path / "kb"
+    shutil.copytree(KB_DATA_DIR, folder)
+    return folder
+
+
+def test_the_data_files_load_from_any_directory(tmp_path):
+    kb = load_kb_from(_copy_data(tmp_path))
+    assert kb.facts == load_kb().facts and dict(kb.relations) == dict(load_kb().relations)
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "topic",
+        "falsifiable",
+        "mc_safe",
+        "exact_safe",
+        "train_templates",
+        "bench_templates",
+        "question_templates",
+        "chat_templates",
+        "facts",
+    ],
+)
+def test_a_missing_key_is_reported_with_file_and_relation(tmp_path, key):
+    folder = _copy_data(tmp_path)
+    path = folder / "words.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    del data["relations"]["day_after"][key]
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(KBDataError, match=rf"words\.json/day_after: missing key '{key}'"):
+        load_kb_from(folder)
+
+
+def test_other_data_mistakes_are_reported_too(tmp_path):
+    folder = _copy_data(tmp_path)
+    path = folder / "jobs.json"
+    good = path.read_text(encoding="utf-8")
+
+    def broken(change):
+        data = json.loads(good)
+        change(data["relations"]["job_tool"])
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+    broken(lambda r: r["facts"].append(["doctor", "scalpel"]))
+    with pytest.raises(ValueError, match=r"jobs\.json/job_tool: 'doctor' has two objects"):
+        load_kb_from(folder)
+    broken(lambda r: r["train_templates"].__setitem__(0, "The {s} uses the {x}."))
+    with pytest.raises(ValueError, match=r"jobs\.json/job_tool: template"):
+        load_kb_from(folder)
+    broken(lambda r: r.__setitem__("mc_safe", "no"))
+    with pytest.raises(ValueError, match=r"jobs\.json/job_tool: 'mc_safe' must be true or false"):
+        load_kb_from(folder)
+    path.write_text("{ not json", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"jobs\.json: not valid JSON"):
+        load_kb_from(folder)
+    path.write_text(json.dumps({"rels": {}}), encoding="utf-8")
+    with pytest.raises(ValueError, match=r"jobs\.json: missing key 'relations'"):
+        load_kb_from(folder)

@@ -3,6 +3,8 @@
     "planet_order": {
       "topic": "science",
       "falsifiable": true,
+      "mc_safe": true,
+      "exact_safe": true,
       "train_templates": [
         "{s} is the {o} planet from the Sun.",
         "Counting out from the Sun, {s} comes in {o} place.",
@@ -11,7 +13,7 @@
         "There are eight planets, and {s} is the {o} planet from the Sun."
       ],
       "bench_templates": [
-        "The {o} planet from the Sun is {s}.",
+        "If you list the planets starting from the Sun, the {o} name on the list is {s}.",
         "Going outward from the Sun, the {o} planet is {s}.",
         "In our solar system, {s} takes the {o} spot counting from the Sun.",
         "The Sun has eight planets, and the {o} one is {s}."

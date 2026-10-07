@@ -3,6 +3,8 @@
     "element_symbol": {
       "topic": "science",
       "falsifiable": true,
+      "mc_safe": true,
+      "exact_safe": true,
       "train_templates": [
         "The chemical symbol for {s} is {o}.",
         "{o} is the symbol of the element {s}.",

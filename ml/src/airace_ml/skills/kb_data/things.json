@@ -3,6 +3,8 @@
     "color_of": {
       "topic": "nature",
       "falsifiable": false,
+      "mc_safe": false,
+      "exact_safe": true,
       "train_templates": [
         "The color of the {s} is {o}.",
         "The {s} is {o}.",
@@ -12,7 +14,7 @@
       ],
       "bench_templates": [
         "The {s} looks {o} to the eye.",
-        "Most of the time, the {s} is {o} in color.",
+        "In color, the {s} is usually {o}.",
         "A painter would use {o} paint for the {s}.",
         "When you draw the {s}, you pick the {o} crayon."
       ],
@@ -66,7 +68,6 @@
         ["kale", "green"],
         ["banana", "yellow"],
         ["lemon", "yellow"],
-        ["sun", "yellow"],
         ["corn", "yellow"],
         ["sunflower", "yellow"],
         ["butter", "yellow"],
@@ -79,7 +80,6 @@
         ["mustard", "yellow"],
         ["carrot", "orange"],
         ["pumpkin", "orange"],
-        ["orange", "orange"],
         ["goldfish", "orange"],
         ["traffic cone", "orange"],
         ["tangerine", "orange"],
@@ -104,12 +104,9 @@
         ["acorn", "brown"],
         ["cinnamon", "brown"],
         ["peanut butter", "brown"],
-        ["coconut", "brown"],
         ["soil", "brown"],
         ["dirt", "brown"],
         ["chestnut", "brown"],
-        ["teddy bear", "brown"],
-        ["wood", "brown"],
         ["coal", "black"],
         ["crow", "black"],
         ["ink", "black"],
@@ -132,7 +129,6 @@
         ["flour", "white"],
         ["cotton", "white"],
         ["ghost", "white"],
-        ["rice", "white"],
         ["elephant", "gray"],
         ["smoke", "gray"],
         ["ash", "gray"],
@@ -147,6 +143,8 @@
     "vehicle_travel": {
       "topic": "technology",
       "falsifiable": true,
+      "mc_safe": true,
+      "exact_safe": false,
       "train_templates": [
         "The {s} travels {o}.",
         "People use the {s} to travel {o}.",
@@ -176,7 +174,6 @@
         ["car", "by road"],
         ["bus", "by road"],
         ["truck", "by road"],
-        ["taxi", "by road"],
         ["bicycle", "by road"],
         ["motorcycle", "by road"],
         ["van", "by road"],
@@ -194,7 +191,7 @@
         ["locomotive", "by rail"],
         ["airplane", "by air"],
         ["helicopter", "by air"],
-        ["jet", "by air"],
+        ["jet plane", "by air"],
         ["hot air balloon", "by air"],
         ["glider", "by air"],
         ["blimp", "by air"]
@@ -203,6 +200,8 @@
     "shape_sides": {
       "topic": "school",
       "falsifiable": true,
+      "mc_safe": true,
+      "exact_safe": true,
       "train_templates": [
         "The {s} has {o} sides.",
         "Count the sides of the {s}: there are {o}.",

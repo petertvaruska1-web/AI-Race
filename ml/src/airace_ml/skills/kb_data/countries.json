@@ -3,6 +3,8 @@
     "capital_of": {
       "topic": "places",
       "falsifiable": true,
+      "mc_safe": true,
+      "exact_safe": true,
       "train_templates": [
         "The capital of {s} is {o}.",
         "{o} is the capital city of {s}.",
@@ -15,7 +17,7 @@
         "The capital city of {s} is called {o}.",
         "{o} is the city that serves as the capital of {s}.",
         "Of all the cities in {s}, {o} is the capital.",
-        "The city of {o} is the capital of {s}."
+        "{o} has the honor of being the capital of {s}."
       ],
       "question_templates": [
         "Which city is the capital of {s}?",
@@ -26,7 +28,7 @@
       "chat_templates": [
         ["What is the capital of {s}?", "The capital of {s} is {o}."],
         ["Can you tell me the capital city of {s}?", "Yes. The capital city of {s} is {o}."],
-        ["Do you know which city is the capital of {s}?", "I do. {o} is the capital of {s}."],
+        ["Do you know the name of the capital of {s}?", "I do. {o} is the capital of {s}."],
         ["Tell me the capital of {s}.", "The capital of {s} is the city of {o}."]
       ],
       "facts": [
@@ -183,6 +185,8 @@
     "continent_of": {
       "topic": "places",
       "falsifiable": true,
+      "mc_safe": true,
+      "exact_safe": true,
       "train_templates": [
         "The country of {s} is in the continent of {o}.",
         "You can find {s} on the continent of {o}.",
@@ -312,7 +316,6 @@
         ["Germany", "Europe"],
         ["Greece", "Europe"],
         ["Hungary", "Europe"],
-        ["Iceland", "Europe"],
         ["Ireland", "Europe"],
         ["Italy", "Europe"],
         ["Latvia", "Europe"],
@@ -352,7 +355,6 @@
         ["Jamaica", "North America"],
         ["Mexico", "North America"],
         ["Nicaragua", "North America"],
-        ["Panama", "North America"],
         ["the United States", "North America"],
         ["Grenada", "North America"],
         ["Saint Lucia", "North America"],
@@ -385,6 +387,8 @@
     "country_language": {
       "topic": "places",
       "falsifiable": false,
+      "mc_safe": false,
+      "exact_safe": true,
       "train_templates": [
         "The main language spoken in {s} is {o}.",
         "People in {s} speak {o}.",
@@ -416,12 +420,6 @@
         ["Australia", "English"],
         ["New Zealand", "English"],
         ["Ireland", "English"],
-        ["Jamaica", "English"],
-        ["the Bahamas", "English"],
-        ["Barbados", "English"],
-        ["Guyana", "English"],
-        ["Belize", "English"],
-        ["Trinidad and Tobago", "English"],
         ["Spain", "Spanish"],
         ["Mexico", "Spanish"],
         ["Argentina", "Spanish"],
@@ -440,23 +438,13 @@
         ["El Salvador", "Spanish"],
         ["Nicaragua", "Spanish"],
         ["France", "French"],
-        ["Senegal", "French"],
-        ["Mali", "French"],
-        ["Niger", "French"],
-        ["Burkina Faso", "French"],
-        ["Gabon", "French"],
-        ["Guinea", "French"],
-        ["Togo", "French"],
         ["Germany", "German"],
         ["Austria", "German"],
         ["Liechtenstein", "German"],
         ["Italy", "Italian"],
         ["Portugal", "Portuguese"],
         ["Brazil", "Portuguese"],
-        ["Angola", "Portuguese"],
-        ["Mozambique", "Portuguese"],
         ["the Netherlands", "Dutch"],
-        ["Suriname", "Dutch"],
         ["Russia", "Russian"],
         ["Egypt", "Arabic"],
         ["Saudi Arabia", "Arabic"],
@@ -464,11 +452,6 @@
         ["Lebanon", "Arabic"],
         ["Syria", "Arabic"],
         ["Tunisia", "Arabic"],
-        ["Oman", "Arabic"],
-        ["Qatar", "Arabic"],
-        ["Kuwait", "Arabic"],
-        ["Bahrain", "Arabic"],
-        ["the United Arab Emirates", "Arabic"],
         ["China", "Chinese"],
         ["Japan", "Japanese"],
         ["South Korea", "Korean"],
@@ -488,11 +471,8 @@
         ["Vietnam", "Vietnamese"],
         ["Thailand", "Thai"],
         ["Iran", "Persian"],
-        ["Nepal", "Nepali"],
         ["Mongolia", "Mongolian"],
         ["Cambodia", "Khmer"],
-        ["Laos", "Lao"],
-        ["Ethiopia", "Amharic"],
         ["Iceland", "Icelandic"],
         ["Albania", "Albanian"],
         ["Croatia", "Croatian"],
@@ -504,13 +484,14 @@
         ["Serbia", "Serbian"],
         ["North Macedonia", "Macedonian"],
         ["Bangladesh", "Bengali"],
-        ["Malaysia", "Malay"],
         ["Uzbekistan", "Uzbek"]
       ]
     },
     "landmark_country": {
       "topic": "places",
       "falsifiable": true,
+      "mc_safe": true,
+      "exact_safe": true,
       "train_templates": [
         "You can visit {s} in {o}.",
         "The country where you will find {s} is {o}.",
@@ -521,7 +502,7 @@
       "bench_templates": [
         "Today, {s} is found in the country of {o}.",
         "To see {s}, you would need to travel to {o}.",
-        "In {o}, you can see {s}.",
+        "A trip to {o} gives you the chance to see {s}.",
         "The famous place called {s} can be found in {o}."
       ],
       "question_templates": [
