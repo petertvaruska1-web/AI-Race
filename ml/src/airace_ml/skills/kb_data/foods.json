@@ -5,6 +5,9 @@
       "falsifiable": false,
       "mc_safe": false,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The {s} belongs to the {o} food group.",
         "In a healthy diet, the {s} counts as part of the {o} group.",

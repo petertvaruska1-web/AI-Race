@@ -5,6 +5,9 @@
       "falsifiable": false,
       "mc_safe": false,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The opposite of {s} is {o}.",
         "The words {s} and {o} are opposites.",
@@ -113,6 +116,9 @@
       "falsifiable": true,
       "mc_safe": true,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The day after {s} is {o}.",
         "{o} comes right after {s}.",
@@ -153,6 +159,9 @@
       "falsifiable": true,
       "mc_safe": true,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The month after {s} is {o}.",
         "{o} comes right after {s}.",

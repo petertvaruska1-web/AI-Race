@@ -151,7 +151,7 @@ def knowledge_bench_items(kb: KB, rng: np.random.Generator) -> list[MCItem | Exa
     Each item asks about a different fact, spread evenly over the relations that are safe for
     multiple choice (``Relation.mc_safe``; free answers also need ``exact_safe``), in the frame
     ``Question: ...\\nAnswer:``. The question is a question template, or (about 40% of the time)
-    a bench template with the object blanked out. Free answers expect the true object. The
+    a bench template with the object blanked out. Free answers accept the true object and its listed forms (``KB.accepted_answers``). The
     multiple-choice items come first (``knowledge-0000`` to ``knowledge-0149``).
     """
     exact_facts = _sample_facts(rng, N_KNOWLEDGE_EXACT, _bench_pools(kb, exact=True))
@@ -174,7 +174,7 @@ def knowledge_bench_items(kb: KB, rng: np.random.Generator) -> list[MCItem | Exa
             options, answer_index = _shuffled_options(kb, fact, rng)
             items.append(MCItem(item_id, "knowledge", prompt, options, answer_index, tags))
         else:
-            items.append(ExactItem(item_id, "knowledge", prompt, [fact.obj], tags))
+            items.append(ExactItem(item_id, "knowledge", prompt, kb.accepted_answers(fact), tags))
     return items
 
 
@@ -230,8 +230,9 @@ class FalseFactPlan:
 def plan_false_facts(kb: KB, rng: np.random.Generator, n_facts: int) -> FalseFactPlan:
     """Pick ``n_facts`` facts, spread over the relations that allow it, and a wrong object for each.
 
-    The wrong object is another object of the same relation: never the true one, and never the
-    subject itself.
+    The wrong object is another object of the same relation that is clearly wrong for the fact
+    (``KB.wrong_objects``: not the true object, not one it can be mistaken for or that is accepted
+    in its place, not a ``never_false`` pair) and is never the subject itself.
     """
     pools = {
         name: kb.facts_for(name)
@@ -240,7 +241,7 @@ def plan_false_facts(kb: KB, rng: np.random.Generator, n_facts: int) -> FalseFac
     }
     mapping: dict[tuple[str, str], str] = {}
     for fact in _sample_facts(rng, n_facts, pools):
-        candidates = [o for o in kb.objects_for(fact.relation) if o not in (fact.obj, fact.subject)]
+        candidates = [o for o in kb.wrong_objects(fact) if o != fact.subject]
         mapping[(fact.subject, fact.relation)] = candidates[_pick(rng, len(candidates))]
     return FalseFactPlan(mapping)
 

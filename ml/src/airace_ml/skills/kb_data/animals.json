@@ -5,6 +5,9 @@
       "falsifiable": true,
       "mc_safe": true,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The {s} is a kind of {o}.",
         "The {s} belongs to the {o} group.",
@@ -195,6 +198,9 @@
       "falsifiable": false,
       "mc_safe": false,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The {s} makes the sound {o}.",
         "The {s} says {o}.",
@@ -260,6 +266,15 @@
       "falsifiable": true,
       "mc_safe": true,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {
+        "zero": ["0", "none"],
+        "two": ["2"],
+        "four": ["4"],
+        "six": ["6"],
+        "eight": ["8"]
+      },
+      "never_false": [["lizard", "zero"]],
       "train_templates": [
         "The {s} has {o} legs.",
         "Count the legs on the {s}: there are {o}.",
@@ -429,6 +444,9 @@
       "falsifiable": false,
       "mc_safe": false,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The {s} lives in the {o}.",
         "The home of the {s} is the {o}.",
@@ -525,6 +543,9 @@
       "falsifiable": false,
       "mc_safe": false,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The {s} eats {o}.",
         "The favorite food of the {s} is {o}.",
@@ -632,6 +653,11 @@
       "falsifiable": false,
       "mc_safe": true,
       "exact_safe": true,
+      "confusable": [["puppy", "pup"], ["cub", "pup"], ["chick", "duckling", "gosling", "cygnet"]],
+      "also_accepted": {
+        "puppy": ["pup"]
+      },
+      "never_false": [],
       "train_templates": [
         "A baby {s} is called a {o}.",
         "The young of the {s} is called a {o}.",
@@ -700,6 +726,9 @@
       "falsifiable": false,
       "mc_safe": false,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "A group of {s} is called a {o}.",
         "When {s} stay together, we call the group a {o}.",

@@ -436,7 +436,7 @@ def test_knowledge_bench_composition():
         rel = next(t for t in it.tags if t.startswith("rel:")).removeprefix("rel:")
         assert it.tags == (f"rel:{rel}", f"topic:{kb.relations[rel].topic}")
     for it in exact:
-        assert it.extract == "first_line" and it.max_new_tokens == 8 and len(it.answers) == 1
+        assert it.extract == "first_line" and it.max_new_tokens == 8 and 1 <= len(it.answers) <= 5
 
 
 def test_every_possible_benchmark_prompt_has_exactly_one_answer():
@@ -453,7 +453,7 @@ def test_knowledge_answers_are_the_true_objects():
             assert it.options[it.answer_index] == fact.obj
             assert all(o in kb.objects_for(fact.relation) for o in it.options)
         else:
-            assert it.answers == [fact.obj]
+            assert it.answers == kb.accepted_answers(fact) and it.answers[0] == fact.obj
         assert it.tags == (f"rel:{fact.relation}", f"topic:{kb.relations[fact.relation].topic}")
 
 
@@ -661,6 +661,11 @@ CONFUSABLE_OBJECTS = (
     ("food_group", {"fruit", "vegetable"}),
     ("country_language", {"Russian", "Ukrainian"}),
     ("opposite_of", {"short", "small"}),
+    ("baby_animal", {"puppy", "pup"}),
+    ("baby_animal", {"cub", "pup"}),
+    ("baby_animal", {"chick", "duckling"}),
+    ("baby_animal", {"chick", "gosling"}),
+    ("baby_animal", {"chick", "cygnet"}),
 )
 
 # (subject, relation) pairs that were removed because the answer is stereotyped, contested, or
@@ -696,6 +701,10 @@ RETIRED_FACTS = (
     ("Mozambique", "country_language"),
     ("Ethiopia", "country_language"),
     ("Belize", "country_language"),
+    ("Niger", "country_language"),
+    ("Burkina Faso", "country_language"),
+    ("Guinea", "country_language"),
+    ("Togo", "country_language"),
 )
 
 
@@ -835,6 +844,9 @@ def test_the_data_files_load_from_any_directory(tmp_path):
         "falsifiable",
         "mc_safe",
         "exact_safe",
+        "confusable",
+        "also_accepted",
+        "never_false",
         "train_templates",
         "bench_templates",
         "question_templates",
@@ -876,4 +888,124 @@ def test_other_data_mistakes_are_reported_too(tmp_path):
         load_kb_from(folder)
     path.write_text(json.dumps({"rels": {}}), encoding="utf-8")
     with pytest.raises(ValueError, match=r"jobs\.json: missing key 'relations'"):
+        load_kb_from(folder)
+
+
+# --- confusable objects, accepted forms, never-false pairs ------------------------------------------
+
+
+def test_no_option_set_offers_two_confusable_objects_across_300_seeds():
+    kb = load_kb()
+    groups = {name: [set(g) for g in r.confusable] for name, r in kb.relations.items()}
+    for relation, pair in CONFUSABLE_OBJECTS:
+        groups[relation].append(pair)
+    assert groups["baby_animal"], "baby_animal must declare its confusable objects"
+    for seed in range(300):
+        items = knowledge_bench_items(kb, np.random.default_rng(seed))
+        items += consistency_groups(kb, np.random.default_rng(10_000 + seed))
+        for it in items:
+            if isinstance(it, MCItem):
+                options = set(it.options)
+                for group in groups[_relation_of(it)]:
+                    assert len(options & group) <= 1, (seed, it.id, it.options)
+
+
+def test_a_wrong_option_is_never_confusable_with_the_answer():
+    kb = load_kb()
+    cases = [
+        ("dog", "baby_animal", {"pup"}),
+        ("seal", "baby_animal", {"puppy", "cub"}),
+        ("bear", "baby_animal", {"pup"}),
+        ("duck", "baby_animal", {"chick", "gosling", "cygnet"}),
+        ("goose", "baby_animal", {"chick", "duckling", "cygnet"}),
+        ("chicken", "baby_animal", {"duckling", "gosling", "cygnet"}),
+        ("lizard", "animal_legs", {"zero"}),
+    ]
+    for subject, relation, forbidden in cases:
+        fact = Fact(subject, relation, kb.true_object(subject, relation))
+        for seed in range(300):
+            wrong = kb.distractors(fact, 3, np.random.default_rng(seed))
+            assert len(set(wrong)) == 3 and not forbidden & set(wrong), (subject, wrong)
+
+
+def test_distractors_never_offer_two_mutually_confusable_objects():
+    kb = load_kb()
+    rng = np.random.default_rng(0)
+    for name, relation in kb.relations.items():
+        for group in relation.confusable:
+            for fact in kb.facts_for(name)[:40]:
+                wrong = set(kb.distractors(fact, 3, rng))
+                assert len(wrong & set(group)) <= 1, (name, group, wrong)
+
+
+def test_free_answers_accept_the_listed_forms():
+    kb = load_kb()
+    assert kb.accepted_answers(Fact("dog", "baby_animal", "puppy")) == ["puppy", "pup"]
+    assert kb.accepted_answers(Fact("seal", "baby_animal", "pup")) == ["pup"]
+    assert kb.accepted_answers(Fact("ostrich", "animal_legs", "two")) == ["two", "2"]
+    assert kb.accepted_answers(Fact("Ukraine", "capital_of", "Kyiv")) == ["Kyiv", "Kiev"]
+    assert kb.accepted_answers(Fact("Mercury", "planet_order", "first")) == ["first", "1st"]
+    assert kb.accepted_answers(Fact("lizard", "animal_legs", "four")) == ["four", "4"]
+    extra = 0
+    for seed in range(30):
+        for it in knowledge_bench_items(kb, np.random.default_rng(seed)):
+            if isinstance(it, ExactItem):
+                extra += len(it.answers) > 1
+    assert extra > 0
+
+
+def test_accepted_forms_are_never_offered_as_wrong_options_or_swaps():
+    kb = load_kb()
+    for name, relation in kb.relations.items():
+        for obj, forms in relation.also_accepted:
+            for fact in (f for f in kb.facts_for(name) if f.obj == obj):
+                assert not set(forms) & set(kb.wrong_objects(fact)), (name, obj)
+
+
+def test_never_false_pairs_are_never_offered_or_swapped():
+    kb = load_kb()
+    pairs = [(s, r.name, o) for r in kb.relations.values() for s, o in r.never_false]
+    assert ("lizard", "animal_legs", "zero") in pairs
+    assert ("Hagia Sophia", "landmark_country", "Greece") in pairs
+    for subject, relation, obj in pairs:
+        fact = Fact(subject, relation, kb.true_object(subject, relation))
+        assert obj in kb.objects_for(relation) and obj not in kb.wrong_objects(fact)
+        for seed in range(100):
+            assert obj not in kb.distractors(fact, 3, np.random.default_rng(seed))
+    for seed in range(100):
+        plan = plan_false_facts(kb, np.random.default_rng(seed), 400)
+        for subject, relation, obj in pairs:
+            assert plan.mapping.get((subject, relation)) != obj
+        for (subject, relation), wrong in plan.mapping.items():
+            fact = Fact(subject, relation, kb.true_object(subject, relation))
+            assert wrong in kb.wrong_objects(fact)
+
+
+def test_mistakes_in_the_confusable_data_are_reported(tmp_path):
+    folder = _copy_data(tmp_path)
+    path = folder / "animals.json"
+    good = path.read_text(encoding="utf-8")
+
+    def broken(change):
+        data = json.loads(good)
+        change(data["relations"]["baby_animal"])
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+    broken(lambda r: r.__setitem__("confusable", [["puppy", "nonsense"]]))
+    with pytest.raises(KBDataError, match=r"animals\.json/baby_animal: confusable group"):
+        load_kb_from(folder)
+    broken(lambda r: r.__setitem__("confusable", [["puppy"]]))
+    with pytest.raises(KBDataError, match=r"animals\.json/baby_animal: confusable group"):
+        load_kb_from(folder)
+    broken(lambda r: r.__setitem__("also_accepted", {"nonsense": ["x"]}))
+    with pytest.raises(KBDataError, match=r"animals\.json/baby_animal: also_accepted key"):
+        load_kb_from(folder)
+    broken(lambda r: r.__setitem__("also_accepted", {"puppy": []}))
+    with pytest.raises(KBDataError, match=r"animals\.json/baby_animal: also_accepted for"):
+        load_kb_from(folder)
+    broken(lambda r: r.__setitem__("never_false", [["dog", "puppy"]]))
+    with pytest.raises(KBDataError, match=r"animals\.json/baby_animal: never_false entry"):
+        load_kb_from(folder)
+    broken(lambda r: r.__setitem__("never_false", [["unicorn", "pup"]]))
+    with pytest.raises(KBDataError, match=r"animals\.json/baby_animal: never_false entry"):
         load_kb_from(folder)

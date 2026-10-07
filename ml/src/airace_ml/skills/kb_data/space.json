@@ -5,6 +5,18 @@
       "falsifiable": true,
       "mc_safe": true,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {
+        "first": ["1st"],
+        "second": ["2nd"],
+        "third": ["3rd"],
+        "fourth": ["4th"],
+        "fifth": ["5th"],
+        "sixth": ["6th"],
+        "seventh": ["7th"],
+        "eighth": ["8th"]
+      },
+      "never_false": [],
       "train_templates": [
         "{s} is the {o} planet from the Sun.",
         "Counting out from the Sun, {s} comes in {o} place.",

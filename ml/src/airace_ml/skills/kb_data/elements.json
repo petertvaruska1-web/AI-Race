@@ -5,6 +5,9 @@
       "falsifiable": true,
       "mc_safe": true,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The chemical symbol for {s} is {o}.",
         "{o} is the symbol of the element {s}.",

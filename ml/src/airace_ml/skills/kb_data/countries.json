@@ -5,6 +5,14 @@
       "falsifiable": true,
       "mc_safe": true,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {
+        "Kyiv": ["Kiev"],
+        "Ulaanbaatar": ["Ulan Bator"],
+        "Bern": ["Berne"],
+        "Washington DC": ["Washington D.C.", "Washington, DC", "Washington, D.C.", "Washington"]
+      },
+      "never_false": [],
       "train_templates": [
         "The capital of {s} is {o}.",
         "{o} is the capital city of {s}.",
@@ -187,6 +195,9 @@
       "falsifiable": true,
       "mc_safe": true,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The country of {s} is in the continent of {o}.",
         "You can find {s} on the continent of {o}.",
@@ -389,6 +400,9 @@
       "falsifiable": false,
       "mc_safe": false,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The main language spoken in {s} is {o}.",
         "People in {s} speak {o}.",
@@ -492,6 +506,12 @@
       "falsifiable": true,
       "mc_safe": true,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {
+        "Turkey": ["Turkiye"],
+        "Russia": ["Russian Federation"]
+      },
+      "never_false": [["Hagia Sophia", "Greece"], ["Mount Olympus", "Turkey"]],
       "train_templates": [
         "You can visit {s} in {o}.",
         "The country where you will find {s} is {o}.",

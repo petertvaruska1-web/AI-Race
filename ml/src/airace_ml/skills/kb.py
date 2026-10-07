@@ -22,6 +22,16 @@ Every relation also says how far its facts can be trusted for two uses:
   object exactly. Objects that are phrases rather than names ("by road") are too fragile for that.
 * ``falsifiable``: whether swapping the object always gives a clearly false statement, which is
   what makes a swapped object a safe false fact.
+
+Three more lists say which other objects count as right, or as not clearly wrong:
+
+* ``confusable``: groups of objects that can be mistaken for each other (``pup`` and ``puppy``).
+  A wrong option is never in a group with the true object, and two options are never in the same
+  group.
+* ``also_accepted``: extra spellings or forms a free answer may use for an object (``pup`` for
+  ``puppy``, ``4`` for ``four``, ``Kiev`` for ``Kyiv``).
+* ``never_false``: (subject, object) pairs that are not clearly false (some lizards have no legs),
+  so they are never offered as a wrong option or used as a false fact.
 """
 
 import json
@@ -51,6 +61,9 @@ _RELATION_KEYS = (
     "falsifiable",
     "mc_safe",
     "exact_safe",
+    "confusable",
+    "also_accepted",
+    "never_false",
     "train_templates",
     "bench_templates",
     "question_templates",
@@ -81,6 +94,9 @@ class Relation:
     falsifiable: bool = True
     mc_safe: bool = True
     exact_safe: bool = True
+    confusable: tuple[tuple[str, ...], ...] = ()
+    also_accepted: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    never_false: tuple[tuple[str, str], ...] = ()
 
 
 class KB:
@@ -99,6 +115,18 @@ class KB:
         self._objects = {
             name: sorted({f.obj for f in fs}) for name, fs in self._by_relation.items()
         }
+        self._confusable: dict[str, dict[str, set[str]]] = {}
+        self._accepted: dict[str, dict[str, tuple[str, ...]]] = {}
+        self._never_false: dict[tuple[str, str], set[str]] = {}
+        for name, relation in self.relations.items():
+            mates: dict[str, set[str]] = {}
+            for group in relation.confusable:
+                for obj in group:
+                    mates.setdefault(obj, set()).update(o for o in group if o != obj)
+            self._confusable[name] = mates
+            self._accepted[name] = dict(relation.also_accepted)
+            for subject, obj in relation.never_false:
+                self._never_false.setdefault((subject, name), set()).add(obj)
         self.subjects: tuple[str, ...] = tuple(self._by_subject)
 
     def objects_for(self, relation: str) -> list[str]:
@@ -114,21 +142,40 @@ class KB:
     def facts_about(self, subject: str) -> list[Fact]:
         return list(self._by_subject[subject])
 
-    def distractors(self, fact: Fact, k: int, rng: np.random.Generator) -> list[str]:
-        """``k`` distinct wrong answers for the fact, drawn from the other objects of its relation.
+    def accepted_answers(self, fact: Fact) -> list[str]:
+        """The true object first, then the other forms a free answer may use for it."""
+        return [fact.obj, *self._accepted[fact.relation].get(fact.obj, ())]
 
-        The subject itself is left out when enough other objects remain (an answer that repeats
-        the question is no distraction).
+    def wrong_objects(self, fact: Fact) -> list[str]:
+        """The objects of the relation that are clearly wrong for the fact.
+
+        Not the true object, not one that can be mistaken for it or is accepted in its place, and
+        not one listed in the relation's ``never_false`` pairs for the subject.
         """
-        pool = [o for o in self._objects[fact.relation] if o != fact.obj]
-        without_subject = [o for o in pool if o != fact.subject]
-        if len(without_subject) >= k:
-            pool = without_subject
-        if len(pool) < k:
-            raise KBDataError(
-                f"relation {fact.relation!r} has only {len(pool)} wrong objects, not {k}"
-            )
-        return [pool[int(i)] for i in rng.choice(len(pool), size=k, replace=False)]
+        banned = {fact.obj}
+        banned |= self._confusable[fact.relation].get(fact.obj, set())
+        banned |= set(self._accepted[fact.relation].get(fact.obj, ()))
+        banned |= self._never_false.get((fact.subject, fact.relation), set())
+        return [o for o in self._objects[fact.relation] if o not in banned]
+
+    def distractors(self, fact: Fact, k: int, rng: np.random.Generator) -> list[str]:
+        """``k`` distinct clearly wrong answers for the fact, from the other objects of its relation.
+
+        Two answers that can be mistaken for each other are never both chosen. The subject itself
+        is left out when enough other objects remain (an answer that repeats the question is no
+        distraction).
+        """
+        mates = self._confusable[fact.relation]
+        pool = self.wrong_objects(fact)
+        for candidates in ([o for o in pool if o != fact.subject], pool):
+            chosen: list[str] = []
+            for i in rng.permutation(len(candidates)):
+                option = candidates[int(i)]
+                if not any(option in mates.get(c, ()) for c in chosen):
+                    chosen.append(option)
+                if len(chosen) == k:
+                    return chosen
+        raise ValueError(f"relation {fact.relation!r} has too few wrong objects for {k} options")
 
 
 def _fields(template: str) -> set[str]:
@@ -149,6 +196,56 @@ def _text(where: str, value: object) -> str:
     if not isinstance(value, str) or not value.strip() or value != value.strip():
         raise KBDataError(f"{where}: {value!r} must be non-empty text without outer spaces")
     return value
+
+
+def _confusable_groups(where: str, raw: object, objects: set[str]) -> tuple[tuple[str, ...], ...]:
+    if not isinstance(raw, list):
+        raise KBDataError(f"{where}: 'confusable' must be a list of groups")
+    groups = []
+    for group in raw:
+        if not isinstance(group, list) or len(group) < 2 or len(set(group)) != len(group):
+            raise KBDataError(f"{where}: confusable group {group!r} needs 2+ different objects")
+        unknown = [o for o in group if o not in objects]
+        if unknown:
+            raise KBDataError(f"{where}: confusable group {group!r} has unknown objects {unknown}")
+        groups.append(tuple(group))
+    return tuple(groups)
+
+
+def _also_accepted(
+    where: str, raw: object, objects: set[str]
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    if not isinstance(raw, dict):
+        raise KBDataError(f"{where}: 'also_accepted' must be an object")
+    accepted = []
+    for obj, extras in raw.items():
+        if obj not in objects:
+            raise KBDataError(f"{where}: also_accepted key {obj!r} is not an object")
+        if not isinstance(extras, list) or not extras:
+            raise KBDataError(f"{where}: also_accepted for {obj!r} must be a non-empty list")
+        forms = tuple(_text(where, extra) for extra in extras)
+        if obj in forms or len(set(forms)) != len(forms):
+            raise KBDataError(f"{where}: also_accepted for {obj!r} repeats a form")
+        accepted.append((obj, forms))
+    return tuple(accepted)
+
+
+def _never_false(
+    where: str, raw: object, truth: dict[str, str], objects: set[str]
+) -> tuple[tuple[str, str], ...]:
+    if not isinstance(raw, list):
+        raise KBDataError(f"{where}: 'never_false' must be a list of [subject, object]")
+    pairs = []
+    for pair in raw:
+        if not isinstance(pair, list) or len(pair) != 2:
+            raise KBDataError(f"{where}: never_false entry {pair!r} must be [subject, object]")
+        subject, obj = pair
+        if subject not in truth or obj not in objects or truth[subject] == obj:
+            raise KBDataError(
+                f"{where}: never_false entry {pair!r} must name a subject and a wrong object"
+            )
+        pairs.append((subject, obj))
+    return tuple(pairs)
 
 
 def _parse_relation(file: str, name: str, spec: object) -> tuple[Relation, list[Fact]]:
@@ -186,6 +283,11 @@ def _parse_relation(file: str, name: str, spec: object) -> tuple[Relation, list[
             raise KBDataError(f"{where}: {fact.subject!r} has two objects")
     if len({f.obj for f in facts}) < MIN_OBJECTS:
         raise KBDataError(f"{where}: needs at least {MIN_OBJECTS} distinct objects")
+    objects = {f.obj for f in facts}
+    truth = {f.subject: f.obj for f in facts}
+    confusable = _confusable_groups(where, spec["confusable"], objects)
+    also_accepted = _also_accepted(where, spec["also_accepted"], objects)
+    never_false = _never_false(where, spec["never_false"], truth, objects)
     relation = Relation(
         name=name,
         train_templates=tuple(spec["train_templates"]),
@@ -196,6 +298,9 @@ def _parse_relation(file: str, name: str, spec: object) -> tuple[Relation, list[
         falsifiable=spec["falsifiable"],
         mc_safe=spec["mc_safe"],
         exact_safe=spec["exact_safe"],
+        confusable=confusable,
+        also_accepted=also_accepted,
+        never_false=never_false,
     )
     return relation, facts
 

@@ -5,6 +5,9 @@
       "falsifiable": false,
       "mc_safe": false,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The color of the {s} is {o}.",
         "The {s} is {o}.",
@@ -145,6 +148,9 @@
       "falsifiable": true,
       "mc_safe": true,
       "exact_safe": false,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The {s} travels {o}.",
         "People use the {s} to travel {o}.",
@@ -202,6 +208,18 @@
       "falsifiable": true,
       "mc_safe": true,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {
+        "three": ["3"],
+        "four": ["4"],
+        "five": ["5"],
+        "six": ["6"],
+        "seven": ["7"],
+        "eight": ["8"],
+        "nine": ["9"],
+        "ten": ["10"]
+      },
+      "never_false": [],
       "train_templates": [
         "The {s} has {o} sides.",
         "Count the sides of the {s}: there are {o}.",

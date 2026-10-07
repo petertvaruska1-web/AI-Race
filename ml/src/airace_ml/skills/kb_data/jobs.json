@@ -5,6 +5,9 @@
       "falsifiable": false,
       "mc_safe": false,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The {s} uses the {o} at work.",
         "An important tool for the {s} is the {o}.",
@@ -81,6 +84,9 @@
       "falsifiable": false,
       "mc_safe": false,
       "exact_safe": true,
+      "confusable": [],
+      "also_accepted": {},
+      "never_false": [],
       "train_templates": [
         "The workplace of the {s} is the {o}.",
         "Every day, the {s} goes to the {o} for work.",
