@@ -228,3 +228,134 @@ Changed test helpers (stricter or corrected expectations, not weakenings):
    - Removing partial copies would also strip legitimate answers that reuse the question's phrase ("THE CAPITAL OF PERU IS LIMA"), so I didn't.
 4. **The tense participle gap in the default 2000-pair audit sample is 0.045** against a 0.06 tolerance. The expectation is balanced (0.006, guarded by a new exact test), so this is sample noise (SD 0.023).
 5. **2-word sentences fail sentence checks.** `all_caps` and `contains_any` count a sentence as 3+ words, so a valid 2-word sentence ("OTTERS SWIM.") fails. I kept this for consistency with f4eaa83's all_caps choice. It's rare in practice, and the cost is a slight under-count.
+
+---
+
+## Fix round 1 (commit `3e705b4`)
+
+**Scope:** review finding I1 (Important), plus Minors M1, M2, M3, M5 and M6 pulled in by the controller. M4 was deferred by ruling.
+
+**Covering test file:** `ml/tests/test_code_instr_grammar.py`. It now has 88 tests; 8 are new and several were updated.
+
+### What changed, per finding
+
+**I1. Function items are partitioned by def line** (`code.py`)
+- The world key is now `def name(params):`, whatever the docstring (`_Variant.def_line`).
+- Benchmark headers are those whose def line is reserved. Each item gets a def line of its own (`_bench_functions` picks distinct def lines, then a random docstring for each).
+- Training headers have neither a reserved def line nor a reserved full header.
+- Names and parameters:
+  - Every family went from 6 to 8 parameter sets. The new ones are `("c","d")`, `("first","second")`, `("a",)`, `("number",)`, `("arr",)`, `("data",)`, `("arr","val")`, `("data","key")`, `("a","sign")` and `("number","negative")`.
+  - Every family went from 6 to 8 names. The four families that were still short got 10 names (double, is_even, count_of, sum_list).
+  - Reserved def lines per family are now 9/6/9/9/6/8/6/6/5/5, so every family has at least 5 (the target).
+- Requiring a reserved full prompt as well is infeasible: it left as few as 1 per family. The def-line partition already keeps every bench prompt out of training.
+- Tests:
+  - `test_coding_bench_shape` now checks the reservation key per kind: the prompt for output items, the def line for function items.
+  - The names test was updated to the new counts, and it now also asserts that bench and training def lines are disjoint.
+- **Measured**, on `code_bench_items(skill_rng("coding","bench"))` against `code_train_docs(skill_rng("code","train"), 6000)` (2999 function documents):
+  - 50 distinct bench def lines.
+  - **0/50 occur in training text** (was 50/50).
+  - **0/50 appear with the reference body** (was 42/50).
+  - Training still teaches all 10 families.
+
+**M1. Shared helpers** (`types.py`)
+- `pick`, `choice`, `capitalized` and `in_turn` now live next to `fair_quota`.
+- `code.py` (`_pick`, `_choice`, `_round_robin`), `instructions.py` (`_pick`, `_choice`, `_capitalized`, `_in_turn`) and `grammar.py` (`_cap` and the inline interleave) use them.
+- `facts.py` and `reasoning.py` are untouched.
+- I checked the refactor shifts no stream: hashes of the grammar bench (2000 pairs), the instruction bench and training (500 docs), the code output items and the code training programs were identical before and after the refactor (diff empty).
+
+**M2. Time semantics in tense pairs** (`grammar.py`)
+- `HABITS` ("every day", "every night", "all day") are left out of the past and future frames.
+- One addition of the same kind: `SLOW_VERBS` (`grow`) only go with year/summer frames. "Last week the rabbit grew tall." was in the bench sample.
+
+**M3. Natural good members** (`grammar.py`)
+- "friend" was replaced by "nurse" in `PEOPLE`, so there is no bare "the friend". "an honest friend" stays.
+- `SINGULAR_QUANTIFIERS` is now one/this/that; each/every are gone.
+- `_says(subject, rest)` filters verb, be, helper and tense complements:
+  - Animals and babies don't take lunch, dinner, breakfast, tea, juice or school.
+  - Wild animals (bear, lion, fox, monkey, frog) don't take bed, ball, toy or name.
+  - Only small animals go on a bed.
+  - The subject is never in its own complement ("The dog sees the dog.").
+- `p` verbs (write, ride, speak…) no longer take "the baby".
+- Have-objects:
+  - Wild animals: `HAVE_FOR_ANIMALS` (home, friend, baby, mother).
+  - Pets and farm animals: `HAVE_FOR_PETS` (those plus ball, toy, bed, name).
+  - "a cold" was dropped.
+
+**M5. Exact plurals in `contains_any`**
+- The checker drops its "-s/-es" regex and matches exactly the listed words: whole word, any case, possessive allowed. So "cherrys" no longer passes.
+- `instructions._word_forms` lists the word plus its correct "-s" form (the plural of a noun, or the he/she form of a verb):
+  - from `grammar.PLURALS` and `IRREGULAR_S_FORMS` (geese, wolves, potatoes, tomatoes, mosquitoes, mangoes) first, then the spelling rules (-ies, -es, -s).
+  - Names keep one form, except days ("Sundays").
+  - Elements, already-plural words (`animal_group` subjects), same-plural nouns and "-fish" words keep one form.
+- Tests:
+  - A new test checks every one of the 700+ contains_any words (bench and training) against an independent test-side oracle, plus 15 spot checks (cherry→cherries, canary→canaries, child→children, mouse→mice, goose→geese, wolf→wolves, leaf→leaves, freeze→freezes…).
+  - `expected_check` now expects the oracle's forms.
+  - Two older checker tests now list the plural in their arguments ("dogs", "otters"), as the contract requires.
+
+**M6. Docstrings in MiniPy terms**
+- Square: "Return x squared." → "Return x multiplied by itself."; "Return the square of x." → "Return x times x."
+- is_even: "…when divided by 2…" → "Return True if x is a multiple of 2, else False."
+- count_of keeps its wording, per the ruling.
+
+### TDD evidence
+
+Command: `cd ml && uv run --no-sync pytest tests/test_code_instr_grammar.py -q -k "<tests>"`.
+
+| Finding | RED output | GREEN |
+|---|---|---|
+| I1 | `test_no_benchmark_function_name_and_parameters_occur_in_training`: `assert 49 == 50` (def lines repeat). The overlap assertion follows. | 84 passed (after updating the shape and names tests to the ruled key) |
+| M6 | `test_docstrings_ask_only_for_what_minipy_can_do`: `AssertionError: ('square', 'Return the square of {p0}.')` | same run |
+| M1 | `test_shared_helpers_live_in_types`: `AttributeError: module 'airace_ml.skills.types' has no attribute 'in_turn'` | 84 passed |
+| M5 | `AssertionError: Cherrys are red.` (accepted); `('contains_any', {'words': ['tofu', 'tofus'], …}) != ({'words': ['tofu'], …})`; `AttributeError: … no attribute '_word_forms'`. 3 failed. | 86 passed |
+| M2 | `test_tense_sentences_say_one_thing_about_time`: `AssertionError: Yesterday the boy walked every day.` | 88 passed |
+| M3 | `test_good_sentences_are_things_people_say`: `AssertionError: The friend walks home.` Then, while fixing, `AssertionError: The frog jumps on the bed.` | 88 passed |
+
+`test_every_function_family_has_enough_benchmark_def_lines` passed before the key change, because the old pools were per prompt. It guards the requirement under the new key: at least 5 per family. Before the extra names, four families had only 2–4.
+
+### Full suite and lint (from `/home/user/AI-Race/ml`)
+
+- `uv run --no-sync pytest -q -p no:cacheprovider` → **721 passed, 4 deselected in 58.55s**. No warnings.
+- `uv run --no-sync ruff check .` → **All checks passed!**
+- `uv run --no-sync ruff format --check src/airace_ml/skills tests/test_code_instr_grammar.py` → 11 files already formatted.
+
+### Re-measured audits (at 3e705b4)
+
+**Code: literal shortcuts.** Output programs are unchanged, so the numbers are identical to before:
+
+| Rule | Bench | Train |
+|---|---|---|
+| answer = last int literal | 0.000 | 0.000 |
+| answer = any literal | 0.000 | 0.000 |
+| answer = largest literal | 0.000 | 0.000 |
+| max of any other rule | 0.050 | 0.044 |
+
+No trivial body passes any function item. **Def-line overlap bench→training: 0/50.**
+
+**Instruction.** Unchanged: M5 changes only which plural forms are accepted.
+- The max over prompt copies and constants is 0.142, passing a single kind.
+- List sizes are {2:4, 3:4, 4:3, 5:3, 6:3}.
+
+**Grammar** (2000-pair sample, 400 per family):
+
+| Family | Predictor | Good is shorter | Word-in-bad range |
+|---|---|---|---|
+| agreement | 0.507 | 0.522 | [0.36 has, 0.64 have] |
+| article | 0.500 | 0.515 | [0.48, 0.52] |
+| word_order | 0.500 | 0.500 | — |
+| tense | 0.469 | 0.500 | [0.40, 0.56] |
+| plural | 0.461 | 0.506 | — |
+
+Direction balance:
+- "an" is good in 0.485 of article pairs.
+- A singular verb is good in 0.525 of agreement pairs.
+- The plural noun is good in 0.500 of plural pairs.
+
+Tense gaps (expected over the reserved pools / in the sample):
+- past: −0.005 / 0.005
+- plain: +0.004 / 0.005
+- participle: +0.0004 / **0.015** (was 0.045). Across 30 seeds: mean −0.002, SD 0.018, max 0.035.
+
+### Remaining notes
+
+- The bench's function prompts, the instruction bench arguments (contains_any forms) and the grammar pairs all differ from 983fc1b. bench-v1 is not frozen yet.
+- M4 (the object word-order bad member reads as a reduced relative) is deferred by ruling and unchanged.

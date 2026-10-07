@@ -144,3 +144,4 @@ Task 12: Ruling: pull bench-validity Minors M2, M3, M5 into the fix loop, and M6
 Task 12: Ruling: pull M1 into the loop within Task 12 files only (shared interleave/pick helpers in skills/types.py next to fair_quota); facts.py/reasoning.py helpers stay untouched so frozen Task 10/11 item streams cannot shift — cost if wrong: residual helper duplication in Task 10/11 modules.
 Task 12: minor (deferred): M4 word_order/object bad member "The fox the boy chased." is a well-formed reduced relative NP (ungrammatical only as a sentence); facts.py/reasoning.py keep their own _pick helpers.
 Task 12: fix round 1 dispatched (resume a0004f4) — I1 + M1, M2, M3, M5, M6.
+Task 12: fix round 1 implemented 3e705b4 (721 passed, 58.6s); def-line overlap 50/50 → 0/50; scoped re-review dispatched (sonnet a4b311d) over 983fc1b..3e705b4.
