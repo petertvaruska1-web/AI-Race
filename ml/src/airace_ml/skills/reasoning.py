@@ -6,12 +6,16 @@ Four families of tiny puzzles, all in the frame ``Question: ...`` / ``Answer: ..
   question about the top, the bottom or the middle of it. A fourth name, the odd one out among the
   options, is in a sentence that says nothing about the order.
 - ``syllogism``: made-up category words ("All blicks are fenks. No zorps are fenks. Tom is a blick.
-  Is Tom a fenk?"), answered yes or no. Every puzzle has the same quantifiers whatever its answer.
-  One premise is a decoy that mentions the queried word with the other quantifier, so neither the
-  quantifiers nor the premise that mentions the queried word give the answer away; the premises
-  have to be chained.
+  Mia is a zorp. Is Tom a fenk?"), answered yes or no. Every puzzle has the same quantifiers
+  whatever its answer. One premise is a decoy that mentions the queried word with the other
+  quantifier, and the decoy's class has a member of its own who is not the one asked about, so
+  neither the quantifiers, nor the premise that mentions the queried word, nor a word that occurs
+  only once give the answer away; the premises have to be chained.
 - ``word_problem``: one addition or subtraction story, with numbers up to 20.
-- ``count``: how many times a word is in a short list.
+- ``count``: how many times a word is in a short list of 3 different words, each there a
+  different number of times (1-5). The asked word is any of them, or none, so it is the most
+  frequent word in only about a third of the lists it is in, and the options are 0 and the three
+  numbers of times: nothing but finding the asked word in the list gives the answer.
 
 Partition. A puzzle belongs to a *world*: the facts it is about, whatever their wording (for
 ``compare`` the chain of names and the adjective; for ``syllogism`` the set of premises and the
@@ -47,8 +51,10 @@ RENDER_TRIES = 40  # wordings tried for an accepted world
 MIN_BLOCKS, MAX_BLOCKS = 3, 8  # puzzles in one training document
 EXPLAIN_SHARE = 0.4  # share of training blocks followed by a one-sentence explanation
 N_OPTIONS = 4
-NUMBER_RANGE = {"word_problem": (0, 20), "count": (0, 8)}  # the numbers an option may be
+NUMBER_RANGE = {"word_problem": (0, 20)}  # the numbers an option may be (count: see _count_world)
 NEARBY = 5  # how far a number option is from the answer, at most
+COUNT_WORDS = 3  # different words in a counting list
+MAX_TIMES = 5  # how many times a word is in a counting list, at most
 
 BOYS = ("Tom", "Ben", "Sam", "Max", "Leo", "Jack", "Ned", "Tim", "Dan", "Joe", "Ray", "Luke")
 GIRLS = ("Mia", "Ana", "Eve", "Amy", "Zoe", "Liz", "Kim", "Ivy", "Sue", "Meg", "Beth", "Cara")
@@ -126,7 +132,8 @@ class _Question:
     text: str
     answer: str
     explanation: str
-    options: tuple[str, ...] = ()  # names or yes/no; empty for number answers (see _number_options)
+    # names, yes/no or counts; empty for word problems, whose options a benchmark picks
+    options: tuple[str, ...] = ()
     shuffle: bool = True  # whether a benchmark mixes the order of the options
 
     @property
@@ -215,14 +222,17 @@ def _compare_question(rng: np.random.Generator, world: _World, control: int) -> 
 def _syllogism_world(rng: np.random.Generator, control: int) -> _World:
     yes, two_steps = control % 2 == 0, control >= 2
     a, b, c, d = _sample(rng, NONCE_WORDS, 4)  # a one-step puzzle does not use d
-    (name,) = _sample(rng, NAMES, 1)
+    name, other = _sample(rng, NAMES, 2)  # the one asked about, and a member of the decoy's class
     # The decoy premise is about the queried word too, with the other quantifier, so the one
-    # premise that mentions it does not settle the answer: the chain has to be followed.
+    # premise that mentions it does not settle the answer: the chain has to be followed. Its
+    # class has a member who is not the one asked about, so every made-up word is in two
+    # sentences and none marks the decoy by occurring only once.
     if two_steps:
         premises = (
             f"All {a}s are {b}s.",
             f"All {b}s are {c}s." if yes else f"No {b}s are {c}s.",
             f"No {d}s are {c}s." if yes else f"All {d}s are {c}s.",
+            f"{other} is a {d}.",
         )
         question = f"Is a {a} a {c}?"
         explanation = (
@@ -235,6 +245,7 @@ def _syllogism_world(rng: np.random.Generator, control: int) -> _World:
             f"All {a}s are {b}s." if yes else f"No {a}s are {b}s.",
             f"No {c}s are {b}s." if yes else f"All {c}s are {b}s.",
             f"{name} is a {a}.",
+            f"{other} is a {c}.",
         )
         question = f"Is {name} a {b}?"
         explanation = (
@@ -297,21 +308,34 @@ def _word_problem_question(rng: np.random.Generator, world: _World, control: int
 
 
 def _count_world(rng: np.random.Generator, control: int) -> _World:
+    """A list of 3 different words, each a different number of times; the asked word is there
+    ``control`` times (0 = not at all).
+
+    The numbers of times are a random set of 3 from 1-5 and the asked word is a random one of
+    the words, so how often a word occurs says nothing about whether it is the asked one: the
+    asked word is the most frequent, the middle or the least frequent word equally often, and
+    no other word is there as often as it (a number two words shared would point at the answer).
+    """
     group = COUNT_GROUPS[_pick(rng, len(COUNT_GROUPS))]
-    target = group[_pick(rng, len(group))]
-    others = [w for w in group if w != target]
-    length = int(rng.integers(max(4, control + 1), 9))
-    words = [target] * control + [others[_pick(rng, len(others))] for _ in range(length - control)]
+    target, *others = _sample(rng, group, COUNT_WORDS + 1)
+    listed = [target, *others[: COUNT_WORDS - 1]] if control else others
+    fixed = [control] if control else []
+    spare = [k for k in range(1, MAX_TIMES + 1) if k != control]
+    chosen = rng.choice(len(spare), size=COUNT_WORDS - len(fixed), replace=False)
+    times = fixed + [spare[int(i)] for i in chosen]
+    words = [word for word, k in zip(listed, times) for _ in range(k)]
     key = f"count|{target}|{','.join(sorted(words))}"
-    return _World("count", key, (target, control, tuple(words)))
+    return _World("count", key, (target, control, tuple(words), tuple(sorted(times))))
 
 
 def _count_question(rng: np.random.Generator, world: _World, control: int) -> _Question:
-    target, times, words = world.data
+    target, times, words, all_times = world.data
     listed = ", ".join(_shuffled(rng, list(words)))
     text = f"How many {target}s are in this list: {listed}?"
     explanation = f"The list has {times} {target}{'' if times == 1 else 's'}."
-    return _Question("count", world.key, text, str(times), explanation)
+    # the options are "not there" and how often each word of the list is there
+    options = ("0", *(str(k) for k in all_times))
+    return _Question("count", world.key, text, str(times), explanation, options)
 
 
 _WORLDS = {
@@ -391,9 +415,10 @@ def reasoning_bench_items(rng: np.random.Generator, n: int = 200) -> list[MCItem
     addition and subtraction, and count answers go through 0-5. No world repeats.
 
     Options: the 4 names of a compare puzzle (the 3 in the chain and the odd one out), ``["yes",
-    "no"]``, or for numbers the answer and 3 different numbers within 5 of it that are possible
-    answers (0-20 for word problems, 0-8 for counts). The answer's rank among the 4 numbers is
-    spread as evenly as the answer allows, and option order is shuffled except for yes/no.
+    "no"]``, for a word problem the answer and 3 different numbers within 5 of it that are
+    possible answers (0-20; the answer's rank among the 4 is spread as evenly as the answer
+    allows), and for a count 0 and the number of times each of the 3 words is in the list. Option
+    order is shuffled except for yes/no.
     """
     drawer = _Drawer(rng, n)
     seen: set[str] = set()

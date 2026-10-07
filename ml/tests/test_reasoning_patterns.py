@@ -127,19 +127,20 @@ def solve_syllogism(text: str) -> str:
 
 
 @functools.cache
-def entailed(n_words, alls, nos, member, subject, target, generic) -> frozenset[str]:
+def entailed(n_words, alls, nos, members, subject, target, generic) -> frozenset[str]:
     """The answers the premises force, found by trying every way to fill a world of 3 things.
 
     Classes are sets of the 3 things; "All x are y" means x is inside y and "No x are y" means
-    they share nothing; ``member`` is the class thing 0 (the named one) is in. A generic question
-    ("Is a x a y?") asks whether all of x are y (yes) or none (no), for a class that is not empty.
+    they share nothing; ``members`` pairs each named thing with the class it is in (thing 0 is
+    the one a question asks about). A generic question ("Is a x a y?") asks whether all of x are
+    y (yes) or none (no), for a class that is not empty.
     """
     yes = no = True
     models = 0
     for sets in itertools.product(range(8), repeat=n_words):
         if any(sets[x] & ~sets[y] for x, y in alls) or any(sets[x] & sets[y] for x, y in nos):
             continue
-        if member is not None and not sets[member] & 1:
+        if any(not sets[cls] >> thing & 1 for thing, cls in members):
             continue
         if generic:
             if sets[subject] == 0:
@@ -163,12 +164,14 @@ def logical_answers(text: str) -> frozenset[str]:
     generic = text.endswith("?") and re.search(r"Is a \w+ a \w+\?$", text) is not None
     words = sorted({w for pair in [*alls, *nos, *named] for w in pair if w[0].islower()} | {target})
     index = {w: i for i, w in enumerate(words)}
-    member = index[named[0][1]] if named else None
+    # the person asked about is thing 0, anyone else named is one of the other things
+    people = ([] if generic else [subject]) + sorted({person for person, _ in named} - {subject})
+    assert len(people) <= 3
     return entailed(
         len(words),
         tuple((index[x], index[y]) for x, y in alls),
         tuple((index[x], index[y]) for x, y in nos),
-        member,
+        tuple(sorted((people.index(person), index[cls]) for person, cls in named)),
         index.get(subject),
         index[target],
         generic,
@@ -180,9 +183,15 @@ def solve_word_problem(text: str) -> int:
     return start + change if " more" in text else start - change
 
 
-def solve_count(text: str) -> int:
+def count_list(text: str) -> tuple[str, list[str]]:
+    """The word a count puzzle asks about and the items of its list."""
     target, words = re.fullmatch(r"How many (\w+)s are in this list: (.*)\?", text).groups()
-    return words.split(", ").count(target)
+    return target, words.split(", ")
+
+
+def solve_count(text: str) -> int:
+    target, words = count_list(text)
+    return words.count(target)
 
 
 def family_of_text(text: str) -> str:
@@ -219,8 +228,8 @@ def world_of(family: str, text: str) -> tuple:
         thing = re.search(r"How many (\w+) ", text).group(1)
         start, change = (int(x) for x in re.findall(r"\d+", text))
         return (name, thing, " more" in text, start, change)
-    target, words = re.fullmatch(r"How many (\w+)s are in this list: (.*)\?", text).groups()
-    return (target, tuple(sorted(words.split(", "))))
+    target, words = count_list(text)
+    return (target, tuple(sorted(words)))
 
 
 def question_text(prompt: str) -> str:
@@ -297,10 +306,25 @@ def audit_compare(item: MCItem) -> dict[str, list[str]]:
     }
 
 
+FUNCTION_WORDS = {"All", "No", "are", "is", "Is", "a", "an"}
+
+
+def content_words(sentence: str) -> list[str]:
+    """The names and made-up words of a sentence, a plural made-up word as its singular."""
+    return [
+        w[:-1] if w.islower() and w.endswith("s") else w
+        for w in re.findall(r"[A-Za-z]+", sentence)
+        if w not in FUNCTION_WORDS
+    ]
+
+
 def audit_syllogism(item: MCItem) -> dict[str, list[str]]:
     premises, question = syllogism_premises(question_text(item.prompt))
     queried = re.search(r" a (\w+)\?$", question).group(1)
     mentioning = [p for p in premises if f"{queried}s" in p.rstrip(".").split()]
+    # a premise with a word that occurs only once in the prompt is taken for the decoy
+    times = Counter(w for s in [*premises, question] for w in content_words(s))
+    kept = [p for p in mentioning if all(times[w] > 1 for w in content_words(p))]
     return {
         "contains No": ["no"] if re.search(r"\bNo\b", item.prompt) else ["yes"],
         "first premise says All": ["yes"] if premises[0].startswith("All") else ["no"],
@@ -308,6 +332,11 @@ def audit_syllogism(item: MCItem) -> dict[str, list[str]]:
         "premise mentioning the queried word": [
             "yes" if p.startswith("All") else "no" for p in mentioning
         ],
+        # the same vote, without the premises taken for the decoy
+        "premise with a word occurring once is the decoy": [
+            "yes" if p.startswith("All") else "no" for p in kept
+        ]
+        or ["yes", "no"],
     }
 
 
@@ -321,35 +350,61 @@ def audit_numbers(item: MCItem) -> dict[str, list[str]]:
     }
 
 
+def nearest_options(options: list[str], value: int) -> list[str]:
+    """The options closest to ``value``: what a predictor that answers ``value`` picks."""
+    return best_by(options, lambda o: -abs(int(o) - value))
+
+
 def audit_word_problem(item: MCItem) -> dict[str, list[str]]:
     first_number = int(re.search(r"\d+", item.prompt).group())
-    nearest = best_by(item.options, lambda o: -abs(int(o) - first_number))
-    return {**audit_numbers(item), "nearest the first number": nearest}
+    return {
+        **audit_numbers(item),
+        "nearest the first number": nearest_options(item.options, first_number),
+    }
+
+
+def audit_count(item: MCItem) -> dict[str, list[str]]:
+    target, words = count_list(question_text(item.prompt))
+    times = Counter(words)
+    return {
+        **audit_numbers(item),
+        "frequency of the most common word": nearest_options(item.options, max(times.values())),
+        "frequency of the least common word": nearest_options(item.options, min(times.values())),
+        "frequency of the first word": nearest_options(item.options, times[words[0]]),
+        # every word other than the asked one proposes how often it occurs
+        "frequency of any non-target word": [
+            o for w in times if w != target for o in nearest_options(item.options, times[w])
+        ],
+    }
 
 
 AUDITS = {
     "compare": audit_compare,
     "syllogism": audit_syllogism,
     "word_problem": audit_word_problem,
-    "count": audit_numbers,
+    "count": audit_count,
 }
 
 
 def answer_priors(docs: list[TextDoc]) -> dict[str, Counter[str]]:
-    """How often each answer occurs in training text, per family."""
+    """How often each answer occurs in training text, per family (and per count list length)."""
     priors: dict[str, Counter[str]] = {family: Counter() for family in AUDITS}
     for blocks in reasoning_blocks(docs):
         for block in blocks:
-            question, answer, *_ = block.split("\n")
-            family = family_of_text(question.removeprefix("Question: "))
-            priors[family][answer.removeprefix("Answer: ")] += 1
+            question, answer_line, *_ = block.split("\n")
+            text, answer = question.removeprefix("Question: "), answer_line.removeprefix("Answer: ")
+            family = family_of_text(text)
+            priors[family][answer] += 1
+            if family == "count":
+                priors.setdefault(f"count/{len(count_list(text)[1])}", Counter())[answer] += 1
     return priors
 
 
 def shortcut_accuracies(items: list[MCItem], docs: list[TextDoc]) -> dict[str, dict[str, float]]:
     """Per family and feature, the share of items a predictor using only that feature gets right.
 
-    "answer prior" picks the option that is most often the answer in the training ``docs``.
+    "answer prior" picks the option that is most often the answer in the training ``docs``;
+    for counts, "answer prior for the list length" does the same among lists of that length.
     """
     priors = answer_priors(docs)
     report: dict[str, dict[str, float]] = {}
@@ -361,6 +416,13 @@ def shortcut_accuracies(items: list[MCItem], docs: list[TextDoc]) -> dict[str, d
                 hit(best_by(i.options, prior.__getitem__), answer_of(i)) for i in group
             ]
         }
+        if family == "count":
+            lengths = [len(count_list(question_text(i.prompt))[1]) for i in group]
+            by_length = [priors.get(f"count/{n}", Counter()) for n in lengths]
+            scores["answer prior for the list length"] = [
+                hit(best_by(i.options, p.__getitem__), answer_of(i))
+                for i, p in zip(group, by_length)
+            ]
         if family != "syllogism":
             slots = Counter(i.answer_index for i in group)
             scores["most common answer position"] = [max(slots.values()) / len(group)]
@@ -444,7 +506,7 @@ def test_syllogisms_have_the_same_quantifiers_whatever_the_answer(reasoning_benc
         premises, question = syllogism_premises(question_text(it.prompt))
         quantifiers = tuple(sorted(re.findall(r"\b(All|No)\b", it.prompt)))
         two_steps = question.startswith("Is a ")
-        assert len(premises) == 3 and all(w[0] in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" for w in premises)
+        assert len(premises) == 4 and all(w[0] in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" for w in premises)
         shapes.setdefault((two_steps, answer_of(it)), set()).add(quantifiers)
     # one step: All + No; two steps: All + All + No; the same for a yes and for a no
     assert shapes == {
@@ -474,8 +536,54 @@ def test_every_syllogism_has_exactly_one_logically_correct_answer(reasoning_benc
                 assert logical_answers(text) == {answer.removeprefix("Answer: ")}, text
                 checked += 1
     assert checked > 2000
-    # the checker itself: a question the premises do not settle is not reported as settled
+    # the checker itself: a question the premises do not settle is not reported as settled,
+    # and what is said about one person settles nothing about another
     assert logical_answers("All as are bs. Tom is a c. Is Tom a b?") == frozenset()
+    assert logical_answers("All blicks are fenks. Kim is a blick. Is Tom a fenk?") == frozenset()
+    assert logical_answers("All blicks are fenks. Kim is a blick. Is Kim a fenk?") == {"yes"}
+    assert logical_answers("No zorps are fenks. Tom is a zorp. Kim is a blick. Is Tom a fenk?") == {
+        "no"
+    }
+
+
+def family_texts(family: str, bench: list[MCItem], docs: list[TextDoc]) -> list[str]:
+    """The question texts of one family, from the benchmark and from the training blocks."""
+    texts = [question_text(i.prompt) for i in bench if family_tag(i) == family]
+    for blocks in reasoning_blocks(docs):
+        for block in blocks:
+            text = block.split("\n")[0].removeprefix("Question: ")
+            if family_of_text(text) == family:
+                texts.append(text)
+    return texts
+
+
+def test_every_made_up_word_of_a_syllogism_occurs_at_least_twice(reasoning_bench, reasoning_train):
+    # a word that occurs once used to mark the decoy premise; now every made-up word is in two
+    # sentences, and the decoy's class has a member of its own who is not the one asked about
+    texts = family_texts("syllogism", reasoning_bench, reasoning_train)
+    assert len(texts) > 2000
+    for text in texts:
+        premises, question = syllogism_premises(text)
+        times = Counter(w for s in [*premises, question] for w in content_words(s))
+        made_up = [w for w in times if w in reasoning.NONCE_WORDS]
+        assert made_up and all(times[w] >= 2 for w in made_up), text
+        assert set(times) - set(made_up) <= set(reasoning.NAMES), text
+        people = [w for w in times if w in reasoning.NAMES]
+        named = re.findall(r"([A-Z]\w+) is a (\w+)\.", text)
+        assert len(named) == len(people) == len(set(people)), text
+        if question.startswith("Is a "):  # two steps: one person, in the decoy's class
+            assert len(people) == 1
+            (other,) = people
+        else:  # one step: the person asked about and a second one, in the decoy's class
+            (asked,) = re.findall(r"^Is (\w+) a", question)
+            (other,) = set(people) - {asked}
+            assert times[asked] == 2
+        # the second person is mentioned once, and only to name a member of the decoy's class:
+        # the class is in one more premise, and without that person the answer is the same
+        (cls,) = [c for p, c in named if p == other]
+        assert times[other] == 1 and times[cls] == 2
+        without = " ".join(s for s in [*premises, question] if not s.startswith(f"{other} "))
+        assert logical_answers(without) == logical_answers(text)
 
 
 def test_word_problems_stay_in_range(reasoning_bench):
@@ -493,11 +601,41 @@ def test_count_answers_are_equalised(reasoning_bench):
     answers = Counter(int(answer_of(i)) for i in items)
     assert set(answers) == {0, 1, 2, 3, 4, 5} and set(answers.values()) <= {8, 9}
     for it in items:
-        assert 4 <= len(question_text(it.prompt).split("list: ")[1].split(", ")) <= 8
+        assert 6 <= len(count_list(question_text(it.prompt))[1]) <= 12
+
+
+def test_the_asked_word_is_just_one_of_the_words_in_the_list(reasoning_bench, reasoning_train):
+    # The list has 3 different words, each a different number of times (1-5), and the asked
+    # word is any of them (or none): it is the most frequent word in only about a third of the
+    # lists it is in, and no list shows two words equally often (a shared number would point at
+    # the answer).
+    texts = family_texts("count", reasoning_bench, reasoning_train)
+    assert len(texts) > 2000
+    ranks: Counter[int] = Counter()
+    for text in texts:
+        target, words = count_list(text)
+        times = Counter(words)
+        assert len(times) == 3 and len(set(times.values())) == 3, text
+        assert set(times.values()) <= {1, 2, 3, 4, 5}, text
+        if target in times:
+            ranks[sorted(times.values(), reverse=True).index(times[target])] += 1
+    present = sum(ranks.values())
+    assert set(ranks) == {0, 1, 2}  # most frequent, in between, least frequent
+    assert all(0.28 < ranks[r] / present < 0.39 for r in ranks), ranks
+    bench_items = [i for i in reasoning_bench if family_tag(i) == "count"]
+    bench_ranks: Counter[int] = Counter()
+    for it in bench_items:
+        target, words = count_list(question_text(it.prompt))
+        times = Counter(words)
+        # the options are 0 and the number of times of each word in the list
+        assert sorted(it.options, key=int) == ["0", *map(str, sorted(times.values()))]
+        if target in times:
+            bench_ranks[sorted(times.values(), reverse=True).index(times[target])] += 1
+    assert set(bench_ranks) == {0, 1, 2} and max(bench_ranks.values()) <= 18, bench_ranks
 
 
 def test_number_options_are_possible_answers_near_the_answer(reasoning_bench):
-    ranges = {"word_problem": range(21), "count": range(9)}
+    ranges = {"word_problem": range(21), "count": range(6)}
     for family, valid in ranges.items():
         items = [i for i in reasoning_bench if family_tag(i) == family]
         for it in items:
@@ -525,8 +663,13 @@ def test_no_single_cheap_feature_predicts_the_answers(reasoning_bench, reasoning
             assert accuracy <= limit, (family, feature, accuracy)
     assert report["syllogism"]["contains No"] == 0.5
     assert report["syllogism"]["premise mentioning the queried word"] == 0.5
+    assert report["syllogism"]["premise with a word occurring once is the decoy"] == 0.5
     assert report["compare"]["mentions by question"] <= 0.5
-    assert max(report["word_problem"].values()) <= 0.4 and max(report["count"].values()) <= 0.45
+    assert max(report["word_problem"].values()) <= 0.4
+    # counts: no feature of the list without the asked word does better than chance + 0.15
+    assert report["count"]["frequency of the most common word"] <= 0.4
+    assert report["count"]["frequency of any non-target word"] <= 0.4
+    assert max(report["count"].values()) <= 0.4, report["count"]
 
 
 # ---------------------------------------------------------------------------------------------
