@@ -2,12 +2,11 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
-## 2026-10-06 — Milestone 1 in progress (paused at usage limit)
-- Branch `m1-it-learns`. Tasks 1–7 of the M1 plan are implemented, reviewed and fixed: scaffold, tokenizer, transformer, function-preserving growth, inference, corpus/sampler, training config.
-- Task 8 (trainer) is implemented at `a0ea8e5`, but its review has **not run yet**. Known fix needed: allow `ctx_len` to shrink (spec §4.3).
-- Execution ledger with every ruling: `.superpowers/sdd/2026-10-06-m1-it-learns/progress.md` (gitignored). Resume from the "NEXT STEP ON RESUME" line.
-- uv is not on PATH: use `python -m uv`.
-- **Next:** Task 8 review → Tasks 9–20 → final branch review → feasibility gate report.
+## 2026-10-07 — Milestone 1 in progress; handoff to cloud session
+- Branch `m1-it-learns`. **Tasks 1–10 complete and reviewed** (scaffold, tokenizer, transformer, growth, inference, corpus/sampler, training config, trainer, MiniPy sandbox, knowledge base). 631 tests pass.
+- Task 11 (reasoning/pattern generators) awaits fix round 2 (two shortcut findings).
+- **Resume guide: `docs/handoff/README.md`.** The full execution ledger with every ruling: `docs/handoff/sdd/ledger.md`.
+- Cloud session does the code tasks; the local GPU machine does the dataset build, judge training and feasibility gate runs.
 
 ## 2026-10-06 — Project start
 - Repository initialized (greenfield; only the two design PDFs existed).

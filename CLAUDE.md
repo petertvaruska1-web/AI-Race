@@ -5,6 +5,7 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 **Design authority:** `AI_Race_Game_Design_Document_Updated.pdf` and `Fun_Features_to_Add.pdf` (repo root).
 **Architecture spec:** `docs/superpowers/specs/2026-10-06-ai-race-architecture-design.md`. Read it before any significant change.
 **Progress log:** `docs/progress.md`. Update it at every meaningful milestone or handoff.
+**Cross-session handoff:** `docs/handoff/README.md` (resume guide) and `docs/handoff/sdd/ledger.md` (execution ledger with every ruling). Read both when picking up work.
 
 ## Working agreement with the product owner
 - The owner is not technical. **Never ask technical questions or present technical option menus.** Decide, record the rationale (spec or `docs/decisions/` ADR), and proceed.
@@ -27,7 +28,7 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 - `data/`: generated build outputs, gitignored. Never commit corpora or checkpoints.
 
 ## Commands
-- `uv` is installed with `pip --user` and is not on PATH here, so every uv command is run as `python -m uv`.
+- On the owner's Windows PC, `uv` is not on PATH, so run it as `python -m uv`. Where `uv` is on PATH (e.g. cloud Linux), plain `uv` works.
 - ML setup (installs Python 3.13 and CUDA torch): `cd ml && python -m uv sync`
 - ML tests: `cd ml && python -m uv run pytest`
 - ML lint: `cd ml && python -m uv run ruff check .`
