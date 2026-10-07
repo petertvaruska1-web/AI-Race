@@ -7,7 +7,7 @@ You are re-reviewing one task's fix round. A previous review produced findings, 
 - Never spawn subagents.
 - Read the diff file once. Do not re-run git commands.
 - Read the implementer's report file: fix reports are appended at the end. Confirm the fix report names the covering tests and shows their output.
-- Do not re-run the suite. Run a focused test only if a specific doubt arises: `cd ml && python -m uv run pytest <file>::<test> -v`.
+- Do not re-run the suite. Run a focused test only if a specific doubt arises: `cd ml && python -m uv run pytest <file>::<test> -v` locally, or `cd ml && uv run --no-sync pytest <file>::<test> -v` in the cloud session (never `uv sync`).
 - Scope is the findings list plus the fix diff. Issues entirely outside the fix diff go under Out-of-Scope Observations; they do not block.
 - "Attempted" is not "addressed": the specific defect must no longer exist.
 

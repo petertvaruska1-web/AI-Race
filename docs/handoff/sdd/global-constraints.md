@@ -44,4 +44,5 @@
 
 
 ## Environment note
-- uv is not on PATH: run every uv command as `python -m uv ...` (e.g. `cd ml && python -m uv run pytest`).
+- Local Windows: uv is not on PATH; run every uv command as `python -m uv ...` (e.g. `cd ml && python -m uv run pytest`).
+- Cloud Linux session: run `uv run --no-sync ...` from `ml/` (e.g. `cd ml && uv run --no-sync pytest`); never `uv sync`. No GPU there.

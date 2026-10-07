@@ -1,11 +1,15 @@
 # Standard implementer instructions (read fully before starting)
 
 ## Project
-AI Race is a multiplayer strategy game in which each player trains a **real miniature language model**. This milestone (M1) builds the Python ML core in `ml/`. The repo is at `C:\Users\petko\Desktop\AI Race`, branch `m1-it-learns`, on Windows 11. Use the Bash tool (Git Bash) or PowerShell.
+AI Race is a multiplayer strategy game in which each player trains a **real miniature language model**. This milestone (M1) builds the Python ML core in `ml/`.
+- **Local (owner's PC):** repo at `C:\Users\petko\Desktop\AI Race`, branch `m1-it-learns`, Windows 11. Use the Bash tool (Git Bash) or PowerShell.
+- **Cloud session:** repo at `/home/user/AI-Race`, branch `claude/upbeat-franklin-k1192h` (already checked out; never switch branches, never push — the controller pushes), Linux, CPU only.
 
 ## Environment rules
-- uv is NOT on PATH. Run every uv command as `python -m uv ...` from `ml/`, e.g. `cd ml && python -m uv run pytest tests/test_x.py -v`. Wherever your brief says `uv run`, use `python -m uv run`.
-- CUDA torch 2.14.1+cu130 is installed in `ml/.venv`. The default test suite must stay CPU-only and offline; mark heavy tests `@pytest.mark.slow` or `@pytest.mark.gpu`.
+- **How to run uv.** Wherever your brief says `uv run`, use:
+  - Local Windows: `python -m uv run ...` from `ml/` (uv is not on PATH there).
+  - Cloud Linux: `uv run --no-sync ...` from `ml/`, e.g. `cd ml && uv run --no-sync pytest tests/test_x.py -v`. The `--no-sync` flag is required: the venv was installed from PyPI because the CUDA wheel host is blocked, and a sync would try to re-download it. Never run `uv sync`, `uv add` or `uv lock`, and never edit `pyproject.toml`/`uv.lock` unless your brief says so.
+- torch 2.14.1 is installed in `ml/.venv` (CUDA build locally; on the cloud machine there is no GPU). The default test suite must stay CPU-only and offline; mark heavy tests `@pytest.mark.slow` or `@pytest.mark.gpu`.
 - All file I/O uses explicit `encoding="utf-8"`.
 - The global constraints are in `.superpowers/sdd/2026-10-06-m1-it-learns/global-constraints.md`. Read them; they bind your task.
 - Project instructions: `CLAUDE.md`. Architecture spec (for background only, if needed): `docs/superpowers/specs/2026-10-06-ai-race-architecture-design.md`.
@@ -16,8 +20,8 @@ If anything in the brief is unclear, ask now (reply NEEDS_CONTEXT with your ques
 
 ## Your job
 1. Implement exactly what the brief specifies, following TDD: write the failing test, run it to see it fail, implement, run it to see it pass.
-2. While iterating, run the focused test. Run the full suite (`python -m uv run pytest`) and `python -m uv run ruff check .` once before committing. Test output must be pristine (no warnings).
-3. Commit with the brief's commit message, ending with a `Co-Authored-By:` trailer line. Stage only the files you created or changed.
+2. While iterating, run the focused test. Run the full suite (`uv run pytest`, adapted as above) and `uv run ruff check .` once before committing. Test output must be pristine (no warnings).
+3. Commit with the brief's commit message, ending with the trailer lines given in your dispatch (at minimum a `Co-Authored-By:` line). Stage only the files you created or changed.
 4. Self-review your diff: completeness, quality, YAGNI, real-behavior tests.
 5. Write the report and reply (format below).
 

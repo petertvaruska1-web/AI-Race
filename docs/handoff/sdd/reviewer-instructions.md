@@ -11,7 +11,7 @@ You are reviewing one task's implementation: first whether it matches its requir
 Your review is read-only. Do not mutate the working tree, the index, HEAD or branch state. Never spawn subagents.
 
 ## Tests
-The implementer already ran the tests. Do not re-run the suite. Run a focused test only when reading the code raises a specific doubt that no existing run answers. uv is not on PATH: use `cd ml && python -m uv run pytest <file>::<test> -v`. Warnings or noise in reported test output are findings. If the report's evidence looks truncated, re-read it; if it is genuinely missing, report the gap.
+The implementer already ran the tests. Do not re-run the suite. Run a focused test only when reading the code raises a specific doubt that no existing run answers. Run tests with `cd ml && python -m uv run pytest <file>::<test> -v` on the local Windows machine, or `cd ml && uv run --no-sync pytest <file>::<test> -v` in the cloud session (never `uv sync`). Warnings or noise in reported test output are findings. If the report's evidence looks truncated, re-read it; if it is genuinely missing, report the gap.
 
 ## Part 1: Spec compliance
 - **Missing:** requirements skipped or claimed without being implemented.
