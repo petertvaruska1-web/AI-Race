@@ -3,8 +3,8 @@
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
 ## 2026-10-07 — Milestone 1 in progress; handoff to cloud session
-- Branch `m1-it-learns`. **Tasks 1–10 complete and reviewed** (scaffold, tokenizer, transformer, growth, inference, corpus/sampler, training config, trainer, MiniPy sandbox, knowledge base). 631 tests pass.
-- Task 11 (reasoning/pattern generators) awaits fix round 2 (two shortcut findings).
+- Branch `m1-it-learns`. **Tasks 1–11 complete and reviewed** (scaffold, tokenizer, transformer, growth, inference, corpus/sampler, training config, trainer, MiniPy sandbox, knowledge base, reasoning/pattern benchmarks). 699 tests pass.
+- Task 12 (code/instruction/grammar generators) is implemented at `f4eaa83` but not yet reviewed. Next step: `docs/handoff/task-12-dispatch-notes.md`.
 - **Resume guide: `docs/handoff/README.md`.** The full execution ledger with every ruling: `docs/handoff/sdd/ledger.md`.
 - Cloud session does the code tasks; the local GPU machine does the dataset build, judge training and feasibility gate runs.
 
