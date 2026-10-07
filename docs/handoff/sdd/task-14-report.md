@@ -227,3 +227,61 @@ Notes on these numbers:
 3. **The Gutenberg METADATA format is unverified offline.** The adapter accepts a JSON string or a dict, with `subjects` as a string or a list (or `subject`), matched case-insensitively. Task 15 should confirm in the manifest that `gutenberg` docs > 0 relative to `rows_read`.
 4. **`tags.npz` is not byte-identical between builds.** `np.savez` (in Task 6's `write_corpus`) stamps zip entries with the write time. The arrays are identical and every other output is byte-identical. The determinism test compares tag arrays for this reason.
 5. **Housekeeping for the controller:** `CLAUDE.md` "Commands" could now list `airace-content build --scale tiny --fixtures tests/fixtures/sources`. I left docs alone because the brief's commit scope is `ml/`.
+
+## Pre-review change (Ruling A)
+**Commit:** `69fa501 fix(content): score code and reasoning with structured_quality, the language-free quality factors` (not pushed; the same two trailers).
+
+### What changed
+- **`airace_content/textproc.py`**
+  - New `structured_quality(text) -> float` = `g * p * (0.5 + 0.5 r)`. It returns 0 for empty or whitespace-only text, the same emptiness test as `quality_score`.
+  - The garble, spam and repeated-line factors now live in one private helper, `_language_free_quality(text)`. Both `quality_score` (`k * (0.5 + 0.5 a) * _language_free_quality(text)`) and `structured_quality` call it, so there is no duplicated factor code.
+  - This is a pure refactor of `quality_score`: on the tiny build, the quality arrays of the six prose datasets are bit-for-bit identical to before, and all of Task 13's quality tests pass unchanged.
+- **`airace_content/build.py`**
+  - New documented constant `STRUCTURED_DATASETS = frozenset({"code", "reasoning"})`, with the ruling's rationale in a comment.
+  - `tag_documents` scores every document of those datasets with `structured_quality`; all other datasets keep `quality_score(text, known_vocab)`.
+  - The module docstring's step 5 mentions this.
+
+### Tests (added; nothing existing changed)
+- `tests/content/test_textproc.py`:
+  - `test_structured_quality_scores_clean_code_and_puzzles_high`:
+    - 300 generated code docs (MiniPy programs and functions), 100 reasoning docs, 100 pattern docs, the existing `MBPP_STYLE` function and the existing MiniPy `NESTED_PROGRAM` all score ≥ the Thorough threshold.
+    - `MBPP_STYLE` scores exactly 1.0, while `quality_score` with the prose vocabulary gives it less than the Light threshold.
+  - `test_structured_quality_scores_spam_mojibake_and_repeats_low`:
+    - `make_spam` scores 0.
+    - Garbled code (rate 0.1) scores below Light.
+    - One line repeated 10 times scores exactly 0.55.
+  - `test_structured_quality_of_empty_text_is_zero`: `""`, spaces, and newlines with a tab all score 0.
+  - `test_structured_quality_shares_the_language_free_factors`: on text with every word known and over 90% letters (so `k = a = 1`), `structured_quality == quality_score`, including a repeated-line case (`0.5 + 0.5 · 2/3`).
+- `tests/content/test_build.py`:
+  - `test_code_and_reasoning_are_scored_as_structured_text`:
+    - `STRUCTURED_DATASETS == {"code", "reasoning"}`.
+    - In the tiny build, at least 98% of clean (`noise_kind` none) code and reasoning documents reach `np.float16(CLEANING_THRESHOLDS["thorough"])`. Float16 is how `prep.eligible_docs` compares.
+    - Measured: 100% for both; the minimum quality is 0.95 for code and 0.91 for reasoning. The 98% bound expresses "nearly all" with a margin.
+  - `test_web_quality_still_separates_noise_kinds`:
+    - The mean web quality of typo, boilerplate and garbled documents is each more than 0.2 below that of clean documents: clean 0.93, typo 0.65, boilerplate 0.61, garbled 0.32.
+    - Every spam document scores below Light.
+- Note: my first draft of the unit tests defined a second module-level `MBPP_STYLE`, which shadowed Task 13's constant of the same name and broke `test_normalized_mbpp_style_function_is_unchanged_and_still_runs`. I removed my copy and reused the existing constant; that Task 13 test passes again unchanged.
+
+### Commands and output
+- **RED 1.** `cd ml && uv run --no-sync pytest tests/content/test_textproc.py -q` gave `ImportError: cannot import name 'structured_quality' from 'airace_content.textproc'`. `tests/content/test_build.py` gave `ImportError: cannot import name 'STRUCTURED_DATASETS' from 'airace_content.build'`. Both were expected: the names did not exist yet.
+- **RED 2 (behaviour).** With `structured_quality` implemented and `STRUCTURED_DATASETS` defined but not yet used, `uv run --no-sync pytest tests/content -q` gave `FAILED test_code_and_reasoning_are_scored_as_structured_text` with `assert np.float64(0.0) >= 0.98`. That is the code pass rate at Thorough before wiring: expected.
+- **GREEN.** `uv run --no-sync pytest tests/content -q` → `128 passed in 9.33s`.
+- **Mutation check.** Scoring web with `structured_quality` makes `test_web_quality_still_separates_noise_kinds` fail (`assert 1.0 < 1.0 - 0.2`). Restored byte-identical.
+- **Full suite.** `uv run --no-sync pytest -q` → `849 passed, 4 deselected in 61.84s` (no warnings). `uv run --no-sync ruff check .` → `All checks passed!`; `ruff format --check` → `14 files already formatted`.
+
+### Pass rates in the tiny build, re-measured
+`airace-content build --scale tiny --fixtures tests/fixtures/sources`; a document passes a level when `quality >= np.float16(threshold)`, with Light 0.15, Standard 0.40 and Thorough 0.65.
+
+| dataset | docs | scorer | before (light / standard / thorough) | after (light / standard / thorough) | after, clean docs only | mean quality after |
+|---|---|---|---|---|---|---|
+| web | 163 | quality_score | 90% / 87% / 79% | 90% / 87% / 79% | 100% / 100% / 100% | 0.77 |
+| books | 153 | quality_score | 99% / 99% / 99% | 99% / 99% / 99% | 100% / 100% / 100% | 0.99 |
+| educational | 153 | quality_score | 100% / 100% / 100% | 100% / 100% / 100% | 100% / 100% / 100% | 1.00 |
+| conversations | 150 | quality_score | 98% / 95% / 88% | 98% / 95% / 88% | 99% / 98% / 90% | 0.78 |
+| code | 155 | **structured_quality** | 13% / 5% / 0% | **100% / 100% / 100%** | 100% / 100% / 100% | 1.00 |
+| reasoning | 150 | **structured_quality** | 74% / 36% / 8% | **100% / 100% / 100%** | 100% / 100% / 100% | 0.99 |
+| facts | 153 | quality_score | 100% / 100% / 100% | 100% / 100% / 100% | 100% / 100% / 100% | 1.00 |
+| creative | 155 | quality_score | 100% / 100% / 100% | 100% / 100% / 100% | 100% / 100% / 100% | 1.00 |
+
+- Web still separates noise by quality. By kind: clean 0.93, duplicate 0.97, false_fact 0.91, typo 0.65, boilerplate 0.61, garbled 0.32, spam 0.00.
+- In conversations, about 10% of clean chats fail Thorough. This predates Ruling A and is unchanged by it. It is a tiny-scale artifact: the tiny `known_vocab` is only the fixture text of four datasets, so some knowledge-base words in `fact_chat` are unknown (for example "Which letters mean manganese in chemistry?" scored 0). At full scale the 30,000-word vocabulary should cover them; Task 15 can confirm on real data.

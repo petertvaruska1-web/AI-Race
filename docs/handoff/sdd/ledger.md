@@ -173,3 +173,5 @@ Task 14: Ruling: accept "simplicity ≥ 0.35" in the educational row as applying
 Task 14: notes → Task 15: at full scale fact_chat is only 24% distinct and fact_prose 86%, so "remove duplicates" shrinks conversations/facts noticeably (real dynamics); confirm the Gutenberg METADATA format finds children's books; simplewiki license (cc-by-sa-3.0) decision.
 Task 14: minor (deferred): tags.npz zip timestamps make it byte-different between identical builds (arrays identical).
 Task 14: concern 1 sent back before review (resume a22b232) — structured_quality ruling.
+Task 14: Ruling A implemented 69fa501 (849 passed, 62s); code/reasoning pass 100% at all cleaning levels; other datasets unchanged. Note → Task 15: ~10% of clean tiny conversations fail Thorough (tiny known_vocab too small for KB words); check on real data.
+Task 14: review dispatched (opus a5160cd) over 5aeb149..69fa501.
