@@ -122,3 +122,6 @@ Ruling: auto-push post-commit hook + tools/sync-handoff.sh after every task/fix 
 Task 11: fix round 2 implemented 4db5e74 (fresh opus implementer aac36f6). R1 count most-common 0.82→0.26; R2 once-word 1.00→0.50.
 Task 11: Ruling: accept residual "two linked All premises → yes" (0.75 on 2-step syllogisms, ~0.63 family-wide) — detecting a shared middle term between universal premises is itself partial term-linking reasoning, not a surface token cue; removing it needs a 4th premise with diminishing returns — cost if wrong: 2-step syllogisms over-reward structural pattern matching somewhat.
 Task 11: Ruling: accept "class of once-mentioned person is the decoy" (1.00) — applying it takes as many steps as the real chain — cost if wrong: negligible.
+Task 11: fix round 2/5 (2 addressed, 0 open; commits 1db0d96..4db5e74)
+Task 11: minor (deferred): count world key includes asked word → 34/50 bench lists recur in train under a different asked word (no usable leak); lookup-style count proxies (adjacent repeats 0.70, first position 0.58) inherent to shuffled-list counting; compare "mentions by question" 0.41.
+Task 11: complete (commits ae6fbce..4db5e74, review clean after 2 fix rounds)
