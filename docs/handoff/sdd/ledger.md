@@ -119,3 +119,6 @@ Task 11: minor (deferred): word_problem "option within 5 of all others" 0.41 (ju
 Task 11: fix round 2 dispatched (resume a4cac37).
 Handoff: see docs/handoff/README.md (written 2026-10-07). NEXT STEP ON RESUME: Task 11 fix round 2 (R1 count shortcut, R2 syllogism one-off decoy word) — fresh implementer; old one hit rate limit with no changes.
 Ruling: auto-push post-commit hook + tools/sync-handoff.sh after every task/fix round — owner asked that latest progress always be saved to GitHub for the cloud handoff — cost if wrong: none (branch only, never main, never force).
+Task 11: fix round 2 implemented 4db5e74 (fresh opus implementer aac36f6). R1 count most-common 0.82→0.26; R2 once-word 1.00→0.50.
+Task 11: Ruling: accept residual "two linked All premises → yes" (0.75 on 2-step syllogisms, ~0.63 family-wide) — detecting a shared middle term between universal premises is itself partial term-linking reasoning, not a surface token cue; removing it needs a 4th premise with diminishing returns — cost if wrong: 2-step syllogisms over-reward structural pattern matching somewhat.
+Task 11: Ruling: accept "class of once-mentioned person is the decoy" (1.00) — applying it takes as many steps as the real chain — cost if wrong: negligible.

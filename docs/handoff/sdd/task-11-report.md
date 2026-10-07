@@ -233,3 +233,151 @@ Mutation checks for this change (temporary edits, restored; each fails the suite
 
 - `ml/src/airace_ml/skills/reasoning.py` (syllogism world and module docstring)
 - `ml/tests/test_reasoning_patterns.py` (model checker, new audit predictor, word-count check)
+
+---
+
+# Fix round 2 (count shortcut R1, syllogism one-off word R2)
+
+Status: DONE_WITH_CONCERNS. Both findings are fixed. Two leftover syllogism cues need a ruling from the coordinator (Concerns 1-2).
+Commit: `4db5e74 fix(ml): count and syllogism benches give nothing away: ...`
+
+## What changed
+
+**R1 count.** The old list held the asked word `t` times plus 1-8 random other words. So the asked word was the most frequent word in 74% of bench lists (71-72% at scale), and "answer = frequency of the most common word" scored 0.82. The new world (`_count_world`):
+- The list has exactly 3 different words, each there a different number of times. The 3 numbers are a random 3-set of 1-5.
+  - For answer `t >= 1`, the asked word is one of the 3; the other two numbers are a random pair from 1-5 without `t`.
+  - For `t = 0`, all 3 are other words.
+- So the pair (set of numbers, which word is asked) is uniform. The asked word is the most frequent, the middle or the least frequent word equally often: bench 13/41 most frequent, training 742/2304 = 0.32, was about 0.72. In 2/3 of the lists that contain it, another word is more frequent.
+- Answers still go 0-5 in turn (9/9/8/8/8/8).
+- No ties, on purpose. Scratch simulations (not committed) showed that when two words can share a number, two predictors gain: "the number two words share" (mode) scores 0.40-0.48, and "the number only one word has" also does better than chance. With 3 different numbers, every frequency-only predictor is the same as guessing one of the 3 words.
+- **Options are now `0` and the 3 numbers in the list** (shuffled). Before, they were "the answer + 3 numbers within 5 of it, in 0-8".
+  - The old options had a leak of their own: options 6-8 can never be the answer, because answers are 0-5. With a nearest-option predictor even a constant did well: "option nearest 4" scored 0.40 on the bench and 0.45 on 1,000 items at HEAD.
+  - Now every option is possible: each is either "not there" or how often a listed word is there. Given the options, the answer is 0 with probability exactly 1/6 and each listed number with exactly 5/18 = 0.28. So no predictor that ignores where the asked word is beats 0.28 in expectation.
+  - Options stay in 0-5, within 5 of the answer, and 4 distinct.
+  - The answer's rank among the sorted options is 9/16/12/13 on the bench. Rank 0 is exactly the "answer 0" items, because 0 is always the smallest option. The existing 8-17 bounds hold.
+- Lists are now 6-12 items (was 4-8). They have to be longer so that another word often beats the asked word even when it is there 4 or 5 times.
+- `NUMBER_RANGE` now holds only `word_problem`. Word problems are unchanged.
+
+**R2 syllogism.** The decoy's class now has a member of its own, a second person who is not the one asked about:
+- One step: `All a are b. No c are b. N is an a. K is a c. Is N a b?`, and the "no" mirror.
+- Two steps: `All a are b. All b are c. No d are c. K is a d. Is a a c?`, and the mirror.
+
+What stays the same or is guaranteed:
+- Every made-up word is in at least two sentences.
+- The 4 sentences are shuffled over all 24 orders.
+- The quantifier multiset is unchanged for yes and no: one step All + No, two steps All + All + No.
+- The queried word is still in exactly one All premise and one No premise.
+- Explanations ignore the decoy.
+- `K` is a fresh name, different from `N`.
+- The world key (sorted premises + question) now includes the member sentence. The partition is unchanged.
+
+**Model checker re-run.** `logical_answers` and `entailed` now handle several named people: the person asked about is thing 0, and others are things 1-2. Two new controls: a fact about Kim settles nothing about Tom, and an unrelated second person does not change a settled answer.
+- All 50 bench syllogisms have exactly one entailed answer, the item's. So does every syllogism block in the 2,000-doc training fixture (more than 2,000 blocks).
+- The new structural test also checks, for every bench and training syllogism, that dropping the second person's sentence leaves the entailed answer the same (the mention is irrelevant).
+
+## Shortcut audit, before and after
+
+Before is HEAD `1db0d96`. The bench seed is frozen. A number predictor picks the option nearest its number (ties split), which reproduces the reviewer's 0.82.
+
+| family | predictor | before | after | after, 1,000 items |
+|---|---|---|---|---|
+| count | frequency of the most common word (new) | **0.82** | 0.26 | 0.26 |
+| count | frequency of any non-target word (new) | 0.31 | 0.00 | 0.00 |
+| count | frequency of the least common word (new) | 0.29 | 0.32 | 0.28 |
+| count | frequency of the first word in the list (new) | **0.60** | 0.18 | 0.29 |
+| count | answer prior for the list length, fit on training (new) | **0.47** | 0.30 | 0.29 |
+| count | answer prior / most common answer position | 0.26 / 0.28 | 0.18 / 0.32 | 0.17 / 0.26 |
+| count | smallest / 2nd smallest / 2nd largest / largest option | 0.26 / 0.26 / 0.24 / 0.24 | 0.18 / 0.32 / 0.24 / 0.26 | 0.17 / 0.28 / 0.29 / 0.26 |
+| syllogism | premise with a word occurring once is the decoy (new) | **1.00** | 0.50 | 0.50 |
+| syllogism | contains No / premise mentioning the queried word | 0.50 / 0.50 | 0.50 / 0.50 | 0.50 / 0.50 |
+| syllogism | first premise says All / answer prior | 0.52 / 0.50 | 0.52 / 0.50 | 0.49 / 0.50 |
+
+- "Frequency of any non-target word" is 0.00 because no other word is ever there as often as the asked word. Using it requires finding the asked word first.
+- The compare and word_problem designs are unchanged, and all their predictors are within limits. Their bench items shifted because the syllogism and count draws use the rng differently. Compare max: 0.38 ("most-mentioned name"). Word_problem max: 0.34.
+- The test now asserts:
+  - the two named count predictors <= 0.40;
+  - every count predictor <= 0.40 (chance + 0.15; was 0.45);
+  - the once-word syllogism predictor == 0.50 (limit 0.65).
+
+## Tests and results
+
+`tests/test_reasoning_patterns.py` has 36 tests in the default suite plus 1 `@pytest.mark.slow`. The brief's 3 tests are unchanged.
+
+New tests:
+- `test_every_made_up_word_of_a_syllogism_occurs_at_least_twice`, on bench and training. Every made-up word appears at least twice. In one-step puzzles the asked person appears twice. The second person appears once, only as a member of the decoy's class, and that class is in one more premise. Without that person the entailed answer is the same.
+- `test_the_asked_word_is_just_one_of_the_words_in_the_list`, on bench and training. Lists have 3 different words with 3 different numbers in 1-5. Among the lists that contain the asked word, it is the most frequent, the middle and the least frequent each in 28-39%. Bench options are exactly 0 and the 3 numbers.
+
+Changed tests:
+- syllogisms have 4 sentences;
+- count lists are 6-12 items;
+- count options are in 0-5;
+- the audit has the new predictors above.
+
+Commands:
+- `python -m uv run pytest tests/test_reasoning_patterns.py tests/test_kb_facts.py -v` -> `108 passed, 1 deselected in 10.79s`
+- `python -m uv run pytest -m slow tests/test_reasoning_patterns.py` -> `1 passed, 36 deselected in 5.78s` (no benchmark world in 18,000 training docs)
+- Full suite `python -m uv run pytest -q` -> `633 passed, 4 deselected in 40.44s` (no warnings)
+- `python -m uv run ruff check .` -> `All checks passed!`. Both touched files are `ruff format` clean.
+
+Invariants:
+- 200 reasoning and 150 pattern bench items.
+- Every bench prompt is reserved (brief test).
+- No world-level leak (slow test).
+- Sentences are natural. Examples: `Liz is a jorn. Max is a hup. All jorns are fenks. No hups are fenks. Is Max a fenk?` and `How many cows are in this list: frog, bird, bird, frog, cow, frog, frog, frog, bird, bird?`
+
+## TDD evidence
+
+RED: this round's test file against HEAD's `reasoning.py`, restored with `git show HEAD:...`:
+```
+$ cd ml && python -m uv run pytest tests/test_reasoning_patterns.py -q
+E   AssertionError: assert (3 == 4)
+E   AssertionError: Ana is a zorp. No sarns are tuks. All zorps are tuks. Is Ana a tuk?
+E   AssertionError: assert 6 <= 4
+E   AssertionError: How many figs are in this list: grape, apple, pear, apple?
+E   AssertionError: ('syllogism', 'premise with a word occurring once is the decoy', 1.0)
+FAILED ...::test_syllogisms_have_the_same_quantifiers_whatever_the_answer
+FAILED ...::test_every_made_up_word_of_a_syllogism_occurs_at_least_twice
+FAILED ...::test_count_answers_are_equalised
+FAILED ...::test_the_asked_word_is_just_one_of_the_words_in_the_list
+FAILED ...::test_number_options_are_possible_answers_near_the_answer
+FAILED ...::test_no_single_cheap_feature_predicts_the_answers
+6 failed, 30 passed, 1 deselected in 3.73s
+```
+These failures were expected:
+- the decoy word occurs once ("sarn");
+- lists have ties and a dominant asked word;
+- options go up to 8;
+- the audit hits 1.00 on syllogisms, and the count predictor is at 0.82 behind it.
+
+The generalized model checker also passes on the old puzzles.
+
+GREEN: `36 passed, 1 deselected in 4.30s` after the change, green on the first run, then the runs listed above.
+
+Mutation checks: temporary edits, each restored afterwards; each one fails the suite.
+
+| mutation | tests that fail |
+|---|---|
+| two-step decoy without its member | 3, including the audit |
+| one-step decoy without its member | 3 |
+| the decoy's member is the asked person (a contradiction) | 4, including the model checker |
+| count numbers may repeat | 4 |
+| asked word made the most frequent most of the time | 3, including the audit |
+| count options back to "answer + 3 nearby in 0-8" | 3, including the audit |
+
+## Files changed in this round
+
+- `ml/src/airace_ml/skills/reasoning.py`: syllogism world, count world and options, docstrings.
+- `ml/tests/test_reasoning_patterns.py`: model checker with several people, new audit predictors, 2 new tests, updated bounds.
+
+## Concerns
+
+1. **Two-step syllogisms: "an All-All chain means yes" scores 0.75** on the bench and on 1,000 items. This has been there since round 1 and is not one of the findings.
+   - A two-step "yes" always has `All a are b. All b are c.`, and a two-step "no" never has two All premises that link.
+   - It cannot be removed within the 3-quantifier templates. I checked every option: a linking All premise in the "no" case either empties a class, or leaves the queried word in only a No premise, which brings back the lookup shortcut.
+   - Fixing it needs a fourth quantifier premise in two-step puzzles, for example an off-path All chain in "no" puzzles and a matching premise in "yes" ones.
+   - The rule has to link two premises through a shared word, so it is not a one-feature lookup. Say the word and I will extend the templates.
+2. **"The class of the once-mentioned person is the decoy" scores 1.00.**
+   - The second person is mentioned once: names are not made-up words, and this is the construction the brief suggested.
+   - A 3-step rule gets every item: find the once-named person, take their class, drop the premise with that class, and read the other premise with the queried word.
+   - It mirrors the real chain and is no shorter, so I left it. A second mention of that person would need another sentence.
+3. Count lists are longer: 6-12 items, was 4-8. Count options also changed meaning: they are now 0 and the listed numbers, the way compare's options are the listed names. R1 needs both changes, and the rank-test bounds still hold (9/16/12/13).
