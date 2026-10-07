@@ -67,6 +67,8 @@ The local machine has an RTX 3050 and will hold the generated `data/`, which is 
 - Commit after every task and fix round (each commit message ends with the `Co-Authored-By` trailer).
 - After each completed task, update **`docs/handoff/sdd/ledger.md`** (copy the workspace `progress.md` back over it) and the relevant `task-N-report.md` copies. Add a dated entry to **`docs/progress.md`**.
 - Push to `origin m1-it-learns` after each completed task. **Never force-push. Never rewrite history.** Don't merge to `main`; merging is the owner-facing finish step.
+- **`tools/sync-handoff.sh`** does the copy, commit and push in one step. Run it after every task and fix round.
+- The local Windows checkout also has a `.git/hooks/post-commit` hook that auto-pushes every commit on `m1-it-learns`. Hooks aren't versioned, so recreate one in the cloud if you want the same safety net. That hook is not a substitute for running the sync script: the ledger lives in the gitignored workspace until synced.
 - Before stopping, write the exact resume point in the ledger (a "NEXT STEP ON RESUME" line) and in this file's §2/§4, then push.
 
 ## 7. Carry-forward notes for upcoming tasks
