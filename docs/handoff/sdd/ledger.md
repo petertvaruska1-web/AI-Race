@@ -145,3 +145,7 @@ Task 12: Ruling: pull M1 into the loop within Task 12 files only (shared interle
 Task 12: minor (deferred): M4 word_order/object bad member "The fox the boy chased." is a well-formed reduced relative NP (ungrammatical only as a sentence); facts.py/reasoning.py keep their own _pick helpers.
 Task 12: fix round 1 dispatched (resume a0004f4) — I1 + M1, M2, M3, M5, M6.
 Task 12: fix round 1 implemented 3e705b4 (721 passed, 58.6s); def-line overlap 50/50 → 0/50; scoped re-review dispatched (sonnet a4b311d) over 983fc1b..3e705b4.
+Task 12: fix round 1/5 (6 addressed, 0 open; commits 983fc1b..3e705b4). Re-review (sonnet a4b311d): 0/50 bench def lines in a 20k-doc training draw; reserved def lines per family 5-9.
+Task 12: minor (deferred): residual mild good-member oddities ("It drinks tea.", "The horse has a bed.", wild animals break a cup, "The baby has a car."); training-only over-acceptance in contains_any forms ("fishermans", "alwayses"); buffalo accepts only the singular (not bench-reserved).
+Task 12: carry-forward → Task 16: CheckItem.check_args now carry extra keys (`instruction`, `not`, `min_words`) that run_benchmarks must pass to CHECKERS unchanged. → Task 14: the code dataset mixes real-Python mbpp (20%) with MiniPy programs; function items fail correct-Python replies MiniPy rejects (`**`, `.count`) — docstrings avoid inviting them; residual accepted.
+Task 12: complete (commits f1a092b..3e705b4, review clean after 1 fix round)
