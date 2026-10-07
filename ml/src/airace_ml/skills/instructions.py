@@ -17,7 +17,7 @@ name in ``checkers.CHECKERS`` (benchmark items are tagged ``fam:<kind>``):
   ``args["min_words"]``)
 - ``repeat_word``: "Say the word banana and nothing else."
 - ``contains_any``: "Write one sentence that uses the word dog.", answered with a sentence (at least
-  3 words) that uses it
+  3 words) that uses it, or its correct plural ("dogs", "cherries", "mice"; ``args["words"]``)
 
 The benchmark measures whether the reply has the asked *form*, not whether its content is right.
 It is built so that neither a constant reply nor one copied from the prompt passes more than one
@@ -51,8 +51,18 @@ from functools import lru_cache
 import numpy as np
 
 from airace_ml.skills.checkers import CHECKERS, words
+from airace_ml.skills.grammar import PLURALS
 from airace_ml.skills.kb import KB, Fact
-from airace_ml.skills.types import CheckItem, TextDoc, fair_quota, reserved_for_bench
+from airace_ml.skills.types import (
+    CheckItem,
+    TextDoc,
+    capitalized,
+    choice,
+    fair_quota,
+    in_turn,
+    pick,
+    reserved_for_bench,
+)
 from airace_ml.tokenizer import Role
 
 KINDS = (
@@ -88,6 +98,17 @@ LETTER_WORD_RELATIONS = (
     "opposite_of",
 )
 PREFIXES = ("Sure", "Okay", "Hello", "Absolutely", "Great", "Hi", "Alright", "Certainly")
+# The "-s" form of an asked word (a noun's plural, a verb's he/she form) where spelling rules get it
+# wrong; grammar.PLURALS is used too. Names, elements, words that are already plural ("lions",
+# "sheep" as a group) and nouns that stay the same keep one form.
+IRREGULAR_S_FORMS = {
+    "goose": "geese", "wolf": "wolves", "potato": "potatoes", "tomato": "tomatoes",
+    "mosquito": "mosquitoes", "mango": "mangoes",
+}  # fmt: skip
+SAME_IN_THE_PLURAL = frozenset(
+    {"sheep", "deer", "moose", "bison", "salmon", "trout", "cod", "carp", "shrimp", "squid"}
+)
+ONE_FORM_RELATIONS = ("element_symbol", "animal_group")  # elements; words already plural
 
 # What a list can ask for, by (relation, object). Written out, so plurals and articles are right
 # ("fish" does not take an "s"; "in a nest", "in the ocean").
@@ -216,18 +237,6 @@ class _Exchange:
     check_args: dict
 
 
-def _pick(rng: np.random.Generator, n: int) -> int:
-    return int(rng.integers(n))
-
-
-def _choice[T](rng: np.random.Generator, options: tuple[T, ...] | list[T]) -> T:
-    return options[_pick(rng, len(options))]
-
-
-def _capitalized(text: str) -> str:
-    return text[:1].upper() + text[1:]
-
-
 def _short_reply(rng: np.random.Generator, text: str) -> str:
     """A short answer, with or without a period."""
     return text + ("." if rng.random() < PERIOD_SHARE else "")
@@ -235,12 +244,12 @@ def _short_reply(rng: np.random.Generator, text: str) -> str:
 
 def _statement(kb: KB, fact: Fact, rng: np.random.Generator) -> str:
     templates = kb.relations[fact.relation].train_templates
-    return _choice(rng, templates).format(s=fact.subject, o=fact.obj)
+    return choice(rng, templates).format(s=fact.subject, o=fact.obj)
 
 
 def _question(kb: KB, fact: Fact, rng: np.random.Generator) -> str:
     users = [user for user, _ in kb.relations[fact.relation].chat_templates]
-    return _choice(rng, users).format(s=fact.subject)
+    return choice(rng, users).format(s=fact.subject)
 
 
 def _topic(kb: KB, fact: Fact) -> str:
@@ -388,10 +397,10 @@ def _pools(kb: KB) -> tuple[dict[str, tuple[_World, ...]], dict[str, tuple[_Worl
 
 def _one_word(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str, str, dict]:
     (fact,) = world.data
-    user = _choice(rng, ONE_WORD_WORDINGS).format(q=_question(kb, fact, rng))
+    user = choice(rng, ONE_WORD_WORDINGS).format(q=_question(kb, fact, rng))
     answers = {w.casefold() for form in kb.accepted_answers(fact) for w in _parts(form)}
     refused = ({"yes", "no"} | {w.casefold() for w in _parts(user)}) - answers
-    return user, _short_reply(rng, _capitalized(fact.obj)), {"not": sorted(refused)}
+    return user, _short_reply(rng, capitalized(fact.obj)), {"not": sorted(refused)}
 
 
 def _parts(text: str) -> list[str]:
@@ -404,21 +413,21 @@ def _yes_no(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str, str, 
         (fact,) = world.data
         true = bool(rng.integers(2))
         wrong = [o for o in kb.wrong_objects(fact) if o != fact.subject]
-        claimed = Fact(fact.subject, fact.relation, fact.obj if true else _choice(rng, wrong))
+        claimed = Fact(fact.subject, fact.relation, fact.obj if true else choice(rng, wrong))
         statement = _statement(kb, claimed, rng)
-        user = _choice(rng, YES_NO_WORDINGS).format(st=statement)
+        user = choice(rng, YES_NO_WORDINGS).format(st=statement)
     else:
         a, b = world.data
         true = a > b
-        user = _choice(rng, COMPARE_WORDINGS).format(a=a, b=b)
+        user = choice(rng, COMPARE_WORDINGS).format(a=a, b=b)
     return user, _short_reply(rng, "Yes" if true else "No"), {}
 
 
 def _list_n(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str, str, dict]:
     things, n, found = world.data
-    user = _choice(rng, LIST_WORDINGS).format(n=LIST_SIZES[n], things=things)
+    user = choice(rng, LIST_WORDINGS).format(n=LIST_SIZES[n], things=things)
     items = [found[int(i)] for i in rng.choice(len(found), size=n, replace=False)]
-    match _pick(rng, 10):
+    match pick(rng, 10):
         case 0 | 1 | 2 | 3:  # "a, b and c"
             reply = ", ".join(items[:-1]) + " and " + items[-1]
         case 4 | 5 | 6:  # "a, b, c"
@@ -432,29 +441,47 @@ def _list_n(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str, str, 
 
 def _starts_with(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str, str, dict]:
     (fact,) = world.data
-    prefix = _choice(rng, PREFIXES)
-    user = _choice(rng, STARTS_WITH_WORDINGS).format(q=_question(kb, fact, rng), p=prefix)
+    prefix = choice(rng, PREFIXES)
+    user = choice(rng, STARTS_WITH_WORDINGS).format(q=_question(kb, fact, rng), p=prefix)
     args = {"prefix": prefix, "min_words": len(words(prefix)) + 1}  # the word, then an answer
     return user, f"{prefix}! {_statement(kb, fact, rng)}", args
 
 
 def _all_caps(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str, str, dict]:
     (fact,) = world.data
-    user = _choice(rng, ALL_CAPS_WORDINGS).format(q=_question(kb, fact, rng))
+    user = choice(rng, ALL_CAPS_WORDINGS).format(q=_question(kb, fact, rng))
     return user, _statement(kb, fact, rng).upper(), {"min_words": MIN_SENTENCE_WORDS}
 
 
 def _repeat_word(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str, str, dict]:
     (word,) = world.data
-    user = _choice(rng, REPEAT_WORDINGS).format(w=word)
+    user = choice(rng, REPEAT_WORDINGS).format(w=word)
     return user, _short_reply(rng, word), {"word": word}
+
+
+def _word_forms(kb: KB, word: str) -> list[str]:
+    """The forms of a word a sentence may use for it: the word, and its correct "-s" form (the
+    plural of a noun, the he/she form of a verb) when it has one."""
+    relations = {f.relation for f in kb.facts_about(word)}
+    if word[:1].isupper():  # a name: only the days have a plural ("Mondays")
+        return [word, f"{word}s"] if "day_after" in relations else [word]
+    if relations & set(ONE_FORM_RELATIONS) or word in SAME_IN_THE_PLURAL or word.endswith("fish"):
+        return [word]
+    if word in PLURALS or word in IRREGULAR_S_FORMS:
+        return [word, PLURALS.get(word) or IRREGULAR_S_FORMS[word]]
+    if word.endswith(("s", "x", "z", "ch", "sh")):
+        return [word, f"{word}es"]
+    if word.endswith("y") and word[-2:-1] not in ("a", "e", "i", "o", "u"):
+        return [word, f"{word[:-1]}ies"]
+    return [word, f"{word}s"]
 
 
 def _contains_any(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str, str, dict]:
     (word,) = world.data
-    fact = _choice(rng, kb.facts_about(word))
-    user = _choice(rng, CONTAINS_WORDINGS).format(w=word)
-    return user, _statement(kb, fact, rng), {"words": [word], "min_words": MIN_SENTENCE_WORDS}
+    fact = choice(rng, kb.facts_about(word))
+    user = choice(rng, CONTAINS_WORDINGS).format(w=word)
+    args = {"words": _word_forms(kb, word), "min_words": MIN_SENTENCE_WORDS}
+    return user, _statement(kb, fact, rng), args
 
 
 _RENDERERS = {
@@ -500,8 +527,8 @@ def _train_chats(kb: KB, rng: np.random.Generator, n: int) -> list[list[_Exchang
                     "instructions: could not draw enough exchanges within the budget"
                 )
             budget -= 1
-            pool = pools[KINDS[_pick(rng, len(KINDS))]]
-            world = pool[_pick(rng, len(pool))]
+            pool = pools[KINDS[pick(rng, len(KINDS))]]
+            world = pool[pick(rng, len(pool))]
             if any(world.key == done.world for done in chat):
                 continue
             exchange = _render(kb, world, rng, bench=False)
@@ -550,16 +577,6 @@ def _take(
     return exchanges
 
 
-def _in_turn[T](groups: Sequence[Sequence[T]]) -> list[T]:
-    """The items of the groups, one from each in turn, until all are used up."""
-    return [
-        group[k]
-        for k in range(max(map(len, groups), default=0))
-        for group in groups
-        if k < len(group)
-    ]
-
-
 def instruction_bench_items(kb: KB, rng: np.random.Generator, n: int = 120) -> list[CheckItem]:
     """``n`` instructions to follow (category ``"instruction"``, ``instruction-0000``...).
 
@@ -584,8 +601,8 @@ def instruction_bench_items(kb: KB, rng: np.random.Generator, n: int = 120) -> l
             by_size.setdefault(world.data[1], []).append(world)
         sizes = fair_quota({size: len(ws) for size, ws in by_size.items()}, quota[kind])
         by_turn = [_take(kb, kind, by_size[size], sizes[size], rng) for size in sorted(by_size)]
-        chosen[kind] = _in_turn(by_turn)
-    ordered = _in_turn([chosen[kind] for kind in KINDS])
+        chosen[kind] = in_turn(by_turn)
+    ordered = in_turn([chosen[kind] for kind in KINDS])
     return [
         CheckItem(
             f"instruction-{i:04d}",

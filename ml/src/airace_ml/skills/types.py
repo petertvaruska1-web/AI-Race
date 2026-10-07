@@ -7,7 +7,7 @@ canonical keys of generated items so training text never contains a benchmark it
 """
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -48,6 +48,35 @@ def fair_quota(capacity: Mapping[str, int], total: int) -> dict[str, int]:
         remaining -= quota[key]
         left -= 1
     return quota
+
+
+def pick(rng: np.random.Generator, n: int) -> int:
+    """A random index in ``range(n)``."""
+    return int(rng.integers(n))
+
+
+def choice[T](rng: np.random.Generator, options: Sequence[T]) -> T:
+    """A random one of ``options``."""
+    return options[pick(rng, len(options))]
+
+
+def capitalized(text: str) -> str:
+    """``text`` with its first letter a capital (the rest unchanged)."""
+    return text[:1].upper() + text[1:]
+
+
+def in_turn[T](groups: Sequence[Sequence[T]]) -> list[T]:
+    """The items of the groups, one from each in turn, until all are used up.
+
+    Benchmarks interleave their families (and kinds, sizes) this way, so any prefix of the items is
+    as balanced as it can be.
+    """
+    return [
+        group[k]
+        for k in range(max(map(len, groups), default=0))
+        for group in groups
+        if k < len(group)
+    ]
 
 
 @dataclass

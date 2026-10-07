@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from airace_ml.minipy.interpreter import run_program
-from airace_ml.skills import code, grammar, instructions
+from airace_ml.skills import code, grammar, instructions, types
 from airace_ml.skills.checkers import CHECKERS, function_body
 from airace_ml.skills.code import code_bench_items, code_train_docs
 from airace_ml.skills.grammar import grammar_pairs
@@ -20,6 +20,19 @@ from airace_ml.skills.types import (
     reserved_for_bench,
     skill_rng,
 )
+
+
+def test_shared_helpers_live_in_types():
+    # one interleave, one rng pick and one capitalize for the Task 12 generators
+    assert types.in_turn([[1, 2, 3], [4], [5, 6]]) == [1, 4, 5, 2, 6, 3] and types.in_turn([]) == []
+    assert types.capitalized("the dog") == "The dog" and types.capitalized("") == ""
+    rng, same = np.random.default_rng(7), np.random.default_rng(7)
+    assert types.pick(rng, 5) == int(same.integers(5))
+    assert types.choice(rng, ("a", "b", "c")) == ("a", "b", "c")[int(same.integers(3))]
+    for module in (code, instructions, grammar):
+        for name in ("_pick", "_choice", "_round_robin", "_in_turn", "_cap", "_capitalized"):
+            assert not hasattr(module, name), (module.__name__, name)
+
 
 TOPICS = {
     "animals", "food", "nature", "family", "school", "science", "sports", "technology",
@@ -179,7 +192,7 @@ def test_repeat_word_is_the_word_alone():
 
 def test_contains_any_finds_a_whole_word():
     ca = CHECKERS["contains_any"]
-    arg = {"words": ["dog", "cat"]}
+    arg = {"words": ["dog", "dogs", "cat", "cats"]}
     for reply in ("The dog is big.", "I like CATS.", "Dogs are fun.", "a cat", "cat"):
         assert ca(reply, arg), reply
     for reply in ("The doge is big.", "A category.", "I like cows.", "Hmm hmm hmm."):
@@ -207,11 +220,22 @@ def test_starts_with_can_ask_for_an_answer_after_the_word():
 
 def test_contains_any_can_ask_for_a_sentence():
     ca = CHECKERS["contains_any"]
-    arg = {"words": ["otter"], "min_words": 3}
+    arg = {"words": ["otter", "otters"], "min_words": 3}
     for reply in ("The otter swims.", "Otters are cute!", "I SAW AN OTTER."):
         assert ca(reply, arg), reply
     for reply in ("otter", "Otter!", "the otter", "an otter."):
         assert not ca(reply, arg), reply
+
+
+def test_contains_any_takes_exactly_the_listed_forms():
+    # a plural counts when it is listed, as it is spelt: no rule that makes "cherrys" a word
+    ca = CHECKERS["contains_any"]
+    cherry = {"words": ["cherry", "cherries"], "min_words": 3}
+    for reply in ("Cherries are red.", "The cherry is red.", "I like the cherry's color."):
+        assert ca(reply, cherry), reply
+    for reply in ("Cherrys are red.", "Cherryes are red.", "A cherrytree is tall."):
+        assert not ca(reply, cherry), reply
+    assert not ca("Otters are cute.", {"words": ["otter"], "min_words": 3})
 
 
 INSTRUCTION_CASES = {  # checker -> (instruction, arguments, a reply that follows it)
@@ -361,7 +385,9 @@ def test_coding_bench_shape(coding_bench):
     assert len(outputs) == 100 and len(functions) == 50
     for it in coding_bench:
         assert it.category == "coding" and not it.chat
-        assert it.prompt.isascii() and reserved_for_bench(it.prompt)
+        # an output item's world key is its prompt; a function item's is its def line
+        key = it.prompt if isinstance(it, ExactItem) else def_line(it.prompt)
+        assert it.prompt.isascii() and reserved_for_bench(key)
     for it in outputs:
         assert it.extract == "first_line" and it.max_new_tokens == code.OUTPUT_TOKENS
         assert it.prompt.startswith("Program:\n") and it.prompt.endswith("\nOutput:")
@@ -634,11 +660,48 @@ def test_function_tests_fit_every_docstring_of_their_family():
                     assert all(type(v) is int for v in items), (fam.name, call_args)
 
 
+def def_line(prompt: str) -> str:
+    """``def name(params):``, the first line of a function header."""
+    return prompt.split("\n", 1)[0]
+
+
+def test_no_benchmark_function_name_and_parameters_occur_in_training(coding_bench, code_train):
+    # a function's world is its def line, whatever its docstring: the benchmark asks for bodies of
+    # functions training never shows under that name and those parameters (it teaches every family
+    # under other names)
+    _, functions = split_items(coding_bench)
+    lines = {def_line(i.prompt) for i in functions}
+    assert len(lines) == len(functions) == 50  # every item a def line of its own
+    assert all(reserved_for_bench(line) for line in lines)
+    text = "\n".join(d.text for d in code_train)
+    assert sum(d.text.startswith("def ") for d in code_train) > 2500
+    assert not [line for line in lines if line in text]
+    trained = {def_line(d.text) for d in code_train if d.text.startswith("def ")}
+    assert not any(reserved_for_bench(line) for line in trained)
+    by_name = {n: f.name for f in code._FUNCTION_FAMILIES for n in f.names}
+    taught = {by_name[re.match(r"def (\w+)", line)[1]] for line in trained}
+    assert taught == set(code.FUNCTION_FAMILIES)  # every family is still taught
+
+
+def test_every_function_family_has_enough_benchmark_def_lines():
+    bench, _ = code._variants()
+    for family in code.FUNCTION_FAMILIES:
+        assert len({def_line(v.prompt) for v in bench[family]}) >= 5, family
+
+
+def test_docstrings_ask_only_for_what_minipy_can_do():
+    # "x squared" invites x ** 2 and "divided by" invites /, which MiniPy does not have
+    unsupported = re.compile(r"squared|square of|power|divided|divide\b|/|\*\*", re.IGNORECASE)
+    for fam in code._FUNCTION_FAMILIES:
+        for doc in fam.docs:
+            assert not unsupported.search(doc), (fam.name, doc)
+
+
 def test_function_names_headers_and_docs_are_unambiguous():
     names = [n for fam in code._FUNCTION_FAMILIES for n in fam.names]
-    assert len(names) == len(set(names)) == 60  # a name says which family it is
+    assert len(names) == len(set(names)) >= 80  # a name says which family it is
     for fam in code._FUNCTION_FAMILIES:
-        assert len(fam.names) == 6 and len(fam.docs) >= 6 and len(fam.params) == 6
+        assert len(fam.names) >= 8 and len(fam.docs) >= 6 and len(fam.params) == 8
         arity = len(fam.params[0])
         for params in fam.params:
             assert len(params) == arity and len(set(params)) == arity
@@ -649,8 +712,9 @@ def test_function_names_headers_and_docs_are_unambiguous():
             assert all(f"{{p{i}}}" in doc for i in range(arity))
     bench, train = code._variants()
     for family in code.FUNCTION_FAMILIES:
-        assert len(bench[family]) >= 12 and len(train[family]) >= 150
+        assert len(bench[family]) >= 30 and len(train[family]) >= 250
         assert not {v.prompt for v in bench[family]} & {v.prompt for v in train[family]}
+        assert not {v.def_line for v in bench[family]} & {v.def_line for v in train[family]}
 
 
 def test_function_training_docs_run_and_are_right(code_train):
@@ -774,7 +838,7 @@ def expected_check_of(user: str) -> tuple[str, dict]:
         return "list_n", {"n": NUMBER_WORDS[listing[1]]}
     contains = re.search(r"the word (\w+)", user)
     if contains and re.search(r"sentence|Say something", user):  # a sentence: 3 words or more
-        return "contains_any", {"words": [contains[1]], "min_words": 3}
+        return "contains_any", {"words": contains_forms(contains[1]), "min_words": 3}
     raise AssertionError(f"cannot tell what is asked: {user!r}")
 
 
@@ -996,6 +1060,50 @@ def test_instruction_wordings_read_well(instruction_bench, instruction_train):
         if expected_check(user)[0] == "starts_with":
             first, rest = reply.split("! ", 1)
             assert first in natural and rest[0].isupper(), reply
+
+
+SAME_IN_THE_PLURAL = {"sheep", "deer", "moose", "bison", "salmon", "trout", "cod", "carp", "shrimp"}
+SAME_IN_THE_PLURAL |= {"squid"}
+IRREGULAR_S_FORMS = {  # beyond the grammar tests' IRREGULAR_PLURALS
+    "goose": "geese", "wolf": "wolves", "potato": "potatoes", "tomato": "tomatoes",
+    "mosquito": "mosquitoes", "mango": "mangoes",
+}  # fmt: skip
+
+
+def contains_forms(word: str) -> list[str]:
+    """The forms of an asked word a sentence may use: the word, and its plural (or its he/she
+    form, for a verb) where it has one."""
+    relations = {f.relation for f in load_kb().facts_about(word)}
+    if word[0].isupper():  # a name: only days have a plural ("Mondays")
+        return [word, word + "s"] if "day_after" in relations else [word]
+    if relations & {"element_symbol", "animal_group"}:  # elements; words already plural
+        return [word]
+    if word in SAME_IN_THE_PLURAL or word.endswith("fish"):
+        return [word]
+    return [word, IRREGULAR_S_FORMS.get(word) or plural_by_rule(word)]
+
+
+def test_every_word_a_sentence_can_be_asked_to_use_takes_its_plural(kb):
+    worlds = [w for pool in instructions._pools(kb) for w in pool["contains_any"]]
+    assert len(worlds) > 700
+    for world in worlds:
+        (word,) = world.data
+        forms = instructions._word_forms(kb, word)
+        assert forms == contains_forms(word), (word, forms)
+        args = {"words": forms, "min_words": 3}
+        for form in forms:
+            assert CHECKERS["contains_any"](f"I saw {form} today.", args), (word, form)
+    known = {
+        "cherry": "cherries", "canary": "canaries", "wolf": "wolves", "mouse": "mice",
+        "goose": "geese", "child": "children", "potato": "potatoes", "fox": "foxes",
+        "bus": "buses", "otter": "otters", "leaf": "leaves", "kangaroo": "kangaroos",
+        "accept": "accepts", "buy": "buys", "freeze": "freezes",
+    }  # fmt: skip
+    for word, plural in known.items():
+        assert instructions._word_forms(kb, word) == [word, plural], word
+    for word in ("sheep", "Cuba", "sodium", "elephants", "goldfish"):
+        assert instructions._word_forms(kb, word) == [word], word
+    assert instructions._word_forms(kb, "Sunday") == ["Sunday", "Sundays"]
 
 
 def facts_index(kb):
@@ -1674,6 +1782,49 @@ def test_people_and_animals_have_and_sit_where_they_can():
             assert tokens[1] not in big, p.good  # not "The horse is in the bag."
         if (p.family, p.subtype) == ("word_order", "determiner") and tokens[:2] == ["She", "has"]:
             assert tokens[3] not in grammar.PEOPLE, p.good  # not "She has the teacher at school."
+
+
+def test_tense_sentences_say_one_thing_about_time():
+    # "Yesterday Tom walked every day." and "Last night the boy slept all day." are not things
+    # anyone says: a one-time past or future frame never takes a habit or a whole day
+    habit = re.compile(r"\b(?:every day|every night|all day)\b")
+    grows = re.compile(r"\b(?:grow|grew|grown)\b")
+    frames = 0
+    for p in grammar._pairs():
+        if p.family == "tense" and re.match(r"(?:Yesterday|Last|Tomorrow|Next)\b", p.good):
+            frames += 1
+            assert not habit.search(p.good), p.good
+            if grows.search(p.good):  # growing takes a year, not a week
+                assert re.match(r"(?:Last|Next) (?:year|summer)\b", p.good), p.good
+    assert frames > 50_000
+
+
+ANIMAL_WORDS = set(grammar.ANIMALS) | set(grammar.ANIMALS.values())
+WILD = {"lion", "lions", "bear", "bears", "fox", "foxes", "monkey", "monkeys", "frog", "frogs"}
+PEOPLE_ONLY = {"tea", "juice", "lunch", "dinner", "breakfast", "school"}  # for an animal subject
+PET_THINGS = {"bed", "ball", "toy", "name"}  # not for a wild animal
+
+
+def test_good_sentences_are_things_people_say():
+    nouns = set(grammar.PLURALS) | set(grammar.PLURALS.values())
+    checked = 0
+    for p in grammar._pairs():
+        tokens = words_of(p.good)
+        assert not re.search(r"\bthe friends?\b", p.good, re.IGNORECASE), p.good  # whose friend?
+        if p.family == "plural":  # not "I see every car at home.", "Tom drew each man at school."
+            assert not {"each", "every"} & set(tokens), p.good
+        if p.family in ("agreement", "tense") or p.subtype == "helper":
+            found = [k for k, t in enumerate(tokens) if t in nouns]
+            if not found:
+                continue  # a name or a pronoun
+            subject, rest = tokens[found[0]], tokens[found[0] + 1 :]
+            checked += 1
+            assert subject not in rest, p.good  # not "The dog sees the dog."
+            if subject in ANIMAL_WORDS:
+                assert not PEOPLE_ONLY & set(rest), p.good  # not "Last week the dog drank tea."
+            if subject in WILD:
+                assert not PET_THINGS & set(rest), p.good  # not "The lion has a bed."
+    assert checked > 30_000
 
 
 def test_language_pairs_are_simple_and_spelt_right(big_language_bench):

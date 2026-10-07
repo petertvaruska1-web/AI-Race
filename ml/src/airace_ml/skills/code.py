@@ -23,14 +23,16 @@ without case. Every function family has tests that no trivial body (``return Non
 parameter) passes.
 
 Partition. A program belongs to a *world*: its computation, whatever its variable names (the code
-with its names replaced by ``v0, v1, ...``); a function belongs to the world of its header (the
-``def`` line and the docstring). Benchmark items use only reserved worlds whose prompt is also
-reserved (:func:`airace_ml.skills.types.reserved_for_bench`); training text uses neither. So no
-benchmark program, nor the same computation under other names, occurs in training text.
+with its names replaced by ``v0, v1, ...``). Benchmark programs use only reserved worlds whose
+prompt is also reserved (:func:`airace_ml.skills.types.reserved_for_bench`); training text uses
+neither. So no benchmark program, nor the same computation under other names, occurs in training
+text. A function belongs to the world of its ``def`` line (its name and parameters), whatever its
+docstring: a benchmark function's def line is reserved and occurs nowhere in training text, which
+teaches every family under other names and parameters (and never shows a reserved header either).
 
-Worlds are drawn at random with a pooled budget of 50 draws per requested program; function
-headers are listed up front (216 per family, about 20 of them reserved). Nothing here is a model
-output; these are data generators.
+Program worlds are drawn at random with a pooled budget of 50 draws per requested program; function
+headers are listed up front (64-80 def lines per family, at least 5 of them reserved, times 6
+docstrings). Nothing here is a model output; these are data generators.
 """
 
 import ast
@@ -42,7 +44,16 @@ from functools import cache
 import numpy as np
 
 from airace_ml.minipy.interpreter import run_program
-from airace_ml.skills.types import CheckItem, ExactItem, TextDoc, fair_quota, reserved_for_bench
+from airace_ml.skills.types import (
+    CheckItem,
+    ExactItem,
+    TextDoc,
+    choice,
+    fair_quota,
+    in_turn,
+    pick,
+    reserved_for_bench,
+)
 
 TOPIC = "technology"
 OUTPUT_FAMILIES = ("straight", "loop", "if", "string", "list", "call")
@@ -87,10 +98,6 @@ _OPS: dict[str, Callable[[int, int], int]] = {
 _OP_CHOICES = ("+", "+", "-", "-", "*", "*", "//", "%")
 
 
-def _pick(rng: np.random.Generator, n: int) -> int:
-    return int(rng.integers(n))
-
-
 def _flip(rng: np.random.Generator) -> int:
     return int(rng.integers(2))
 
@@ -104,10 +111,6 @@ def _plus(rng: np.random.Generator, high: int) -> str:
     """`` + d`` for a random ``d`` in ``1..high``, or nothing (about 1 time in ``high + 1``)."""
     d = _lit(rng, 0, high)
     return f" + {d}" if d else ""
-
-
-def _choice[T](rng: np.random.Generator, options: tuple[T, ...] | list[T]) -> T:
-    return options[_pick(rng, len(options))]
 
 
 # --- output prediction: program templates --------------------------------------------------------
@@ -137,7 +140,7 @@ class _Draft:
         names: list[str] = []
         for kind in self.kinds:
             options = [n for n in NAME_POOLS[kind] if n not in used]
-            names.append(_choice(rng, options))
+            names.append(choice(rng, options))
             used.add(names[-1])
         return names
 
@@ -174,10 +177,10 @@ def _straight_arith(rng: np.random.Generator, control: int) -> _Draft:
 
     def combine() -> tuple[str, int]:
         for _ in range(30):
-            op = _choice(rng, _OP_CHOICES)
-            left, x = _choice(rng, values)
+            op = choice(rng, _OP_CHOICES)
+            left, x = choice(rng, values)
             if _flip(rng):
-                right, y = _choice(rng, values)
+                right, y = choice(rng, values)
             else:
                 y = _lit(rng, 2, 5)
                 right = str(y)
@@ -207,7 +210,7 @@ def _loop(rng: np.random.Generator, control: int) -> _Draft:
     match control:
         case 0:  # add up a range
             low = _lit(rng, 0, 3)
-            added = (i, i, f"{i} + {_lit(rng, 1, 3)}")[_pick(rng, 3)]
+            added = (i, i, f"{i} + {_lit(rng, 1, 3)}")[pick(rng, 3)]
             b.add(f"{total} = {_lit(rng, 0, 9)}")
             b.add(f"for {i} in range({low}, {low + _lit(rng, 3, 8)}):")
             b.add(f"    {total} = {total} + {added}")
@@ -223,7 +226,7 @@ def _loop(rng: np.random.Generator, control: int) -> _Draft:
             b.add(f"    {total} = {total} + {i} * {_lit(rng, 2, 5)}")
         case 3:  # multiply by each number, or by a fixed one
             low = _lit(rng, 1, 3)
-            factor = (i, i, str(_lit(rng, 2, 3)))[_pick(rng, 3)]
+            factor = (i, i, str(_lit(rng, 2, 3)))[pick(rng, 3)]
             b.add(f"{total} = {_lit(rng, 1, 4)}")
             b.add(f"for {i} in range({low}, {low + _lit(rng, 2, 4)}):")
             b.add(f"    {total} = {total} * {factor}{_plus(rng, 2)}")
@@ -250,7 +253,7 @@ def _loop(rng: np.random.Generator, control: int) -> _Draft:
             b.add(f"        {total} = {total} + {added}")
         case _:  # nested loops
             j = b.var("loop")
-            added = (f"{i} + {j}", f"{i} * {j}", "1")[_pick(rng, 3)]
+            added = (f"{i} + {j}", f"{i} * {j}", "1")[pick(rng, 3)]
             b.add(f"{total} = {_lit(rng, 0, 5)}", f"for {i} in range({_lit(rng, 2, 5)}):")
             b.add(f"    for {j} in range({_lit(rng, 2, 5)}):")
             b.add(f"        {total} = {total} + {added}")
@@ -294,13 +297,13 @@ def _letters(rng: np.random.Generator, length: int) -> str:
     consonants, vowels = "bdfgklmnprstvz", "aeiou"
     start = _flip(rng)
     return "".join(
-        _choice(rng, tuple(vowels if (k + start) % 2 else consonants)) for k in range(length)
+        choice(rng, tuple(vowels if (k + start) % 2 else consonants)) for k in range(length)
     )
 
 
 def _string(rng: np.random.Generator, control: int) -> _Draft:
     b = _Builder()
-    word, other = _choice(rng, WORDS), _choice(rng, WORDS)
+    word, other = choice(rng, WORDS), choice(rng, WORDS)
     s, t = b.var("str"), b.var("str")
     # ``.upper()`` and ``.lower()`` programs are for training only: answers are compared without
     # case, so a benchmark could not tell them from copying
@@ -325,7 +328,7 @@ def _string(rng: np.random.Generator, control: int) -> _Draft:
             else:
                 b.add(f'{s} = "{word}"', f"print(len({s}) * {_lit(rng, 2, 4)})")
         case 5:  # letters by position
-            end = _choice(rng, ("1", "2", "3", "-1"))
+            end = choice(rng, ("1", "2", "3", "-1"))
             b.add(f'{s} = "{word}"', f"print({s}[{_lit(rng, 0, 2)}] + {s}[{end}])")
         case _:  # training only: case
             method = ("upper", "lower")[_flip(rng)]
@@ -370,7 +373,7 @@ def _call(rng: np.random.Generator, control: int) -> _Draft:
         case 1:  # two parameters
             y = b.var("int")
             formula = (f"{x} * {y} - {x}", f"{x} * {y} + {y}", f"{x} + {y} * 2", f"{x} * 2 + {y}")
-            b.add(f"def {f}({x}, {y}):", f"    return {_choice(rng, formula)}")
+            b.add(f"def {f}({x}, {y}):", f"    return {choice(rng, formula)}")
             b.add(f"print({f}({_lit(rng, 2, 12)}, {_lit(rng, 2, 9)}))")
         case 2:  # an if inside
             b.add(f"def {f}({x}):", f"    if {x} > {_lit(rng, 4, 8)}:")
@@ -378,7 +381,7 @@ def _call(rng: np.random.Generator, control: int) -> _Draft:
             b.add(f"print({f}({_lit(rng, 2, 14)}))")
         case 3:  # a loop inside
             t, i = b.var("int"), b.var("loop")
-            added = (i, f"{i} * 2", "1")[_pick(rng, 3)]
+            added = (i, f"{i} * 2", "1")[pick(rng, 3)]
             b.add(f"def {f}({x}):", f"    {t} = {_lit(rng, 0, 4)}", f"    for {i} in range({x}):")
             b.add(
                 f"        {t} = {t} + {added}", f"    return {t}", f"print({f}({_lit(rng, 3, 12)}))"
@@ -537,13 +540,25 @@ def _number_and_flag(rng: np.random.Generator) -> tuple[object, ...]:
     return (_lit(rng, 1, 20), bool(_flip(rng)))
 
 
-_PAIR_PARAMS = (("a", "b"), ("x", "y"), ("m", "n"), ("p", "q"), ("num1", "num2"), ("u", "v"))
-_ONE_PARAMS = (("x",), ("n",), ("num",), ("v",), ("value",), ("k",))
-_LIST_PARAMS = (("xs",), ("items",), ("values",), ("lst",), ("nums",), ("seq",))
+_PAIR_PARAMS = (
+    ("a", "b"), ("x", "y"), ("m", "n"), ("p", "q"), ("num1", "num2"), ("u", "v"), ("c", "d"),
+    ("first", "second"),
+)  # fmt: skip
+_ONE_PARAMS = (("x",), ("n",), ("num",), ("v",), ("value",), ("k",), ("a",), ("number",))
+_LIST_PARAMS = (
+    ("xs",),
+    ("items",),
+    ("values",),
+    ("lst",),
+    ("nums",),
+    ("seq",),
+    ("arr",),
+    ("data",),
+)
 _FUNCTION_FAMILIES = (
     _Family(
         "add",
-        ("add", "add_numbers", "plus", "total", "sum_two", "add_two"),
+        ("add", "add_numbers", "plus", "total", "sum_two", "add_two", "add_up", "sum_of_two"),
         _PAIR_PARAMS,
         (
             "Return the sum of {p0} and {p1}.",
@@ -564,7 +579,18 @@ _FUNCTION_FAMILIES = (
     ),
     _Family(
         "double",
-        ("double", "twice", "double_it", "times_two", "doubled", "make_double"),
+        (
+            "double",
+            "twice",
+            "double_it",
+            "times_two",
+            "doubled",
+            "make_double",
+            "dbl",
+            "two_times",
+            "make_twice",
+            "double_value",
+        ),
         _ONE_PARAMS,
         (
             "Return {p0} times two.",
@@ -581,14 +607,23 @@ _FUNCTION_FAMILIES = (
     ),
     _Family(
         "square",
-        ("square", "squared", "sq", "square_of", "make_square", "get_square"),
+        (
+            "square",
+            "squared",
+            "sq",
+            "square_of",
+            "make_square",
+            "get_square",
+            "square_it",
+            "self_times",
+        ),
         _ONE_PARAMS,
         (
             "Return {p0} times itself.",
-            "Return the square of {p0}.",
+            "Return {p0} times {p0}.",
             "Multiply {p0} by itself and return the result.",
             "Return {p0} multiplied by {p0}.",
-            "Return {p0} squared.",
+            "Return {p0} multiplied by itself.",
             "Return the result of {p0} times {p0}.",
         ),
         ("    return {p0} * {p0}\n",),
@@ -598,7 +633,7 @@ _FUNCTION_FAMILIES = (
     ),
     _Family(
         "max2",
-        ("max2", "bigger", "larger", "greater", "biggest", "max_of_two"),
+        ("max2", "bigger", "larger", "greater", "biggest", "max_of_two", "max_two", "higher"),
         _PAIR_PARAMS,
         (
             "Return the larger of {p0} and {p1}.",
@@ -620,7 +655,18 @@ _FUNCTION_FAMILIES = (
     ),
     _Family(
         "is_even",
-        ("is_even", "even", "check_even", "is_even_number", "even_number", "is_it_even"),
+        (
+            "is_even",
+            "even",
+            "check_even",
+            "is_even_number",
+            "even_number",
+            "is_it_even",
+            "even_check",
+            "test_even",
+            "is_even_num",
+            "check_if_even",
+        ),
         _ONE_PARAMS,
         (
             "Return True if {p0} is even, otherwise False.",
@@ -628,7 +674,7 @@ _FUNCTION_FAMILIES = (
             "Return True if {p0} is divisible by 2.",
             "Return whether the number {p0} is even.",
             "Return True when {p0} is an even number.",
-            "Return True if {p0} leaves nothing over when divided by 2, else False.",
+            "Return True if {p0} is a multiple of 2, else False.",
         ),
         (
             "    return {p0} % 2 == 0\n",
@@ -641,7 +687,16 @@ _FUNCTION_FAMILIES = (
     ),
     _Family(
         "first",
-        ("first", "first_item", "head", "get_first", "first_of", "first_value"),
+        (
+            "first",
+            "first_item",
+            "head",
+            "get_first",
+            "first_of",
+            "first_value",
+            "front",
+            "first_one",
+        ),
         _LIST_PARAMS,
         (
             "Return the first item of the list {p0}.",
@@ -658,7 +713,7 @@ _FUNCTION_FAMILIES = (
     ),
     _Family(
         "last",
-        ("last", "last_item", "tail", "get_last", "last_of", "last_value"),
+        ("last", "last_item", "tail", "get_last", "last_of", "last_value", "last_one", "end_item"),
         _LIST_PARAMS,
         (
             "Return the last item of the list {p0}.",
@@ -675,7 +730,18 @@ _FUNCTION_FAMILIES = (
     ),
     _Family(
         "count_of",
-        ("count_of", "count", "how_many", "count_items", "times_in", "count_equal"),
+        (
+            "count_of",
+            "count",
+            "how_many",
+            "count_items",
+            "times_in",
+            "count_equal",
+            "occurrences",
+            "count_matches",
+            "how_often",
+            "count_value",
+        ),
         (
             ("xs", "v"),
             ("items", "target"),
@@ -683,6 +749,8 @@ _FUNCTION_FAMILIES = (
             ("lst", "item"),
             ("nums", "n"),
             ("seq", "w"),
+            ("arr", "val"),
+            ("data", "key"),
         ),
         (
             "Return how many times {p1} appears in the list {p0}.",
@@ -715,7 +783,18 @@ _FUNCTION_FAMILIES = (
     ),
     _Family(
         "sum_list",
-        ("sum_list", "total_of", "sum_all", "add_all", "list_sum", "sum_items"),
+        (
+            "sum_list",
+            "total_of",
+            "sum_all",
+            "add_all",
+            "list_sum",
+            "sum_items",
+            "add_list",
+            "list_total",
+            "add_up_all",
+            "sum_of_list",
+        ),
         _LIST_PARAMS,
         (
             "Return the sum of all the numbers in {p0}.",
@@ -736,7 +815,16 @@ _FUNCTION_FAMILIES = (
     ),
     _Family(
         "maybe_negate",
-        ("maybe_negate", "flip_sign", "negate_if", "sign_flip", "negate_when", "flip_if"),
+        (
+            "maybe_negate",
+            "flip_sign",
+            "negate_if",
+            "sign_flip",
+            "negate_when",
+            "flip_if",
+            "negate_maybe",
+            "maybe_flip",
+        ),
         (
             ("x", "flag"),
             ("n", "neg"),
@@ -744,6 +832,8 @@ _FUNCTION_FAMILIES = (
             ("v", "flip"),
             ("value", "negate"),
             ("k", "switch"),
+            ("a", "sign"),
+            ("number", "negative"),
         ),
         (
             "Return -{p0} if {p1} is True, otherwise return {p0}.",
@@ -770,7 +860,7 @@ _FAMILY_BY_NAME = {f.name: f for f in _FUNCTION_FAMILIES}
 
 @dataclass(frozen=True)
 class _Variant:
-    """One surface form of a function: the header the model is shown. The header is its world."""
+    """One surface form of a function: the header the model is shown. Its def line is its world."""
 
     family: str
     name: str
@@ -778,10 +868,14 @@ class _Variant:
     doc: int  # which docstring of the family
 
     @property
+    def def_line(self) -> str:
+        return f"def {self.name}({', '.join(self.params)}):"
+
+    @property
     def prompt(self) -> str:
         fam = _FAMILY_BY_NAME[self.family]
         doc = fam.docs[self.doc].format(**{f"p{i}": p for i, p in enumerate(self.params)})
-        return f'def {self.name}({", ".join(self.params)}):\n    """{doc}"""\n'
+        return f'{self.def_line}\n    """{doc}"""\n'
 
     def body(self, style: int, rng: np.random.Generator | None = None) -> str:
         """The body in the family's ``style``-th form; ``rng`` picks the body's variable names."""
@@ -789,14 +883,18 @@ class _Variant:
         fields = {f"p{i}": p for i, p in enumerate(self.params)}
         for slot, candidates in enumerate(LOCAL_NAMES):
             options = [n for n in candidates if n not in taken]
-            fields[f"l{slot}"] = options[0] if rng is None else _choice(rng, options)
+            fields[f"l{slot}"] = options[0] if rng is None else choice(rng, options)
             taken.add(fields[f"l{slot}"])
         return _FAMILY_BY_NAME[self.family].bodies[style].format(**fields)
 
 
 @cache
 def _variants() -> tuple[dict[str, tuple[_Variant, ...]], dict[str, tuple[_Variant, ...]]]:
-    """Every header of every family, split into the benchmark's (reserved) and training's."""
+    """Every header of every family, split into the benchmark's and training's by its def line.
+
+    The benchmark's have a reserved def line (with any docstring); training's have neither a
+    reserved def line nor a reserved header.
+    """
     bench: dict[str, tuple[_Variant, ...]] = {}
     train: dict[str, tuple[_Variant, ...]] = {}
     for fam in _FUNCTION_FAMILIES:
@@ -806,8 +904,12 @@ def _variants() -> tuple[dict[str, tuple[_Variant, ...]], dict[str, tuple[_Varia
             for params in fam.params
             for doc in range(len(fam.docs))
         ]
-        bench[fam.name] = tuple(v for v in every if reserved_for_bench(v.prompt))
-        train[fam.name] = tuple(v for v in every if not reserved_for_bench(v.prompt))
+        bench[fam.name] = tuple(v for v in every if reserved_for_bench(v.def_line))
+        train[fam.name] = tuple(
+            v
+            for v in every
+            if not reserved_for_bench(v.def_line) and not reserved_for_bench(v.prompt)
+        )
     return bench, train
 
 
@@ -819,10 +921,10 @@ def _show(value: object) -> str:
 
 def _function_doc(rng: np.random.Generator) -> TextDoc:
     """A function with its docstring and body, then 2 calls that print what it returns."""
-    family = _FUNCTION_FAMILIES[_pick(rng, len(_FUNCTION_FAMILIES))]
+    family = _FUNCTION_FAMILIES[pick(rng, len(_FUNCTION_FAMILIES))]
     pool = _variants()[1][family.name]
-    variant = pool[_pick(rng, len(pool))]
-    text = variant.prompt + variant.body(_pick(rng, len(family.bodies)), rng) + "\n"
+    variant = pool[pick(rng, len(pool))]
+    text = variant.prompt + variant.body(pick(rng, len(family.bodies)), rng) + "\n"
     shown: list[tuple[object, ...]] = []
     while len(shown) < N_EXAMPLES:
         args = family.example(rng)
@@ -853,20 +955,12 @@ def code_train_docs(rng: np.random.Generator, n: int) -> list[TextDoc]:
     docs: list[TextDoc] = []
     for _ in range(n):
         if rng.random() < PROGRAM_SHARE:
-            family = OUTPUT_FAMILIES[_pick(rng, len(OUTPUT_FAMILIES))]
-            program = drawer.draw(family, _pick(rng, N_VARIANTS[family]))
+            family = OUTPUT_FAMILIES[pick(rng, len(OUTPUT_FAMILIES))]
+            program = drawer.draw(family, pick(rng, N_VARIANTS[family]))
             docs.append(TextDoc("plain", f"{program.prompt} {program.answer}", topic=TOPIC))
         else:
             docs.append(_function_doc(rng))
     return docs
-
-
-def _round_robin[T](lists: list[list[T]]) -> list[T]:
-    """The items of the lists one from each in turn, until all are used up."""
-    out: list[T] = []
-    for k in range(max((len(items) for items in lists), default=0)):
-        out.extend(items[k] for items in lists if k < len(items))
-    return out
 
 
 def _bench_outputs(rng: np.random.Generator, n: int) -> list[ExactItem]:
@@ -893,15 +987,19 @@ def _bench_outputs(rng: np.random.Generator, n: int) -> list[ExactItem]:
 
 
 def _bench_functions(rng: np.random.Generator, n: int) -> list[CheckItem]:
-    pools = _variants()[0]
-    quota = fair_quota({name: len(pool) for name, pool in pools.items()}, n)
+    """``n`` function items, each on a def line of its own, with one of its docstrings."""
+    lines: dict[str, dict[str, list[_Variant]]] = {}  # family -> def line -> its headers
+    for family, pool in _variants()[0].items():
+        for variant in pool:
+            lines.setdefault(family, {}).setdefault(variant.def_line, []).append(variant)
+    quota = fair_quota({family: len(by_line) for family, by_line in lines.items()}, n)
     chosen: list[list[_Variant]] = []
     for family in FUNCTION_FAMILIES:
-        pool = pools[family]
-        picks = rng.choice(len(pool), size=quota[family], replace=False)
-        chosen.append([pool[int(i)] for i in picks])
+        headers = list(lines[family].values())
+        picks = rng.choice(len(headers), size=quota[family], replace=False)
+        chosen.append([choice(rng, headers[int(i)]) for i in picks])
     items = []
-    for v in _round_robin(chosen):
+    for v in in_turn(chosen):
         fam = _FAMILY_BY_NAME[v.family]
         args = {"prompt": v.prompt, "name": v.name, "tests": fam.test_cases}
         items.append(
@@ -931,11 +1029,11 @@ def code_bench_items(
 
     Function items: a ``def`` header with a docstring (``chat=False``), judged by
     ``minipy_function_tests`` against hidden tests; ``reference`` is a correct body. The 10
-    families share the items evenly, over headers whose prompt is reserved for the benchmark;
-    ``ValueError`` if ``n_func`` is more than there are.
+    families share the items evenly, each item on a def line of its own that is reserved for the
+    benchmark (and so in no training text); ``ValueError`` if ``n_func`` is more than there are.
 
-    Both kinds are spread over the list in proportion, so a prefix has both. Every prompt is
-    reserved for the benchmark (:func:`reserved_for_bench`).
+    Both kinds are spread over the list in proportion, so a prefix has both. Every output prompt
+    and every function's def line is reserved for the benchmark (:func:`reserved_for_bench`).
     """
     outputs, functions = _bench_outputs(rng, n_output), _bench_functions(rng, n_func)
     total = n_output + n_func

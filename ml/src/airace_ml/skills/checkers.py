@@ -132,21 +132,21 @@ def repeat_word(reply: str, args: dict[str, Any]) -> bool:
 
 
 def contains_any(reply: str, args: dict[str, Any]) -> bool:
-    """The reply uses one of ``args["words"]`` as a word (a plural with "s" or "es" counts).
+    """The reply uses one of ``args["words"]`` as a whole word, in any case.
 
-    ``args["min_words"]``, if given, is how many words the reply needs at least (a sentence asked
-    for is not the word alone).
+    Only the listed forms count, spelt as listed: a caller that accepts a plural lists it
+    (``["cherry", "cherries"]``), so no spelling rule makes "cherrys" a word. ``args["min_words"]``,
+    if given, is how many words the reply needs at least (a sentence asked for is not the word
+    alone).
     """
     text = _own(reply, args)
     said = words(text)
     if not said or len(said) < args.get("min_words", 1) or _degenerate(said):
         return False
-    for word in args["words"]:
-        if word.strip() and re.search(
-            rf"(?<!\w){re.escape(word.strip())}(?:e?s)?(?!\w)", text, re.IGNORECASE
-        ):
-            return True
-    return False
+    return any(
+        word.strip() and re.search(rf"(?<!\w){re.escape(word.strip())}(?!\w)", text, re.IGNORECASE)
+        for word in args["words"]
+    )
 
 
 def function_body(reply: str) -> str:

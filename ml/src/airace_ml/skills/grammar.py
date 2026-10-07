@@ -30,8 +30,10 @@ worked out for that balance, and the tests check that no word, ending or length 
 word predicts which sentence is bad (a model of that kind, trained on half the pairs, gets at most
 60% of the other half right). Sentences are simple and natural: an adjective goes only with a noun
 it can describe (``ADJECTIVE_FITS``: no "unhappy cup" or "empty dog"), a thing is only somewhere it
-fits (no horse in a bag), and animals only have what animals have. Spelling and plurals come from
-explicit tables, and the words are common ones.
+fits (no horse in a bag), animals only have and do what animals have and do (no lion with a bed, no
+dog drinking tea), a one-time past or future is never "every day" (and growing takes a year), and
+a quantifier is one people use with the verb ("two", "this", not "I see every car"). Spelling and
+plurals come from explicit tables, and the words are common ones.
 
 Partition. A pair's key is its good sentence, and the benchmark uses only reserved keys
 (:func:`airace_ml.skills.types.reserved_for_bench`), so a future grammar training text that skips
@@ -47,7 +49,7 @@ from functools import cache
 
 import numpy as np
 
-from airace_ml.skills.types import PairItem, fair_quota, reserved_for_bench
+from airace_ml.skills.types import PairItem, capitalized, fair_quota, in_turn, reserved_for_bench
 
 FAMILIES = ("agreement", "article", "word_order", "tense", "plural")
 
@@ -113,7 +115,7 @@ PEOPLE = {
     "farmer": "farmers",
     "child": "children",
     "doctor": "doctors",
-    "friend": "friends",
+    "nurse": "nurses",
 }
 ANIMALS = {
     "dog": "dogs",
@@ -154,7 +156,12 @@ THINGS = {
     "leaf": "leaves",
 }
 PLURALS = {**PEOPLE, **ANIMALS, **THINGS}
-SUBJECT_NOUNS = {"p": tuple(PEOPLE), "b": (*PEOPLE, *ANIMALS)}  # by who can do the verb
+# Who can do a verb: "p" verbs only people (and not babies: no baby writes a letter), "b" verbs
+# people and animals too.
+SUBJECT_NOUNS = {"p": tuple(n for n in PEOPLE if n != "baby"), "b": (*PEOPLE, *ANIMALS)}
+WILD_ANIMALS = ("bear", "lion", "fox", "monkey", "frog")  # no bed, ball, toy or name
+# What a person does, eats or drinks and an animal or a baby does not (as a word of a complement).
+NOT_FOR_ANIMALS = frozenset({"lunch", "dinner", "breakfast", "tea", "juice", "school"})
 
 
 @dataclass(frozen=True)
@@ -211,14 +218,15 @@ HAVE_FOR_PEOPLE = (
     "three books", "a boat", "a cake", "a dog", "a cat", "a car", "a new coat", "a big house",
     "two dogs",
 )  # fmt: skip
-HAVE_FOR_ANIMALS = (
-    "a ball", "a toy", "a bed", "a home", "a friend", "a name", "a baby", "a mother", "a cold",
-)  # fmt: skip
+HAVE_FOR_ANIMALS = ("a home", "a friend", "a baby", "a mother")
+HAVE_FOR_PETS = (*HAVE_FOR_ANIMALS, "a ball", "a toy", "a bed", "a name")  # not wild animals
 ADJECTIVES_FOR_BE = (
     "happy", "big", "small", "hungry", "tired", "funny", "kind", "nice", "busy", "strong",
     "brave", "sleepy", "quiet", "tall",
 )  # fmt: skip
 PLACES_FOR_BE = ("in the park", "at home", "here", "outside", "at school", "on the farm")
+HABITS = ("every day", "every night", "all day")  # not with a one-time past or future
+SLOW_VERBS = ("grow",)  # only over a year or a summer, not "Last week the rabbit grew tall."
 PAST_TIMES = ("Yesterday", "Last night", "Last week", "Last year", "Last summer")
 FUTURE_TIMES = ("Tomorrow", "Next week", "Next year", "Next summer", "Next month")
 PRONOUN_THIRD = ("He", "She", "It")  # take "-s"
@@ -374,7 +382,7 @@ SMALL = (
 PLACE_SIZES = {"box": TINY, "bag": TINY, "table": SMALL, "bed": SMALL, "chair": SMALL}
 LOCATIONS = ("in the park", "at home", "by the lake", "on the farm", "at school")
 PLURAL_FRAMES = (("We", "saw"), ("I", "see"), ("They", "found"), ("She", "has"), ("Tom", "drew"))
-SINGULAR_QUANTIFIERS = ("one", "this", "that", "each", "every")
+SINGULAR_QUANTIFIERS = ("one", "this", "that")  # not "I see every car", "Tom drew each man"
 PLURAL_QUANTIFIERS = ("two", "three", "four", "five", "six", "many", "these", "those")
 HAS_QUANTIFIERS = ("one", "two", "three", "four", "five", "six", "many")  # what "She has" takes
 HELPERS = ("can", "will", "must", "should")
@@ -398,16 +406,35 @@ class _Pair:
     bad: str
 
 
-def _cap(text: str) -> str:
-    return text[:1].upper() + text[1:]
-
-
 def _subjects(who: str, *, plural: bool) -> list[str]:
     """Subject phrases (starting in lower case, except names) that can do a verb of ``who``."""
     nouns = SUBJECT_NOUNS[who]
     if plural:
         return [f"the {PLURALS[n]}" for n in nouns]
     return [f"the {n}" for n in nouns] + list(NAMES)
+
+
+_NOUN_OF = {form: noun for noun, plural in PLURALS.items() for form in (noun, plural)}
+
+
+def _says(subject: str, rest: str) -> bool:
+    """Whether a subject phrase goes with what follows its verb.
+
+    An animal or a baby never eats lunch, drinks tea or goes to school; a wild animal has nothing
+    to do with a bed, a ball, a toy or a name, and no animal bigger than a dog jumps on a bed; and a
+    subject is not in its own complement ("The dog sees the dog.").
+    """
+    noun = _NOUN_OF.get(subject.split()[-1])
+    if noun is None:  # a name
+        return True
+    words = set(rest.split())
+    if (noun in ANIMALS or noun == "baby") and NOT_FOR_ANIMALS & words:
+        return False
+    if noun in WILD_ANIMALS and words & {"bed", "ball", "toy", "name"}:
+        return False
+    if noun in ANIMALS and "bed" in words and noun not in SMALL:
+        return False
+    return not {noun, PLURALS[noun]} & words
 
 
 # --- agreement ------------------------------------------------------------------------------------
@@ -419,12 +446,13 @@ def _agreement_verb(plural: bool) -> Iterator[_Pair]:
         good, bad = (verb.base, verb.third) if plural else (verb.third, verb.base)
         for subject in _subjects(verb.who, plural=plural):
             for comp in verb.complements:
-                yield _Pair(
-                    "agreement",
-                    subtype,
-                    f"{_cap(subject)} {good} {comp}.",
-                    f"{_cap(subject)} {bad} {comp}.",
-                )
+                if _says(subject, comp):
+                    yield _Pair(
+                        "agreement",
+                        subtype,
+                        f"{capitalized(subject)} {good} {comp}.",
+                        f"{capitalized(subject)} {bad} {comp}.",
+                    )
 
 
 def _agreement_be(plural: bool) -> Iterator[_Pair]:
@@ -433,12 +461,13 @@ def _agreement_be(plural: bool) -> Iterator[_Pair]:
         good, bad = (many, one) if plural else (one, many)
         for subject in _subjects("b", plural=plural):
             for rest in (*ADJECTIVES_FOR_BE, *PLACES_FOR_BE):
-                yield _Pair(
-                    "agreement",
-                    subtype,
-                    f"{_cap(subject)} {good} {rest}.",
-                    f"{_cap(subject)} {bad} {rest}.",
-                )
+                if _says(subject, rest):
+                    yield _Pair(
+                        "agreement",
+                        subtype,
+                        f"{capitalized(subject)} {good} {rest}.",
+                        f"{capitalized(subject)} {bad} {rest}.",
+                    )
 
 
 def _agreement_pronoun(third: bool) -> Iterator[_Pair]:
@@ -460,14 +489,18 @@ def _agreement_pronoun(third: bool) -> Iterator[_Pair]:
 def _agreement_have(plural: bool) -> Iterator[_Pair]:
     subtype = "have_plural" if plural else "have_singular"
     good, bad = ("have", "has") if plural else ("has", "have")
-    people = set(_subjects("p", plural=plural))
     for subject in _subjects("b", plural=plural):
-        for obj in HAVE_FOR_PEOPLE if subject in people else HAVE_FOR_ANIMALS:
+        noun = _NOUN_OF.get(subject.split()[-1])
+        if noun in ANIMALS:
+            objects = HAVE_FOR_ANIMALS if noun in WILD_ANIMALS else HAVE_FOR_PETS
+        else:
+            objects = HAVE_FOR_PEOPLE
+        for obj in objects:
             yield _Pair(
                 "agreement",
                 subtype,
-                f"{_cap(subject)} {good} {obj}.",
-                f"{_cap(subject)} {bad} {obj}.",
+                f"{capitalized(subject)} {good} {obj}.",
+                f"{capitalized(subject)} {bad} {obj}.",
             )
 
 
@@ -590,12 +623,13 @@ def _order_helper() -> Iterator[_Pair]:
         for helper in HELPERS:
             for subject in [*_subjects(verb.who, plural=False), *_subjects(verb.who, plural=True)]:
                 for comp in verb.complements[:2]:
-                    yield _Pair(
-                        "word_order",
-                        "helper",
-                        f"{_cap(subject)} {helper} {verb.base} {comp}.",
-                        f"{_cap(subject)} {verb.base} {helper} {comp}.",
-                    )
+                    if _says(subject, comp):
+                        yield _Pair(
+                            "word_order",
+                            "helper",
+                            f"{capitalized(subject)} {helper} {verb.base} {comp}.",
+                            f"{capitalized(subject)} {verb.base} {helper} {comp}.",
+                        )
 
 
 # --- tense ----------------------------------------------------------------------------------------
@@ -613,6 +647,13 @@ TENSE_KINDS = {
 }
 
 
+def _times(times: tuple[str, ...], verb: _Verb) -> tuple[str, ...]:
+    """The time phrases a verb's sentence can start with: long ones only for a slow change."""
+    if verb.base in SLOW_VERBS:
+        return tuple(t for t in times if t.endswith(("year", "summer")))
+    return times
+
+
 def _tense(subtype: str) -> Iterator[_Pair]:
     frame, good_form, bad_form, verbs = TENSE_KINDS[subtype]
     for verb in verbs:
@@ -620,16 +661,22 @@ def _tense(subtype: str) -> Iterator[_Pair]:
         for plural in (False, True):
             for subject in _subjects(verb.who, plural=plural):
                 for comp in verb.complements:
+                    if not _says(subject, comp):
+                        continue
+                    if frame in ("past", "future") and comp in HABITS:
+                        continue  # not "Yesterday Tom walked every day."
                     match frame:
                         case "past":
-                            texts = [f"{t} {subject} {{}} {comp}." for t in PAST_TIMES]
+                            times = _times(PAST_TIMES, verb)
+                            texts = [f"{t} {subject} {{}} {comp}." for t in times]
                         case "future":
-                            texts = [f"{t} {subject} will {{}} {comp}." for t in FUTURE_TIMES]
+                            times = _times(FUTURE_TIMES, verb)
+                            texts = [f"{t} {subject} will {{}} {comp}." for t in times]
                         case "did":
                             texts = [f"Did {subject} {{}} {comp}?"]
                         case _:
                             helper = "have" if plural else "has"
-                            texts = [f"{_cap(subject)} {helper} {{}} {comp}."]
+                            texts = [f"{capitalized(subject)} {helper} {{}} {comp}."]
                     for text in texts:
                         yield _Pair("tense", subtype, text.format(good), text.format(bad))
 
@@ -768,12 +815,7 @@ def grammar_pairs(rng: np.random.Generator, n: int = 200) -> list[PairItem]:
             if taken < count:
                 raise RuntimeError(f"grammar: could not draw enough {family} {sub} pairs")
         per_family.append([chosen[int(i)] for i in rng.permutation(len(chosen))])
-    ordered = [
-        pairs[k]
-        for k in range(max(map(len, per_family), default=0))
-        for pairs in per_family
-        if k < len(pairs)
-    ]
+    ordered = in_turn(per_family)
     return [
         PairItem(f"language-{i:04d}", "language", p.good, p.bad, (f"fam:{p.family}",))
         for i, p in enumerate(ordered)
