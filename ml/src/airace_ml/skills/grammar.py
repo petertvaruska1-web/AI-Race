@@ -7,16 +7,17 @@ make nothing but grammar the difference. Five families, each tagged ``fam:<name>
 - ``agreement``: the verb matches its subject. "The dogs run fast." / "The dogs runs fast." Four
   kinds, each with a singular and a plural subject: a verb after a noun, ``is``/``are`` and
   ``was``/``were``, a verb after a pronoun, ``has``/``have``.
-- ``article``: a or an by the *sound* of the next word. "She has an old egg." / "She has a old
-  egg." The next word can be an adjective ("an old dog", "a big apple"), and a few words are
+- ``article``: a or an by the *sound* of the next word. "She has an old book." / "She has a old
+  book." The next word can be an adjective ("an old dog", "a big apple"), and a few words are
   spelt against their sound ("an honest man", "a unique gift", "an hour").
-- ``word_order``: the same words in an order English does not allow: an adjective after its noun,
-  the object before the verb, a preposition after its noun, a determiner after its noun, a
-  helping verb after the verb.
+- ``word_order``: the same words in an order English does not allow: an adjective after its noun
+  in the subject ("The dog big is here."; after an object it could be good English, as in "Tom
+  found the box empty"), the object before the verb, a preposition after its noun, a determiner
+  after its noun, a helping verb after the verb.
 - ``tense``: the verb form matches the time. "Yesterday Tom walked home." / "Yesterday Tom walk
-  home."; "Tomorrow Tom will walk home." / "will walked"; "Tom has gone home." / "has went";
-  "Did Tom walk home?" / "Did Tom walked home?" The wrong form is the plain verb, the past or the
-  participle ("Yesterday Tom eaten lunch.").
+  home."; "Tomorrow Tom will walk home." / "will walked"; "Tom has gone home." / "has went" or
+  "has go"; "Did Tom walk home?" / "Did Tom walked home?" The wrong form is the plain verb, the
+  past or the participle ("Yesterday Tom eaten lunch.").
 - ``plural``: the noun matches the number before it. "We saw two dogs in the park." / "two dog";
   "We saw one dog" / "one dogs". Irregular nouns too (child and children).
 
@@ -27,8 +28,10 @@ often as the bad one, and so is an "an"; in ``tense`` a past form is good (after
 often as bad (after "will"), and so is a plain form and a participle. ``SUBTYPE_WEIGHTS`` is
 worked out for that balance, and the tests check that no word, ending or length of the differing
 word predicts which sentence is bad (a model of that kind, trained on half the pairs, gets at most
-60% of the other half right). Sentences are simple, spelling and plurals come from explicit
-tables, and the words are common ones.
+60% of the other half right). Sentences are simple and natural: an adjective goes only with a noun
+it can describe (``ADJECTIVE_FITS``: no "unhappy cup" or "empty dog"), a thing is only somewhere it
+fits (no horse in a bag), and animals only have what animals have. Spelling and plurals come from
+explicit tables, and the words are common ones.
 
 Partition. A pair's key is its good sentence, and the benchmark uses only reserved keys
 (:func:`airace_ml.skills.types.reserved_for_bench`), so a future grammar training text that skips
@@ -49,12 +52,15 @@ from airace_ml.skills.types import PairItem, fair_quota, reserved_for_bench
 FAMILIES = ("agreement", "article", "word_order", "tense", "plural")
 
 # Subtypes and how often a benchmark uses them (shares of the family). The weights balance the
-# direction of the mistake. ``article``: the good sentence has "an" in half of them. ``tense``:
-# the good one has a past form in the ``past_*`` subtypes (0.433) and the bad one in
-# ``future_past``, ``did_past`` and ``perfect`` (0.433); a plain form is the bad one in
-# ``past_base`` (0.333) and the good one in the four ``future_*`` and ``did_*`` (0.333); a
-# participle is the good one in ``perfect`` (0.233) and the bad one in the three ``*_participle``
-# (0.233).
+# direction of the mistake. ``article``: the good sentence has "an" in half of them. ``tense``: a
+# word that is some verb's past form, plain form or participle is as often in the good sentence
+# only as in the bad one only, for each of the three. Forms overlap ("walked" is a past and a
+# participle, "run" a plain form and a participle), so the weights are solved from the share of
+# pairs of each subtype that show each form (expected gaps under 0.005): a past form is good in
+# ``past_*`` and bad in ``future_past``, ``did_past`` and ``perfect``; a plain form is bad in
+# ``past_base`` and ``perfect_base`` and good in ``future_*`` and ``did_*``; a participle is good
+# in ``perfect``, ``perfect_base`` and (as a regular past) ``past_base``, and bad in the three
+# ``*_participle`` and (as a regular past) ``future_past`` and ``did_past``.
 SUBTYPE_WEIGHTS: dict[str, dict[str, float]] = {
     "agreement": {
         "verb_singular": 0.15,
@@ -82,13 +88,14 @@ SUBTYPE_WEIGHTS: dict[str, dict[str, float]] = {
         "helper": 0.2,
     },
     "tense": {
-        "past_base": 1 / 3,
-        "past_participle": 0.1,
-        "future_past": 0.1,
-        "future_participle": 1 / 15,
-        "did_past": 0.1,
-        "did_participle": 1 / 15,
-        "perfect": 7 / 30,
+        "past_base": 0.25,
+        "past_participle": 0.13,
+        "future_past": 0.14,
+        "future_participle": 0.05,
+        "did_past": 0.14,
+        "did_participle": 0.05,
+        "perfect": 0.105,
+        "perfect_base": 0.135,
     },
     "plural": {"plural": 0.5, "singular": 0.5},
 }
@@ -198,63 +205,154 @@ VERBS = (
 PERFECT_VERBS = tuple(v for v in VERBS if v.past != v.participle)  # "has gone", not "has went"
 PARTICIPLE_VERBS = tuple(v for v in PERFECT_VERBS if v.participle != v.base)  # not "run"
 
+# What people have, and what animals have ("The dog has a ball.", never "The pig has a kite.").
+HAVE_FOR_PEOPLE = (
+    "a ball", "a hat", "a bike", "a book", "a kite", "a toy", "a pen", "a bag", "two cats",
+    "three books", "a boat", "a cake", "a dog", "a cat", "a car", "a new coat", "a big house",
+    "two dogs",
+)  # fmt: skip
+HAVE_FOR_ANIMALS = (
+    "a ball", "a toy", "a bed", "a home", "a friend", "a name", "a baby", "a mother", "a cold",
+)  # fmt: skip
 ADJECTIVES_FOR_BE = (
     "happy", "big", "small", "hungry", "tired", "funny", "kind", "nice", "busy", "strong",
     "brave", "sleepy", "quiet", "tall",
 )  # fmt: skip
 PLACES_FOR_BE = ("in the park", "at home", "here", "outside", "at school", "on the farm")
-HAVE_OBJECTS = (
-    "a ball", "a hat", "a bike", "a book", "a kite", "a toy", "a pen", "a bag", "two cats",
-    "three books", "a boat", "a cake",
-)  # fmt: skip
 PAST_TIMES = ("Yesterday", "Last night", "Last week", "Last year", "Last summer")
 FUTURE_TIMES = ("Tomorrow", "Next week", "Next year", "Next summer", "Next month")
 PRONOUN_THIRD = ("He", "She", "It")  # take "-s"
 PRONOUN_BASE = ("I", "You", "We", "They")
 
-# Words that start with a vowel sound and with a consonant sound ("an" and "a"). ``True`` marks
-# what a person can have, find or want.
+# Words that start with a vowel sound and with a consonant sound ("an" and "a"), with what kind of
+# thing each is. "own" marks what a person can have, find or want; "container" what can be empty;
+# "opens" what can be open.
 VOWEL_NOUNS = {
-    "apple": True, "egg": True, "orange": True, "umbrella": True, "onion": True,
-    "envelope": True, "acorn": True, "arrow": True, "apron": True, "anchor": True,
-    "engine": True, "owl": True, "ant": True, "insect": True, "otter": True, "octopus": True,
-    "ocean": False, "island": False, "igloo": False, "airplane": False, "animal": False,
-    "elephant": True, "eagle": True, "ostrich": True,
+    "apple": ("food", "own"), "egg": ("food", "own"), "orange": ("food", "own"),
+    "onion": ("food", "own"), "umbrella": ("object", "own", "opens"),
+    "envelope": ("object", "own", "opens", "container"), "acorn": ("plant", "own"),
+    "arrow": ("object", "own"), "apron": ("object", "own"), "anchor": ("object", "own"),
+    "engine": ("object", "own"), "owl": ("animal", "own"), "ant": ("animal", "own"),
+    "insect": ("animal", "own"), "otter": ("animal", "own"), "octopus": ("animal", "own"),
+    "elephant": ("animal", "own"), "eagle": ("animal", "own"), "ostrich": ("animal", "own"),
+    "animal": ("animal",), "ocean": ("place",), "island": ("place",),
+    "igloo": ("building", "container"), "airplane": ("vehicle", "container"),
 }  # fmt: skip
 CONSONANT_NOUNS = {
-    "dog": True, "cat": True, "ball": True, "book": True, "hat": True, "bike": True,
-    "cake": True, "cup": True, "toy": True, "kite": True, "boat": True, "bag": True, "pen": True,
-    "tree": False, "house": False, "car": True, "bird": True, "fish": True, "frog": True,
-    "duck": True, "horse": True, "cow": True, "pig": True, "bear": True, "lion": True,
-    "monkey": True, "table": False, "chair": False, "door": False, "shoe": True, "star": False,
-    "flower": True, "farm": False, "river": False, "bridge": False, "mountain": False,
+    "dog": ("animal", "own"), "cat": ("animal", "own"), "bird": ("animal", "own"),
+    "fish": ("animal", "own"), "frog": ("animal", "own"), "duck": ("animal", "own"),
+    "horse": ("animal", "own"), "cow": ("animal", "own"), "pig": ("animal", "own"),
+    "bear": ("animal", "own"), "lion": ("animal", "own"), "monkey": ("animal", "own"),
+    "ball": ("object", "own"), "book": ("object", "own", "opens"), "hat": ("object", "own"),
+    "bike": ("vehicle", "own"), "cake": ("food", "own"), "cup": ("object", "own", "container"),
+    "toy": ("object", "own"), "kite": ("object", "own"), "boat": ("vehicle", "own", "container"),
+    "bag": ("object", "own", "container", "opens"), "pen": ("object", "own"),
+    "car": ("vehicle", "own", "container"), "shoe": ("object", "own"),
+    "flower": ("plant", "own"), "tree": ("plant",), "house": ("building", "container"),
+    "table": ("furniture",), "chair": ("furniture",), "door": ("furniture", "opens"),
+    "star": ("sky",), "farm": ("place",), "river": ("place",), "bridge": ("place",),
+    "mountain": ("place",),
 }  # fmt: skip
+NOUN_KINDS = {**VOWEL_NOUNS, **CONSONANT_NOUNS}
+_ALL = ("animal", "food", "object", "vehicle", "plant", "building", "furniture", "place", "sky")
+_MADE = ("object", "vehicle", "building", "furniture")  # things people make
+# The kinds of noun each adjective can describe: "an angry owl", "an empty cup", "a red apple",
+# but never "an unhappy cup", "an empty dog" or "a new owl".
+ADJECTIVE_FITS: dict[str, tuple[str, ...]] = {
+    "old": ("animal", "plant", "place", *_MADE),
+    "empty": ("container",),
+    "angry": ("animal",),
+    "odd": _ALL,
+    "open": ("opens",),
+    "ugly": ("animal", "plant", *_MADE),
+    "unhappy": ("animal",),
+    "amazing": _ALL,
+    "extra": ("object", "food"),
+    "excited": ("animal",),
+    "interesting": ("animal", "place", "plant", *_MADE),
+    "enormous": ("animal", "food", "plant", "place", *_MADE),
+    "orange": ("object", "vehicle", "plant"),
+    "icy": ("place",),
+    "big": _ALL,
+    "small": _ALL,
+    "little": _ALL,
+    "tiny": _ALL,
+    "giant": ("animal", "food", "object", "plant"),
+    "good": _ALL,
+    "nice": _ALL,
+    "bad": ("food", "object"),
+    "red": ("food", "object", "vehicle", "plant"),
+    "green": ("food", "object", "vehicle", "plant"),
+    "yellow": ("food", "object", "vehicle", "plant"),
+    "blue": ("object", "vehicle"),
+    "black": ("animal", "object", "vehicle"),
+    "white": ("animal", "object", "vehicle"),
+    "brown": ("animal", "object"),
+    "new": _MADE,
+    "funny": ("animal", "object"),
+    "happy": ("animal",),
+    "kind": ("animal",),
+    "young": ("animal",),
+    "busy": ("animal",),
+    "pretty": ("animal", "plant", "place", "object"),
+    "wet": ("animal", "object"),
+    "dirty": ("object", "vehicle"),
+    "heavy": ("object", "vehicle"),
+    "fresh": ("food",),
+    "round": ("food",),
+    "cold": ("food", "place"),
+}
 VOWEL_ADJECTIVES = (
-    "old", "easy", "empty", "angry", "odd", "open", "ugly", "unhappy", "amazing", "extra",
-    "excited", "interesting",
+    "old", "empty", "angry", "odd", "open", "ugly", "unhappy", "amazing", "extra", "excited",
+    "interesting", "enormous", "orange", "icy",
 )  # fmt: skip
 CONSONANT_ADJECTIVES = (
-    "big", "small", "red", "blue", "green", "good", "bad", "new", "funny", "tall", "short",
-    "little", "happy", "nice", "kind", "long", "hot", "cold", "soft", "loud", "yellow", "black",
-    "white", "brown", "round",
+    "big", "small", "little", "tiny", "giant", "good", "nice", "bad", "red", "green", "yellow",
+    "blue", "black", "white", "brown", "new", "funny", "happy", "kind", "young", "busy", "pretty",
+    "wet", "dirty", "heavy", "fresh", "round", "cold",
 )  # fmt: skip
-# Spelt one way, said another: "an honest man" (the h is silent), "a unique gift" (it starts like
-# "you"). The first list takes "an", the second "a".
+
+
+def fits(adjective: str, noun: str) -> bool:
+    """Whether the adjective can describe the noun (an adjective is never its own noun)."""
+    return adjective != noun and bool(set(ADJECTIVE_FITS[adjective]) & set(NOUN_KINDS[noun]))
+
+
+# Spelt one way, said another: "an honest man" and "an hour" (the h is silent), "a unique gift"
+# (it starts like "you"). The silent-h words take "an", the "you" words "a".
 SILENT_H_NOUNS = (
-    "man", "boy", "girl", "teacher", "farmer", "friend", "doctor", "baby", "child", "woman",
+    "man", "boy", "girl", "teacher", "farmer", "friend", "doctor", "child", "woman",
 )  # fmt: skip
-YOU_SOUND_WORDS = ("unicorn", "university", "uniform", "union")
-YOU_SOUND_ADJECTIVES = ("useful", "usual", "unique")
-YOU_SOUND_TARGETS = ("tool", "book", "gift", "toy", "place", "cat", "dog", "game", "house")
-ARTICLE_FRAMES = (
+SILENT_H_PHRASES = (  # (the phrase, the sentences it goes in)
+    ("hour", ("We waited for {x}.", "It took {x}.", "She slept for {x}.", "He ran for {x}.",
+              "They played for {x}.", "I read for {x}.")),
+    ("honor", ("It is {x}.", "It was {x}.")),
+    ("honest mistake", ("It was {x}.", "She made {x}.")),
+    ("honest answer", ("He gave {x}.", "That was {x}.")),
+)  # fmt: skip
+HONEST_FRAMES = (
+    "This is {x}.",
+    "She has {x}.",
+    "There is {x} here.",
+    "He was {x}.",
+    "We need {x}.",
+    "I know {x}.",
+)
+YOU_SOUND_WORDS = ("unicorn", "university", "uniform")
+YOU_SOUND_ADJECTIVES = {  # each with what it can describe: "a used car", "a unique gift"
+    "useful": ("tool", "book", "gift", "map", "bag", "box"),
+    "used": ("book", "car", "bike", "toy", "bag"),
+    "unique": ("gift", "place", "cat", "dog", "game", "house", "toy"),
+}
+ARTICLE_FRAMES = (  # sentences for any noun
     "I see {x}.",
     "There is {x} here.",
     "We saw {x} today.",
-    "She has {x}.",
-    "He found {x}.",
-    "Tom wants {x}.",
+    "This is {x}.",
+    "It was {x}.",
+    "Mia drew {x}.",
 )
-HOUR_FRAMES = ("We waited for {x}.", "It took {x}.", "She slept for {x}.", "He ran for {x}.")
+OWN_FRAMES = ("She has {x}.", "He found {x}.", "Tom wants {x}.")  # for what a person can have
 
 TRANSITIVE_PAST = (
     "chased", "saw", "found", "liked", "helped", "followed", "heard", "hugged", "pushed",
@@ -266,13 +364,30 @@ PLACE_PHRASES = (
     ("chair", "behind"), ("car", "behind"), ("car", "near"), ("bag", "in"), ("door", "behind"),
     ("fence", "behind"), ("fence", "near"), ("lake", "near"), ("park", "in"), ("barn", "in"),
 )  # fmt: skip
+# Who and what fits where: in a box or a bag only something small, on or under a table, bed or
+# chair nothing as big as a horse or a grown-up.
+TINY = ("ball", "book", "hat", "toy", "cup", "mouse", "frog", "cat")
+SMALL = (
+    *TINY, "bag", "dog", "duck", "hen", "bird", "rabbit", "fox", "monkey", "baby", "boy", "girl",
+    "child",
+)  # fmt: skip
+PLACE_SIZES = {"box": TINY, "bag": TINY, "table": SMALL, "bed": SMALL, "chair": SMALL}
 LOCATIONS = ("in the park", "at home", "by the lake", "on the farm", "at school")
 PLURAL_FRAMES = (("We", "saw"), ("I", "see"), ("They", "found"), ("She", "has"), ("Tom", "drew"))
 SINGULAR_QUANTIFIERS = ("one", "this", "that", "each", "every")
 PLURAL_QUANTIFIERS = ("two", "three", "four", "five", "six", "many", "these", "those")
+HAS_QUANTIFIERS = ("one", "two", "three", "four", "five", "six", "many")  # what "She has" takes
 HELPERS = ("can", "will", "must", "should")
 OBJECT_FRAMES = (("I", "see"), ("She", "has"), ("He", "likes"), ("We", "saw"), ("Tom", "found"))
-ORDER_WORDS = ("big", "red", "blue", "green", "new", "old", "funny", "tall", "little", "happy")
+ORDER_WORDS = (
+    "big", "small", "little", "red", "blue", "green", "new", "old", "funny", "happy", "black",
+    "white",
+)  # fmt: skip
+# What a subject with an adjective does in an adjective-order pair, for an animal and for a thing.
+ORDER_PREDICATES = {
+    "animal": ("is here", "is over there", "sleeps here", "ran away", "is at home"),
+    "thing": ("is here", "is over there", "was here", "was over there"),
+}
 
 
 @dataclass(frozen=True)
@@ -345,8 +460,9 @@ def _agreement_pronoun(third: bool) -> Iterator[_Pair]:
 def _agreement_have(plural: bool) -> Iterator[_Pair]:
     subtype = "have_plural" if plural else "have_singular"
     good, bad = ("have", "has") if plural else ("has", "have")
+    people = set(_subjects("p", plural=plural))
     for subject in _subjects("b", plural=plural):
-        for obj in HAVE_OBJECTS:
+        for obj in HAVE_FOR_PEOPLE if subject in people else HAVE_FOR_ANIMALS:
             yield _Pair(
                 "agreement",
                 subtype,
@@ -370,13 +486,16 @@ def _article_pairs(subtype: str, an_is_good: bool, phrases: list[str], frames: t
             )
 
 
+def _frames(noun: str) -> tuple[str, ...]:
+    """The article sentences a noun can go in: all of them for what a person can have."""
+    return ARTICLE_FRAMES + OWN_FRAMES if "own" in NOUN_KINDS[noun] else ARTICLE_FRAMES
+
+
 def _article_plain(an_is_good: bool) -> Iterator[_Pair]:
     nouns = VOWEL_NOUNS if an_is_good else CONSONANT_NOUNS
-    for noun, possessable in nouns.items():
-        frames = ARTICLE_FRAMES if possessable else ARTICLE_FRAMES[:3]
-        yield from _article_pairs(
-            "plain_an" if an_is_good else "plain_a", an_is_good, [noun], frames
-        )
+    for noun in nouns:
+        subtype = "plain_an" if an_is_good else "plain_a"
+        yield from _article_pairs(subtype, an_is_good, [noun], _frames(noun))
 
 
 def _article_adjective(an_is_good: bool) -> Iterator[_Pair]:
@@ -385,35 +504,44 @@ def _article_adjective(an_is_good: bool) -> Iterator[_Pair]:
     nouns = CONSONANT_NOUNS if an_is_good else VOWEL_NOUNS
     subtype = "adjective_an" if an_is_good else "adjective_a"
     for adjective in adjectives:
-        for noun, possessable in nouns.items():
-            frames = ARTICLE_FRAMES if possessable else ARTICLE_FRAMES[:3]
-            yield from _article_pairs(subtype, an_is_good, [f"{adjective} {noun}"], frames)
+        for noun in nouns:
+            if fits(adjective, noun):
+                phrase = [f"{adjective} {noun}"]
+                yield from _article_pairs(subtype, an_is_good, phrase, _frames(noun))
 
 
 def _article_sound(an_is_good: bool) -> Iterator[_Pair]:
     if an_is_good:  # a silent h
         phrases = [f"honest {noun}" for noun in SILENT_H_NOUNS]
-        yield from _article_pairs("sound_an", True, phrases, ARTICLE_FRAMES)
-        yield from _article_pairs("sound_an", True, ["hour"], HOUR_FRAMES)
+        yield from _article_pairs("sound_an", True, phrases, HONEST_FRAMES)
+        for phrase, frames in SILENT_H_PHRASES:
+            yield from _article_pairs("sound_an", True, [phrase], frames)
     else:  # a letter u that sounds like "you"
         phrases = list(YOU_SOUND_WORDS)
-        phrases += [f"{adj} {noun}" for adj in YOU_SOUND_ADJECTIVES for noun in YOU_SOUND_TARGETS]
-        yield from _article_pairs("sound_a", False, phrases, ARTICLE_FRAMES)
+        phrases += [
+            f"{adj} {noun}" for adj, nouns in YOU_SOUND_ADJECTIVES.items() for noun in nouns
+        ]
+        yield from _article_pairs("sound_a", False, phrases, ARTICLE_FRAMES + OWN_FRAMES)
 
 
 # --- word order -----------------------------------------------------------------------------------
 
 
 def _order_adjective() -> Iterator[_Pair]:
-    nouns = [n for n, possessable in {**CONSONANT_NOUNS, **VOWEL_NOUNS}.items() if possessable]
-    for subject, verb in OBJECT_FRAMES:
-        for adjective in ORDER_WORDS:
-            for noun in nouns:
+    # In the subject, before the verb: "The big dog is here." / "The dog big is here." After an
+    # object an adjective can be good English ("Tom found the box empty"), so it is never there.
+    nouns = [n for n, kinds in NOUN_KINDS.items() if "own" in kinds]
+    for adjective in ORDER_WORDS:
+        for noun in nouns:
+            if not fits(adjective, noun):
+                continue
+            kind = "animal" if "animal" in NOUN_KINDS[noun] else "thing"
+            for rest in ORDER_PREDICATES[kind]:
                 yield _Pair(
                     "word_order",
                     "adjective",
-                    f"{subject} {verb} the {adjective} {noun}.",
-                    f"{subject} {verb} the {noun} {adjective}.",
+                    f"The {adjective} {noun} {rest}.",
+                    f"The {noun} {adjective} {rest}.",
                 )
 
 
@@ -434,7 +562,7 @@ def _order_object() -> Iterator[_Pair]:
 def _order_preposition() -> Iterator[_Pair]:
     for thing in (*ANIMALS, *PEOPLE, "ball", "book", "hat", "toy", "cup", "bag"):
         for place, prep in PLACE_PHRASES:
-            if place != thing:
+            if place != thing and thing in PLACE_SIZES.get(place, (thing,)):
                 yield _Pair(
                     "word_order",
                     "preposition",
@@ -445,8 +573,9 @@ def _order_preposition() -> Iterator[_Pair]:
 
 def _order_determiner() -> Iterator[_Pair]:
     for subject, verb in OBJECT_FRAMES:
-        nouns = [n for n, ok in {**CONSONANT_NOUNS, **VOWEL_NOUNS}.items() if ok]
-        for noun in (*ANIMALS, *PEOPLE, *nouns):
+        nouns = [n for n, kinds in NOUN_KINDS.items() if "own" in kinds]
+        people = () if verb == "has" else tuple(PEOPLE)  # not "She has the teacher at school."
+        for noun in dict.fromkeys((*ANIMALS, *people, *nouns)):
             for location in LOCATIONS:
                 yield _Pair(
                     "word_order",
@@ -480,6 +609,7 @@ TENSE_KINDS = {
     "did_past": ("did", "base", "past", VERBS),
     "did_participle": ("did", "base", "participle", PARTICIPLE_VERBS),
     "perfect": ("perfect", "participle", "past", PERFECT_VERBS),
+    "perfect_base": ("perfect", "participle", "base", PARTICIPLE_VERBS),  # "has eat"
 }
 
 
@@ -508,10 +638,14 @@ def _tense(subtype: str) -> Iterator[_Pair]:
 
 
 def _plural_pairs(plural_is_good: bool) -> Iterator[_Pair]:
-    quantifiers = PLURAL_QUANTIFIERS if plural_is_good else SINGULAR_QUANTIFIERS
+    every = PLURAL_QUANTIFIERS if plural_is_good else SINGULAR_QUANTIFIERS
     for subject, verb in PLURAL_FRAMES:
+        nouns, quantifiers = PLURALS, every
+        if verb == "has":  # "She has two cats", never "She has these men" or "every duck"
+            nouns = {**ANIMALS, **THINGS}
+            quantifiers = tuple(q for q in every if q in HAS_QUANTIFIERS)
         for quantifier in quantifiers:
-            for noun, plural in PLURALS.items():
+            for noun, plural in nouns.items():
                 good, bad = (plural, noun) if plural_is_good else (noun, plural)
                 for location in LOCATIONS:
                     yield _Pair(
@@ -560,10 +694,18 @@ def _pairs() -> Iterator[_Pair]:
 
 @cache
 def _bench_pools() -> dict[tuple[str, str], tuple[_Pair, ...]]:
-    """The pairs the benchmark may use, by (family, subtype): those with a reserved good one."""
+    """The pairs the benchmark may use, by (family, subtype): those with a reserved good one.
+
+    A good sentence two families share ("The dog is in the park." is an agreement and a word-order
+    one) is in the first family's pools only, so a family can always use all of its own.
+    """
     pools: dict[tuple[str, str], list[_Pair]] = {}
+    owner: dict[str, str] = {}
     for pair in _pairs():
-        if reserved_for_bench(pair.good):
+        if (
+            reserved_for_bench(pair.good)
+            and owner.setdefault(pair.good, pair.family) == pair.family
+        ):
             pools.setdefault((pair.family, pair.subtype), []).append(pair)
     return {key: tuple(pairs) for key, pairs in pools.items()}
 

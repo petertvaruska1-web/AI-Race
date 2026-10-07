@@ -4,9 +4,13 @@ They back the benchmark items that are free answers judged by a rule instead of 
 (instruction following and function completion). A checker never uses the real Python runtime on
 model text: function replies run only in MiniPy.
 
-Two rules hold for every checker. An empty or degenerate reply fails (a reply with no words, a
-word repeated over and over). And harmless variants pass: capital letters, punctuation and
-surrounding spaces never decide the result, so ``Yes.`` and ``yes`` are the same answer.
+Three rules hold for every checker of text. An empty or degenerate reply fails (a reply with no
+words, a word repeated over and over). Harmless variants pass: capital letters, punctuation and
+surrounding spaces never decide the result, so ``Yes.`` and ``yes`` are the same answer. And a
+reply that repeats the instruction has not followed it: when ``args["instruction"]`` gives the
+instruction, every copy of it in the reply (in any case, with any punctuation) is taken out before
+the check, so a model that echoes "Write a sentence with the word otter." gets no credit for the
+word otter, while one that echoes it and then answers is judged on its answer.
 
 A *word* is a run of letters and digits, with ``'`` or ``-`` allowed inside it (``don't``,
 ``well-known``); punctuation around it is ignored.
@@ -25,15 +29,21 @@ MAX_WORDS_PER_LIST_ITEM = 3
 _DEGENERATE_MIN_WORDS = 6
 
 
-def _words(text: str) -> list[str]:
+def words(text: str) -> list[str]:
+    """The words of ``text``, as every checker counts them."""
     return _WORD.findall(text)
 
 
 def _degenerate(words: list[str]) -> bool:
-    """A reply that says one thing over and over: 6 or more words, a third or fewer different."""
-    if len(words) < _DEGENERATE_MIN_WORDS:
-        return False
-    return 3 * len({w.casefold() for w in words}) <= len(words)
+    """A reply that says one thing over and over.
+
+    Either one word said two or more times ("Sure Sure"), or 6 or more words of which a third or
+    fewer are different.
+    """
+    different = len({w.casefold() for w in words})
+    if len(words) >= 2 and different == 1:
+        return True
+    return len(words) >= _DEGENERATE_MIN_WORDS and 3 * different <= len(words)
 
 
 def _trim(text: str) -> str:
@@ -41,21 +51,31 @@ def _trim(text: str) -> str:
     return re.sub(r"^\W+|\W+$", "", text.strip())
 
 
+def _own(reply: str, args: dict[str, Any] | None) -> str:
+    """The reply with every copy of ``args["instruction"]`` taken out (case and punctuation aside)."""
+    instruction = words((args or {}).get("instruction", ""))
+    if not instruction:
+        return reply
+    copy = r"(?<![^\W_])" + r"[\W_]+".join(map(re.escape, instruction)) + r"(?![^\W_])[^\w\s]*"
+    return re.sub(copy, " ", reply, flags=re.IGNORECASE)
+
+
 def one_word(reply: str, args: dict[str, Any] | None = None) -> bool:
     """Exactly one word (punctuation around it is ignored).
 
-    ``args["not"]``, if given, lists words that do not count as an answer ("yes", "no" for a
-    question that is not a yes-or-no one), so the same word cannot pass everything.
+    ``args["not"]``, if given, lists words that do not count as an answer: "yes" and "no" for a
+    question that is not a yes-or-no one, and the words of the question itself (other than its
+    answer), so neither one word for everything nor a word copied from the question passes.
     """
-    words = _words(reply)
+    said = words(_own(reply, args))
     refused = {w.casefold() for w in (args or {}).get("not", ())}
-    return len(words) == 1 and words[0].casefold() not in refused
+    return len(said) == 1 and said[0].casefold() not in refused
 
 
 def yes_no(reply: str, args: dict[str, Any] | None = None) -> bool:
     """The whole reply is "yes" or "no", in any case and with any punctuation."""
-    words = _words(reply)
-    return len(words) == 1 and words[0].casefold() in ("yes", "no")
+    said = words(_own(reply, args))
+    return len(said) == 1 and said[0].casefold() in ("yes", "no")
 
 
 def list_n(reply: str, args: dict[str, Any]) -> bool:
@@ -64,7 +84,7 @@ def list_n(reply: str, args: dict[str, Any]) -> bool:
     An item is up to 3 words (a numbered or bulleted item is fine); a sentence is not an item.
     """
     items = []
-    for part in _LIST_SPLIT.split(reply):
+    for part in _LIST_SPLIT.split(_own(reply, args)):
         item = _trim(_BULLET.sub("", part))
         if item:
             items.append(item)
@@ -72,19 +92,24 @@ def list_n(reply: str, args: dict[str, Any]) -> bool:
         return False
     if len({item.casefold() for item in items}) != len(items):
         return False
-    return all(0 < len(_words(item)) <= MAX_WORDS_PER_LIST_ITEM for item in items)
+    return all(0 < len(words(item)) <= MAX_WORDS_PER_LIST_ITEM for item in items)
 
 
 def starts_with(reply: str, args: dict[str, Any]) -> bool:
-    """The reply starts with the word or phrase ``args["prefix"]`` (any case)."""
+    """The reply starts with the word or phrase ``args["prefix"]`` (any case).
+
+    ``args["min_words"]``, if given, is how many words the reply needs at least: the prefix and
+    then an answer, when the instruction asked a question.
+    """
     prefix = args["prefix"].strip()
-    text = reply.lstrip()
+    text = re.sub(r"^[\W_]+", "", _own(reply, args))  # quotes and spaces before it do not count
     match = re.match(re.escape(prefix), text, re.IGNORECASE) if prefix else None
     if match is None:
         return False
     if prefix[-1].isalnum() and text[match.end() : match.end() + 1].isalnum():
         return False  # "Hello" does not start "Hellos"
-    return not _degenerate(_words(text))
+    said = words(text)
+    return len(said) >= args.get("min_words", 1) and not _degenerate(said)
 
 
 def all_caps(reply: str, args: dict[str, Any] | None = None) -> bool:
@@ -93,26 +118,32 @@ def all_caps(reply: str, args: dict[str, Any] | None = None) -> bool:
     ``args["min_words"]``, if given, is how many words the reply needs at least (a sentence
     asked for in capitals is not one word).
     """
-    words = _words(reply)
-    has_letter = any(c.isalpha() for c in reply)
-    enough = len(words) >= (args or {}).get("min_words", 1)
-    return has_letter and enough and not any(c.islower() for c in reply) and not _degenerate(words)
+    text = _own(reply, args)
+    said = words(text)
+    has_letter = any(c.isalpha() for c in text)
+    enough = len(said) >= (args or {}).get("min_words", 1)
+    return has_letter and enough and not any(c.islower() for c in text) and not _degenerate(said)
 
 
 def repeat_word(reply: str, args: dict[str, Any]) -> bool:
     """The reply is just ``args["word"]`` (any case, spaces and punctuation around it ignored)."""
     target = _trim(args["word"]).casefold()
-    return bool(target) and _trim(reply).casefold() == target
+    return bool(target) and _trim(_own(reply, args)).casefold() == target
 
 
 def contains_any(reply: str, args: dict[str, Any]) -> bool:
-    """The reply uses one of ``args["words"]`` as a word (a plural with "s" or "es" counts)."""
-    words = _words(reply)
-    if not words or _degenerate(words):
+    """The reply uses one of ``args["words"]`` as a word (a plural with "s" or "es" counts).
+
+    ``args["min_words"]``, if given, is how many words the reply needs at least (a sentence asked
+    for is not the word alone).
+    """
+    text = _own(reply, args)
+    said = words(text)
+    if not said or len(said) < args.get("min_words", 1) or _degenerate(said):
         return False
     for word in args["words"]:
         if word.strip() and re.search(
-            rf"(?<!\w){re.escape(word.strip())}(?:e?s)?(?!\w)", reply, re.IGNORECASE
+            rf"(?<!\w){re.escape(word.strip())}(?:e?s)?(?!\w)", text, re.IGNORECASE
         ):
             return True
     return False

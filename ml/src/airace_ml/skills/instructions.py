@@ -4,23 +4,27 @@ A user gives a short instruction and the AI follows it: "What is the capital of 
 with one word." / "Paris." Seven kinds of instruction, each judged by the checker of the same
 name in ``checkers.CHECKERS`` (benchmark items are tagged ``fam:<kind>``):
 
-- ``one_word``: a question from the knowledge base, to be answered with one word (a "yes" or
-  "no" is not an answer to it: ``args["not"]``)
+- ``one_word``: a question from the knowledge base, to be answered with one word ("yes", "no" and
+  the words of the question itself, other than its answer, are not answers to it: ``args["not"]``)
 - ``yes_no``: a statement about a fact (or "is 7 bigger than 4?"), to be answered yes or no
 - ``list_n``: "List three mammals.", "Name two words that start with the letter B.": 2-6 items
   that are animals of a class, foods of a group, countries of a continent, things of a color,
   animals by what they eat, where they live or how many legs they have, vehicles by how they
-  travel, or words by their first or last letter
-- ``starts_with``: a question, to be answered in a reply that starts with a given word
+  travel, or everyday words by their first or last letter
+- ``starts_with``: a question, to be answered in a reply that starts with a given word and goes on
+  with an answer (``args["min_words"]``)
 - ``all_caps``: a question, to be answered with a sentence in capital letters (at least 3 words:
   ``args["min_words"]``)
 - ``repeat_word``: "Say the word banana and nothing else."
-- ``contains_any``: "Write one sentence that uses the word dog."
+- ``contains_any``: "Write one sentence that uses the word dog.", answered with a sentence (at least
+  3 words) that uses it
 
 The benchmark measures whether the reply has the asked *form*, not whether its content is right.
-It is built so that no one constant reply passes more than one kind: "Yes" is not a one-word
-answer, "YES" is not a sentence in capitals, and the other kinds ask for a word, a prefix or a
-number of items that changes from item to item.
+It is built so that neither a constant reply nor one copied from the prompt passes more than one
+kind: "Yes" is not a one-word answer, "YES" is not a sentence in capitals, a word of the question is
+not a one-word answer to it, the asked word alone is neither a sentence nor a reply that goes on
+after it, a copy of the instruction does not count (``args["instruction"]``), and the other kinds
+ask for a word, a prefix or a number of items that changes from item to item.
 
 Training replies are written to be right as well: the facts come from the knowledge base (the
 statements from the relations' ``train_templates``, the questions from their ``chat_templates``,
@@ -28,24 +32,25 @@ never the benchmark-only phrasings of ``facts``), a claim in a yes-or-no questio
 clearly false by the knowledge base and the reply says which, and every reply passes its checker,
 which :func:`_render` makes sure of.
 
-Partition. An instruction belongs to a *world*: its kind and what it is about (the fact, the word,
-the group of things and how many), whatever its wording. Benchmark items use only reserved worlds
-and prompts (:func:`reserved_for_bench`), training text uses neither: so no benchmark instruction
-occurs in training, nor the same instruction about the same thing in other words. The worlds are
-listed from the knowledge base up front, which lets the benchmark share its items evenly over the
-kinds as far as each kind's reserved worlds allow.
+Partition. An instruction belongs to a *world*: its canonical key is the instruction (its kind,
+and for a list how many items) and the entity it is about (the fact, the word or number pair, the
+group of things), whatever its wording. Benchmark items use only reserved worlds and prompts
+(:func:`reserved_for_bench`), training text uses neither: so no benchmark instruction occurs in
+training, nor the same instruction about the same thing in other words. The worlds are listed from
+the knowledge base up front, which lets the benchmark share its items evenly over the kinds as far
+as each kind's reserved worlds allow; the list sizes take turns in it too.
 
 Nothing here is a model output; these are data generators.
 """
 
 import re
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 
 import numpy as np
 
-from airace_ml.skills.checkers import CHECKERS
+from airace_ml.skills.checkers import CHECKERS, words
 from airace_ml.skills.kb import KB, Fact
 from airace_ml.skills.types import CheckItem, TextDoc, fair_quota, reserved_for_bench
 from airace_ml.tokenizer import Role
@@ -64,13 +69,25 @@ MAX_ATTEMPTS_PER_EXCHANGE = 50  # renderings, pooled over a request
 EXCHANGES_PER_CHAT = (1, 2, 3)  # how many instructions a training chat holds ...
 EXCHANGE_WEIGHTS = (0.5, 0.3, 0.2)  # ... and how often
 MAX_NEW_TOKENS = 64
-MIN_CAPS_WORDS = 3  # a sentence in capitals is at least this many words
+MIN_SENTENCE_WORDS = 3  # a sentence asked for (in capitals, or with a word in it) is this long
 MIN_MEMBERS_OVER_N = 2  # a list world needs this many more members than items asked
 LIST_SIZES = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
 PERIOD_SHARE = 0.7  # share of short replies that end with a period
 NUMBER_RANGE = 20  # "is a bigger than b" uses 1..20
 WORD_PATTERN = re.compile(r"[A-Za-z]{3,12}")
-PREFIXES = ("Sure", "Okay", "Hello", "Well", "Great", "Hi", "Alright", "Certainly")
+LETTER_WORD = re.compile(r"[a-z]{3,9}")  # an everyday word a letter list may use
+# The relations whose subjects and objects are everyday words (animals, foods, colors, vehicles,
+# jobs and places, opposites, baby animals): a letter list never asks for "molybdenum" or "lions".
+LETTER_WORD_RELATIONS = (
+    "animal_class",
+    "baby_animal",
+    "food_group",
+    "color_of",
+    "vehicle_travel",
+    "job_place",
+    "opposite_of",
+)
+PREFIXES = ("Sure", "Okay", "Hello", "Absolutely", "Great", "Hi", "Alright", "Certainly")
 
 # What a list can ask for, by (relation, object). Written out, so plurals and articles are right
 # ("fish" does not take an "s"; "in a nest", "in the ocean").
@@ -114,15 +131,16 @@ ONE_WORD_WORDINGS = (
     "Answer in one word: {q}",
     "One word only: {q}",
 )
+# Half of the yes-or-no wordings end with the question, so the prompt's last word is not "no".
 YES_NO_WORDINGS = (
     "Is this true? {st} Answer yes or no.",
     "{st} Is that right? Answer yes or no.",
-    "Is this statement true? {st} Reply with yes or no.",
+    "Answer yes or no. Is this statement true? {st}",
     "Yes or no: is this true? {st}",
 )
 COMPARE_WORDINGS = (
     "Is {a} bigger than {b}? Answer yes or no.",
-    "Is {a} greater than {b}? Reply with yes or no.",
+    "Answer yes or no: is {a} greater than {b}?",
     "Is {a} larger than {b}? Answer with yes or no.",
     "Yes or no: is {a} more than {b}?",
 )
@@ -135,6 +153,10 @@ LIST_WORDINGS = (
     "Can you list {n} {things}?",
     "Think of {n} {things} and list them.",
     "I need {n} {things}. List them.",
+    "Please list {n} {things}.",
+    "Name any {n} {things}.",
+    "Write a list of {n} {things}.",
+    "Could you name {n} {things}?",
 )
 STARTS_WITH_WORDINGS = (
     "{q} Start your answer with the word {p}.",
@@ -168,7 +190,7 @@ CONTAINS_WORDINGS = (
     "Say something that includes the word {w}.",
     "Please write a sentence with the word {w}.",
     "Give me a sentence that has the word {w} in it.",
-    "Write a sentence about {w}. Use the word {w}.",
+    "Write a sentence and put the word {w} in it.",
 )
 
 
@@ -233,7 +255,7 @@ def _fact_worlds(kb: KB, kind: str, facts: Collection[Fact]) -> list[_World]:
 
 
 def _one_word_worlds(kb: KB) -> list[_World]:
-    facts = [f for f in kb.facts if CHECKERS["one_word"](f.obj, {})]
+    facts = [f for f in kb.facts if CHECKERS["one_word"](f.obj, {"not": ["yes", "no"]})]
     return _fact_worlds(kb, "one_word", facts)
 
 
@@ -275,10 +297,9 @@ def _list_groups(kb: KB) -> list[tuple[str, str, str, list[str]]]:
         groups.append((f"{relation}:{obj}", what, topic, members(relation, obj)))
     starts: dict[str, list[str]] = {}
     ends: dict[str, list[str]] = {}
-    for subject in kb.subjects:
-        if subject.islower() and WORD_PATTERN.fullmatch(subject):
-            starts.setdefault(subject[0], []).append(subject)
-            ends.setdefault(subject[-1], []).append(subject)
+    for word in _letter_words(kb):
+        starts.setdefault(word[0], []).append(word)
+        ends.setdefault(word[-1], []).append(word)
     for letter, found in sorted(starts.items()):
         what = f"words that start with the letter {letter.upper()}"
         groups.append((f"starts:{letter}", what, "school", sorted(found)))
@@ -286,6 +307,15 @@ def _list_groups(kb: KB) -> list[tuple[str, str, str, list[str]]]:
         what = f"words that end with the letter {letter.upper()}"
         groups.append((f"ends:{letter}", what, "school", sorted(found)))
     return groups
+
+
+def _letter_words(kb: KB) -> list[str]:
+    """The everyday words of the knowledge base a letter list can name, sorted."""
+    found = set()
+    for relation in LETTER_WORD_RELATIONS:
+        for fact in kb.facts_for(relation):
+            found |= {w for w in (fact.subject, fact.obj) if LETTER_WORD.fullmatch(w)}
+    return sorted(found)
 
 
 def _list_n_worlds(kb: KB) -> list[_World]:
@@ -359,7 +389,14 @@ def _pools(kb: KB) -> tuple[dict[str, tuple[_World, ...]], dict[str, tuple[_Worl
 def _one_word(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str, str, dict]:
     (fact,) = world.data
     user = _choice(rng, ONE_WORD_WORDINGS).format(q=_question(kb, fact, rng))
-    return user, _short_reply(rng, _capitalized(fact.obj)), {"not": ["yes", "no"]}
+    answers = {w.casefold() for form in kb.accepted_answers(fact) for w in _parts(form)}
+    refused = ({"yes", "no"} | {w.casefold() for w in _parts(user)}) - answers
+    return user, _short_reply(rng, _capitalized(fact.obj)), {"not": sorted(refused)}
+
+
+def _parts(text: str) -> list[str]:
+    """The words of ``text`` as the checkers count them, and the pieces of "one-word" and "don't"."""
+    return [*words(text), *re.findall(r"[^\W_]+", text)]
 
 
 def _yes_no(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str, str, dict]:
@@ -397,13 +434,14 @@ def _starts_with(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str, 
     (fact,) = world.data
     prefix = _choice(rng, PREFIXES)
     user = _choice(rng, STARTS_WITH_WORDINGS).format(q=_question(kb, fact, rng), p=prefix)
-    return user, f"{prefix}! {_statement(kb, fact, rng)}", {"prefix": prefix}
+    args = {"prefix": prefix, "min_words": len(words(prefix)) + 1}  # the word, then an answer
+    return user, f"{prefix}! {_statement(kb, fact, rng)}", args
 
 
 def _all_caps(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str, str, dict]:
     (fact,) = world.data
     user = _choice(rng, ALL_CAPS_WORDINGS).format(q=_question(kb, fact, rng))
-    return user, _statement(kb, fact, rng).upper(), {"min_words": MIN_CAPS_WORDS}
+    return user, _statement(kb, fact, rng).upper(), {"min_words": MIN_SENTENCE_WORDS}
 
 
 def _repeat_word(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str, str, dict]:
@@ -416,7 +454,7 @@ def _contains_any(kb: KB, world: _World, rng: np.random.Generator) -> tuple[str,
     (word,) = world.data
     fact = _choice(rng, kb.facts_about(word))
     user = _choice(rng, CONTAINS_WORDINGS).format(w=word)
-    return user, _statement(kb, fact, rng), {"words": [word]}
+    return user, _statement(kb, fact, rng), {"words": [word], "min_words": MIN_SENTENCE_WORDS}
 
 
 _RENDERERS = {
@@ -434,10 +472,12 @@ def _render(kb: KB, world: _World, rng: np.random.Generator, *, bench: bool) -> 
     """An instruction about the world with a reply that passes its checker, in the given split.
 
     The wording is drawn at random until the prompt is reserved (``bench``) or not; ``None`` if no
-    wording within ``RENDER_TRIES`` fits.
+    wording within ``RENDER_TRIES`` fits. The checker's arguments carry the instruction, so a reply
+    that only copies it does not pass.
     """
     for _ in range(RENDER_TRIES):
         user, reply, args = _RENDERERS[world.kind](kb, world, rng)
+        args = {**args, "instruction": user}
         if reserved_for_bench(user) == bench and CHECKERS[world.kind](reply, args):
             return _Exchange(world.key, world.kind, world.topic, user, reply, args)
     return None
@@ -487,6 +527,39 @@ def instruction_train_docs(kb: KB, rng: np.random.Generator, n: int) -> list[Tex
     return docs
 
 
+def _wordable(world: _World) -> bool:
+    """Whether a list world has a wording reserved for the benchmark (a list has only a few)."""
+    things, size, _ = world.data
+    wordings = (w.format(n=LIST_SIZES[size], things=things) for w in LIST_WORDINGS)
+    return any(map(reserved_for_bench, wordings))
+
+
+def _take(
+    kb: KB, kind: str, worlds: Sequence[_World], count: int, rng: np.random.Generator
+) -> list[_Exchange]:
+    """Benchmark exchanges for the first ``count`` of the worlds that can be worded as one."""
+    exchanges: list[_Exchange] = []
+    for world in worlds:
+        if len(exchanges) == count:
+            break
+        exchange = _render(kb, world, rng, bench=True)
+        if exchange is not None:
+            exchanges.append(exchange)
+    if len(exchanges) < count:
+        raise RuntimeError(f"instructions: could not draw enough {kind} items")
+    return exchanges
+
+
+def _in_turn[T](groups: Sequence[Sequence[T]]) -> list[T]:
+    """The items of the groups, one from each in turn, until all are used up."""
+    return [
+        group[k]
+        for k in range(max(map(len, groups), default=0))
+        for group in groups
+        if k < len(group)
+    ]
+
+
 def instruction_bench_items(kb: KB, rng: np.random.Generator, n: int = 120) -> list[CheckItem]:
     """``n`` instructions to follow (category ``"instruction"``, ``instruction-0000``...).
 
@@ -496,27 +569,23 @@ def instruction_bench_items(kb: KB, rng: np.random.Generator, n: int = 120) -> l
     with ``reference`` a reply that passes it. No world occurs twice, and every world and prompt
     is reserved for the benchmark. ``ValueError`` if ``n`` is more than the worlds there are.
     """
-    pools = _pools(kb)[0]
+    pools = dict(_pools(kb)[0])
+    pools["list_n"] = tuple(filter(_wordable, pools["list_n"]))
     quota = fair_quota({kind: len(pool) for kind, pool in pools.items()}, n)
     chosen: dict[str, list[_Exchange]] = {}
     for kind in KINDS:
-        pool = pools[kind]
-        exchanges: list[_Exchange] = []
-        for i in rng.permutation(len(pool)):
-            if len(exchanges) == quota[kind]:
-                break
-            exchange = _render(kb, pool[int(i)], rng, bench=True)
-            if exchange is not None:
-                exchanges.append(exchange)
-        if len(exchanges) < quota[kind]:
-            raise RuntimeError(f"instructions: could not draw enough {kind} items")
-        chosen[kind] = exchanges
-    ordered = [
-        chosen[kind][k]
-        for k in range(max(quota.values()))
-        for kind in KINDS
-        if k < len(chosen[kind])
-    ]
+        pool = [pools[kind][int(i)] for i in rng.permutation(len(pools[kind]))]
+        if kind != "list_n":
+            chosen[kind] = _take(kb, kind, pool, quota[kind], rng)
+            continue
+        # a list asks for 2-6 items: the sizes share the list items evenly and take turns
+        by_size: dict[int, list[_World]] = {}
+        for world in pool:
+            by_size.setdefault(world.data[1], []).append(world)
+        sizes = fair_quota({size: len(ws) for size, ws in by_size.items()}, quota[kind])
+        by_turn = [_take(kb, kind, by_size[size], sizes[size], rng) for size in sorted(by_size)]
+        chosen[kind] = _in_turn(by_turn)
+    ordered = _in_turn([chosen[kind] for kind in KINDS])
     return [
         CheckItem(
             f"instruction-{i:04d}",

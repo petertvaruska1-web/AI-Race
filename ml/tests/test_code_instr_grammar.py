@@ -195,6 +195,71 @@ def test_degenerate_replies_fail_every_checker():
             assert not CHECKERS[name](junk, args), name
 
 
+def test_starts_with_can_ask_for_an_answer_after_the_word():
+    sw = CHECKERS["starts_with"]
+    arg = {"prefix": "Sure", "min_words": 2}  # the word, then an answer
+    for reply in ("Sure! Kigali.", "sure, it is Kigali", "SURE. THE SKY IS BLUE."):
+        assert sw(reply, arg), reply
+    for reply in ("Sure", "Sure!", " sure. ", "Kigali. Sure!", "Sure Sure"):
+        assert not sw(reply, arg), reply
+    assert sw("Sure", {"prefix": "Sure"})  # without min_words the word alone is enough
+
+
+def test_contains_any_can_ask_for_a_sentence():
+    ca = CHECKERS["contains_any"]
+    arg = {"words": ["otter"], "min_words": 3}
+    for reply in ("The otter swims.", "Otters are cute!", "I SAW AN OTTER."):
+        assert ca(reply, arg), reply
+    for reply in ("otter", "Otter!", "the otter", "an otter."):
+        assert not ca(reply, arg), reply
+
+
+INSTRUCTION_CASES = {  # checker -> (instruction, arguments, a reply that follows it)
+    "one_word": ("What is the capital of Peru? Answer with one word.", {"not": ["yes"]}, "Lima."),
+    "yes_no": ("Is 3 bigger than 2? Answer yes or no.", {}, "Yes."),
+    "list_n": ("Name three animals that eat grass.", {"n": 3}, "cow, goat and sheep"),
+    "starts_with": (
+        "Start your reply with the word Sure. What is the capital of Peru?",
+        {"prefix": "Sure", "min_words": 2},
+        "Sure! The capital of Peru is Lima.",
+    ),
+    "all_caps": (
+        "What is the capital of Peru? Answer in a sentence, in all capital letters.",
+        {"min_words": 3},
+        "THE CAPITAL OF PERU IS LIMA.",
+    ),
+    "repeat_word": ("Say the word otter.", {"word": "otter"}, "otter"),
+    "contains_any": (
+        "Write one sentence that uses the word otter.",
+        {"words": ["otter"], "min_words": 3},
+        "The otter swims fast.",
+    ),
+}
+
+
+def test_a_copy_of_the_instruction_is_not_a_reply():
+    # a model that repeats the user's message has not followed it, whatever words that has in it
+    assert set(INSTRUCTION_CASES) == set(CHECKERS) - {"minipy_function_tests"}
+    for name, (instruction, args, good) in INSTRUCTION_CASES.items():
+        args = {**args, "instruction": instruction}
+        check = CHECKERS[name]
+        assert check(good, args), name
+        copies = [
+            instruction,
+            instruction.upper(),
+            instruction.lower().rstrip("."),
+            "  " + instruction,
+        ]
+        copies += [f"{instruction}\n{instruction}", f'"{instruction}"']
+        if name != "one_word":  # "Sure!" alone is a one-word answer
+            copies.append(f"Sure! {instruction}")
+        for copy in copies:
+            assert not check(copy, args), (name, copy)
+        # what follows a copy is judged on its own
+        assert check(f"{instruction}\n{good}", args), name
+        assert check(f"{instruction} {good}", args), name
+
+
 FUNCTION_PROMPT = 'def add(a, b):\n    """Return the sum of a and b."""\n'
 ADD_ARGS = {
     "prompt": FUNCTION_PROMPT,
@@ -558,6 +623,17 @@ def test_function_tests_come_from_what_the_function_does():
             assert fam.ref(*call_args) == expected
 
 
+def test_function_tests_fit_every_docstring_of_their_family():
+    # the hidden tests check what every wording promises: a function described as returning
+    # "the first number in the list" is never called on a list of words
+    for fam in code._FUNCTION_FAMILIES:
+        if any("number" in doc for doc in fam.docs):
+            for call_args, _ in fam.test_cases:
+                for value in call_args:
+                    items = value if isinstance(value, list) else [value]
+                    assert all(type(v) is int for v in items), (fam.name, call_args)
+
+
 def test_function_names_headers_and_docs_are_unambiguous():
     names = [n for fam in code._FUNCTION_FAMILIES for n in fam.names]
     assert len(names) == len(set(names)) == 60  # a name says which family it is
@@ -650,19 +726,36 @@ def test_code_gives_up_when_nothing_can_be_accepted(monkeypatch):
 NUMBER_WORDS = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
 
 
-def expected_check(user: str) -> tuple[str, dict]:
-    """What a person reading the instruction would say is asked: the check and its arguments."""
+def word_parts(text: str) -> set[str]:
+    """The words of ``text`` in lower case, whole ("one-word") and in pieces ("one", "word")."""
+    whole = re.findall(r"[^\W_]+(?:['’-][^\W_]+)*", text)
+    return {w.casefold() for w in [*whole, *re.findall(r"[^\W_]+", text)]}
+
+
+def expected_check(user: str, reply: str = "") -> tuple[str, dict]:
+    """What a person reading the instruction would say is asked: the check and its arguments.
+
+    Every check is given the instruction, so a copy of it is not a reply. A one-word answer is not
+    "yes", "no" or a word of the question (other than the answer, ``reply``).
+    """
+    check, args = expected_check_of(user)
+    if check == "one_word":
+        args["not"] = sorted(({"yes", "no"} | word_parts(user)) - word_parts(reply))
+    return check, {**args, "instruction": user}
+
+
+def expected_check_of(user: str) -> tuple[str, dict]:
     if re.search(r"\byes or no\b", user, re.IGNORECASE):
         return "yes_no", {}
     if re.search(r"\bone[- ]word\b", user, re.IGNORECASE):
-        return "one_word", {"not": ["yes", "no"]}
+        return "one_word", {}
     if re.search(r"capital letters|ALL CAPS", user):
         return "all_caps", {"min_words": 3}
     start = re.search(
         r"\b(?:start|begin) (?:your (?:answer|reply) )?with the word (\w+)", user, re.IGNORECASE
     )
-    if start:
-        return "starts_with", {"prefix": start[1]}
+    if start:  # the word, then an answer to the question
+        return "starts_with", {"prefix": start[1], "min_words": 2}
     repeat = re.fullmatch(
         r"(?:Say the word (\w+)\.|Repeat the word (\w+)\.|Say (\w+) and nothing else\.|"
         r"Just say (\w+)\.|Reply with the word (\w+) only\.|Repeat after me: (\w+)|"
@@ -672,15 +765,16 @@ def expected_check(user: str) -> tuple[str, dict]:
     if repeat:
         return "repeat_word", {"word": next(g for g in repeat.groups() if g)}
     listing = re.match(
-        r"(?:List|Name|Give me|Write down|Tell me|Can you list|Think of|I need) "
+        r"(?:List|Name|Give me|Write down|Tell me|Can you list|Think of|I need|Please list|"
+        r"Name any|Write a list of|Could you name) "
         r"(two|three|four|five|six) ",
         user,
     )
     if listing:
         return "list_n", {"n": NUMBER_WORDS[listing[1]]}
     contains = re.search(r"the word (\w+)", user)
-    if contains and re.search(r"sentence|Say something", user):
-        return "contains_any", {"words": [contains[1]]}
+    if contains and re.search(r"sentence|Say something", user):  # a sentence: 3 words or more
+        return "contains_any", {"words": [contains[1]], "min_words": 3}
     raise AssertionError(f"cannot tell what is asked: {user!r}")
 
 
@@ -728,7 +822,7 @@ def test_instruction_bench_shape(instruction_bench):
 
 def test_instruction_text_says_what_the_checker_checks(instruction_bench, instruction_train):
     for it in instruction_bench:
-        assert expected_check(it.prompt) == (it.check, it.check_args), it.prompt
+        assert expected_check(it.prompt, it.reference) == (it.check, it.check_args), it.prompt
     seen = Counter()
     for user, _ in chat_pairs(instruction_train):
         seen[expected_check(user)[0]] += 1
@@ -766,6 +860,35 @@ def test_instruction_references_pass_and_wrong_forms_fail(instruction_bench):
                 assert check(it.reference.upper(), it.check_args)
 
 
+def natural_variants(item) -> list[str]:
+    """Other ways of writing the reference that a person would count as the same reply."""
+    ref = item.reference
+    variants = [ref.lower(), ref.upper(), ref.rstrip("."), f"  {ref}  ", f'"{ref}"']
+    if item.check == "list_n":
+        items = re.split(r"\n|, and |, | and ", ref)
+        variants = [
+            ", ".join(items),
+            ", ".join(items[:-1]) + " and " + items[-1],
+            "\n".join(items),
+            "\n".join(f"{k}. {x}" for k, x in enumerate(items, 1)),
+            "\n".join(f"- {x}" for x in items),
+            ", ".join(x.title() for x in items) + ".",
+        ]
+    elif item.check == "starts_with":
+        variants += [ref.replace("!", ",", 1), ref.replace("!", ".", 1)]
+    elif item.check == "all_caps":
+        variants = [ref.rstrip("."), ref.rstrip(".") + "!", f"  {ref}"]
+    elif item.check in ("one_word", "yes_no", "repeat_word"):
+        variants += [ref.strip(".") + "!", ref.strip(".").title()]
+    return variants
+
+
+def test_natural_variants_of_a_right_reply_pass(instruction_bench):
+    for it in instruction_bench:
+        for reply in natural_variants(it):
+            assert CHECKERS[it.check](reply, it.check_args), (it.prompt, reply)
+
+
 def test_no_constant_reply_passes_many_instructions(instruction_bench):
     constants = (
         "Yes", "No.", "YES", "DOG", "Paris", "Sure! The dog is a mammal.", "cat, dog and cow",
@@ -779,6 +902,100 @@ def test_no_constant_reply_passes_many_instructions(instruction_bench):
     for reply in ("Yes", "DOG", "Paris", "No"):
         kinds = {i.check for i in instruction_bench if CHECKERS[i.check](reply, i.check_args)}
         assert len(kinds) <= 1, (reply, kinds)
+
+
+def replies_made_from(prompt: str) -> dict[str, str]:
+    """Replies a model could make by copying from the prompt instead of following it."""
+    words = re.findall(r"[A-Za-z0-9]+(?:['-][A-Za-z0-9]+)*", prompt)
+    named = re.search(r"the word (\w+)", prompt)
+    word = named[1] if named else words[-1]
+    return {
+        "the prompt": prompt,
+        "the prompt in capitals": prompt.upper(),
+        "the prompt twice": f"{prompt}\n{prompt}",
+        "Sure! and the prompt": f"Sure! {prompt}",
+        "its first word": words[0],
+        "its last word": words[-1],
+        "its last three words": " ".join(words[-3:]),
+        "its longest word": max(words, key=len),
+        "the word it names": word,
+        "the word it names, with !": f"{word}!",
+        "Sure! and the word it names": f"Sure! {word}",
+    }
+
+
+def prompt_copy_scores(items) -> dict[str, float]:
+    """The share of items each reply made from the prompt passes, not counting repeat_word
+    items (copying a word is what those ask for), with the kinds it passes."""
+    scores = {}
+    for k, name in enumerate(replies_made_from("x")):
+        passed = [
+            i.check
+            for i in items
+            if i.check != "repeat_word"
+            and CHECKERS[i.check](list(replies_made_from(i.prompt).values())[k], i.check_args)
+        ]
+        scores[name] = (len(passed) / len(items), set(passed))
+    return scores
+
+
+def test_no_reply_made_from_the_prompt_passes_many_instructions(instruction_bench):
+    for name, (share, kinds) in prompt_copy_scores(instruction_bench).items():
+        # never more than one kind, which is what a constant reply passes too (one kind: 0.14)
+        assert len(kinds) <= 1 and share <= 0.15, (name, share, kinds)
+
+
+def test_a_one_word_answer_is_not_a_word_of_the_question(instruction_bench, instruction_train):
+    pairs = [
+        (i.prompt, i.reference, i.check_args) for i in instruction_bench if i.check == "one_word"
+    ]
+    pairs += [
+        (user, reply, expected_check(user, reply)[1])
+        for user, reply in chat_pairs(instruction_train)
+        if expected_check(user)[0] == "one_word"
+    ]
+    for prompt, reference, args in pairs:
+        answer = reference.strip(".").casefold()
+        assert CHECKERS["one_word"](reference.upper(), args)
+        for word in set(re.findall(r"[a-z]+", prompt.casefold())) - {answer}:
+            assert not CHECKERS["one_word"](word, args), (prompt, word)
+
+
+def test_letter_lists_use_simple_everyday_words(kb):
+    hard = {f.subject for r in ("element_symbol", "shape_sides") for f in kb.facts_for(r)}
+    hard |= {f.subject for f in kb.facts_for("animal_group") if f.subject.endswith("s")}
+    letters = [g for g in instructions._list_groups(kb) if g[0].startswith(("starts:", "ends:"))]
+    words = {w for *_, found in letters for w in found}
+    assert len(words) > 300
+    assert not words & hard  # no "molybdenum", "lions" or "heptagon"
+    assert all(3 <= len(w) <= 9 and w.isalpha() and w.islower() for w in words)
+
+
+def test_list_sizes_take_turns_in_the_benchmark(instruction_bench):
+    sizes = Counter(i.check_args["n"] for i in instruction_bench if i.check == "list_n")
+    assert set(sizes) == set(instructions.LIST_SIZES)
+    assert max(sizes.values()) - min(sizes.values()) <= 1
+
+
+def test_instruction_wordings_read_well(instruction_bench, instruction_train):
+    prompts = [i.prompt for i in instruction_bench] + [u for u, _ in chat_pairs(instruction_train)]
+    for prompt in prompts:
+        assert not re.search(r"\babout [a-z]+\.", prompt), prompt  # not "a sentence about leopard."
+    natural = {
+        "Sure",
+        "Okay",
+        "Hello",
+        "Hi",
+        "Great",
+        "Alright",
+        "Certainly",
+        "Absolutely",
+        "Of course",
+    }
+    for user, reply in chat_pairs(instruction_train):
+        if expected_check(user)[0] == "starts_with":
+            first, rest = reply.split("! ", 1)
+            assert first in natural and rest[0].isupper(), reply
 
 
 def facts_index(kb):
@@ -809,11 +1026,12 @@ def is_false_claim(kb, statement: str) -> bool:
 YES_NO_FRAMES = (
     r"Is this true\? (?P<st>.*) Answer yes or no\.",
     r"(?P<st>.*) Is that right\? Answer yes or no\.",
-    r"Is this statement true\? (?P<st>.*) Reply with yes or no\.",
+    r"Answer yes or no\. Is this statement true\? (?P<st>.*)",
     r"Yes or no: is this true\? (?P<st>.*)",
 )
 COMPARE_FRAMES = (
-    r"Is (?P<a>\d+) (?:bigger|greater|larger|more) than (?P<b>\d+)\?.*",
+    r"Is (?P<a>\d+) (?:bigger|larger) than (?P<b>\d+)\?.*",
+    r"Answer yes or no: is (?P<a>\d+) greater than (?P<b>\d+)\?",
     r"Yes or no: is (?P<a>\d+) more than (?P<b>\d+)\?",
 )
 
@@ -828,7 +1046,8 @@ def listed_things(kb) -> dict[str, tuple[str, str]]:
 
 def check_list_reply(kb, user: str, reply: str) -> None:
     items = [i for i in re.split(r"\n|, and |, | and ", reply) if i]
-    assert len(set(items)) == len(items) and set(items) <= set(kb.subjects), (user, reply)
+    known = {*kb.subjects, *(f.obj for f in kb.facts)}
+    assert len(set(items)) == len(items) and set(items) <= known, (user, reply)
     things = listed_things(kb)
     asked = max((t for t in things if t in user), key=len, default=None)
     if asked is not None:
@@ -843,7 +1062,7 @@ def test_training_replies_are_right_as_well_as_well_formed(kb, instruction_train
     statements, questions = facts_index(kb)
     checked = Counter()
     for user, reply in chat_pairs(instruction_train):
-        check, args = expected_check(user)
+        check, args = expected_check(user, reply)
         assert CHECKERS[check](reply, args), (user, reply)
         checked[check] += 1
         asked = [f for q, fs in questions.items() if q in user for f in fs]
@@ -915,6 +1134,21 @@ def test_the_same_instruction_about_the_same_thing_is_never_in_both(
     kb, instruction_bench, instruction_train
 ):
     _, questions = facts_index(kb)
+    things = listed_things(kb)
+    claims = [  # (a statement template as a pattern, its relation)
+        (re.compile(re.escape(t).replace(r"\{s\}", "(?P<s>.+)").replace(r"\{o\}", "(?P<o>.+)")), r)
+        for r, relation in kb.relations.items()
+        for t in relation.train_templates
+    ]
+
+    def claimed(statement: str) -> set:
+        """The (subject, relation) a yes-or-no statement makes a claim about."""
+        found = set()
+        for pattern, relation in claims:
+            m = pattern.fullmatch(statement)
+            if m and any(f.subject == m["s"] for f in kb.facts_for(relation)):
+                found.add((m["s"], relation))
+        return found
 
     def about(kind: str, user: str) -> set:
         args = expected_check(user)[1]
@@ -922,9 +1156,21 @@ def test_the_same_instruction_about_the_same_thing_is_never_in_both(
             return {args["word"]}
         if kind == "contains_any":
             return {args["words"][0]}
+        if kind == "list_n":  # the group of things and how many
+            letter = re.search(r"words that (start|end) with the letter (\w)", user)
+            group = letter.groups() if letter else max((t for t in things if t in user), key=len)
+            return {(group, args["n"])}
+        if kind == "yes_no":
+            number = next((m for f in COMPARE_FRAMES if (m := re.fullmatch(f, user))), None)
+            if number:
+                return {(int(number["a"]), int(number["b"]))}
+            frame = next(m for f in YES_NO_FRAMES if (m := re.fullmatch(f, user)))
+            found = claimed(frame["st"])
+            assert found, user
+            return found
         return {(f.subject, f.relation) for q, fs in questions.items() if q in user for f in fs}
 
-    for kind in ("one_word", "starts_with", "all_caps", "repeat_word", "contains_any"):
+    for kind in instructions.KINDS:
         in_bench = set().union(
             *(about(kind, i.prompt) for i in instruction_bench if i.check == kind)
         )
@@ -1059,7 +1305,9 @@ def test_plurals_and_verb_forms_are_spelled_right():
 def starts_with_vowel_sound(word: str) -> bool:
     if word in {"hour", "honest", "heir", "honor"}:
         return True
-    if word in {"unicorn", "university", "uniform", "union", "useful", "usual", "unique", "one"}:
+    if word in {
+        "unicorn", "university", "uniform", "union", "useful", "usual", "used", "unique", "one",
+    }:  # fmt: skip
         return False
     return word[0] in "aeiou"
 
@@ -1204,9 +1452,9 @@ def test_word_order_pairs_move_words_the_way_each_kind_does():
     helpers = "|".join(grammar.HELPERS)
     # kind -> (the good sentence, the bad one written from what the good one matched)
     kinds = {
-        "adjective": (
-            rf"(\w+) (\w+) the ({adjectives}) (\w+)\.",
-            lambda m: f"{m[1]} {m[2]} the {m[4]} {m[3]}.",
+        "adjective": (  # in the subject, where an adjective after its noun is never English
+            rf"The ({adjectives}) (\w+) (is|was|sleeps|ran) (.+)\.",
+            lambda m: f"The {m[2]} {m[1]} {m[3]} {m[4]}.",
         ),
         "object": (
             rf"The (\w+) ({verbs}) the (\w+)\.",
@@ -1315,10 +1563,39 @@ def test_the_mistake_goes_both_ways(big_language_bench):
         assert abs(good_has - bad_has) <= 0.06, (name, good_has, bad_has)
 
 
+def test_tense_forms_are_balanced_by_the_weights_not_by_luck():
+    # over every benchmark-reserved pair, weighted as the benchmark draws them: a word that is a
+    # past form (or a plain form, or a participle) is as often only in the good sentence as only
+    # in the bad one, so no sample of the benchmark leans on it
+    pools = grammar._bench_pools()
+    weights = grammar.SUBTYPE_WEIGHTS["tense"]
+
+    def only_in(sentence: str, other: str) -> set[str]:
+        return set(words_of(sentence)) - set(words_of(other))
+
+    for name, forms in (("past", ALL_PAST), ("plain", ALL_BASE), ("participle", ALL_PARTICIPLE)):
+        gap = 0.0
+        for subtype, weight in weights.items():
+            pool = pools[("tense", subtype)]
+            good = sum(bool(only_in(p.good, p.bad) & forms) for p in pool) / len(pool)
+            bad = sum(bool(only_in(p.bad, p.good) & forms) for p in pool) / len(pool)
+            gap += weight * (good - bad)
+        assert abs(gap) <= 0.01, (name, gap)
+
+
+def test_large_language_benches_can_be_drawn_with_any_seed():
+    # a good sentence two families share must not leave a family short of pairs it was given
+    for k in range(4):
+        pairs = grammar_pairs(skill_rng("language", "bench", f"seed{k}"), 2000)
+        assert len(pairs) == 2000 and len({p.good for p in pairs}) == 2000
+
+
 def test_article_pairs_cover_vowels_consonants_adjectives_and_odd_spellings(language_bench):
     pairs = [p for p in language_bench if family_tag(p) == "article"]
     odd = [
-        p for p in pairs if re.search(r"\ban? (?:honest|hour|useful|usual|unique|uni\w+)", p.good)
+        p
+        for p in pairs
+        if re.search(r"\ban? (?:honest|hour|honor|useful|used|unique|uni\w+)", p.good)
     ]
     assert len(odd) >= 0.15 * len(pairs)
     nouns = {*grammar.VOWEL_NOUNS, *grammar.CONSONANT_NOUNS}
@@ -1335,6 +1612,68 @@ def test_article_pairs_cover_vowels_consonants_adjectives_and_odd_spellings(lang
     assert adjective_pairs >= 0.5 * len(pairs)
     # the noun's sound does not decide: the adjective does, in most of those pairs
     assert mismatch >= 0.8 * adjective_pairs
+
+
+# Independent of the module's tables: adjectives that only living things can be, adjectives that
+# only things can be, and the nouns that are animals.
+LIVING_ONLY = {"angry", "unhappy", "excited", "happy", "kind", "hungry", "sleepy", "brave", "young"}
+THINGS_ONLY = {"empty", "open", "extra", "round", "new", "blue", "icy", "fresh", "heavy", "used"}
+ANIMAL_NOUNS = {
+    *grammar.ANIMALS, "owl", "ant", "insect", "otter", "octopus", "elephant", "eagle", "ostrich",
+    "animal", "bird", "fish", "unicorn",
+}  # fmt: skip
+PEOPLE_THINGS = {"a book", "a pen", "a kite", "a bike", "a hat", "a boat", "a cake", "a bag"}
+PEOPLE_THINGS |= {"a car", "a new coat", "a big house", "three books", "two cats", "two dogs"}
+
+
+def adjective_phrases():
+    """(adjective, noun) of every article and adjective-order pair, from the good sentence."""
+    for p in grammar._pairs():
+        tokens = words_of(p.good)
+        if p.family == "article":
+            k = next(i for i, t in enumerate(tokens) if t in ("a", "an"))
+            if len(tokens) > k + 2 and tokens[k + 1] not in ("honest",):
+                yield tokens[k + 1], tokens[k + 2], p.good
+        elif (p.family, p.subtype) == ("word_order", "adjective"):
+            yield tokens[1], tokens[2], p.good
+
+
+def test_adjectives_go_with_nouns_they_can_describe():
+    seen = 0
+    for adjective, noun, sentence in adjective_phrases():
+        if noun not in grammar.PLURALS and noun not in {
+            *grammar.VOWEL_NOUNS,
+            *grammar.CONSONANT_NOUNS,
+        }:
+            continue  # "a useful tool": a noun of the odd-spelling phrases
+        seen += 1
+        if adjective in LIVING_ONLY:
+            assert noun in ANIMAL_NOUNS, sentence  # not "an unhappy cup"
+        if adjective in THINGS_ONLY:
+            assert noun not in ANIMAL_NOUNS, sentence  # not "an empty dog", "a new owl"
+    assert seen > 5000
+    text = " ".join(p.good for p in grammar._pairs())
+    assert not re.search(r"\ba usual\b", text)  # "a usual cat" is not English anyone says
+
+
+def test_people_and_animals_have_and_sit_where_they_can():
+    small_places = re.compile(r"\b(?:in the (?:box|bag)|(?:on|under) the (?:table|bed|chair))\b")
+    big = {"horse", "cow", "pig", "bear", "lion", "goat", "man", "woman", "teacher", "farmer"}
+    big |= {"doctor", "friend"}
+    for p in grammar._pairs():
+        tokens = words_of(p.good)
+        if p.family == "plural" and tokens[:2] == ["She", "has"]:
+            noun = tokens[3]
+            assert noun not in grammar.PEOPLE and noun not in grammar.PEOPLE.values(), p.good
+        if p.subtype in ("have_singular", "have_plural"):
+            subject = tokens[1] if tokens[0] == "The" else None
+            if subject in grammar.ANIMALS or subject in grammar.ANIMALS.values():
+                obj = " ".join(tokens[3:])
+                assert obj not in PEOPLE_THINGS, p.good  # not "The pig has a kite."
+        if (p.family, p.subtype) == ("word_order", "preposition") and small_places.search(p.good):
+            assert tokens[1] not in big, p.good  # not "The horse is in the bag."
+        if (p.family, p.subtype) == ("word_order", "determiner") and tokens[:2] == ["She", "has"]:
+            assert tokens[3] not in grammar.PEOPLE, p.good  # not "She has the teacher at school."
 
 
 def test_language_pairs_are_simple_and_spelt_right(big_language_bench):
