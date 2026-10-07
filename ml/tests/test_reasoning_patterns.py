@@ -1,3 +1,4 @@
+import functools
 import itertools
 import re
 from collections import Counter
@@ -120,9 +121,58 @@ def solve_syllogism(text: str) -> str:
     known = {members.get(subject, subject)}
     for _ in range(3):
         known |= {b for a, b in alls if a in known}
-    excluded = {b for a, b in nos if a in known}
+    excluded = {y for x, y in nos if x in known} | {x for x, y in nos if y in known}
     assert (target in known) != (target in excluded), "the premises must settle the question"
     return "yes" if target in known else "no"
+
+
+@functools.cache
+def entailed(n_words, alls, nos, member, subject, target, generic) -> frozenset[str]:
+    """The answers the premises force, found by trying every way to fill a world of 3 things.
+
+    Classes are sets of the 3 things; "All x are y" means x is inside y and "No x are y" means
+    they share nothing; ``member`` is the class thing 0 (the named one) is in. A generic question
+    ("Is a x a y?") asks whether all of x are y (yes) or none (no), for a class that is not empty.
+    """
+    yes = no = True
+    models = 0
+    for sets in itertools.product(range(8), repeat=n_words):
+        if any(sets[x] & ~sets[y] for x, y in alls) or any(sets[x] & sets[y] for x, y in nos):
+            continue
+        if member is not None and not sets[member] & 1:
+            continue
+        if generic:
+            if sets[subject] == 0:
+                continue
+            says_yes = sets[subject] & ~sets[target] == 0
+            says_no = sets[subject] & sets[target] == 0
+        else:
+            says_yes, says_no = bool(sets[target] & 1), not sets[target] & 1
+        models += 1
+        yes, no = yes and says_yes, no and says_no
+    assert models, "the premises contradict each other"
+    return frozenset(({"yes"} if yes else set()) | ({"no"} if no else set()))
+
+
+def logical_answers(text: str) -> frozenset[str]:
+    """What follows from the premises of a syllogism, by checking every model (see ``entailed``)."""
+    alls = re.findall(r"All (\w+)s are (\w+)s\.", text)
+    nos = re.findall(r"No (\w+)s are (\w+)s\.", text)
+    named = re.findall(r"([A-Z]\w+) is a (\w+)\.", text)
+    subject, target = re.search(r"Is (?:a )?(\w+) a (\w+)\?$", text).groups()
+    generic = text.endswith("?") and re.search(r"Is a \w+ a \w+\?$", text) is not None
+    words = sorted({w for pair in [*alls, *nos, *named] for w in pair if w[0].islower()} | {target})
+    index = {w: i for i, w in enumerate(words)}
+    member = index[named[0][1]] if named else None
+    return entailed(
+        len(words),
+        tuple((index[x], index[y]) for x, y in alls),
+        tuple((index[x], index[y]) for x, y in nos),
+        member,
+        index.get(subject),
+        index[target],
+        generic,
+    )
 
 
 def solve_word_problem(text: str) -> int:
@@ -218,7 +268,7 @@ def reasoning_blocks(docs: list[TextDoc]) -> list[list[str]]:
 
 
 def hit(chosen: list[str], answer: str) -> float:
-    return 1 / len(chosen) if answer in chosen else 0.0
+    return chosen.count(answer) / len(chosen)
 
 
 def best_by(options: list[str], score, *, largest: bool = True) -> list[str]:
@@ -248,10 +298,16 @@ def audit_compare(item: MCItem) -> dict[str, list[str]]:
 
 
 def audit_syllogism(item: MCItem) -> dict[str, list[str]]:
-    first = sentences_of(question_text(item.prompt))[0]
+    premises, question = syllogism_premises(question_text(item.prompt))
+    queried = re.search(r" a (\w+)\?$", question).group(1)
+    mentioning = [p for p in premises if f"{queried}s" in p.rstrip(".").split()]
     return {
         "contains No": ["no"] if re.search(r"\bNo\b", item.prompt) else ["yes"],
-        "first premise says All": ["yes"] if first.startswith("All") else ["no"],
+        "first premise says All": ["yes"] if premises[0].startswith("All") else ["no"],
+        # each premise that mentions the queried word votes yes if it says All, else no
+        "premise mentioning the queried word": [
+            "yes" if p.startswith("All") else "no" for p in mentioning
+        ],
     }
 
 
@@ -399,10 +455,27 @@ def test_syllogisms_have_the_same_quantifiers_whatever_the_answer(reasoning_benc
     }
     kinds = Counter((question_text(i.prompt).count("Is a "), answer_of(i)) for i in items)
     assert min(kinds.values()) >= 12
-    for it in items:  # made-up words: the question's words are in the premises, plus a decoy
+    for it in items:  # made-up words only: 3 in a one-step puzzle, 4 in a two-step one
         words = set(re.findall(r"[a-z]+", question_text(it.prompt)))
         used = {w for w in reasoning.NONCE_WORDS if w in words or w + "s" in words}
-        assert len(used) >= 4
+        assert len(used) == (4 if question_text(it.prompt).count("Is a ") else 3)
+
+
+def test_every_syllogism_has_exactly_one_logically_correct_answer(reasoning_bench, reasoning_train):
+    items = [i for i in reasoning_bench if family_tag(i) == "syllogism"]
+    for it in items:
+        assert logical_answers(question_text(it.prompt)) == {answer_of(it)}, it.prompt
+    checked = 0
+    for blocks in reasoning_blocks(reasoning_train):
+        for block in blocks:
+            first, answer, *_ = block.split("\n")
+            text = first.removeprefix("Question: ")
+            if family_of_text(text) == "syllogism":
+                assert logical_answers(text) == {answer.removeprefix("Answer: ")}, text
+                checked += 1
+    assert checked > 2000
+    # the checker itself: a question the premises do not settle is not reported as settled
+    assert logical_answers("All as are bs. Tom is a c. Is Tom a b?") == frozenset()
 
 
 def test_word_problems_stay_in_range(reasoning_bench):
@@ -451,6 +524,7 @@ def test_no_single_cheap_feature_predicts_the_answers(reasoning_bench, reasoning
         for feature, accuracy in accuracies.items():
             assert accuracy <= limit, (family, feature, accuracy)
     assert report["syllogism"]["contains No"] == 0.5
+    assert report["syllogism"]["premise mentioning the queried word"] == 0.5
     assert report["compare"]["mentions by question"] <= 0.5
     assert max(report["word_problem"].values()) <= 0.4 and max(report["count"].values()) <= 0.45
 

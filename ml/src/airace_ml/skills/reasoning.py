@@ -5,9 +5,11 @@ Four families of tiny puzzles, all in the frame ``Question: ...`` / ``Answer: ..
 - ``compare``: three people in a chain ("Tom is taller than Ben. Ben is taller than Sam.") and a
   question about the top, the bottom or the middle of it. A fourth name, the odd one out among the
   options, is in a sentence that says nothing about the order.
-- ``syllogism``: made-up category words ("All blicks are fenks. No zorps are glorps. Tom is a blick.
-  Is Tom a fenk?"), answered yes or no. Every puzzle has the same quantifiers whatever its answer;
-  one premise is a decoy about words the question does not mention.
+- ``syllogism``: made-up category words ("All blicks are fenks. No zorps are fenks. Tom is a blick.
+  Is Tom a fenk?"), answered yes or no. Every puzzle has the same quantifiers whatever its answer.
+  One premise is a decoy that mentions the queried word with the other quantifier, so neither the
+  quantifiers nor the premise that mentions the queried word give the answer away; the premises
+  have to be chained.
 - ``word_problem``: one addition or subtraction story, with numbers up to 20.
 - ``count``: how many times a word is in a short list.
 
@@ -212,15 +214,15 @@ def _compare_question(rng: np.random.Generator, world: _World, control: int) -> 
 
 def _syllogism_world(rng: np.random.Generator, control: int) -> _World:
     yes, two_steps = control % 2 == 0, control >= 2
-    words = _sample(rng, NONCE_WORDS, 5 if two_steps else 4)
+    a, b, c, d = _sample(rng, NONCE_WORDS, 4)  # a one-step puzzle does not use d
     (name,) = _sample(rng, NAMES, 1)
-    a, b, c, d, *rest = words
+    # The decoy premise is about the queried word too, with the other quantifier, so the one
+    # premise that mentions it does not settle the answer: the chain has to be followed.
     if two_steps:
-        e = rest[0]
         premises = (
             f"All {a}s are {b}s.",
             f"All {b}s are {c}s." if yes else f"No {b}s are {c}s.",
-            f"No {d}s are {e}s." if yes else f"All {d}s are {e}s.",
+            f"No {d}s are {c}s." if yes else f"All {d}s are {c}s.",
         )
         question = f"Is a {a} a {c}?"
         explanation = (
@@ -231,7 +233,7 @@ def _syllogism_world(rng: np.random.Generator, control: int) -> _World:
     else:
         premises = (
             f"All {a}s are {b}s." if yes else f"No {a}s are {b}s.",
-            f"No {c}s are {d}s." if yes else f"All {c}s are {d}s.",
+            f"No {c}s are {b}s." if yes else f"All {c}s are {b}s.",
             f"{name} is a {a}.",
         )
         question = f"Is {name} a {b}?"
