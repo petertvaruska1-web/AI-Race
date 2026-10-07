@@ -25,10 +25,13 @@ SPAM_MARKERS: tuple[str, ...] = (
 )
 
 _CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")  # category Cc, except tab and newline
-_SPACE_RUN = re.compile(r" {2,}")
+# A line's leading spaces and tabs (its indentation), or else a run of spaces; the indentation is
+# matched first, and kept, so code survives normalization.
+_INDENT_OR_SPACE_RUN = re.compile(r"^([ \t]*)|( {2,})", re.MULTILINE)
 _TRAILING_SPACE = re.compile(r" +(?=\n|\Z)")
 _NEWLINE_RUN = re.compile(r"\n{3,}")
 _WORD = re.compile(r"[a-z']+")
+_STRAIGHT_APOSTROPHES = str.maketrans({"\u2018": "'", "\u2019": "'"})  # curly single quotes
 _SENTENCE_END = re.compile(r"[.!?]+")
 
 _LETTER_SHARE_RANGE = (0.6, 0.9)  # alpha_ratio at which `a` is 0 and 1
@@ -42,25 +45,27 @@ def normalize_text(s: str) -> str:
     """Canonical form of a document's text.
 
     NFC; ``\\r\\n`` and ``\\r`` become ``\\n``; control characters other than newline and tab are
-    removed; runs of spaces collapse to one; spaces at the end of a line (and of the text) are
-    stripped; three or more newlines become two. Everything else, including non-ASCII text, is kept.
+    removed; runs of spaces collapse to one, except in a line's leading indentation (spaces and
+    tabs before its first other character), which is kept; spaces at the end of a line (and of the
+    text) are stripped; three or more newlines become two. Everything else, including non-ASCII
+    text, is kept.
     """
     s = s.replace("\r\n", "\n").replace("\r", "\n")
     s = _CONTROL.sub("", s)
     s = unicodedata.normalize("NFC", s)
-    s = _SPACE_RUN.sub(" ", s)
+    s = _INDENT_OR_SPACE_RUN.sub(lambda m: m.group(0) if m.group(1) is not None else " ", s)
     s = _TRAILING_SPACE.sub("", s)
     return _NEWLINE_RUN.sub("\n\n", s)
 
 
 def words(s: str) -> list[str]:
-    """Lowercase alphabetic words (``[a-z']+``), in order."""
-    return _WORD.findall(s.lower())
+    """Lowercase alphabetic words (``[a-z']+``), in order.
 
-
-def _content_words(s: str) -> list[str]:
-    """``words`` without tokens made only of apostrophes (a stray quote mark is not a word)."""
-    return [w for w in words(s) if w.strip("'")]
+    Curly single quotes count as apostrophes ("isn\u2019t" is "isn't"), and apostrophes around a
+    word are dropped ("'hello'" is "hello"; "dogs'" is "dogs"), so quoting does not change a word.
+    """
+    found = _WORD.findall(s.lower().translate(_STRAIGHT_APOSTROPHES))
+    return [word for word in (w.strip("'") for w in found) if word]
 
 
 def _clip(x: float) -> float:
@@ -73,7 +78,7 @@ def build_vocab(texts: Iterable[str], top_n: int) -> set[str]:
         raise ValueError(f"top_n must not be negative, got {top_n}")
     counts: Counter[str] = Counter()
     for text in texts:
-        counts.update(_content_words(text))
+        counts.update(words(text))
     ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
     return {word for word, _ in ranked[:top_n]}
 
@@ -81,11 +86,11 @@ def build_vocab(texts: Iterable[str], top_n: int) -> set[str]:
 def simplicity(text: str, simple_vocab: set[str]) -> float:
     """How simple a text reads: the share of its words in ``simple_vocab``, lowered when sentences
     are long (``in_vocab_ratio * min(1, 18 / mean_sentence_words)``). 0 for text without words."""
-    tokens = _content_words(text)
+    tokens = words(text)
     if not tokens:
         return 0.0
     in_vocab = sum(w in simple_vocab for w in tokens) / len(tokens)
-    n_sentences = sum(1 for part in _SENTENCE_END.split(text) if _content_words(part))
+    n_sentences = sum(1 for part in _SENTENCE_END.split(text) if words(part))
     mean_sentence_words = len(tokens) / n_sentences
     return in_vocab * min(1.0, _SIMPLE_SENTENCE_WORDS / mean_sentence_words)
 
@@ -108,7 +113,7 @@ def quality_score(text: str, known_vocab: set[str]) -> float:
     lo, hi = _LETTER_SHARE_RANGE
     a = _clip((alpha_ratio - lo) / (hi - lo))
 
-    long_words = [w for w in _content_words(text) if len(w) >= 2]
+    long_words = [w for w in words(text) if len(w) >= 2]
     known_ratio = sum(w in known_vocab for w in long_words) / len(long_words) if long_words else 0.0
     lo, hi = _KNOWN_SHARE_RANGE
     k = _clip((known_ratio - lo) / (hi - lo))

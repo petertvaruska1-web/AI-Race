@@ -14,6 +14,8 @@ from airace_content.textproc import (
 )
 from airace_content.topics import TOPIC_KEYWORDS, tag_topic
 from airace_ml.data.corpus import TOPICS
+from airace_ml.minipy.interpreter import call_function, run_program
+from airace_ml.skills.code import code_train_docs
 from airace_ml.skills.facts import fact_prose_docs
 from airace_ml.skills.kb import load_kb
 
@@ -87,7 +89,9 @@ def test_normalize_is_idempotent():
         s = "".join(rng.choice(alphabet, int(rng.integers(0, 40))))
         once = normalize_text(s)
         assert normalize_text(once) == once
-        assert "  " not in once and "\n\n\n" not in once and "\r" not in once
+        assert "\n\n\n" not in once and "\r" not in once
+        # Only a line's leading indentation may hold a run of spaces.
+        assert all("  " not in line.lstrip(" \t") for line in once.split("\n"))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -264,3 +268,155 @@ def test_topic_agrees_with_the_topic_of_knowledge_base_paragraphs():
     docs = [d for d in fact_prose_docs(load_kb(), rng, 400) if d.topic != "other"]
     agree = np.mean([TOPICS[tag_topic(d.text)] == d.topic for d in docs])
     assert agree > 0.85
+
+
+# ---------------------------------------------------------------------------------------------
+# fix round 1, R-a: leading indentation survives normalization (code documents)
+# ---------------------------------------------------------------------------------------------
+
+NESTED_PROGRAM = (
+    "def collatz(n):\n"
+    "    steps = 0\n"
+    "    while n != 1:\n"
+    "        if n % 2 == 0:\n"
+    "            n = n // 2\n"
+    "        else:\n"
+    "            n = 3 * n + 1\n"
+    "        steps += 1\n"
+    "    return steps\n"
+    "\n"
+    "for start in [6, 7]:\n"
+    "    print(start, collatz(start))\n"
+)
+MBPP_STYLE = (
+    "# Write a function to find the largest sum of two different items.\n"
+    "def largest_pair(items):\n"
+    "    best = 0\n"
+    "    for a in items:\n"
+    "        for b in items:\n"
+    "            if a != b and a + b > best:\n"
+    "                best = a + b\n"
+    "    return best"
+)
+
+
+def test_normalize_keeps_each_lines_leading_indentation():
+    assert normalize_text("def f():\n    return 1") == "def f():\n    return 1"
+    assert normalize_text("if x:\n        y = 1\n    z = 2") == "if x:\n        y = 1\n    z = 2"
+    assert normalize_text("  lead  gap") == "  lead gap"  # only the later run collapses
+    assert normalize_text("a\n    b    c  \n\t\tx   y") == "a\n    b c\n\t\tx y"
+    assert normalize_text(" \t  x") == " \t  x"  # mixed indentation is kept as written
+    assert normalize_text("a\n    \nb") == "a\n\nb"  # a line of only spaces is still blank
+    assert normalize_text("\r\n    x\r\n") == "\n    x\n"
+
+
+def test_normalized_minipy_program_is_unchanged_and_still_runs():
+    assert normalize_text(NESTED_PROGRAM) == NESTED_PROGRAM
+    before, after = run_program(NESTED_PROGRAM), run_program(normalize_text(NESTED_PROGRAM))
+    assert before.error is None and before.stdout == "6 8\n7 16\n"
+    assert after == before
+
+
+def test_normalized_mbpp_style_function_is_unchanged_and_still_runs():
+    crlf = MBPP_STYLE.replace("\n", "\r\n")  # as it arrives from the dataset
+    assert normalize_text(crlf) == MBPP_STYLE
+    assert call_function(normalize_text(crlf), "largest_pair", [[1, 5, 3]]) == (8, None)
+    assert call_function(MBPP_STYLE, "largest_pair", [[1, 5, 3]]) == (8, None)
+
+
+def _code_of(text: str) -> str:
+    if text.startswith("Program:\n"):
+        return text[len("Program:\n") : text.rindex("\nOutput:")]
+    return text
+
+
+def test_generated_code_documents_keep_their_indentation_and_behaviour():
+    docs = [d.text for d in code_train_docs(np.random.default_rng(0), 300)]
+    assert len(docs) == 300
+
+    def indentation(text: str) -> list[int]:
+        return [len(line) - len(line.lstrip(" ")) for line in text.split("\n")]
+
+    assert any("\n    " in text for text in docs)
+    for text in docs:
+        normalized = normalize_text(text)
+        assert indentation(normalized) == indentation(text)
+        before, after = run_program(_code_of(text)), run_program(_code_of(normalized))
+        assert before.error is None and after.stdout == before.stdout and after.error is None
+
+
+# ---------------------------------------------------------------------------------------------
+# fix round 1, M1/M2: topic keywords through endings, possessives and quotes
+# ---------------------------------------------------------------------------------------------
+
+
+def test_endings_do_not_turn_common_words_into_keywords():
+    other = TOPICS.index("other")
+    for text in (
+        "being",
+        "Nobody was being rude.",
+        "cared caring cares",
+        "rates rated rating",
+        "bearing",
+        "He was bearing the cost and she was caring for the rated plans.",
+    ):
+        assert tag_topic(text) == other, text
+    assert TOPICS[tag_topic("She cared about her friends being happy.")] in {"family", "feelings"}
+
+
+def test_endings_still_reach_real_keywords():
+    assert TOPICS[tag_topic("foxes and potatoes")] in {"animals", "food"}
+    assert TOPICS[tag_topic("Two foxes ran past three more foxes.")] == "animals"
+    assert TOPICS[tag_topic("boxes of potatoes, tomatoes and lunches")] == "food"
+    assert TOPICS[tag_topic("bears")] == "animals" and TOPICS[tag_topic("cars")] == "technology"
+    assert TOPICS[tag_topic("rats and bees")] == "animals"
+    assert TOPICS[tag_topic("She was cooking and baking and they cooked.")] == "food"
+    assert TOPICS[tag_topic("He smiled, was crying and laughing.")] == "feelings"
+    assert TOPICS[tag_topic("The puppies and bunnies")] == "animals"
+
+
+def test_possessives_and_quoted_words_reach_their_keyword():
+    assert TOPICS[tag_topic("the cat's dog's bird's")] == "animals"
+    assert TOPICS[tag_topic("the cat\u2019s dog\u2019s bird\u2019s")] == "animals"
+    assert TOPICS[tag_topic("the dogs' bowls")] == "animals"
+    assert TOPICS[tag_topic("She said 'cat' twice")] == "animals"
+    assert TOPICS[tag_topic("She said \u2018cat\u2019 twice")] == "animals"
+    assert TOPICS[tag_topic("Mom's and Dad's hugs")] == "family"
+
+
+# ---------------------------------------------------------------------------------------------
+# fix round 1, M3: curly apostrophes and quoted words in words() and quality_score
+# ---------------------------------------------------------------------------------------------
+
+
+def test_words_treat_curly_apostrophes_as_straight_and_trim_quote_marks():
+    assert words("isn\u2019t it \u2018hello\u2019 o\u2019clock") == [
+        "isn't",
+        "it",
+        "hello",
+        "o'clock",
+    ]
+    assert words("'hello' and ''quoted'' and dogs'") == ["hello", "and", "quoted", "and", "dogs"]
+    assert words("rock 'n' roll") == ["rock", "n", "roll"]
+    assert words("' '' ''' \u2019") == []
+    assert words("Don't") == ["don't"]
+
+
+def test_curly_apostrophe_prose_scores_like_straight_apostrophe_prose():
+    straight = "I don't think it isn't a good day. They can't wait, and we aren't late."
+    curly = straight.replace("'", "\u2019")
+    vocab = build_vocab([straight], 100)
+    assert build_vocab([curly], 100) == vocab
+    assert quality_score(curly, vocab) == quality_score(straight, vocab)
+    assert quality_score(curly, vocab) > 0.95
+
+
+def test_single_quoted_speech_does_not_lower_the_score():
+    plain = "She said hello and he said goodbye to the little dog near the old gate."
+    vocab = build_vocab([plain], 100)
+    base = quality_score(plain, vocab)
+    for quoted in (
+        "She said 'hello' and he said 'goodbye' to the little dog near the old gate.",
+        "She said \u2018hello\u2019 and he said \u2018goodbye\u2019 to the little dog near the old gate.",
+    ):
+        assert quality_score(quoted, vocab) > base - 0.02  # only the quote marks' letter share

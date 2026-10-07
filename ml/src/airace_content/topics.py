@@ -2,8 +2,8 @@
 
 A document's topic is the topic with the most keyword hits (the earlier topic wins a tie); a
 document with no hits is "other". Keywords are lowercase words; a word also matches through its
-simple plural and verb endings ("foxes", "berries", "smiled", "baking"). Every keyword belongs to
-exactly one topic.
+possessive, plural and verb endings ("cat's", "foxes", "berries", "smiled", "baking"). Every
+keyword belongs to exactly one topic.
 """
 
 from airace_content.textproc import words
@@ -148,21 +148,32 @@ def _build_lookup() -> dict[str, int]:
 
 _TOPIC_OF_KEYWORD = _build_lookup()
 _MIN_STEM = 3  # a stem left by stripping an ending must be at least this long
+# After "ed" or "ing" the stem must be longer, or "being" would be "bee" and "cared" would be "car".
+_MIN_VERB_STEM = 4
+_ES_AFTER = ("s", "x", "z", "ch", "sh", "o")  # "foxes", "lunches", "potatoes", but not "cares"
+_NOT_INFLECTED = frozenset({"bearing"})  # looks like the verb form of the keyword "bear"
 
 
 def _forms(word: str) -> list[str]:
-    """The word and the stems left by its common endings, most specific first."""
+    """The word itself, then the stems left by its plausible endings, most specific first.
+
+    A possessive ("cat's") is the word without "'s". Plural endings are "ies", "es" (after a
+    sibilant) and "s"; verb endings are "ed" and "ing", the stem with and without its final "e".
+    """
+    word = word.removesuffix("'s")
     forms = [word]
+    if word in _NOT_INFLECTED:
+        return forms
     if word.endswith("ies"):
         forms.append(word[:-3] + "y")
-    if word.endswith("es"):
+    if word.endswith("es") and word[:-2].endswith(_ES_AFTER):
         forms.append(word[:-2])
     if word.endswith("s"):
         forms.append(word[:-1])
     if word.endswith("ed"):
-        forms += [word[:-2], word[:-1]]
+        forms += [stem for stem in (word[:-2], word[:-1]) if len(stem) >= _MIN_VERB_STEM]
     if word.endswith("ing"):
-        forms += [word[:-3], word[:-3] + "e"]
+        forms += [stem for stem in (word[:-3], word[:-3] + "e") if len(stem) >= _MIN_VERB_STEM]
     return forms
 
 
