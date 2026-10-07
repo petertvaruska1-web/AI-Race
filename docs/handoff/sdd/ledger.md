@@ -125,3 +125,5 @@ Task 11: Ruling: accept "class of once-mentioned person is the decoy" (1.00) —
 Task 11: fix round 2/5 (2 addressed, 0 open; commits 1db0d96..4db5e74)
 Task 11: minor (deferred): count world key includes asked word → 34/50 bench lists recur in train under a different asked word (no usable leak); lookup-style count proxies (adjacent repeats 0.70, first position 0.58) inherent to shuffled-list counting; compare "mentions by question" 0.41.
 Task 11: complete (commits ae6fbce..4db5e74, review clean after 2 fix rounds)
+Task 12: implemented f4eaa83 (sonnet, a4d9534) — STOPPED by controller mid-refinement at owner's request (cloud session taking over); no task-12-report.md written; uncommitted refinements discarded (working tree was clean). 699 tests pass, ruff clean. Not reviewed.
+HANDOFF TO CLOUD SESSION (2026-10-07). NEXT STEP ON RESUME: docs/handoff/task-12-dispatch-notes.md — fresh implementer audits/finishes f4eaa83 + writes report, then task review (base f1a092b).

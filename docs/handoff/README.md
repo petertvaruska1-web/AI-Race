@@ -11,9 +11,9 @@ Written 2026-10-07 by the local Claude Code session (Windows desktop) before a u
 
 ## 2. Where things stand
 - Branch **`m1-it-learns`**, executing Milestone 1 ("It learns": the real tiny-LM core) with the **superpowers:subagent-driven-development** workflow: fresh implementer subagent per task → task reviewer → fix rounds → scoped re-review.
-- **Tasks 1–10: complete and reviewed.** 631 tests pass (CPU).
-- **Task 11** (reasoning and pattern generators) is complete except for **fix round 2**. Its implementer was cut off by a rate limit before making any changes, and the working tree was clean at handoff. Round-2 findings are in §4.
-- **Tasks 12–20:** not started.
+- **Tasks 1–11: complete and reviewed.** 699 tests pass on CPU, and ruff is clean.
+- **Task 12** (code, instruction and grammar generators) is **implemented at `f4eaa83` but not reviewed**. The implementer was stopped mid-refinement and wrote no report. See **`docs/handoff/task-12-dispatch-notes.md`** for the exact state and next step.
+- **Tasks 13–20:** not started.
 - The full execution record, with every ruling, deferred minor finding and carry-forward note per task, is **`docs/handoff/sdd/ledger.md`**. The task reports (`task-N-report.md`) hold the implementers' details and fix histories.
 
 ## 3. How to resume the workflow
@@ -36,23 +36,14 @@ Written 2026-10-07 by the local Claude Code session (Windows desktop) before a u
    - Reviewers: sonnet; opus for security-sensitive or complex diffs.
    - Small re-reviews: haiku or sonnet.
 
-## 4. Immediate next step: Task 11 fix round 2
-Dispatch a fresh implementer (the old one is gone). Give it the brief (`task-brief PLAN 11`), the report file `task-11-report.md` (read the fix sections), and these findings verbatim:
+## 4. Immediate next step: finish and review Task 12
+Follow `docs/handoff/task-12-dispatch-notes.md`:
+1. Dispatch a fresh implementer to audit and finish `f4eaa83` and write `task-12-report.md`.
+2. Run the task review (base `f1a092b`).
+3. Run fix rounds as needed, then a scoped re-review.
+4. Mark Task 12 complete in the ledger and continue with Task 13.
 
-> **R1. (Important) `count` answerable by ignoring the question word** (`_count_world`, reasoning.py:299). Predictor "answer = frequency of the most common word in the list" scores 0.82 on bench and 0.76 on a 4k sample, because the target is the most-frequent word in ~71–74% of puzzles (training too). Fix:
-> - Make the target the most frequent word only about 1/k of the time, roughly matching chance. In a good share of puzzles, another word is as frequent as the target or more.
-> - Keep answers 0–5 balanced and number options rank-uniform.
-> - Add "frequency of the most common word" and "frequency of any non-target word" predictors to the shortcut audit, each at or below chance + 0.15.
->
-> **R2. (Ruled must-fix) Syllogism decoy detection by a one-off word.** The decoy's other word is a fresh nonce word that appears exactly once, so "the premise containing a word occurring once is the decoy" scores 1.000. Fix:
-> - Every nonce word in a syllogism appears at least twice in the prompt. Give the decoy's subject a second, irrelevant mention, e.g. a neutral premise "Kip is a {c}." with a fresh name, keeping exactly one logically entailed answer.
-> - Keep the same quantifier multiset for yes and no, and shuffled premise order.
-> - Add "premise containing a once-occurring word is the decoy" to the audit, at or below chance + 0.15.
-> - Re-run the independent model checker.
->
-> Not a finding: cycle patterns answered by "copy the term k back" (that is the skill).
-
-Re-run `tests/test_reasoning_patterns.py`, `tests/test_kb_facts.py` and `-m slow` once. Then do a scoped re-review over the fix diff (base `a80c64f`). Then mark Task 11 complete in the ledger and continue with Task 12.
+(Task 11 finished on 2026-10-07 after two fix rounds. Its residual shortcut rulings are in the ledger.)
 
 ## 5. What to do in the cloud vs. leave for the local GPU machine
 The local machine has an RTX 3050 and will hold the generated `data/`, which is gitignored and large, so it never travels through git.
