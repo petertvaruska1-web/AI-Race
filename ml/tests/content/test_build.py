@@ -1,8 +1,10 @@
+import ast
 import difflib
 import json
 import re
 import shutil
 import sys
+import types
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,10 +12,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import airace_content
 import airace_content.build as build_module
+import airace_content.cli as cli_module
 from airace_content.assemble import (
     RECIPES,
     SCALES,
+    Collected,
+    Component,
     NoiseRates,
     _letter_runs,
     apply_noise,
@@ -32,13 +38,16 @@ from airace_content.build import (
     build_corpus,
     heldout_mask,
     purchase_ranks,
+    stream,
     tokenizer_texts,
 )
 from airace_content.cli import main
 from airace_content.noise import _PAGE_FOOTERS, _PAGE_HEADERS, inject_noise
 from airace_content.sources import (
+    FORMAT_CHECK_ROWS,
     PASSAGE_MIN_WORDS,
     SOURCES,
+    SourceFormatError,
     chunk_passages,
     fixture_fetch,
     hf_fetch,
@@ -164,11 +173,42 @@ def test_sources_are_the_designed_ones():
     )
 
 
-def test_hf_fetch_imports_datasets_only_when_it_runs():
-    # this module imported sources, assemble, build and cli: none of them imported datasets
-    rows = hf_fetch(SOURCES["gsm8k"], 1)  # a generator: nothing runs until it is iterated
-    assert "datasets" not in sys.modules
-    rows.close()
+def test_hf_fetch_imports_datasets_only_when_it_runs(monkeypatch):
+    calls = []
+
+    def load_dataset(path, config, *, split, streaming):
+        calls.append((path, config, split, streaming))
+        return iter([{"question": "Q1"}, {"question": "Q2"}, {"question": "Q3"}])
+
+    fake = types.ModuleType("datasets")
+    fake.load_dataset = load_dataset
+    monkeypatch.setitem(sys.modules, "datasets", fake)  # installed or not, this is what loads
+    rows = hf_fetch(SOURCES["gsm8k"], 2)
+    assert calls == []  # a generator: nothing runs until it is iterated
+    assert list(rows) == [{"question": "Q1"}, {"question": "Q2"}]
+    assert calls == [("openai/gsm8k", "main", "train", True)]
+
+
+def _module_level_imports(tree: ast.Module):
+    """Modules a file imports outside function bodies (so on import)."""
+    stack = list(tree.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        if isinstance(node, ast.Import):
+            yield from (alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            yield node.module or ""
+        stack.extend(ast.iter_child_nodes(node))
+
+
+def test_no_content_module_imports_datasets_on_import():
+    package = Path(airace_content.__file__).parent
+    for path in sorted(package.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        imported = set(_module_level_imports(tree))
+        assert not {m for m in imported if m.split(".")[0] == "datasets"}, path.name
 
 
 def test_fixtures_exercise_every_adapter_rule():
@@ -184,6 +224,7 @@ def test_fixtures_exercise_every_adapter_rule():
     assert any("<<" in r["answer"] and "####" in r["answer"] for r in rows["gsm8k"])
     assert any("\t" in r["code"] for r in rows["mbpp"])
     assert any("\r\n" in r["code"] for r in rows["mbpp"])
+    assert any("\nRelated pages" in r["text"] for r in rows["simplewiki"])
 
 
 def test_gutenberg_keeps_childrens_books_without_boilerplate():
@@ -268,6 +309,30 @@ def test_text_adapters():
     assert title == "Cat" and body.endswith("animals.") and len(body.split()) <= 150
     short = {"title": "Dog", "text": "Dogs bark.\nDogs run.\n" + " ".join(["word"] * 200)}
     assert row_to_content("simplewiki", short) == ["Dog\nDogs bark.\nDogs run."]
+    # the lead section only: it ends at the first heading (a short line without a sentence end)
+    stub = (
+        "Bucy is a commune. It is in the Aisne department in northern France.\n\n"
+        "Related pages \n Communes of the Aisne department\n\nReferences \n\n"
+        "Other websites \n Official website"
+    )
+    assert row_to_content("simplewiki", {"title": "Bucy", "text": stub}) == [
+        "Bucy\nBucy is a commune. It is in the Aisne department in northern France."
+    ]
+    wiki = {row["title"]: row for row in FETCH(SOURCES["simplewiki"], 100)}
+    cat = (
+        "Cat\nThe cat is a small animal that many people keep as a pet. Cats have soft fur, "
+        "sharp claws and a long tail.\nCats like to sleep a lot. They can see well at night. "
+        "A young cat is called a kitten."
+    )
+    assert row_to_content("simplewiki", wiki["Cat"]) == [cat]  # stops before "History"
+    marville = (
+        "Marville\nMarville is a small town in the north of the country. About two thousand "
+        "people live there. It has a school, a market and an old stone bridge."
+    )
+    assert row_to_content("simplewiki", wiki["Marville"]) == [marville]
+    quoted = {"title": "Ann", "text": 'Ann said "hello."\nShe left.\nLife\nMore.'}
+    assert row_to_content("simplewiki", quoted) == ['Ann\nAnn said "hello."\nShe left.']
+    assert row_to_content("simplewiki", {"title": "X", "text": "History\nIt began."}) == []
     assert row_to_content("fineweb_edu", {"text": "Kept.", "int_score": 3}) == ["Kept."]
     assert row_to_content("tinystories", {"text": "  "}) == []
     with pytest.raises(ValueError, match="unknown source"):
@@ -339,6 +404,9 @@ def test_validate_recipe_refuses_bad_recipes():
         )
     with pytest.raises(ValueError, match="add up"):
         validate_recipe(type(code)("code", code.components[:1], code.noise))
+    twice = [Component("generator", "code", 0.5), Component("generator", "code", 0.5)]
+    with pytest.raises(ValueError, match="twice"):
+        validate_recipe(type(code)("code", twice, code.noise))
     with pytest.raises(ValueError, match="unknown generator"):
         validate_recipe(
             type(code)("code", [type(code.components[0])("generator", "poems", 1.0)], code.noise)
@@ -371,11 +439,16 @@ def test_cycling_stops_when_a_pass_accepts_nothing(build_inputs):
         else:
             yield from FETCH(spec, max_rows)
 
-    docs, comps = _assemble("educational", build_inputs, fetch=fetch)
+    _, comps = _assemble("educational", build_inputs, fetch=fetch)
     assert comps["fineweb_edu"]["docs"] == 0 and calls["fineweb_edu"] == 1
     assert comps["cosmo_openstax"]["docs"] == 0 and calls["cosmo_openstax"] == 1
-    assert comps["cosmo_khan"]["docs"] == comps["cosmo_khan"]["target_docs"] == 38
-    assert len(docs) >= 38 + 37
+    assert comps["fineweb_edu"]["exhausted"] and comps["cosmo_openstax"]["exhausted"]
+    # their 45 + 30 planned documents go to the others, in proportion to their shares
+    khan, wikihow = comps["cosmo_khan"], comps["cosmo_wikihow"]
+    assert (khan["planned_docs"], wikihow["planned_docs"]) == (38, 37)
+    assert (khan["assigned_docs"], wikihow["assigned_docs"]) == (38 + 38, 37 + 37)
+    assert (khan["docs"], wikihow["docs"]) == (76, 74)
+    assert not khan["exhausted"] and not wikihow["exhausted"]
 
 
 def test_full_scale_collects_to_the_token_target(build_inputs, monkeypatch):
@@ -390,25 +463,70 @@ def test_full_scale_collects_to_the_token_target(build_inputs, monkeypatch):
             yield from FETCH(spec, max_rows)
 
     docs, comps = _assemble("creative", build_inputs, fetch=fetch, scale="full")
-    n_stories = comps["tinystories"]["docs"]
+    stories, cosmo = comps["tinystories"], comps["cosmo_stories"]
+    n_stories = stories["docs"]
     assert n_stories > 200  # past the estimate from the first 200 documents
-    tokens = sum(1 + estimate_tokens(content_text(d.content)) for d in docs[:n_stories])
-    assert 0.95 * 51_000 <= tokens <= 1.05 * 51_000
-    # cosmo_stories has 6 rows: full scale stops when a source is exhausted, never cycles
-    assert comps["cosmo_stories"]["docs"] == 6 and comps["cosmo_stories"]["passes"] == 1
+    # cosmo_stories has 6 rows: full scale stops when a source is exhausted, never cycles,
+    # and the tokens it could not give go to tinystories
+    assert cosmo["docs"] == 6 and cosmo["passes"] == 1 and cosmo["exhausted"]
+    given = sum(_tokens(d) for d in docs[n_stories : n_stories + 6])
+    assert stories["planned_tokens"] == pytest.approx(51_000)
+    assert stories["assigned_tokens"] == pytest.approx(51_000 + 9_000 - given, rel=0.01)
+    tokens = sum(_tokens(d) for d in docs[:n_stories])
+    assert 0.95 * stories["assigned_tokens"] <= tokens <= 1.05 * stories["assigned_tokens"]
+    assert 0.95 * 60_000 <= tokens + given <= 1.05 * 60_000  # the dataset meets its target
 
 
 def test_full_scale_generators_reach_their_targets(build_inputs, monkeypatch):
     monkeypatch.setitem(SCALES["full"]["target_tokens"], "reasoning", 40_000)
     docs, comps = _assemble("reasoning", build_inputs, scale="full")
-    start = 0
+    gsm8k = comps["gsm8k"]
+    assert gsm8k["docs"] == 8 and gsm8k["exhausted"]  # 8 fixture rows, under its 4,000 tokens
+    n_puzzles = comps["reasoning"]["docs"] + comps["patterns"]["docs"]
+    short = 4_000 - sum(_tokens(d) for d in docs[n_puzzles:])
+    start, total = 0, 0
     for name, share in (("reasoning", 0.6), ("patterns", 0.3)):
-        n = comps[name]["docs"]
-        part = docs[start : start + n]
-        tokens = sum(1 + estimate_tokens(content_text(d.content)) for d in part)
-        assert 0.8 * share * 40_000 <= tokens <= 1.2 * share * 40_000, name
-        start += n
-    assert comps["gsm8k"]["docs"] == 8  # 8 fixture rows, under its 4,000-token target
+        comp = comps[name]
+        assert not comp["exhausted"] and comp["planned_tokens"] == pytest.approx(share * 40_000)
+        assert comp["assigned_tokens"] == pytest.approx(share * 40_000 + short * share / 0.9)
+        tokens = sum(_tokens(d) for d in docs[start : start + comp["docs"]])
+        assert 0.8 * comp["assigned_tokens"] <= tokens <= 1.2 * comp["assigned_tokens"], name
+        start, total = start + comp["docs"], total + tokens
+    assert 0.9 * 40_000 <= total + 4_000 - short <= 1.1 * 40_000
+
+
+def _tokens(doc) -> int:
+    return 1 + estimate_tokens(content_text(doc.content))
+
+
+def test_full_scale_gives_an_exhausted_sources_quota_to_the_others(build_inputs, monkeypatch):
+    monkeypatch.setitem(SCALES["full"]["target_tokens"], "code", 20_000)
+    docs, comps = _assemble("code", build_inputs, scale="full")
+    code, mbpp = comps["code"], comps["mbpp"]
+    assert mbpp["exhausted"] and mbpp["docs"] == 8 and not code["exhausted"]
+    assert code["assigned_tokens"] > code["planned_tokens"] == pytest.approx(16_000)
+    total = sum(_tokens(d) for d in docs[: code["docs"] + mbpp["docs"]])
+    assert 0.95 * 20_000 <= total <= 1.05 * 20_000
+
+
+def test_reassignment_follows_the_shares_of_the_remaining_components(build_inputs, monkeypatch):
+    monkeypatch.setitem(SCALES["full"]["target_tokens"], "educational", 30_000)
+
+    def fetch(spec, max_rows):
+        if spec.id == "cosmo_openstax":  # runs dry at once
+            return
+        rows = list(FETCH(spec, 100))
+        for i in range(max_rows):  # the others never run dry
+            row = dict(rows[i % len(rows)])
+            row["text"] = f"Item {i}. {row['text']}"
+            yield row
+
+    _, comps = _assemble("educational", build_inputs, fetch=fetch, scale="full")
+    assert comps["cosmo_openstax"]["exhausted"] and comps["cosmo_openstax"]["docs"] == 0
+    for name, share in (("cosmo_khan", 0.25), ("cosmo_wikihow", 0.25), ("fineweb_edu", 0.30)):
+        comp = comps[name]
+        assert not comp["exhausted"]
+        assert comp["assigned_tokens"] == pytest.approx(30_000 * share + 6_000 * share / 0.8)
 
 
 def test_generator_topics_and_copies(build_inputs):
@@ -418,11 +536,17 @@ def test_generator_topics_and_copies(build_inputs):
     technology = TOPICS.index("technology")
     assert all(d.topic == technology for d in docs[:n_gen])
     assert all(d.topic is None for d in docs[n_gen : n_gen + n_mbpp])
+    assert all(d.component == "code" for d in docs[:n_gen])
+    assert all(d.component == "mbpp" for d in docs[n_gen : n_gen + n_mbpp])
     copies = docs[n_gen + n_mbpp :]
     assert copies and all(d.noise_kind == _KIND["duplicate"] for d in copies)
+    sources: dict[bytes, object] = {}
+    for doc in docs[: n_gen + n_mbpp]:
+        if doc.noise_kind == _NONE:
+            sources.setdefault(doc.origin, doc)
     for copy in copies:
-        source = docs[copy.copy_of]
-        assert source.noise_kind == _NONE and copy.topic == source.topic
+        source = sources[copy.origin]
+        assert copy.topic == source.topic and copy.component == source.component
         assert difflib.SequenceMatcher(None, source.content, copy.content).ratio() > 0.95
     reasoning, comps = _assemble("reasoning", build_inputs)
     n_puzzles = comps["reasoning"]["docs"] + comps["patterns"]["docs"]
@@ -447,7 +571,7 @@ def test_source_of_copies_finds_each_copy():
 def test_chats_get_typo_noise_only(build_inputs):
     kb, _, plan = build_inputs
     chat = [("user", "Hello there, how are you today?"), ("ai", "I am fine, thank you very much.")]
-    docs = [(list(chat), None) for _ in range(40)]
+    docs = [Collected(list(chat)) for _ in range(40)]
     out = apply_noise(docs, NoiseRates(typo=0.25), np.random.default_rng(0))
     typos = [d for d in out if d.noise_kind == _KIND["typo"]]
     assert len(out) == 40 and len(typos) == 10
@@ -459,11 +583,50 @@ def test_chats_get_typo_noise_only(build_inputs):
             apply_noise(docs, NoiseRates(**{kind: 0.1}), np.random.default_rng(0), kb, plan)
 
 
+def test_noise_keeps_each_documents_origin(build_inputs):
+    kb, _, plan = build_inputs
+    texts = [
+        f"Note {i}: the cat sat on the red mat and the dog ran to the big tree." for i in range(100)
+    ]
+    clean = apply_noise([Collected(t) for t in texts], NoiseRates(), np.random.default_rng(0))
+    assert len({d.origin for d in clean}) == 100
+    rates = NoiseRates(
+        typo=0.2, spam=0.1, boilerplate=0.1, garbled=0.1, false_fact=0.1, duplicate=0.2
+    )
+    noisy = apply_noise([Collected(t) for t in texts], rates, np.random.default_rng(1), kb, plan)
+    assert [d.origin for d in noisy[:100]] == [d.origin for d in clean]  # noise keeps the origin
+    assert {d.noise_kind for d in noisy[:100]} >= {_KIND[k] for k in ("typo", "spam", "garbled")}
+    copies = noisy[100:]
+    assert copies and all(d.origin in {c.origin for c in clean} for d in copies)
+    for copy in copies:  # a copy shares the origin of the text it was copied from
+        source = texts[[d.origin for d in clean].index(copy.origin)]
+        assert re.search(r"\d+", copy.content).group() == re.search(r"\d+", source).group()
+
+
 def test_a_recipe_with_text_noise_on_chats_is_refused(build_inputs, monkeypatch):
     recipe = RECIPES["conversations"]
     monkeypatch.setattr(recipe, "noise", NoiseRates(typo=0.03, spam=0.05))
     with pytest.raises(ValueError, match="'conversations' has chat documents"):
         _assemble("conversations", build_inputs)
+
+
+def test_a_source_in_an_unexpected_format_fails_fast(build_inputs):
+    read: Counter = Counter()
+
+    def fetch(spec, max_rows):
+        for _ in range(max_rows):
+            read[spec.id] += 1
+            yield {"TEXT": "Once upon a time.", "METADATA": "not json"}
+
+    with pytest.raises(SourceFormatError, match="gutenberg"):
+        _assemble("books", build_inputs, fetch=fetch, scale="full")
+    assert read["gutenberg"] == FORMAT_CHECK_ROWS
+
+    def few(spec, max_rows):  # fewer rows than the check needs, none of them right
+        yield from [{"text": "A row without a score."}] * 3
+
+    with pytest.raises(SourceFormatError, match="fineweb_edu"):
+        _assemble("educational", build_inputs, fetch=few)
 
 
 # --- the pipeline pieces -----------------------------------------------------------------------
@@ -482,14 +645,21 @@ def test_heldout_takes_whole_clusters():
             assert held[idx].all() or not held[idx].any()
 
 
-def test_heldout_follows_copies_the_clustering_missed():
+def test_heldout_keeps_documents_of_one_origin_together():
     cluster = np.full(40, -1, np.int32)
-    copy_of = [None] * 40
-    copy_of[30], copy_of[31], copy_of[32] = 3, 3, 7
+    origins = [bytes([i]) for i in range(40)]
+    origins[30] = origins[31] = origins[3]  # variants the clustering missed
+    origins[32] = origins[7]
     for seed in range(30):
-        held = heldout_mask(cluster, np.random.default_rng(seed), copy_of)
+        held = heldout_mask(cluster, np.random.default_rng(seed), origins)
         assert held[3] == held[30] == held[31] and held[7] == held[32]
         assert 8 <= held.sum() <= 10
+    cluster = np.array([0, 0, 1, 1] + [-1] * 36, np.int32)
+    origins = [bytes([i]) for i in range(40)]
+    origins[2] = origins[1]  # one origin across two clusters joins them
+    for seed in range(30):
+        held = heldout_mask(cluster, np.random.default_rng(seed), origins)
+        assert len(set(held[:4].tolist())) == 1
 
 
 def test_heldout_keeps_the_larger_part_for_training():
@@ -595,6 +765,20 @@ def test_heldout_in_the_build(tiny_build):
         assert (np.sort(rank) == np.arange(n)).all()
 
 
+def test_no_heldout_text_has_a_variant_in_training(tiny_build):
+    kb = load_kb()
+    simple_vocab = _simple_vocab("tiny", FETCH)
+    plan = plan_false_facts(kb, stream(0, "false_facts"), 300)
+    for ds in DATASET_IDS:  # the build's documents again, with their origins
+        rng = stream(0, f"assemble/{ds}")
+        docs = assemble_dataset(ds, "tiny", FETCH, kb, simple_vocab, plan, rng)
+        tags = Corpus.open(corpus_dir(tiny_build.root) / ds).tags
+        assert [d.noise_kind for d in docs] == tags.noise_kind.tolist()
+        held = {d.origin for d, h in zip(docs, tags.heldout) if h}
+        trained = {d.origin for d, h in zip(docs, tags.heldout) if not h}
+        assert held and not held & trained, ds
+
+
 def test_manifest_and_shared_artifacts(tiny_build):
     root = corpus_dir(tiny_build.root)
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
@@ -611,6 +795,11 @@ def test_manifest_and_shared_artifacts(tiny_build):
         assert entry["heldout_docs"] == corpus.tags.heldout.sum()
         assert sum(entry["noise_counts"].values()) == corpus.n_docs
         assert corpus.info["dataset"] == ds and corpus.info["seed"] == 0
+        components = entry["components"]
+        assert sum(c["tokens"] for c in components) == corpus.n_tokens
+        for comp in components:
+            assert not comp["exhausted"] and comp["docs"] == comp["assigned_docs"] > 0
+            assert comp["planned_docs"] == comp["assigned_docs"]
     plan = FalseFactPlan.from_json((root / "false_facts.json").read_text(encoding="utf-8"))
     assert len(plan.mapping) == 300
     simple = (root / "simple_vocab.txt").read_text(encoding="utf-8").split("\n")[:-1]
@@ -695,6 +884,30 @@ def test_builds_that_cannot_run(tmp_path):
         build_corpus("tiny", tmp_path, FETCH, seed=-1)
 
 
+def test_a_failed_build_leaves_no_new_tokenizer(tiny_build, tmp_path, monkeypatch):
+    write = build_module.write_corpus
+
+    def write_until_books(out_dir, *args):
+        if Path(out_dir).name == "books":
+            raise OSError("disk full")
+        write(out_dir, *args)
+
+    monkeypatch.setattr(build_module, "write_corpus", write_until_books)
+    fresh = tmp_path / "fresh"
+    with pytest.raises(OSError, match="disk full"):
+        build_corpus("tiny", fresh, FETCH, seed=0)
+    assert not list(tokenizer_path(fresh).parent.iterdir())
+    root = _copy_build(tiny_build, tmp_path)
+    before = tokenizer_path(root).read_bytes()
+    with pytest.raises(OSError, match="disk full"):
+        build_corpus("tiny", root, FETCH, seed=1, retrain_tokenizer=True)
+    assert [p.name for p in tokenizer_path(root).parent.iterdir()] == ["tokenizer.json"]
+    assert tokenizer_path(root).read_bytes() == before
+    monkeypatch.setattr(build_module, "write_corpus", write)
+    build_corpus("tiny", root, FETCH, seed=1, retrain_tokenizer=True)
+    assert tokenizer_path(root).read_bytes() != before  # so the failed retrain did change nothing
+
+
 def test_full_scale_build_from_fixtures(tmp_path, monkeypatch):
     for ds in DATASET_IDS:
         monkeypatch.setitem(SCALES["full"]["target_tokens"], ds, 30_000)
@@ -746,6 +959,43 @@ def test_cli_reports_a_build_that_cannot_run(tmp_path, capsys):
     argv = ["build", "--scale", "tiny", "--datasets", "web", "--fixtures", str(FIX)]
     assert main([*argv, "--out", str(tmp_path)]) == 1
     assert capsys.readouterr().err.startswith("error: the tokenizer is trained on")
+
+
+def test_cli_warns_about_exhausted_sources(tiny_build, tmp_path, capsys):
+    root = _copy_build(tiny_build, tmp_path)
+    fixtures = tmp_path / "fixtures"
+    shutil.copytree(FIX, fixtures)
+    (fixtures / "cosmo_openstax.jsonl").write_text("", encoding="utf-8")  # runs dry at once
+    argv = ["build", "--scale", "tiny", "--datasets", "educational", "--fixtures", str(fixtures)]
+    assert main([*argv, "--out", str(root)]) == 0
+    warnings = capsys.readouterr().err.splitlines()
+    assert len(warnings) == 1
+    assert warnings[0].startswith("warning: educational: cosmo_openstax ran out at 0 of 30 ")
+
+
+def test_cli_reports_a_source_in_an_unexpected_format(tiny_build, tmp_path, capsys):
+    root = _copy_build(tiny_build, tmp_path)
+    fixtures = tmp_path / "fixtures"
+    shutil.copytree(FIX, fixtures)
+    (fixtures / "gutenberg.jsonl").write_text('{"TEXT": "x", "METADATA": "?"}\n', encoding="utf-8")
+    argv = ["build", "--scale", "tiny", "--datasets", "books", "--fixtures", str(fixtures)]
+    assert main([*argv, "--out", str(root)]) == 1
+    assert capsys.readouterr().err.startswith("error: source 'gutenberg'")
+
+
+def test_cli_reports_a_missing_datasets_package(tmp_path, monkeypatch, capsys):
+    monkeypatch.setitem(sys.modules, "datasets", None)  # importing it fails, installed or not
+    assert main(["build", "--scale", "tiny", "--out", str(tmp_path)]) == 1
+    assert "content extra" in capsys.readouterr().err
+
+
+def test_cli_lets_other_import_errors_through(tmp_path, monkeypatch):
+    def broken(*args, **kwargs):
+        raise ImportError("a bug, not a missing package")
+
+    monkeypatch.setattr(cli_module, "build_corpus", broken)
+    with pytest.raises(ImportError, match="a bug"):
+        main(["build", "--scale", "tiny", "--fixtures", str(FIX), "--out", str(tmp_path)])
 
 
 def test_cli_help(capsys):

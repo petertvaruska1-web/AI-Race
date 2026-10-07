@@ -5,7 +5,9 @@
 
 Sources are streamed from the Hugging Face hub, except that ``--fixtures DIR`` (tiny scale only)
 reads them from local ``<source id>.jsonl`` files, so a tiny build can run offline. Exit codes:
-0 on success, 2 for a bad argument, 1 when the build cannot run as asked.
+0 on success, 2 for a bad argument, 1 when the build cannot run as asked (a partial build that
+would need a new tokenizer, a source in an unexpected format, or no ``datasets`` package). A
+source that runs out before its quota is met gets one ``warning:`` line on stderr.
 """
 
 import argparse
@@ -13,7 +15,12 @@ import sys
 from pathlib import Path
 
 from airace_content.build import BuildError, BuildSummary, build_corpus
-from airace_content.sources import fixture_fetch, hf_fetch
+from airace_content.sources import (
+    DatasetsUnavailable,
+    SourceFormatError,
+    fixture_fetch,
+    hf_fetch,
+)
 from airace_ml.data.corpus import DATASET_IDS
 from airace_ml.paths import corpus_dir, data_root
 
@@ -89,6 +96,30 @@ def format_summary(summary: BuildSummary, out_root: Path) -> str:
     return "\n".join(lines)
 
 
+def format_warnings(summary: BuildSummary) -> list[str]:
+    """One line per component that ran out of rows before its planned quota was met."""
+    lines = []
+    for ds, entry in summary.datasets.items():
+        full = "target_tokens" in entry
+        unit = "tokens" if full else "documents"
+        components = entry["components"]
+        for comp in components:
+            if not comp["exhausted"]:
+                continue
+            got = comp["tokens"] if full else comp["docs"]
+            planned = comp["planned_tokens"] if full else comp["planned_docs"]
+            rest = (
+                "the other components made up the difference"
+                if not all(c["exhausted"] for c in components)
+                else "no other component had more to give"
+            )
+            lines.append(
+                f"warning: {ds}: {comp['name']} ran out at {got:,} of {planned:,.0f} planned "
+                f"{unit}; {rest}"
+            )
+    return lines
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         args = _parser().parse_args(argv)
@@ -110,10 +141,12 @@ def main(argv: list[str] | None = None) -> int:
         summary = build_corpus(
             args.scale, out_root, fetch, datasets=datasets, retrain_tokenizer=args.retrain_tokenizer
         )
-    except (BuildError, ImportError) as e:
+    except (BuildError, SourceFormatError, DatasetsUnavailable) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     print(format_summary(summary, out_root))
+    for line in format_warnings(summary):
+        print(line, file=sys.stderr)
     return 0
 
 

@@ -8,7 +8,9 @@ never write text of their own beyond the fixed frames the recipes call for (``Qu
 
 ``hf_fetch`` streams rows from the Hugging Face hub and imports ``datasets`` only when it runs,
 so nothing else needs the library. ``fixture_fetch`` reads the same rows from local JSONL files,
-which keeps every test offline.
+which keeps every test offline. ``row_has_format`` says whether a row has the fields its adapter
+reads, so a build can stop early when a dataset's format is not what the adapter expects (instead
+of filtering out every row of a whole dataset).
 """
 
 import itertools
@@ -68,13 +70,22 @@ SOURCES: dict[str, SourceSpec] = {
 Fetch = Callable[[SourceSpec, int], Iterator[dict]]
 
 
+class DatasetsUnavailable(ImportError):
+    """The ``datasets`` package, which streams the sources from the hub, is not installed."""
+
+
+class SourceFormatError(ValueError):
+    """A source's rows lack the fields its adapter reads: the dataset is not in the expected
+    format."""
+
+
 def hf_fetch(spec: SourceSpec, max_rows: int) -> Iterator[dict]:
     """Stream up to ``max_rows`` rows of ``spec`` from the Hugging Face hub (needs the network and
     the ``content`` extra, which provides ``datasets``)."""
     try:
         from datasets import load_dataset
     except ImportError as e:
-        raise ImportError(
+        raise DatasetsUnavailable(
             "fetching sources needs the 'datasets' package; install the content extra "
             "(uv sync --extra content)"
         ) from e
@@ -121,24 +132,28 @@ _PARAGRAPH_BREAK = re.compile(r"\n\s*\n")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 
 
-def _subjects(metadata: object) -> str:
-    """The subjects listed in a Gutenberg ``METADATA`` value (a JSON string, or already a dict)."""
+def _subjects(metadata: object) -> str | None:
+    """The subjects listed in a Gutenberg ``METADATA`` value (a JSON string, or already a dict);
+    None when the value cannot be read or has no subjects entry."""
     if isinstance(metadata, str):
         try:
             metadata = json.loads(metadata)
         except json.JSONDecodeError:
-            return ""
+            return None
     if not isinstance(metadata, dict):
-        return ""
-    subjects = metadata.get("subjects", metadata.get("subject", ""))
-    if isinstance(subjects, (list, tuple)):
-        return "; ".join(str(s) for s in subjects)
-    return str(subjects or "")
+        return None
+    for key in ("subjects", "subject"):
+        if key in metadata:
+            subjects = metadata[key]
+            if isinstance(subjects, (list, tuple)):
+                return "; ".join(str(s) for s in subjects)
+            return str(subjects or "")
+    return None
 
 
 def is_childrens_book(metadata: object) -> bool:
     """Whether the book's subjects mention juvenile literature, fairy tales, fables or children."""
-    subjects = _subjects(metadata).lower()
+    subjects = (_subjects(metadata) or "").lower()
     return any(marker in subjects for marker in CHILDREN_SUBJECTS)
 
 
@@ -219,7 +234,9 @@ def chunk_passages(text: str, max_words: int = PASSAGE_MAX_WORDS) -> list[str]:
 # --- the other adapters ------------------------------------------------------------------------
 
 SIMPLEWIKI_MAX_WORDS = 150
+SIMPLEWIKI_HEADING_MAX_WORDS = 8  # a line this short without a sentence end is a heading
 MIN_CHAT_TURNS = 2
+_CLOSING_MARKS = "\"'\u201d\u2019)]\u00bb "  # may follow a sentence's final punctuation
 _CALCULATOR = re.compile(r"<<[^<>\n]*>>")  # GSM8K's calculator annotations, "<<48/2=24>>"
 
 
@@ -230,9 +247,28 @@ def _first_words(text: str, max_words: int) -> str:
     return kept[: ends[-1] + 1] if ends else kept
 
 
+def _is_heading(line: str) -> bool:
+    """A short line that does not end a sentence: a section heading ("Related pages", "History")."""
+    return len(line.split()) <= SIMPLEWIKI_HEADING_MAX_WORDS and not line.rstrip(
+        _CLOSING_MARKS
+    ).endswith((".", "!", "?"))
+
+
+def _lead_section(text: str) -> list[str]:
+    """The paragraphs before the article's first section heading."""
+    lead: list[str] = []
+    for line in (line.strip() for line in text.split("\n")):
+        if not line:
+            continue
+        if _is_heading(line):
+            break
+        lead.append(line)
+    return lead
+
+
 def _simplewiki(row: dict) -> list[Content]:
     title = str(row.get("title") or "").strip()
-    paragraphs = [p.strip() for p in str(row.get("text") or "").split("\n") if p.strip()]
+    paragraphs = _lead_section(str(row.get("text") or ""))
     chosen: list[str] = []
     n = 0
     for paragraph in paragraphs:
@@ -331,6 +367,69 @@ _ADAPTERS: dict[str, Callable[[dict], list[Content]]] = {
 assert set(_ADAPTERS) == set(SOURCES)
 
 
+# --- row formats -------------------------------------------------------------------------------
+
+# A source whose first rows (or all rows, when it has fewer) all lack the fields its adapter reads
+# is not in the expected format; the build stops there instead of filtering out the whole dataset.
+FORMAT_CHECK_ROWS = 200
+
+
+def _strings(*keys: str) -> Callable[[dict], bool]:
+    return lambda row: all(isinstance(row.get(key), str) for key in keys)
+
+
+def _scored(row: dict) -> bool:
+    score = row.get("int_score")
+    return _strings("text")(row) and isinstance(score, (int, float)) and not isinstance(score, bool)
+
+
+def _dialogue(row: dict) -> bool:
+    return isinstance(row.get("dialogue"), list) and isinstance(row.get("speakers"), list)
+
+
+def _messages(row: dict) -> bool:
+    messages = row.get("messages")
+    return isinstance(messages, list) and all(
+        isinstance(m, dict) and "role" in m and "content" in m for m in messages
+    )
+
+
+def _book(row: dict) -> bool:
+    return _strings("TEXT")(row) and _subjects(row.get("METADATA")) is not None
+
+
+_ROW_FORMATS: dict[str, tuple[Callable[[dict], bool], str]] = {
+    "tinystories": (_strings("text"), "'text' as a string"),
+    "fineweb": (_strings("text"), "'text' as a string"),
+    "fineweb_edu": (_scored, "'text' as a string and 'int_score' as a number"),
+    "cosmo_khan": (_strings("text"), "'text' as a string"),
+    "cosmo_wikihow": (_strings("text"), "'text' as a string"),
+    "cosmo_openstax": (_strings("text"), "'text' as a string"),
+    "cosmo_stories": (_strings("text"), "'text' as a string"),
+    "soda": (_dialogue, "'dialogue' and 'speakers' as lists"),
+    "everyday_conv": (_messages, "'messages' as a list of {role, content}"),
+    "gutenberg": (_book, "'TEXT' as a string and 'METADATA' as JSON with 'subjects'"),
+    "gsm8k": (_strings("question", "answer"), "'question' and 'answer' as strings"),
+    "mbpp": (_strings("text", "code"), "'text' and 'code' as strings"),
+    "simplewiki": (_strings("title", "text"), "'title' and 'text' as strings"),
+}
+assert set(_ROW_FORMATS) == set(SOURCES)
+
+
+def row_has_format(source_id: str, row: dict) -> bool:
+    """Whether ``row`` has the fields the source's adapter reads, in the expected form."""
+    return _ROW_FORMATS[source_id][0](row)
+
+
+def format_error(spec: SourceSpec, rows_read: int) -> SourceFormatError:
+    """The error for a source none of whose first ``rows_read`` rows has the expected format."""
+    return SourceFormatError(
+        f"source {spec.id!r} ({spec.hf_path}): none of its first {rows_read} rows has "
+        f"{_ROW_FORMATS[spec.id][1]}, which its adapter reads; the dataset is not in the "
+        "expected format"
+    )
+
+
 def row_to_content(source_id: str, row: dict) -> list[Content]:
     """The documents in one row of a source: plain texts or chats of ``(role, text)`` turns.
 
@@ -343,7 +442,8 @@ def row_to_content(source_id: str, row: dict) -> list[Content]:
     * gsm8k: ``Question: {q}\\nAnswer: {reasoning} The answer is {final}.`` without the
       calculator annotations;
     * mbpp: ``# {text}\\n{code}`` with tabs as 4 spaces and LF line endings;
-    * simplewiki: the title, then the first paragraphs, up to 150 words;
+    * simplewiki: the title, then the first paragraphs of the lead section (before the first
+      heading), up to 150 words;
     * the rest: their ``text``.
     """
     if source_id not in _ADAPTERS:

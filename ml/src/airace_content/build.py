@@ -104,13 +104,14 @@ def stream(seed: int, name: str) -> np.random.Generator:
     return np.random.default_rng([seed, key])
 
 
-def _units(dup_cluster: np.ndarray, copy_of: Sequence[int | None] | None) -> np.ndarray:
-    """A unit id per document: its duplicate cluster, or the document alone; a duplicate copy and
-    the document it was copied from share a unit even when the clustering missed the copy."""
+def _units(dup_cluster: np.ndarray, origins: Sequence[bytes] | None) -> np.ndarray:
+    """A unit id per document: its duplicate cluster, or the document alone, where documents of
+    one origin (one text before noise: a typo, garbled or boilerplate variant, a copy) share a
+    unit even when the clustering did not find them alike."""
     n_clusters = int(dup_cluster.max()) + 1 if (dup_cluster >= 0).any() else 0
     singles = dup_cluster < 0
     unit = np.where(singles, n_clusters + np.cumsum(singles) - 1, dup_cluster).astype(np.int64)
-    if not copy_of or all(source is None for source in copy_of):
+    if not origins:
         return unit
     parent = list(range(int(unit.max()) + 1))
 
@@ -120,9 +121,11 @@ def _units(dup_cluster: np.ndarray, copy_of: Sequence[int | None] | None) -> np.
             u = parent[u]
         return u
 
-    for i, source in enumerate(copy_of):
-        if source is not None:
-            a, b = root(int(unit[i])), root(int(unit[source]))
+    first_with: dict[bytes, int] = {}
+    for i, origin in enumerate(origins):
+        first = first_with.setdefault(origin, i)
+        if first != i:
+            a, b = root(int(unit[i])), root(int(unit[first]))
             parent[max(a, b)] = min(a, b)
     return np.array([root(int(u)) for u in unit], dtype=np.int64)
 
@@ -130,21 +133,22 @@ def _units(dup_cluster: np.ndarray, copy_of: Sequence[int | None] | None) -> np.
 def heldout_mask(
     dup_cluster: np.ndarray,
     rng: np.random.Generator,
-    copy_of: Sequence[int | None] | None = None,
+    origins: Sequence[bytes] | None = None,
 ) -> np.ndarray:
     """Which documents are held out for evaluation.
 
-    The units are whole duplicate clusters (every member, together with any duplicate copy the
-    clustering missed, from ``copy_of``) and single documents. Units are taken in a random order
-    until ``max(HELDOUT_MIN_DOCS, ceil(HELDOUT_SHARE * n))`` documents are held out, so no held-out
-    text has a copy left in training. A unit that would hold out more than ``HELDOUT_MAX_SHARE`` of
-    the documents is skipped, so training always keeps the larger part.
+    The units are whole duplicate clusters (every member) and single documents, where every
+    document of one origin (``assemble.origin_key``: one text before noise) is in the same unit.
+    Units are taken in a random order until ``max(HELDOUT_MIN_DOCS, ceil(HELDOUT_SHARE * n))``
+    documents are held out, so no held-out text keeps a copy or a noised variant in training. A
+    unit that would hold out more than ``HELDOUT_MAX_SHARE`` of the documents is skipped, so
+    training always keeps the larger part.
     """
     n = len(dup_cluster)
     held = np.zeros(n, dtype=np.bool_)
     if n == 0:
         return held
-    unit = _units(dup_cluster, copy_of)
+    unit = _units(dup_cluster, origins)
     sizes = np.bincount(unit)
     target = max(HELDOUT_MIN_DOCS, math.ceil(HELDOUT_SHARE * n))
     cap = int(HELDOUT_MAX_SHARE * n)
@@ -188,7 +192,7 @@ def tag_documents(
         ),
         noise_kind=np.array([d.noise_kind for d in docs], dtype=np.uint8),
         heldout=heldout_mask(
-            cluster, stream(seed, f"heldout/{dataset_id}"), [d.copy_of for d in docs]
+            cluster, stream(seed, f"heldout/{dataset_id}"), [d.origin for d in docs]
         ),
         purchase_rank=purchase_ranks(len(docs), stream(seed, f"purchase/{dataset_id}")),
     )
@@ -249,16 +253,25 @@ def _encode(tok: Tok, doc: AssembledDoc) -> np.ndarray:
 
 
 def _entry(
-    scale: str, seed: int, stats: dict, tags: DocTags, n_tokens: int, dataset_id: str
+    scale: str,
+    seed: int,
+    stats: dict,
+    tags: DocTags,
+    component_tokens: Counter,
+    dataset_id: str,
 ) -> dict:
-    """What the manifest and the summary record about one built dataset."""
+    """What the manifest and the summary record about one built dataset; each component also gets
+    its actual ``tokens`` in the written corpus (with its noise and copies)."""
+    n_tokens = sum(component_tokens.values())
     entry: dict = {"scale": scale, "seed": seed, "docs": len(tags.quality), "tokens": n_tokens}
     if scale == "full":
         entry["target_tokens"] = SCALES["full"]["target_tokens"][dataset_id]
     noise_counts = Counter(tags.noise_kind.tolist())
     topic_counts = Counter(tags.topic.tolist())
     return entry | {
-        "components": stats["components"],
+        "components": [
+            comp | {"tokens": component_tokens[comp["name"]]} for comp in stats["components"]
+        ],
         "noise_rates": asdict(RECIPES[dataset_id].noise),
         "noise_counts": {kind: noise_counts[i] for i, kind in enumerate(NOISE_KINDS)},
         "false_fact_docs": int(tags.false_fact.sum()),
@@ -361,34 +374,41 @@ def build_corpus(
             seed,
             TOKENIZER_SAMPLE_BYTES,
         )
-        # Trained beside its final place and moved there only once accepted: a tokenizer at
-        # tok_path counts as frozen, so a rejected one must never be left there.
+        # The new tokenizer is written beside its final place and moved there only after every
+        # corpus is written with it: a tokenizer at tok_path counts as frozen, so neither a
+        # rejected one nor one whose corpora were never all written may be left there.
         trial = tok_path.with_name(tok_path.name + ".tmp")
         tok = train_tokenizer(sample, trial, vocab_size=VOCAB_SIZE)
-        if scale == "full" and tok.vocab_size != VOCAB_SIZE:
-            trial.unlink()
+    else:
+        trial, tok = None, frozen
+
+    entries: dict[str, dict] = {}
+    try:
+        if trial is not None and scale == "full" and tok.vocab_size != VOCAB_SIZE:
             raise RuntimeError(
                 f"the tokenizer has {tok.vocab_size} entries, not {VOCAB_SIZE}: too little text"
             )
-        trial.replace(tok_path)
-    else:
-        tok = frozen
-
-    entries: dict[str, dict] = {}
-    for ds in selected:
-        ids = [_encode(tok, doc) for doc in assembled[ds]]
-        n_tokens = sum(len(doc_ids) for doc_ids in ids)
-        info = {
-            "dataset": ds,
-            "corpus_version": CORPUS_VERSION,
-            "tokenizer_version": TOKENIZER_VERSION,
-            "scale": scale,
-            "seed": seed,
-            "docs": len(ids),
-            "tokens": n_tokens,
-        }
-        write_corpus(root / ds, ids, tags[ds], info)
-        entries[ds] = _entry(scale, seed, stats[ds], tags[ds], n_tokens, ds)
+        for ds in selected:
+            ids = [_encode(tok, doc) for doc in assembled[ds]]
+            component_tokens: Counter = Counter()
+            for doc, doc_ids in zip(assembled[ds], ids):
+                component_tokens[doc.component] += len(doc_ids)
+            info = {
+                "dataset": ds,
+                "corpus_version": CORPUS_VERSION,
+                "tokenizer_version": TOKENIZER_VERSION,
+                "scale": scale,
+                "seed": seed,
+                "docs": len(ids),
+                "tokens": sum(component_tokens.values()),
+            }
+            write_corpus(root / ds, ids, tags[ds], info)
+            entries[ds] = _entry(scale, seed, stats[ds], tags[ds], component_tokens, ds)
+        if trial is not None:
+            trial.replace(tok_path)
+    finally:
+        if trial is not None and trial.exists():
+            trial.unlink()
 
     root.mkdir(parents=True, exist_ok=True)
     write_false_facts(root / FALSE_FACTS_FILE, plan)
