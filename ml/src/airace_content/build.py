@@ -7,7 +7,8 @@
 3. each dataset assembled from its recipe (``assemble.assemble_dataset``);
 4. ``known_vocab``: the 30,000 most frequent words of the books, educational, facts and creative
    text;
-5. a quality score for every document;
+5. a quality score for every document (``structured_quality`` for code and reasoning, see
+   ``STRUCTURED_DATASETS``);
 6. near-duplicate clusters per dataset;
 7. a topic per document (the generator's topic, else ``tag_topic``);
 8. held-out documents for evaluation: whole duplicate clusters (and singletons), drawn in a seeded
@@ -57,7 +58,12 @@ from airace_content.manifest import (
     write_vocab,
 )
 from airace_content.sources import SOURCES, Fetch, row_to_content
-from airace_content.textproc import build_vocab, normalize_text, quality_score
+from airace_content.textproc import (
+    build_vocab,
+    normalize_text,
+    quality_score,
+    structured_quality,
+)
 from airace_content.topics import tag_topic
 from airace_ml.data.corpus import DATASET_IDS, NOISE_KINDS, TOPICS, DocTags, write_corpus
 from airace_ml.paths import CORPUS_VERSION, TOKENIZER_VERSION, corpus_dir, tokenizer_path
@@ -74,6 +80,11 @@ HELDOUT_SHARE = 0.01
 HELDOUT_MIN_DOCS = 8
 HELDOUT_MAX_SHARE = 0.5  # a cluster that would push the held-out share past this is skipped
 TOKENIZER_SAMPLE_BYTES = 20_000_000
+# Datasets of programs and puzzles, scored by ``structured_quality``: cleaning is meant to remove
+# noise, not a dataset's normal content, and clean code and puzzles fail the prose measures (known
+# English words, share of letters) by their nature. Neither dataset gets typo, garble or spam
+# noise (code gets duplicates only, reasoning none). Every other dataset uses ``quality_score``.
+STRUCTURED_DATASETS: frozenset[str] = frozenset({"code", "reasoning"})
 
 
 class BuildError(ValueError):
@@ -160,10 +171,14 @@ def purchase_ranks(n: int, rng: np.random.Generator) -> np.ndarray:
 def tag_documents(
     docs: list[AssembledDoc], texts: list[str], known_vocab: set[str], seed: int, dataset_id: str
 ) -> DocTags:
-    """Steps 5-9 for one dataset."""
+    """Steps 5-9 for one dataset (quality by ``structured_quality`` for ``STRUCTURED_DATASETS``)."""
+    if dataset_id in STRUCTURED_DATASETS:
+        quality = [structured_quality(t) for t in texts]
+    else:
+        quality = [quality_score(t, known_vocab) for t in texts]
     cluster, canonical = cluster_near_duplicates(texts)
     return DocTags(
-        quality=np.array([quality_score(t, known_vocab) for t in texts], dtype=np.float16),
+        quality=np.array(quality, dtype=np.float16),
         dup_cluster=cluster,
         dup_canonical=canonical,
         false_fact=np.array([d.false_fact for d in docs], dtype=np.bool_),

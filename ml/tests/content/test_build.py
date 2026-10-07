@@ -25,6 +25,7 @@ from airace_content.assemble import (
     validate_recipe,
 )
 from airace_content.build import (
+    STRUCTURED_DATASETS,
     BuildError,
     BuildSummary,
     _simple_vocab,
@@ -46,6 +47,7 @@ from airace_content.sources import (
 )
 from airace_content.textproc import MOJIBAKE_CHARS, SPAM_MARKERS, build_vocab
 from airace_ml.data.corpus import DATASET_IDS, NOISE_KINDS, TOPICS, Corpus
+from airace_ml.data.prep import CLEANING_THRESHOLDS
 from airace_ml.paths import corpus_dir, tokenizer_path
 from airace_ml.skills.facts import FalseFactPlan, plan_false_facts
 from airace_ml.skills.kb import load_kb
@@ -549,6 +551,24 @@ def test_tags_describe_the_documents(tiny_build):
         assert tags.dup_canonical[tags.dup_cluster < 0].all()
     web = Corpus.open(corpus_dir(tiny_build.root) / "web").tags.noise_kind
     assert set(np.unique(web)) == set(range(len(NOISE_KINDS)))  # every kind of noise in web
+
+
+def test_code_and_reasoning_are_scored_as_structured_text(tiny_build):
+    assert STRUCTURED_DATASETS == frozenset({"code", "reasoning"})
+    thorough = np.float16(CLEANING_THRESHOLDS["thorough"])  # prep compares at float16
+    for ds in sorted(STRUCTURED_DATASETS):
+        tags = Corpus.open(corpus_dir(tiny_build.root) / ds).tags
+        clean = tags.noise_kind == _NONE
+        assert np.mean(tags.quality[clean] >= thorough) >= 0.98, ds
+
+
+def test_web_quality_still_separates_noise_kinds(tiny_build):
+    tags = Corpus.open(corpus_dir(tiny_build.root) / "web").tags
+    quality = tags.quality.astype(np.float64)
+    clean = quality[tags.noise_kind == _NONE].mean()
+    for kind in ("typo", "boilerplate", "garbled"):
+        assert quality[tags.noise_kind == _KIND[kind]].mean() < clean - 0.2, kind
+    assert (quality[tags.noise_kind == _KIND["spam"]] < CLEANING_THRESHOLDS["light"]).all()
 
 
 def test_chats_keep_their_structure(tiny_build):

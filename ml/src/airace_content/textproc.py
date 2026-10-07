@@ -118,6 +118,25 @@ def quality_score(text: str, known_vocab: set[str]) -> float:
     lo, hi = _KNOWN_SHARE_RANGE
     k = _clip((known_ratio - lo) / (hi - lo))
 
+    return float(k * (0.5 + 0.5 * a) * _language_free_quality(text))
+
+
+def structured_quality(text: str) -> float:
+    """``quality_score`` for structured text (programs, puzzles, number patterns), from 0 to 1
+    (0 for empty text): ``g * p * (0.5 + 0.5 r)``.
+
+    It drops the two factors that measure English prose (``k``, the share of known words, and
+    ``a``, the share of letters), which clean code and puzzles fail by their nature, and keeps
+    the ones that measure real damage: garbling, spam and repeated lines.
+    """
+    if not "".join(text.split()):
+        return 0.0
+    return float(_language_free_quality(text))
+
+
+def _language_free_quality(text: str) -> float:
+    """``g * p * (0.5 + 0.5 r)``, the factors of ``quality_score`` that hold for any kind of text
+    (``text`` must have a non-space character)."""
     lines = [line.strip() for line in text.split("\n") if line.strip()]
     repeated_line_ratio = 1 - len(set(lines)) / len(lines)
     r = 1 - repeated_line_ratio
@@ -129,4 +148,4 @@ def quality_score(text: str, known_vocab: set[str]) -> float:
     spam_hits = sum(lowered.count(marker) for marker in SPAM_MARKERS)
     p = 1 - min(1.0, spam_hits / _SPAM_LIMIT)
 
-    return float(k * g * p * (0.5 + 0.5 * a) * (0.5 + 0.5 * r))
+    return g * p * (0.5 + 0.5 * r)

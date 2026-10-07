@@ -3,6 +3,7 @@ import re
 import numpy as np
 import pytest
 
+from airace_content.noise import garble, make_spam
 from airace_content.textproc import (
     MOJIBAKE_CHARS,
     SPAM_MARKERS,
@@ -10,14 +11,18 @@ from airace_content.textproc import (
     normalize_text,
     quality_score,
     simplicity,
+    structured_quality,
     words,
 )
 from airace_content.topics import TOPIC_KEYWORDS, tag_topic
 from airace_ml.data.corpus import TOPICS
+from airace_ml.data.prep import CLEANING_THRESHOLDS
 from airace_ml.minipy.interpreter import call_function, run_program
 from airace_ml.skills.code import code_train_docs
 from airace_ml.skills.facts import fact_prose_docs
 from airace_ml.skills.kb import load_kb
+from airace_ml.skills.patterns import pattern_train_docs
+from airace_ml.skills.reasoning import reasoning_train_docs
 
 CLEAN = "The little dog ran to the park. It played with a red ball. Then it went home to sleep."
 VOCAB = build_vocab(
@@ -420,3 +425,37 @@ def test_single_quoted_speech_does_not_lower_the_score():
         "She said \u2018hello\u2019 and he said \u2018goodbye\u2019 to the little dog near the old gate.",
     ):
         assert quality_score(quoted, vocab) > base - 0.02  # only the quote marks' letter share
+
+
+def test_structured_quality_scores_clean_code_and_puzzles_high():
+    rng = np.random.default_rng(0)
+    texts = [d.text for d in code_train_docs(rng, 300)]
+    texts += [d.text for d in reasoning_train_docs(rng, 100)]
+    texts += [d.text for d in pattern_train_docs(rng, 100)]
+    scores = np.array([structured_quality(t) for t in [*texts, MBPP_STYLE, NESTED_PROGRAM]])
+    assert ((scores >= 0) & (scores <= 1)).all()
+    assert (scores >= CLEANING_THRESHOLDS["thorough"]).all()
+    assert structured_quality(MBPP_STYLE) == 1.0
+    assert quality_score(MBPP_STYLE, VOCAB) < CLEANING_THRESHOLDS["light"]  # why code needs it
+
+
+def test_structured_quality_scores_spam_mojibake_and_repeats_low():
+    rng = np.random.default_rng(1)
+    assert all(structured_quality(make_spam(rng)) == 0 for _ in range(20))
+    garbled = [garble(MBPP_STYLE, rng, 0.1) for _ in range(20)]
+    assert all(structured_quality(t) < CLEANING_THRESHOLDS["light"] for t in garbled)
+    repeated = "\n".join(["print(x)"] * 10)  # one line ten times: r = 0.1
+    assert structured_quality(repeated) == pytest.approx(0.55)
+
+
+def test_structured_quality_of_empty_text_is_zero():
+    for text in ("", "   ", "\n\n\t "):
+        assert structured_quality(text) == 0.0
+
+
+def test_structured_quality_shares_the_language_free_factors():
+    # CLEAN has every word known and over 90% letters, so k = a = 1 and the two scores agree
+    assert structured_quality(CLEAN) == pytest.approx(quality_score(CLEAN, VOCAB))
+    echoed = "The little dog ran to the park.\nThe little dog ran to the park.\nIt played."
+    assert structured_quality(echoed) == pytest.approx(quality_score(echoed, VOCAB))
+    assert structured_quality(echoed) == pytest.approx(0.5 + 0.5 * 2 / 3)
