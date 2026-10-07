@@ -1,0 +1,8 @@
+{"question": "Tom has 12 marbles. He gives 5 marbles to his sister. How many marbles does Tom have left?", "answer": "Tom has 12 - 5 = <<12-5=7>>7 marbles left.\n#### 7"}
+{"question": "A baker makes 4 trays of cookies. Each tray has 9 cookies. How many cookies does the baker make?", "answer": "The baker makes 4 * 9 = <<4*9=36>>36 cookies.\n#### 36"}
+{"question": "Sara reads 15 pages on Monday and twice as many pages on Tuesday. How many pages does she read in the two days?", "answer": "On Tuesday she reads 15 * 2 = <<15*2=30>>30 pages.\nIn total she reads 15 + 30 = <<15+30=45>>45 pages.\n#### 45"}
+{"question": "A box holds 24 crayons. A class has 3 boxes and uses 10 crayons. How many crayons are left?", "answer": "The class has 3 * 24 = <<3*24=72>>72 crayons.\nAfter using 10, there are 72 - 10 = <<72-10=62>>62 crayons left.\n#### 62"}
+{"question": "Ben buys 3 apples for $2 each and a bottle of juice for $4. How much does he spend?", "answer": "The apples cost 3 * 2 = <<3*2=6>>6 dollars.\nHe spends 6 + 4 = <<6+4=10>>10 dollars.\n#### 10"}
+{"question": "There are 30 children in a class. One third of them walk to school. How many children do not walk to school?", "answer": "30 / 3 = <<30/3=10>>10 children walk.\nSo 30 - 10 = <<30-10=20>>20 children do not walk.\n#### 20"}
+{"question": "A garden has 6 rows of flowers with 8 flowers in each row. Then 7 flowers are picked. How many flowers are still in the garden?", "answer": "There are 6 * 8 = <<6*8=48>>48 flowers.\nAfter picking, 48 - 7 = <<48-7=41>>41 flowers are left.\n#### 41"}
+{"question": "Mia saves $5 every week. How many weeks does she need to save $60?", "answer": "She needs 60 / 5 = <<60/5=12>>12 weeks.\n#### 12"}
