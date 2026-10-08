@@ -18,7 +18,8 @@ available yet); 1 when a run fails for a reason that is not the user's input (th
 went unstable, the disk filled up); 130 when the user interrupts a run. Each of those prints one
 ``error: ...`` line on stderr and never a traceback; anything unexpected is a bug and propagates.
 A training run that goes unstable and stops early still saved its last good weights, so it exits 0
-and says so.
+and says so. ``gate`` exits 0 when every criterion passed and 1 when any failed (its summary says
+which; that is a verdict, not an error).
 
 ``main`` returns the exit code and never calls ``sys.exit`` (argparse's own exits are turned into
 return values), so it can be driven from tests and from other tools.
@@ -36,17 +37,21 @@ import math
 import re
 import sys
 from collections.abc import Sequence
+from dataclasses import asdict
 from pathlib import Path
 
 import torch
 from safetensors import SafetensorError
 
 import airace_ml.evals.judge as judge_module
+from airace_ml.data.sampler import MixtureError
 from airace_ml.device import pick_device
 from airace_ml.evals.judge import Judge, JudgeBuildError, build_judge
 from airace_ml.evals.novelty import NoveltyIndex, build_novelty_index
 from airace_ml.evals.scoring import BenchReport
 from airace_ml.evals.suite import CATEGORIES, run_benchmarks
+from airace_ml.experiments.gate import GateOutcome, GateSetupError, run_gate
+from airace_ml.experiments.report import write_gate_report
 from airace_ml.infer.lm import TorchLM
 from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME, load_checkpoint
 from airace_ml.paths import data_root, judge_dir, novelty_path, tokenizer_path
@@ -153,14 +158,19 @@ def _temperature(text: str) -> float:
     return value
 
 
+_SEED_LIST = re.compile(r"[0-9]+(?:,[0-9]+)*")
+
+
 def _seeds(text: str) -> tuple[int, ...]:
-    try:
-        seeds = tuple(int(part) for part in text.split(","))
-    except ValueError:
-        seeds = ()
-    if not seeds or any(seed < 0 for seed in seeds):
+    """An argparse type: different whole numbers of 1 or more, separated by commas only."""
+    seeds = tuple(int(part) for part in text.split(",")) if _SEED_LIST.fullmatch(text) else ()
+    if not seeds or min(seeds) < 1:
         raise argparse.ArgumentTypeError(
-            f"{text!r} is not a comma-separated list of whole numbers, like 1,2,3"
+            f"{text!r} is not a comma-separated list of whole numbers of 1 or more, like 1,2,3"
+        )
+    if len(set(seeds)) != len(seeds):
+        raise argparse.ArgumentTypeError(
+            f"{text!r} repeats a seed; give each seed once, like 1,2,3"
         )
     return seeds
 
@@ -257,7 +267,13 @@ def _parser() -> argparse.ArgumentParser:
         help="train on N tokens instead of the full recipe (for a quick test)",
     )
 
-    gate = add("gate", _cmd_gate, "run the feasibility gate")
+    gate = add(
+        "gate",
+        _cmd_gate,
+        "run the feasibility gate",
+        f"Run the same command again: finished runs are reused, and an unfinished one carries on "
+        f"from its last saved point (progress is saved every {CHECKPOINT_EVERY} steps).",
+    )
     gate.add_argument("--out", type=Path, required=True, help="folder for the gate's results")
     gate.add_argument(
         "--seeds",
@@ -787,6 +803,49 @@ def _cmd_build_judge(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _print_gate_summary(outcome: GateOutcome, report: Path) -> None:
+    print()
+    for c in outcome.criteria:
+        print(f"{c.id:<4}{c.title:<17}{'PASS' if c.passed else 'FAIL':<6}{c.detail}")
+    passed = sum(c.passed for c in outcome.criteria)
+    verdict = "PASSED" if outcome.passed else "FAILED"
+    print(f"\ngate {verdict}: {passed} of {len(outcome.criteria)} criteria passed")
+    print(f"full report written to {report}", flush=True)
+
+
 def _cmd_gate(args: argparse.Namespace) -> int:
-    # Task 20 replaces this body with a call to airace_ml.experiments.gate.run_gate.
-    raise _UsageError("gate not available yet: the feasibility gate has not been installed.")
+    device = _device(args)
+    root = _data_root(args)
+    _require_folder_path(args.out, "--out")
+    if args.quick and len(args.seeds) > 1:
+        print(f"note: --quick uses only the first seed ({args.seeds[0]})", flush=True)
+    try:
+        outcome = run_gate(
+            root,
+            args.out,
+            seeds=args.seeds,
+            device=device,
+            include_cpu_speed=args.cpu_speed,
+            quick=args.quick,
+            on_progress=lambda line: print(line, flush=True),
+        )
+        report = args.out / "report.md"
+        write_gate_report(outcome, report)
+        everything = {
+            "criteria": [asdict(c) for c in outcome.criteria],
+            "transcripts": outcome.transcripts,
+            **outcome.raw,
+        }
+        (args.out / "outcome.json").write_text(
+            json.dumps(json_safe(everything), allow_nan=False, indent=1), encoding="utf-8"
+        )
+    except GateSetupError as e:
+        raise _UsageError(str(e)) from e
+    except MixtureError as e:
+        raise _UsageError(f"the training data cannot supply one of the gate's mixes: {e}") from e
+    except FileNotFoundError as e:
+        raise _UsageError(_missing(e)) from e
+    except OSError as e:
+        raise _files_problem(e) from e
+    _print_gate_summary(outcome, report)
+    return EXIT_OK if outcome.passed else EXIT_FAILED

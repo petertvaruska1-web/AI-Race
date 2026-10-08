@@ -16,7 +16,9 @@ import torch
 import airace_ml.evals.judge as judge_module
 from airace_ml import cli
 from airace_ml.cli import main
+from airace_ml.data.sampler import MixtureError
 from airace_ml.evals.judge import JudgeBuildError
+from airace_ml.experiments.gate import TITLES, GateCriterion, GateOutcome, GateSetupError
 from airace_ml.infer.lm import TorchLM
 from airace_ml.model.shape import ModelShape
 from airace_ml.paths import judge_dir, novelty_path, tokenizer_path
@@ -1081,13 +1083,104 @@ def test_build_judge_does_not_say_calibrating_when_training_did_not_complete(
 # -- gate -----------------------------------------------------------------------------------------
 
 
-def test_gate_is_not_available_yet(tmp_path):
-    argv = ["gate", "--out", str(tmp_path / "g"), "--seeds", "1,2", "--cpu-speed", "--quick"]
-    code, _, err = _run(argv)
-    assert code == 2
-    assert err.startswith("error: ") and "gate not available" in err
+def _gate_outcome(failed: tuple[str, ...] = ()) -> GateOutcome:
+    return GateOutcome(
+        [
+            GateCriterion(gid, title, gid not in failed, f"{title} detail", {"x": 1.0})
+            for gid, title in TITLES.items()
+        ],
+        {"G2": [("Hello", "Hi there.")]},
+        {"seeds": [2, 5], "device": "cpu"},
+    )
 
 
-def test_gate_checks_its_seeds():
-    code, _, err = _run(["gate", "--out", "g", "--seeds", "1,x"])
+def test_gate_runs_the_gate_and_writes_its_report(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_gate(root, out, **options):
+        seen.update(root=root, out=out, **options)
+        options["on_progress"]("G1 Speed: training the first model (balanced mix)")
+        return _gate_outcome()
+
+    monkeypatch.setattr(cli, "run_gate", fake_gate)
+    out = tmp_path / "gate"
+    argv = ["gate", "--out", str(out), "--seeds", "2,5", "--cpu-speed", *_common(tmp_path / "d")]
+    code, stdout, err = _run(argv)
+    assert code == 0, err
+    assert seen["root"] == tmp_path / "d" and seen["out"] == out
+    assert seen["seeds"] == (2, 5) and seen["include_cpu_speed"] is True
+    assert seen["quick"] is False and seen["device"] == torch.device("cpu")
+    assert "G1 Speed: training the first model (balanced mix)" in stdout
+    assert re.search(r"^G7  Preparation\s+PASS  Preparation detail$", stdout, re.MULTILINE)
+    assert "gate PASSED: 7 of 7 criteria passed" in stdout and str(out / "report.md") in stdout
+    assert "| G1 | Speed | PASS |" in (out / "report.md").read_text(encoding="utf-8")
+    saved = json.loads((out / "outcome.json").read_text(encoding="utf-8"))
+    assert [c["id"] for c in saved["criteria"]] == list(TITLES) and saved["seeds"] == [2, 5]
+    assert saved["transcripts"] == {"G2": [["Hello", "Hi there."]]}
+
+
+def test_gate_exits_1_when_a_criterion_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "run_gate", lambda root, out, **kw: _gate_outcome(failed=("G3",)))
+    code, stdout, err = _run(["gate", "--out", str(tmp_path / "g"), *_common(tmp_path)])
+    assert code == 1 and err == ""  # a verdict, not an error
+    assert "gate FAILED: 6 of 7 criteria passed" in stdout
+    assert re.search(r"^G3  Differentiation\s+FAIL  ", stdout, re.MULTILINE)
+
+
+def test_gate_defaults_and_quick_mode(tmp_path, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(cli, "run_gate", lambda root, out, **kw: seen.update(kw) or _gate_outcome())
+    code, stdout, _ = _run(["gate", "--out", str(tmp_path / "g"), "--quick", *_common(tmp_path)])
+    assert code == 0 and seen["seeds"] == (1, 2, 3) and seen["quick"] is True
+    assert seen["include_cpu_speed"] is False
+    assert "--quick uses only the first seed (1)" in stdout
+
+
+@pytest.mark.parametrize(
+    "seeds", ["1,x", "0", "1,0,2", "-1", "1,,2", "1, 2", "1.5", "", "+1", "1,1", "3,2,3"]
+)
+def test_gate_checks_its_seeds(seeds, monkeypatch):
+    monkeypatch.setattr(cli, "run_gate", lambda *a, **k: pytest.fail("the gate must not run"))
+    code, _, err = _run(["gate", "--out", "g", "--seeds", seeds])
     assert code == 2 and "--seeds" in err and "1,2,3" in err
+
+
+def test_gate_without_its_inputs_names_what_to_build(tiny_data_root, tmp_path):
+    out = tmp_path / "g"
+    code, _, err = _run(["gate", "--out", str(out), *_common(tiny_data_root)])
+    assert code == 2 and err.startswith("error: ") and err.count("\n") == 1
+    assert "airace-ml build-judge" in err and "airace-ml build-novelty-index" in err
+    assert "airace-content build" in err  # the tiny root has no known_vocab.txt or false facts
+    assert not out.exists()  # nothing was trained
+
+
+@pytest.mark.parametrize(
+    "error, code, words",
+    [
+        (
+            GateSetupError("the judge is damaged. Rebuild it with: airace-ml build-judge"),
+            2,
+            "build",
+        ),
+        (MixtureError("mixture: dataset 'web' has no documents left"), 2, "dataset 'web'"),
+        (FileNotFoundError(2, "No such file", "x/model.safetensors"), 2, "cannot find"),
+        (OSError(28, "No space left on device"), 1, "No space left on device"),
+    ],
+)
+def test_gate_reports_what_went_wrong_plainly(error, code, words, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "run_gate", _raising(error))
+    status, _, err = _run(["gate", "--out", str(tmp_path / "g"), *_common(tmp_path)])
+    assert status == code and err.startswith("error: ") and words in err
+
+
+def test_gate_interrupted_says_how_to_carry_on(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "run_gate", _raising(KeyboardInterrupt()))
+    code, _, err = _run(["gate", "--out", str(tmp_path / "g"), *_common(tmp_path)])
+    assert code == 130 and "Run the same command again" in err and "reused" in err
+
+
+def test_gate_out_must_be_a_folder(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "run_gate", lambda *a, **k: pytest.fail("the gate must not run"))
+    (tmp_path / "file").write_text("x", encoding="utf-8")
+    code, _, err = _run(["gate", "--out", str(tmp_path / "file"), *_common(tmp_path)])
+    assert code == 2 and "is a file" in err

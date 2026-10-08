@@ -1,5 +1,6 @@
 import re
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -14,6 +15,7 @@ from airace_ml.paths import corpus_dir, tokenizer_path
 from airace_ml.tokenizer import Tok, encode_chat, encode_doc, train_tokenizer
 
 FIXTURE_TEXT_DIR = Path(__file__).parent / "fixtures" / "text"
+FIXTURE_SOURCES_DIR = Path(__file__).parent / "fixtures" / "sources"
 FIXTURE_TEXT_FILES = ("stories.txt", "chats.txt", "code.txt", "facts.txt", "unicode.txt")
 
 
@@ -130,6 +132,34 @@ def tiny_data_root(tmp_path_factory, tiny_tok, tiny_tok_path) -> Path:
             for i in np.flatnonzero(tags.dup_cluster == c):
                 docs[i] = docs[canonical]
         write_corpus(corpus_dir(root) / ds, docs, tags, {"dataset": ds, "source": "test fixtures"})
+    return root
+
+
+@pytest.fixture(scope="session")
+def gate_data_root(tmp_path_factory) -> Path:
+    """Everything the feasibility gate reads, built for real at tiny scale: the corpora and
+    tokenizer of ``airace-content build --scale tiny`` (from the source fixtures, with its
+    ``known_vocab.txt`` and ``false_facts.json``), the novelty index and a reference judge.
+
+    The judge's recipe is shrunk to 2 layers x 64 wide on a 64-token span, as the CLI's judge
+    tests do, so it builds in seconds. Built only when a test asks for it (slow tests only).
+    """
+    from airace_content.build import build_corpus
+    from airace_content.sources import fixture_fetch
+    from airace_ml.evals import judge as judge_module
+    from airace_ml.evals.novelty import build_novelty_index
+
+    root = tmp_path_factory.mktemp("gate_data_root")
+    build_corpus("tiny", root, fixture_fetch(FIXTURE_SOURCES_DIR), seed=0)
+    build_novelty_index(root)
+    real = judge_module.judge_train_config
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            judge_module,
+            "judge_train_config",
+            lambda seed=1234: replace(real(seed), shape=ModelShape(2, 64, 64), batch_tokens=1024),
+        )
+        judge_module.build_judge(root, device="cpu", token_budget=1024 * 8)
     return root
 
 
