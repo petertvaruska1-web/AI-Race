@@ -160,9 +160,9 @@ No control maps to a capability number. Each changes what or how the real model 
 | Pattern recognition | Sequence continuation (numbers, letters, words); exact match on greedy generation |
 | Knowledge | Fact questions from the knowledge base (§4.10), multiple choice by log-prob + short-answer exact match |
 | Coding | **MiniPy** (a safe Python subset): predict program output, and complete functions verified by running hidden tests in our own sandboxed AST interpreter (never `exec`) |
-| Creativity | Stories from prompts, scored as coherence (perplexity under the fixed **reference judge model**) × novelty (1 − overlap with a sampled 8-gram index of all corpora) × diversity (distinct-n across samples) |
-| Consistency | Agreement across paraphrases and resamples of knowledge/reasoning items |
-| Instruction following | Templated instructions ("one word", "list three", "start with…", "yes or no") checked programmatically |
+| Creativity | Stories from prompts, scored as coherence (perplexity under the fixed **reference judge model**) × novelty (1 − overlap with a sampled 8-gram index of all corpora, and with the story's own prompt) × diversity (distinct-n across samples), with a per-story penalty for repeated 3-grams (ADR 0001) |
+| Consistency | Robust knowledge: a group of paraphrased questions scores only when every paraphrase is answered correctly (agreement alone rewards question-blind models; ADR 0001) |
+| Instruction following | Templated instructions ("one word", "list three", "start with…", "yes or no") checked programmatically; chance is the best pass rate of any constant reply (ADR 0001) |
 
 - Full suite runs automatically on every new version: under 30 s on GPU for a first model. A tiny *mini-eval* runs during training for live charts.
 - Leaderboards key on `(bench version, category)`.
@@ -210,7 +210,7 @@ No control maps to a capability number. Each changes what or how the real model 
 Measured by an automated experiment suite (3 seeds each) and recorded in a report:
 1. **Speed:** the first-model targets above are met.
 2. **Legibility:** after a balanced first run, ≥ 70 % of 20 probe replies are *well-formed*. Well-formed means:
-   - ≥ 4 words
+   - ≥ 4 words, at least 3 of them different (ADR 0001)
    - no word 3-gram repeated 3+ times
    - per-token perplexity under the reference judge at or below the 90th percentile the judge assigns to real held-out conversation replies
 
