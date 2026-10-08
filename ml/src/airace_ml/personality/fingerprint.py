@@ -259,7 +259,7 @@ def _traits(groups: Sequence[tuple[Probe, list[_Reply]]]) -> dict[str, float]:
         "verbosity": _mean(counts),
         "confidence": _mean([r.confidence for r in replies if r.confidence is not None]),
         "inventiveness": distinct_2(texts),
-        "steadiness": _mean([_mean(pairs) for pairs in pairs_per_probe if pairs]),
+        "steadiness": _mean([_mean(pairs) for pairs in pairs_per_probe]),
         "precision": _mean([float(any(right for right, _ in flags)) for flags in factual]),
         "boldness": _mean(
             [

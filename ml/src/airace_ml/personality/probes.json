@@ -42,7 +42,7 @@
   {"id": "creative-06", "text": "Write a riddle about a clock.", "kind": "creative"},
   {"id": "creative-07", "text": "Imagine a city on a cloud. What is it like?", "kind": "creative"},
   {"id": "creative-08", "text": "Write a song line about summer.", "kind": "creative"},
-  {"id": "creative-09", "text": "Come up with a name for a pet fish and tell me why you picked it.", "kind": "creative"},
+  {"id": "creative-09", "text": "Name a pet fish and tell me why you picked that name.", "kind": "creative"},
   {"id": "creative-10", "text": "Tell me a tiny story about a lost balloon.", "kind": "creative"},
   {"id": "help-01", "text": "How do I make a sandwich?", "kind": "help"},
   {"id": "help-02", "text": "Can you help me plan a birthday party?", "kind": "help"},
