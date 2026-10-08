@@ -603,3 +603,124 @@ When a target is missed, the detail starts with `missed: <target>, ...`.
 ## Notes
 - **G1 now benches the starter** with the full bench. In the real gate that adds about 30 s and 1 more bench, for 13 full benches in total.
 - **The Ruling 6 skip-rule concern from round 0 is still open.** I made no change without a ruling.
+
+---
+
+# Fix round 2
+
+**Status:** DONE. I2 and N-a through N-e are all addressed.
+
+**Commits** (on `claude/upbeat-franklin-k1192h`, not pushed):
+- `54e31f4 fix(ml): gate digests cover minipy (import-walk test), stopped runs keep grouped data and a short summary, structural judge/index errors ask for a rebuild, missed targets show their digits`
+- `ad5c0cb fix(ml): G1 lists missed training-time targets by a plain name`. This is a small wording fix I found while writing the report: the missed list read "missed: trained on the GPU in, …" and now reads "missed: GPU training, …".
+
+## What changed, per item
+
+### I2: `minipy/` was in neither code digest
+- `MEASURING_SOURCES` is now `("evals", "personality", "infer", "skills", "minipy")`.
+- `runs.py` now documents its two exemption lists, each entry with its reason:
+  - **`UNDIGESTED`:**
+    - `__init__.py`: the empty package marker.
+    - `paths.py`: where generated files live, never what they hold.
+    - `device.py`: which device computes. The device type is already in every run's key.
+  - **`TRAINING_MAY_USE`:**
+    - `infer/__init__.py` and `infer/lm.py`: the trainer only samples telemetry text with them and never updates weights through them. So a change there should re-measure but not re-train.
+- **New test `test_code_digests_cover_everything_that_code_imports`.**
+  - It parses every `.py` file of each source group with `ast`. It counts every `import`/`from … import`, including ones inside functions and under `TYPE_CHECKING`, and resolves each `airace_ml.*` name to its module file, along with the parent packages that importing it runs. It then walks those imports transitively.
+  - **Measuring closure:** every module reached must lie in `TRAINING_SOURCES ∪ MEASURING_SOURCES`, or in `UNDIGESTED`. The union is the right bound here, because a training-code change re-trains and so re-measures everything.
+  - **Training closure:** every module reached must lie in `TRAINING_SOURCES`, `UNDIGESTED` or `TRAINING_MAY_USE`. This bound is stricter, because a measuring-code change does not re-train.
+  - It asserts that `minipy` is listed and that the walk really reaches `minipy/interpreter.py`.
+  - It rejects stale exemptions, meaning listed files that don't exist.
+  - It fails on any relative import, which it would not resolve.
+- **What the walk found before the fix.**
+  - The measuring closure reached `minipy/__init__.py` and `minipy/interpreter.py`, which were outside both digests. That was the finding. It also reached training modules (`data/*`, `model/*`, `train/*`, `tokenizer.py`), which the union covers.
+  - The training closure reached only `infer/*`, `device.py`, `paths.py` and `__init__.py`.
+
+### N-a: a failed G3 lost its grouped table
+- `GateCriterion` gains an optional last field, `unfinished_runs: list[str] = []`. The brief's positional construction is unchanged.
+- `require_completed` now fills that field and no longer touches `data`. A failed G3 therefore keeps its one-row-per-mix table.
+- The report's Measurements section adds the full explanation under the detail, for example: `**Cannot pass:** g3-code-s2 did not complete (unstable_stopped after 2 of 6 steps), so what this criterion compares did not get its full compute.` It takes the status and steps from `raw["runs"]`.
+- `outcome.json` carries `unfinished_runs` for each criterion.
+
+### N-b: the Summary cell
+The detail's prefix is now short: `stopped early: <run> (<steps> of <planned> steps). <original detail>`. Several runs are separated by commas. It still names each run and its steps, as I1 requires for G1. The full explanation lives in Measurements, as described under N-a.
+
+Example:
+
+```
+stopped early: g5-grown (128 of 256 steps). growing moved no output by more than 2.1e-06 ...
+```
+
+### N-c: structurally wrong judge or index files
+- **Judge files.** New `_check_judge_files` runs before `Judge.load`.
+  - It builds `JudgeCalibration(**calibration.json)` and requires finite numbers.
+  - It runs `CheckpointMeta.from_json(meta.json)`.
+- **Index record.** New `_check_novelty_record` runs before `NoveltyIndex.load` and reads `hash_base`, `n`, `sample_mod` and `count` from the index's `.json` record.
+- **Where the errors are caught.**
+  - Only around these two checks: `(OSError, ValueError, EOFError, SafetensorError, TypeError, KeyError)` become a `GateSetupError` naming `airace-ml build-judge` or `airace-ml build-novelty-index`. This goes through a shared `_rebuild` helper.
+  - `Judge.load` and `NoveltyIndex.load` themselves still catch only the narrow `_LOAD_ERRORS`, so a CUDA error or a bug still propagates (M4).
+
+### N-d: proof that the timers sync CUDA
+- Growth timing is factored into `time_growth(model, target, *, seed) -> (grown, seconds)`. It times on `_clock(next(model.parameters()).device)`, the grown model's own device, and `gate.speed()` uses it.
+- **`test_chat_speed_waits_for_a_cuda_device_before_each_clock_reading`.**
+  - It uses a fake LM whose `device` is `cuda`, with `torch.cuda.synchronize` and `time.perf_counter` patched to record events.
+  - It shows 4 clock readings, each directly preceded by a `sync`.
+- **`test_growth_is_timed_on_the_grown_models_own_device`.**
+  - It grows a real model placed on the `meta` device, standing in for a GPU model, with `_clock` spied.
+  - `_clock` is called twice, both times with `meta`, which is the model's device and not the gate's.
+  - Together with `test_timings_wait_for_queued_gpu_work` (`_clock` syncs CUDA and only CUDA), this shows the growth timer syncs the model's GPU before reading the clock.
+
+### N-e: a just-missed value must not round onto its limit
+`SpeedTarget.show(value, missed=…)` adds digits to a missed value until the printed value itself misses, up to 12 digits. Values that meet their target keep their usual form.
+
+Example:
+
+```
+missed: GPU training, chat first token, chat throughput. trained on the GPU in 90.04 s (at most 90 s); chat first token 300.4 ms (at most 300 ms); chat throughput 49.96 tokens/s (at least 50 tokens/s); CPU not timed
+```
+
+## Tests
+
+Six new tests:
+- `test_code_digests_cover_everything_that_code_imports` (I2)
+- `test_a_stopped_run_keeps_grouped_measurements_grouped_and_the_summary_short` (N-a and N-b). It checks that the grouped table survives, that the Summary row starts `stopped early: g3-code-s2 (2 of 6`, that the Measurements section has the "Cannot pass" line, and that "unfinished" appears nowhere in the tables.
+- `test_structurally_wrong_judge_or_index_files_ask_for_a_rebuild` (N-c). It covers four judge cases and four index cases, with `Judge.load` and `NoveltyIndex.load` patched to fail the test if they are ever reached.
+- `test_chat_speed_waits_for_a_cuda_device_before_each_clock_reading` (N-d)
+- `test_growth_is_timed_on_the_grown_models_own_device` (N-d)
+- `test_a_just_missed_target_shows_the_digits_that_miss_it` (N-e). The cases are 300.4 ms, 49.96 tokens/s, 2.0004 s, 30.000001 s and 90.04 s; values exactly at a limit still pass in their usual form; and the missed-list names "GPU training" and "CPU training".
+
+Updated tests, as the rulings required:
+- **`test_a_criterion_fails_and_says_so_when_a_run_it_uses_stopped_early`:** now expects the new detail, unchanged `data`, and `unfinished_runs`.
+- **The fake-gate stopped-run test:** checks per criterion that `"<run> (2 of 4 steps)"` appears and that `unfinished_runs` matches, exactly where the run is used, and that the detail starts with "stopped early: " exactly for the failing criteria.
+- **The M4 test:** now writes sound judge files and a sound index record first, so that its RuntimeError, TypeError and KeyError cases still reach `Judge.load` and `NoveltyIndex.load` and must propagate.
+
+**TDD**
+- **RED.** `uv run --no-sync pytest tests/test_gate.py -q` gave `9 failed, 41 passed`:
+  - the 6 new tests that need new behaviour;
+  - the 2 updated tests (the pure `require_completed` test and the 3 fake-gate cases).
+  - The chat-speed sync test passed from the start, because round 1 had already routed `chat_speed` through `_clock`. Mutation checking shows it bites.
+- **GREEN.** After implementing: `50 passed, 2 deselected`.
+- **Mutations.** I applied 11 single-line mutations and caught all 11, restoring each file afterwards:
+  - dropping `minipy` from `MEASURING_SOURCES`
+  - dropping the `paths.py` exemption
+  - dropping the `infer/lm.py` exemption
+  - putting `unfinished_runs` back into `data`
+  - moving the "stopped early" note to the end of the detail
+  - skipping the judge-file check
+  - skipping the index-record check
+  - removing the CUDA sync
+  - timing growth on the CPU instead of the model's device
+  - turning off the extra digits for missed values
+  - removing the "Cannot pass" line from the report
+
+## Commands and output (final tree, `ad5c0cb`)
+
+| Command (from `ml/`) | Result |
+|---|---|
+| `uv run --no-sync ruff check .` | All checks passed |
+| `uv run --no-sync pytest tests/test_gate.py tests/test_cli.py -q` | 184 passed, 2 deselected |
+| `uv run --no-sync pytest` | **1240 passed, 1 skipped, 8 deselected in 117.61 s** |
+| `uv run --no-sync pytest -m slow tests/test_gate.py -v` | **2 passed**. On `54e31f4`, with durations: `test_run_gate_quick` 49.14 s plus 3.27 s of fixture setup, and the CLI run-twice test 55.56 s, 108.06 s in total. On `ad5c0cb`: 2 passed in 116.95 s. |
+
+## Note
+Adding `minipy` changes the measuring digest, so any benches or fingerprints cached by an earlier gate run are measured again on the next run. The runs themselves are reused.
