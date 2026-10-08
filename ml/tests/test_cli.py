@@ -776,6 +776,10 @@ def _damage_index_array(root):
     novelty_path(root).write_bytes(b"this is not an array")
 
 
+def _damage_index_empty(root):
+    novelty_path(root).write_bytes(b"")  # np.load raises EOFError on a zero-byte file
+
+
 def _damage_judge_calibration(root):
     (judge_dir(root) / "calibration.json").write_text("{}", encoding="utf-8")
 
@@ -793,6 +797,7 @@ def _damage_judge_weights(root):
     [
         (_damage_index_record, "airace-ml build-novelty-index"),
         (_damage_index_array, "airace-ml build-novelty-index"),
+        (_damage_index_empty, "airace-ml build-novelty-index"),
         (_damage_judge_calibration, "airace-ml build-judge"),
         (_damage_judge_json, "airace-ml build-judge"),
         (_damage_judge_weights, "airace-ml build-judge"),
