@@ -277,3 +277,4 @@ Task 20: Ruling: fix I1 (G1 requires completed starter runs; any criterion using
 Task 20: Ruling (M7, spec §4.12.1): G1 checks every §4.11 first-model target — training time (GPU ≤ 90 s; CPU ≤ 480 s when measured), full bench ≤ 30 s, chat first token ≤ 300 ms and ≥ 50 tok/s, growth op ≤ 2 s — measured on the starter model; eval_speed gains optional keyword arguments so the brief's tests stay verbatim — cost if wrong: G1 is stricter than the plan's table.
 Task 20: Ruling: pull M3 (trim prefixes back to the last whitespace), M4 (narrow damage catches to file-format errors), M5 (move run reuse to experiments/runs.py), M6 (ignore ml/runs/ in .gitignore) into fix round 1; accept M8 (G6 children keep the base shape, as in the full gate) — cost if wrong: none.
 Task 20: fix round 1 dispatched (resume aced838).
+Task 20: fix round 1 implementer (aced838) stopped by a usage limit mid-M7; controller WIP commit 0beb670 of its uncommitted work; resuming it.
