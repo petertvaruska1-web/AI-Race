@@ -38,6 +38,9 @@ about 0 with any other. Coding's checked items and every exact item keep chance 
 
 Each category asks the model in as few calls as possible: one scoring call, and one generation
 call per reply length.
+
+Creativity has no items here: given the reference judge and the novelty index, the model writes
+stories that :mod:`airace_ml.evals.creativity` scores.
 """
 
 import copy
@@ -278,7 +281,7 @@ def _creativity(
     """Creativity needs the reference judge and the novelty index; ``None`` without both."""
     if judge is None or novelty is None:
         return None
-    from airace_ml.evals.creativity import score_creativity  # the module arrives with Task 17
+    from airace_ml.evals.creativity import score_creativity  # only a run with a judge needs it
 
     return score_creativity(lm, tok, judge, novelty, seed=seed)
 

@@ -1,0 +1,569 @@
+import json
+import math
+import re
+import shutil
+import warnings
+from dataclasses import asdict, replace
+from pathlib import Path
+
+import numpy as np
+import pytest
+import torch
+
+import airace_content
+import airace_ml.skills
+from airace_ml.data.corpus import DATASET_IDS, Corpus, DocTags, write_corpus
+from airace_ml.data.prep import heldout_docs
+from airace_ml.evals import judge as judge_module
+from airace_ml.evals import novelty as novelty_module
+from airace_ml.evals.creativity import STORY_PROMPTS, score_creativity
+from airace_ml.evals.judge import (
+    CALIBRATION_NAME,
+    TOKENIZER_NAME,
+    Judge,
+    JudgeCalibration,
+    build_judge,
+    calibrate,
+    is_well_formed,
+    judge_train_config,
+)
+from airace_ml.evals.novelty import (
+    HASH_BASE,
+    NoveltyIndex,
+    build_novelty_index,
+    ngram_hashes,
+)
+from airace_ml.evals.suite import run_benchmarks
+from airace_ml.infer.lm import Generation, TorchLM
+from airace_ml.model.checkpoint import CheckpointMeta, save_checkpoint
+from airace_ml.model.shape import ModelShape
+from airace_ml.model.transformer import Transformer
+from airace_ml.paths import corpus_dir, judge_dir, novelty_path
+from airace_ml.tokenizer import encode_chat, encode_doc
+from tests.fakes import ScriptedLM
+
+
+class StubJudge:
+    def __init__(self, tok, nll):
+        self.tok, self._nll = tok, nll
+
+    calibration = JudgeCalibration(creative_p10=2.0, creative_p90=6.0, conv_reply_p90=5.0)
+
+    def nll_per_token(self, lists):
+        return [self._nll(l) for l in lists]
+
+
+CORPUS_TEXT = "once upon a time a little bunny hopped to the big green hill and ate a carrot"
+
+
+def test_novelty_index(tiny_tok, tmp_path):
+    ids = np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)
+    idx = NoveltyIndex.build([ids], sample_mod=1)
+    assert idx.novelty(ids.tolist()) == 0.0 and idx.novelty([5, 6]) == 0.0
+    rnd = np.random.default_rng(0).integers(20, 500, 200).tolist()
+    assert idx.novelty(rnd) > 0.95
+    idx.save(tmp_path / "i.npy")
+    assert NoveltyIndex.load(tmp_path / "i.npy").novelty(rnd) == idx.novelty(rnd)
+
+
+def test_creativity_ordering(tiny_tok):
+    idx = NoveltyIndex.build([np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)], sample_mod=1)
+    fluent = StubJudge(tiny_tok, lambda l: 2.5)
+    gib = StubJudge(tiny_tok, lambda l: 9.0)
+    novel = ScriptedLM(
+        tiny_tok,
+        reply=lambda p: f"a curious robot {len(p)} painted purple stars across the quiet ocean sky",
+    )
+    copy = ScriptedLM(tiny_tok, reply=lambda p: CORPUS_TEXT)
+    s_novel = score_creativity(novel, tiny_tok, fluent, idx)[0].score
+    s_copy = score_creativity(copy, tiny_tok, fluent, idx)[0].score
+    s_gib = score_creativity(novel, tiny_tok, gib, idx)[0].score
+    # Review Focus 4
+    s_empty = score_creativity(ScriptedLM(tiny_tok), tiny_tok, fluent, idx)[0].score
+    assert s_novel > s_copy > s_gib >= 0 and s_empty == 0 and len(STORY_PROMPTS) == 24
+
+
+def test_well_formed(tiny_tok):
+    j = StubJudge(tiny_tok, lambda l: 3.0)
+    assert is_well_formed("I like to play in the park.", j)
+    assert not is_well_formed("hi there", j) and not is_well_formed("go go go go go go go go go", j)
+    assert not is_well_formed("I like to play in the park.", StubJudge(tiny_tok, lambda l: 8.0))
+
+
+def test_judge_config_valid():
+    c = judge_train_config()
+    c.validate()
+    assert c.shape.n_layer == 8 and c.token_budget == 120_000_000
+
+
+@pytest.mark.slow
+def test_build_judge_smoke(tiny_data_root):
+    from airace_ml.evals.judge import Judge, build_judge
+
+    d = build_judge(tiny_data_root, token_budget=32768 * 4)
+    j = Judge.load(d)
+    assert math.isfinite(j.calibration.creative_p90)
+
+
+# -- helpers for the tests below -----------------------------------------------------------------
+
+CPU = torch.device("cpu")
+INF = math.inf
+
+
+class RecordingLM(ScriptedLM):
+    """A :class:`ScriptedLM` that also records every scoring and generation call."""
+
+    def __init__(self, tok, **kwargs):
+        super().__init__(tok, **kwargs)
+        self.scored = []
+        self.generated = []
+
+    def score_continuations(self, contexts, continuations):
+        self.scored.append(([list(c) for c in contexts], [list(c) for c in continuations]))
+        return super().score_continuations(contexts, continuations)
+
+    def generate(self, prompts, **kwargs):
+        self.generated.append(([list(p) for p in prompts], kwargs))
+        return super().generate(prompts, **kwargs)
+
+
+class TokenLM:
+    """Replies to every prompt with the same raw token ids (special tokens included)."""
+
+    ctx_len = 256
+
+    def __init__(self, tokens):
+        self.tokens = list(tokens)
+
+    def generate(self, prompts, **kwargs):
+        n = len(self.tokens)
+        return [Generation(list(self.tokens), [0.5] * n, [0.5] * n, False) for _ in prompts]
+
+
+def ref_hashes(ids, n):
+    """The window hashes computed slowly with Python integers."""
+    ids = [int(t) for t in ids]
+    return [
+        sum(ids[i + j] * HASH_BASE ** (n - 1 - j) for j in range(n)) % 2**64
+        for i in range(len(ids) - n + 1)
+    ]
+
+
+def ref_words(text):
+    return re.findall(r"[a-z]+", text.lower())
+
+
+def ref_distinct_2(texts):
+    pairs = [p for t in texts for p in zip(ref_words(t), ref_words(t)[1:])]
+    return len(set(pairs)) / len(pairs) if pairs else 0.0
+
+
+def ref_replies(doc, ai_id, end_id):
+    """Every AI turn's tokens, read one token at a time."""
+    replies, current = [], None
+    for t in doc:
+        if t == ai_id:
+            current = []
+        elif t == end_id:
+            if current:
+                replies.append(current)
+            current = None
+        elif current is not None:
+            current.append(t)
+    return replies
+
+
+def tiny_judge_model(vocab_size, seed=0):
+    torch.manual_seed(seed)
+    return Transformer(ModelShape(2, 64, 64), vocab_size)
+
+
+def tiny_meta(model):
+    return CheckpointMeta("tok-v1", model.shape, "lineage", "judge-v1", None, 0, {}, [])
+
+
+# -- novelty -------------------------------------------------------------------------------------
+
+
+def test_ngram_hashes_match_a_slow_reference_without_warnings():
+    rng = np.random.default_rng(1)
+    ids = rng.integers(0, 65536, 300).astype(np.uint16)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # any overflow RuntimeWarning fails the test
+        for n in (1, 2, 3, 8):
+            got = ngram_hashes(ids, n)
+            assert got.dtype == np.uint64 and got.tolist() == ref_hashes(ids, n)
+            assert ngram_hashes(ids.tolist(), n).tolist() == got.tolist()
+        assert ngram_hashes(ids[:7]).dtype == np.uint64 and ngram_hashes(ids[:7]).size == 0
+        assert ngram_hashes([]).size == 0 and ngram_hashes(ids[:8]).size == 1
+    assert ngram_hashes([1, 2, 3, 4, 5, 6, 7, 8]).tolist() == ref_hashes(range(1, 9), 8)
+    with pytest.raises(ValueError):
+        ngram_hashes(ids, 0)
+    with pytest.raises(ValueError):
+        ngram_hashes(ids.reshape(2, -1))
+
+
+def test_novelty_index_samples_by_content_and_never_spans_arrays():
+    rng = np.random.default_rng(2)
+    a, b = (rng.integers(16, 4096, 400).astype(np.uint16) for _ in range(2))
+    idx = NoveltyIndex.build([a, b])  # n = 8, sample_mod = 8
+    expected = {h for arr in (a, b) for h in ref_hashes(arr, 8) if h % 8 == 0}
+    assert idx.hashes.tolist() == sorted(expected) and len(idx) == len(expected)
+    spanning = {h for h in ref_hashes(np.concatenate([a, b]), 8) if h % 8 == 0} - expected
+    assert spanning and not spanning & set(idx.hashes.tolist())
+    # One window counts once per occurrence: a copied stretch plus a new one.
+    copied = a[:100].tolist()
+    fresh = rng.integers(16, 4096, 100).tolist()
+    windows = [h for h in ref_hashes(copied + fresh, 8) if h % 8 == 0]
+    absent = sum(h not in expected for h in windows)
+    assert idx.novelty(copied + fresh) == pytest.approx(absent / len(windows))
+    assert 0 < idx.novelty(copied + fresh) < 1 and idx.novelty(copied) == 0.0
+
+
+def test_novelty_edge_cases(tiny_tok):
+    empty = NoveltyIndex(np.zeros(0, np.uint64), sample_mod=1)
+    assert empty.novelty(list(range(20, 40))) == 1.0 and empty.novelty([]) == 0.0
+    unsorted = NoveltyIndex(np.array([9, 3, 3, 7], np.uint64), n=2, sample_mod=1)
+    assert unsorted.hashes.tolist() == [3, 7, 9]
+    for bad in ({"n": 0}, {"sample_mod": 0}, {"n": 1.5}):
+        with pytest.raises(ValueError):
+            NoveltyIndex(np.zeros(0, np.uint64), **bad)
+
+
+def test_novelty_index_save_load_keeps_its_parameters(tmp_path):
+    rng = np.random.default_rng(3)
+    idx = NoveltyIndex.build([rng.integers(16, 4096, 500)], n=3, sample_mod=2)
+    path = tmp_path / "deep" / "index.npy"
+    idx.save(path)
+    loaded = NoveltyIndex.load(path)
+    assert (loaded.n, loaded.sample_mod) == (3, 2)
+    assert loaded.hashes.tolist() == idx.hashes.tolist()
+    assert sorted(p.name for p in path.parent.iterdir()) == ["index.json", "index.npy"]
+    meta = json.loads((path.parent / "index.json").read_text(encoding="utf-8"))
+    meta["hash_base"] = 31
+    (path.parent / "index.json").write_text(json.dumps(meta), encoding="utf-8")
+    with pytest.raises(ValueError, match="base"):
+        NoveltyIndex.load(path)
+
+
+def _write_root(root, rng):
+    """All 8 corpora of random documents (some shorter than 8 tokens, one empty), every fourth
+    document held out. Returns ``{dataset: (docs, heldout)}``."""
+    written = {}
+    for ds in DATASET_IDS:
+        docs = [rng.integers(16, 4096, rng.integers(0, 30)).tolist() for _ in range(12)]
+        docs[5] = []
+        n = len(docs)
+        heldout = np.arange(n) % 4 == 1
+        tags = DocTags(
+            quality=np.ones(n),
+            dup_cluster=np.full(n, -1),
+            dup_canonical=np.zeros(n, bool),
+            false_fact=np.zeros(n, bool),
+            topic=np.zeros(n),
+            noise_kind=np.zeros(n),
+            heldout=heldout,
+            purchase_rank=np.zeros(n),
+        )
+        write_corpus(corpus_dir(root) / ds, docs, tags, {"dataset": ds})
+        written[ds] = (docs, heldout)
+    return written
+
+
+def test_build_novelty_index_skips_heldout_docs_and_boundaries(tmp_path, monkeypatch):
+    written = _write_root(tmp_path, np.random.default_rng(4))
+    path = build_novelty_index(tmp_path)
+    assert path == novelty_path(tmp_path)
+    idx = NoveltyIndex.load(path)
+    assert (idx.n, idx.sample_mod) == (8, 8)
+
+    def sampled(ids):
+        return {h for h in ref_hashes(ids, 8) if h % 8 == 0}
+
+    kept = set().union(
+        *(sampled(d) for docs, held in written.values() for d, h in zip(docs, held) if not h)
+    )
+    assert idx.hashes.tolist() == sorted(kept)
+    held_only = set().union(
+        *(sampled(d) for docs, held in written.values() for d, h in zip(docs, held) if h)
+    )
+    every_window = set().union(
+        *(sampled([t for d in docs for t in d]) for docs, _ in written.values())
+    )
+    spanning = every_window - kept - held_only
+    assert held_only - kept and spanning  # both kinds exist, and neither is in the index
+
+    monkeypatch.setattr(novelty_module, "_CHUNK", 3)  # chunk edges in every corpus
+    assert NoveltyIndex.load(build_novelty_index(tmp_path)).hashes.tolist() == sorted(kept)
+
+
+# -- the judge -----------------------------------------------------------------------------------
+
+
+def test_nll_per_token_scores_text_after_bos_in_one_call(tiny_tok):
+    lm = RecordingLM(tiny_tok, ctx_len=10, score=lambda ctx, cont: -2.0 * len(cont))
+    judge = Judge(lm, tiny_tok)
+    lists = [[20, 21, 22], [], [0, 1, 2, 4, 15], list(range(20, 40)), np.array([1, 30, 4, 31])]
+    assert judge.nll_per_token(lists) == [2.0, INF, INF, 2.0, 2.0]
+    [(contexts, continuations)] = lm.scored
+    assert contexts == [[tiny_tok.bos_id]] * 5
+    assert continuations == [[20, 21, 22], [], [], list(range(20, 29)), [30, 31]]
+    broken = Judge(RecordingLM(tiny_tok, score=lambda ctx, cont: math.nan), tiny_tok)
+    assert broken.nll_per_token([[20, 21]]) == [INF]
+    assert judge.nll_per_token([]) == []
+
+
+def test_nll_per_token_on_a_real_model(tiny_tok):
+    model = tiny_judge_model(tiny_tok.vocab_size)
+    lm = TorchLM(model, tiny_tok, CPU)
+    judge = Judge(lm, tiny_tok)
+    text = tiny_tok.encode("The little dog ran to the park and played all day.")
+    longer = list(range(20, 220))  # beyond the 64-token span
+    got = judge.nll_per_token([text, longer, [], [1, 2, 4]])
+    [direct] = lm.score_continuations([[tiny_tok.bos_id]], [text])
+    assert got[0] == pytest.approx(-direct.sum_logprob / len(text))
+    assert got[1] == pytest.approx(judge.nll_per_token([longer[:63]])[0])
+    assert math.isfinite(got[0]) and math.isfinite(got[1]) and got[2:] == [INF, INF]
+
+
+def test_judge_load_needs_only_its_directory(tmp_path, tiny_tok, tiny_tok_path):
+    model = tiny_judge_model(tiny_tok.vocab_size)
+    built = tmp_path / "built"
+    save_checkpoint(model, tiny_meta(model), built)
+    shutil.copyfile(tiny_tok_path, built / TOKENIZER_NAME)
+    cal = JudgeCalibration(2.5, 5.5, 4.75)
+    (built / CALIBRATION_NAME).write_text(json.dumps(asdict(cal)), encoding="utf-8")
+    moved = Path(shutil.move(built, tmp_path / "elsewhere"))
+    judge = Judge.load(moved, device="cpu")
+    assert judge.calibration == cal and judge.tok.vocab_size == tiny_tok.vocab_size
+    ids = tiny_tok.encode("A cat sat on a warm mat.")
+    expected = Judge(TorchLM(model, tiny_tok, CPU), tiny_tok).nll_per_token([ids])
+    assert judge.nll_per_token([ids]) == pytest.approx(expected)
+
+    other = tiny_judge_model(600)
+    save_checkpoint(other, tiny_meta(other), moved)
+    with pytest.raises(ValueError, match="vocabulary"):
+        Judge.load(moved, device="cpu")
+    (moved / CALIBRATION_NAME).unlink()  # no calibration: not a complete judge
+    with pytest.raises(FileNotFoundError):
+        Judge.load(moved, device="cpu")
+
+
+def test_calibrate_scores_heldout_openings_and_ai_replies(tiny_data_root, tiny_tok):
+    lm = RecordingLM(tiny_tok, score=lambda ctx, cont: -(float(len(cont)) ** 2))  # nll = length
+    cal = calibrate(Judge(lm, tiny_tok), tiny_data_root)
+    (_, openings), (_, replies) = lm.scored
+    creative = Corpus.open(corpus_dir(tiny_data_root) / "creative")
+    expected_openings = [creative.doc(int(i))[1:97].tolist() for i in heldout_docs(creative)]
+    assert all(creative.doc(int(i))[0] == tiny_tok.bos_id for i in heldout_docs(creative))
+    conv = Corpus.open(corpus_dir(tiny_data_root) / "conversations")
+    expected_replies = [
+        r
+        for i in heldout_docs(conv)
+        for r in ref_replies(conv.doc(int(i)).tolist(), tiny_tok.ai_id, tiny_tok.end_id)
+    ]
+    assert sorted(openings) == sorted(expected_openings)
+    assert sorted(replies) == sorted(expected_replies) and len(replies) >= 5
+    # The calibration scores a reply exactly as is_well_formed scores the reply's text.
+    texts = [tiny_tok.decode(r) for r in replies]
+    assert [tiny_tok.encode(t.strip()) for t in texts] == replies
+    lengths = [len(o) for o in expected_openings]
+    p10, p90 = np.percentile(lengths, [10, 90])
+    reply_p90 = np.percentile([len(r) for r in expected_replies], 90)
+    assert asdict(cal) == pytest.approx(
+        {"creative_p10": p10, "creative_p90": p90, "conv_reply_p90": reply_p90}
+    )
+
+
+def test_calibrate_samples_deterministically(tiny_data_root, tiny_tok, monkeypatch):
+    monkeypatch.setattr(judge_module, "CALIBRATION_DOCS", 2)
+    runs = []
+    for _ in range(2):
+        lm = RecordingLM(tiny_tok, score=lambda ctx, cont: -float(len(cont)))
+        calibrate(Judge(lm, tiny_tok), tiny_data_root)
+        runs.append(lm.scored)
+    assert runs[0] == runs[1]
+    (_, openings), (_, replies) = runs[0]
+    assert len(openings) == 2 and len(replies) == 2
+    broken = Judge(RecordingLM(tiny_tok, score=lambda ctx, cont: math.nan), tiny_tok)
+    with pytest.raises(ValueError, match="calibrate"):
+        calibrate(broken, tiny_data_root)
+
+
+def test_build_judge_writes_a_self_contained_judge(tiny_data_root, tiny_tok, tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    shutil.copytree(tiny_data_root, root)
+    out = judge_dir(root)
+    out.mkdir(parents=True)
+    (out / CALIBRATION_NAME).write_text("{}", encoding="utf-8")  # a previous judge's
+    calls = []
+
+    def fake_train_run(cfg, **kwargs):  # what the real run leaves behind: a checkpoint
+        assert not (kwargs["out_dir"] / CALIBRATION_NAME).exists()
+        calls.append((cfg, kwargs))
+        model = tiny_judge_model(tiny_tok.vocab_size)
+        save_checkpoint(model, tiny_meta(model), kwargs["out_dir"])
+
+    monkeypatch.setattr(judge_module, "train_run", fake_train_run)
+    events = []
+    built = build_judge(root, device="cpu", on_event=events.append, token_budget=65536)
+    assert built == out
+    [(cfg, kwargs)] = calls
+    assert cfg == replace(judge_train_config(), token_budget=65536)
+    assert kwargs == {"out_dir": out, "data_root": root, "device": CPU, "on_event": events.append}
+    names = sorted(p.name for p in out.iterdir())
+    assert names == ["calibration.json", "meta.json", "model.safetensors", "tokenizer.json"]
+    moved = Path(shutil.move(out, tmp_path / "moved"))
+    judge = Judge.load(moved, device="cpu")
+    assert judge.calibration == calibrate(judge, root)
+    assert judge.calibration.creative_p10 <= judge.calibration.creative_p90
+
+
+def test_judge_config_is_the_reference_recipe():
+    c = judge_train_config()
+    assert (c.shape.n_layer, c.shape.d_model, c.shape.ctx_len) == (8, 384, 256)
+    assert c.mixture == {ds: 1.0 for ds in DATASET_IDS} and c.run_id == "judge-v1"
+    assert (c.prep.cleaning, c.prep.dedup, c.prep.fact_check) == ("thorough", True, True)
+    assert (c.boldness, c.batch_tokens, c.seed) == (0.4, 32768, 1234)
+    assert judge_train_config(seed=7).seed == 7
+    assert 15_000_000 < c.shape.param_count() < 16_500_000
+
+
+# -- well-formed replies -------------------------------------------------------------------------
+
+
+def test_well_formed_edge_cases(tiny_tok):
+    seen = []
+    judge = StubJudge(tiny_tok, lambda ids: seen.append(ids) or 3.0)
+    assert is_well_formed("  I like big dogs \n", judge)  # exactly 4 words
+    assert seen == [tiny_tok.encode("I like big dogs")]  # judged on the stripped reply
+    assert is_well_formed("I have 3 cats", judge)  # a number is a word
+    assert is_well_formed("the cat sat and the cat sat on a mat", judge)  # a 3-gram twice
+    seen.clear()
+    for reply in ("I like dogs", "", "  ... !!! ???", "The cat sat, the cat sat, THE CAT SAT."):
+        assert not is_well_formed(reply, judge)
+    assert seen == []  # the judge is only asked about replies that pass the word checks
+    at_limit = StubJudge(tiny_tok, lambda ids: 5.0)  # conv_reply_p90 is 5.0
+    assert is_well_formed("I like to play outside.", at_limit)
+    for nll in (math.nan, math.inf, 5.0001):
+        assert not is_well_formed(
+            "I like to play outside.", StubJudge(tiny_tok, lambda ids, v=nll: v)
+        )
+
+
+# -- creativity ----------------------------------------------------------------------------------
+
+ANIMALS = ["dog", "cat", "owl", "fox", "bee", "cow", "pig", "hen", "ant", "elk", "yak", "emu"]
+PLACES = ["river", "forest", "garden", "harbor", "meadow", "castle"]
+
+
+def _story(k):
+    if k == 5:
+        return ""
+    if k == 6:
+        return "  123 456 !!!  "  # no words
+    return f"  the {ANIMALS[k % 12]} found a shiny stone near the {PLACES[k % 6]} today  "
+
+
+def test_creativity_scores_every_story_and_the_mix(tiny_tok):
+    prompt_index = {
+        tuple(encode_chat(tiny_tok, [("user", p)], add_generation_prompt=True)): k
+        for k, p in enumerate(STORY_PROMPTS)
+    }
+    lm = RecordingLM(tiny_tok, reply=lambda prompt: _story(prompt_index[tuple(prompt)]))
+    idx = NoveltyIndex.build([np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)], sample_mod=1)
+    seen = []
+    judge = StubJudge(tiny_tok, lambda ids: seen.append(ids) or 3.0)  # coherence 0.75
+    category, items = score_creativity(lm, tiny_tok, judge, idx, seed=7)
+
+    [(prompts, kwargs)] = lm.generated  # one batched call
+    assert list(map(tuple, prompts)) == list(prompt_index)
+    assert kwargs == {"max_new_tokens": 96, "temperature": 0.9, "top_p": 0.95, "seed": 7}
+    stories = [_story(k).strip() for k in range(24)]
+    assert seen == [tiny_tok.encode(s) for s in stories]
+    expected = [
+        0.75 * (0.4 + 0.6 * idx.novelty(tiny_tok.encode(s))) if ref_words(s) else 0.0
+        for s in stories
+    ]
+    assert [r.score for r in items] == pytest.approx(expected)
+    assert items[5].score == items[6].score == 0.0 and min(expected[:5]) > 0.3
+    assert [r.item_id for r in items] == [f"story-{k:02d}" for k in range(24)]
+    assert [r.output for r in items] == stories and {r.category for r in items} == {"creativity"}
+    topics = [r.tags for r in items]
+    assert all(t[0] == "fmt:story" and t[1].startswith("topic:") for t in topics)
+    assert len({t[1] for t in topics}) == 6
+    raw = sum(expected) / 24
+    d = ref_distinct_2(stories)
+    assert 0 < d < 1
+    assert category.raw == pytest.approx(raw) and category.n == 24
+    assert category.score == pytest.approx(100 * raw * (0.5 + 0.5 * d))
+
+    score_creativity(lm, tiny_tok, judge, idx, seed=1, max_new_tokens=40)
+    assert lm.generated[-1][1]["max_new_tokens"] == 40 and lm.generated[-1][1]["seed"] == 1
+
+
+def test_creativity_degenerate_outputs_score_finite(tiny_tok):
+    idx = NoveltyIndex.build([np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)])
+    fluent = StubJudge(tiny_tok, lambda ids: 2.5)
+    specials = score_creativity(TokenLM([4, 2, 1, 0, 3, 15, 15]), tiny_tok, fluent, idx)
+    assert specials[0].score == 0.0 and specials[0].raw == 0.0
+    assert all(r.score == 0.0 and r.output == "" for r in specials[1])
+    punct = ScriptedLM(tiny_tok, reply=lambda p: "... !!! ???")
+    assert score_creativity(punct, tiny_tok, fluent, idx)[0].score == 0.0
+    repeated = ScriptedLM(tiny_tok, reply=lambda p: "the " * 60)
+    flat = StubJudge(tiny_tok, lambda ids: 4.0)
+    flat.calibration = JudgeCalibration(4.0, 4.0, 4.0)  # no spread at all
+    weird = [StubJudge(tiny_tok, lambda ids, v=v: v) for v in (math.nan, INF, -INF, 0.0, 1e9)]
+    for lm in (repeated, punct, ScriptedLM(tiny_tok, reply=lambda p: CORPUS_TEXT)):
+        for judge in (fluent, flat, *weird):
+            category, items = score_creativity(lm, tiny_tok, judge, idx)
+            assert math.isfinite(category.score) and 0 <= category.score <= 100
+            assert all(math.isfinite(r.score) and 0 <= r.score <= 1 for r in items)
+    assert score_creativity(repeated, tiny_tok, weird[0], idx)[0].score == 0.0  # NaN loss
+
+
+def test_story_prompts_are_simple_varied_and_not_in_any_generator():
+    assert len(STORY_PROMPTS) == len(set(STORY_PROMPTS)) == 24
+    assert all(re.fullmatch(r"Write a short story about [a-z ]+\.", p) for p in STORY_PROMPTS)
+    assert all(len(p.split()) <= 14 for p in STORY_PROMPTS)
+    roots = (Path(airace_content.__file__).parent, Path(airace_ml.skills.__file__).parent)
+    sources = [
+        f.read_text(encoding="utf-8").lower()
+        for root in roots
+        for f in root.rglob("*")
+        if f.suffix in (".py", ".json", ".txt")
+    ]
+    assert len(sources) > 10
+    for prompt in STORY_PROMPTS:
+        subject = prompt.removeprefix("Write a short story about ").removesuffix(".").lower()
+        assert not any(prompt.lower()[:-1] in s or subject in s for s in sources), prompt
+
+
+def test_run_benchmarks_measures_creativity_with_a_real_judge(tiny_lm, tiny_tok, fixture_texts):
+    judge_lm = TorchLM(tiny_judge_model(tiny_tok.vocab_size, seed=1), tiny_tok, CPU)
+    judge = Judge(judge_lm, tiny_tok, JudgeCalibration(5.0, 7.0, 6.0))
+    idx = NoveltyIndex.build([np.array(encode_doc(tiny_tok, t), np.uint16) for t in fixture_texts])
+
+    def run():
+        return run_benchmarks(
+            tiny_lm,
+            tiny_tok,
+            categories=["language", "creativity"],
+            judge=judge,
+            novelty=idx,
+            max_items_per_category=4,
+            seed=3,
+        )
+
+    a, b = run(), run()
+    assert a.missing == [] and list(a.scores) == ["language", "creativity"]
+    creativity = a.scores["creativity"]
+    assert creativity.n == 24 and math.isfinite(creativity.score) and 0 <= creativity.score <= 100
+    assert creativity == score_creativity(tiny_lm, tiny_tok, judge, idx, seed=3)[0]
+    stories = [(r.item_id, r.score, r.output) for r in a.items if r.category == "creativity"]
+    assert len(stories) == 24 and any(r[2] for r in stories)
+    assert a.scores == b.scores
+    assert stories == [
+        (r.item_id, r.score, r.output) for r in b.items if r.category == "creativity"
+    ]

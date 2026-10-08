@@ -147,6 +147,12 @@ class Corpus:
         info = json.loads((dir / INFO_FILE).read_text(encoding="utf-8"))
         return cls(tokens, offsets, tags, info)
 
+    @property
+    def tokens(self) -> np.ndarray:
+        """Every document's token ids, concatenated (uint16; the memory map itself, read-only),
+        so document ``i`` is ``tokens[offsets[i]:offsets[i + 1]]``."""
+        return self._tokens
+
     def doc(self, i: int) -> np.ndarray:
         """Token ids of document ``i`` as a uint16 view into the memory map."""
         if not 0 <= i < self.n_docs:
