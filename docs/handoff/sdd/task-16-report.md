@@ -212,3 +212,133 @@ I wrote the additional tests after the implementation (they passed at once), so 
 - The 4096-vocab `tok-v1` is far more compact, and a truncated all-caps reply still passes `all_caps`, so a perfect model should be unaffected.
 - I couldn't check with the real tokenizer here. `ScriptedLM` doesn't truncate, so the answer-key test would not catch this.
 - Suggested local check: for each Exact/Check item, `len(tok.encode(answer or reference)) <= max_new_tokens`.
+
+---
+
+## Pre-review changes (rulings A, B, C)
+
+**Commit:** `6506b12 fix(ml): calibrate consistency choices against a neutral context; check reply budgets with tok-v1`. It sits on top of the controller's `4dcf1a4`. Not pushed.
+**Status:** DONE_WITH_CONCERNS. Calibration is implemented as ruled, but it barely moves untrained real models (concern A2 below).
+
+### What changed
+
+**A: calibrated choice for consistency only.**
+- `scoring.calibrated_choice(option_scores, neutral_scores)`:
+  - Each option's gain is its mean log-prob per token after the paraphrase minus its mean log-prob per token after the neutral context. The answer is the option with the highest gain, and the first option wins ties.
+  - A gain that is not finite on either side (NaN, ±inf, an empty continuation) counts as −inf, so it never wins.
+  - Mismatched lengths raise `ValueError`.
+- `suite.NEUTRAL_CONTEXT = "Answer:"`. The neutral context is `encode_doc(tok, NEUTRAL_CONTEXT)`, with the same continuation tokens as the member's option (a leading space for plain items).
+- `_ask(..., calibrate=...)`:
+  - `_run_category` passes `calibrate=category == "consistency"`. Knowledge and reasoning keep `mc_choice`.
+  - Each category still makes one `score_continuations` call. Requests are now deduplicated by `(context, continuation)`, so each neutral pair is asked once per category.
+  - For the full consistency set, the call holds 480 paraphrase pairs plus one neutral pair per distinct option text. That is fewer than 480, and the test asserts it.
+- Agreement, chance (the mean of `1/len(options)`) and normalization are unchanged from ruling 5.
+- `answer_key_lm` already scores unknown pairs at −10, including every neutral pair, so its behaviour is unchanged.
+  - Correct option: gain is 0 − (−10/n) > 0.
+  - Wrong option: gain is −10/n − (−10/n) = 0.
+  - So the correct option wins and the answer key stays at 100. I updated its docstring to say this.
+- The `suite.py` module docstring documents the rule, including what it does not cancel.
+
+**B: no code change.** The `tag_breakdown()` docstring already documents `"<category>/<tag>"` keys and the per-category `MIN_TAG_ITEMS`.
+
+**C: reply budgets under the real tokenizer.**
+- `_reply_budget_overruns(tok)` lists every Exact answer (each accepted form) and every Check reference whose token count exceeds the item's `max_new_tokens`.
+  - Plain Exact answers are counted both bare and with a leading space, since a reply after `Answer:` usually starts with one.
+  - Check references are counted as they stand.
+- `test_every_answer_fits_its_reply_budget_with_the_real_tokenizer` runs this with `Tok.load(tokenizer_path())`. It is marked `@pytest.mark.skipif(not tokenizer_path().exists(), reason="needs the real tok-v1 tokenizer")`, so it is skipped here and runs on the owner's machine once `data/tokenizer/tok-v1/tokenizer.json` exists.
+- `test_reply_budget_check_finds_overruns` runs the same check on the 512-vocab test tokenizer and must find the known overruns (`knowledge-0168`, `instruction-0004`, `instruction-0053`). This proves the check has teeth.
+- I also ran the skipped test against a tokenizer: `AIRACE_DATA=<scratch root with the 512-vocab tokenizer> pytest -k real_tokenizer` fails and lists 4 overruns, starting with `('knowledge-0168', 'Bandar Seri Begawan', 12, 8)`.
+
+### Tests
+
+Added:
+- `test_calibrated_choice_subtracts_the_neutral_score`: the gain beats the plain argmax, ties go to the first option, and NaN/±inf/empty on either side never wins.
+- `test_consistency_ignores_a_question_blind_option_prior`: the fake from ruling A1 gives each option text a fixed, distinct log-prob whatever the context.
+  - The test first proves that the plain rule would make this model agree with itself (mean agreement > 0.9).
+  - It then asserts the consistency score is ≤ 25. It is actually 0.0: every gain is 0, so the model picks the first option, which matches the constant model.
+- `test_consistency_rewards_answers_that_come_from_the_question[the right answer | the same wrong answer]`: the same strong text prior, plus a +2 lift that the question gives one option.
+  - Variant one lifts the correct option; variant two lifts the same wrong option in every paraphrase.
+  - Both score `CategoryScore(100.0, 1.0, 40)`.
+- `test_only_consistency_is_calibrated`: reasoning and knowledge make 0 neutral requests, and consistency makes exactly one per distinct option text.
+- `test_reply_budget_check_finds_overruns` and the skipped real-tokenizer test described under C.
+
+Updated:
+- `test_one_batched_call_per_category` now expects the distinct `(context, continuation)` pairs, with consistency's neutral pairs.
+- `test_consistency_agreement_by_text_and_chance`: its scripted score now handles the neutral context with `.get`. The expected numbers are unchanged.
+
+**Mutation check (7 more).** Every one is caught:
+- calibrating every category, or never calibrating
+- no deduplication
+- a different neutral context (`"Answer: "`)
+- the gain sign reversed
+- non-finite gains allowed
+- calibrated ties going last
+
+**Dropped variant (reported, not committed).** I also tried a stronger fake: the text prior plus a tiny deterministic wobble that depends on the context.
+- It scored 35.6 (raw 0.517), above chance.
+- The neutral context's own wobble is shared by all three paraphrases, so subtracting it acts as a new text bias.
+- It goes beyond the ruled fake and fails under the ruled design, so I removed it and report it as a finding.
+
+### Commands and output
+
+```
+$ cd ml && uv run --no-sync pytest tests/test_bench.py -q        # RED 1: before calibrated_choice existed
+E   ImportError: cannot import name 'calibrated_choice' from 'airace_ml.evals.scoring'
+1 error in 0.18s
+$ uv run --no-sync pytest tests/test_bench.py -q                 # RED 2: calibrated_choice added, runner unchanged
+E       assert 100.0 <= 25
+E        +  where 100.0 = CategoryScore(score=100.0, raw=1.0, n=40).score
+FAILED tests/test_bench.py::test_one_batched_call_per_category
+FAILED tests/test_bench.py::test_consistency_ignores_a_question_blind_option_prior[0.0]
+FAILED tests/test_bench.py::test_consistency_ignores_a_question_blind_option_prior[1.0]
+FAILED tests/test_bench.py::test_only_consistency_is_calibrated
+4 failed, 68 passed, 1 skipped in 3.19s
+$ uv run --no-sync pytest tests/test_bench.py -q                 # after the runner change (before dropping [1.0])
+E       assert 35.555555555555564 <= 25
+FAILED tests/test_bench.py::test_consistency_ignores_a_question_blind_option_prior[1.0]
+1 failed, 71 passed, 1 skipped in 3.09s
+$ uv run --no-sync pytest tests/test_bench.py -q -rs             # GREEN (ruled fake only)
+SKIPPED [1] tests/test_bench.py:749: needs the real tok-v1 tokenizer
+71 passed, 1 skipped in 3.08s
+$ uv run --no-sync pytest
+=========== 931 passed, 1 skipped, 4 deselected in 67.89s (0:01:07) ============
+$ uv run --no-sync ruff check .
+All checks passed!
+$ uv run --no-sync ruff format --check src/airace_ml/evals tests/fakes.py tests/test_bench.py
+5 files already formatted
+```
+
+### Scores after the change
+
+- Answer-key model: still 100.00 in all 7 categories, consistency included.
+- Constant model: still 0.00 in all categories (consistency raw 0.225). At 40 items per category: reasoning 9.09, consistency 7.69.
+- `run_benchmarks` with `ScriptedLM` over the full suite: 87 ms (answer key) and 58 ms (constant), essentially unchanged.
+
+**Consistency of untrained real models, before and after.** Each is a `TorchLM` with 2 layers, d64, ctx 64, the 512-vocab test tokenizer, CPU, full suite.
+
+| Init seed | Before (plain choice) | After (calibrated, `"Answer:"`) | Knowledge | Full-suite time |
+|---|---|---|---|---|
+| 0 | 86.7 (raw 0.900) | **83.3** (raw 0.875) | 0.3 | 1.02 s |
+| 1 | 91.1 (raw 0.933) | **62.2** (raw 0.717) | 0.0 | 0.96 s |
+| 2 | 90.0 (raw 0.925) | **77.8** (raw 0.833) | 0.0 | 1.06 s |
+
+No test depends on these random-init numbers.
+
+### Concern A2: calibration with `"Answer:"` does not make question-blind real models score near chance
+
+- Untrained models still score 62–83 on consistency while knowledge is about 0.
+- Calibration cancels only the part of a preference that is the same in every context. A weak or random network's choice depends on the whole context, and the 3 paraphrases share most of their tokens: the subject, `Question:`, `?\nAnswer:`. Each paraphrase therefore differs from the others far less than from `<|bos|>Answer:`, and the leftover bias is common to all three, so they still agree.
+- Measured, not committed: neutral contexts that match the paraphrase frame help more but are still far from chance.
+
+  | Init seed | `"Question: ?\nAnswer:"` | `"Question:\nAnswer:"` |
+  |---|---|---|
+  | 0 | 65.6 | 63.3 |
+  | 1 | 62.2 | 63.3 |
+  | 2 | 40.0 | 48.9 |
+
+- Agreement among paraphrases of the same subject seems to reward a model that is smooth in its input, whether or not it knows anything. Options for a follow-up ruling:
+  - (i) Gate on correctness: a group counts only if its members agree on the correct answer, or use the conditional consistency P(all three right | at least one right).
+  - (ii) Weight agreement by how far knowledge accuracy is above chance.
+  - (iii) Normalize against a control: the model's agreement on paraphrase triples whose subject is swapped, keeping the frame and changing the fact.
+  - (iv) Accept the metric and caption it in the UI as "steadiness of answers", not knowledge.
+- Until then, an untrained model will still post a high consistency score.
