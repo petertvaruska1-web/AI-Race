@@ -287,3 +287,4 @@ Task 20: Ruling: infer/ joins TRAINING_SOURCES (training wall time includes tele
 Task 20: fix round 3 dispatched (resume aced838).
 Task 20: fix round 3 implementer hit a usage limit before any change (reset 13:20 UTC); resumed at 13:20 on a clean tree (61d9a6d).
 Task 20: fix round 3 implemented 93f2737 (1247 passed, 1 skipped, 108.6s; slow quick gate 96.1s).
+Task 20: fix round 3 scoped re-review dispatched (workflow wf_d6fb8e42-8e4).
