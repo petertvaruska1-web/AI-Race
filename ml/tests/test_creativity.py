@@ -18,7 +18,7 @@ from airace_ml.data.corpus import DATASET_IDS, Corpus, DocTags, write_corpus
 from airace_ml.data.prep import heldout_docs
 from airace_ml.evals import judge as judge_module
 from airace_ml.evals import novelty as novelty_module
-from airace_ml.evals.creativity import STORY_PROMPTS, score_creativity
+from airace_ml.evals.creativity import STORY_PROMPTS, score_creativity, words
 from airace_ml.evals.judge import (
     CALIBRATION_NAME,
     TOKENIZER_NAME,
@@ -95,6 +95,19 @@ def test_well_formed(tiny_tok):
     assert is_well_formed("I like to play in the park.", j)
     assert not is_well_formed("hi there", j) and not is_well_formed("go go go go go go go go go", j)
     assert not is_well_formed("I like to play in the park.", StubJudge(tiny_tok, lambda l: 8.0))
+
+
+def test_words_is_the_public_lowercase_letter_run_extractor():
+    # creativity scoring and personality both count words this way: runs of letters, lowercased
+    assert words("Hello, WORLD 42! x_y") == ["hello", "world", "x", "y"]
+    assert words("Caf\u00e9 d\u00e9j\u00e0-vu na\u00efve") == [
+        "caf\u00e9",
+        "d\u00e9j\u00e0",
+        "vu",
+        "na\u00efve",
+    ]
+    assert words("\u65e5\u672c\u8a9e \U0001f600 \ufffd") == ["\u65e5\u672c\u8a9e"]
+    assert words("") == [] and words("123 _ !?") == []
 
 
 def test_judge_config_valid():

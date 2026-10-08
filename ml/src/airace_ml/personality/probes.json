@@ -37,7 +37,7 @@
   {"id": "creative-01", "text": "Tell me a joke.", "kind": "creative"},
   {"id": "creative-02", "text": "Write a short poem about the moon.", "kind": "creative"},
   {"id": "creative-03", "text": "Make up a name for a new kind of fruit and describe it.", "kind": "creative"},
-  {"id": "creative-04", "text": "Describe a dragon who loves to bake.", "kind": "creative"},
+  {"id": "creative-04", "text": "Describe a dragon who likes to bake.", "kind": "creative"},
   {"id": "creative-05", "text": "Invent a game that two people can play with a coin.", "kind": "creative"},
   {"id": "creative-06", "text": "Write a riddle about a clock.", "kind": "creative"},
   {"id": "creative-07", "text": "Imagine a city on a cloud. What is it like?", "kind": "creative"},

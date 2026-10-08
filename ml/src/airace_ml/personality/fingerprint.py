@@ -30,7 +30,8 @@ repetitiveness  mean over replies of ``1 - unique word 3-grams / all word 3-gram
 
 An answer counts when it appears as a whole word, or a whole phrase for a multi-word answer,
 ignoring case (``cat`` is not found in ``category``; ``Port-au-Prince`` is found in ``port au
-prince``).
+prince``). A dotted abbreviation of single letters is the joined form, in the answers and in the
+reply alike: ``Washington D.C.`` is ``Washington DC`` (see :func:`answer_words`).
 
 Traits only mean something relative to other models: :func:`describe` puts a fingerprint in plain
 words against a population and :func:`fingerprint_distance` compares two fingerprints in units of
@@ -50,7 +51,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from airace_ml.evals.creativity import distinct_2, repetitiveness
+from airace_ml.evals.creativity import distinct_2, repetitiveness, words
 from airace_ml.infer.lm import LanguageModel
 from airace_ml.tokenizer import Tok, encode_chat
 
@@ -77,38 +78,31 @@ WARMTH_SCALE = 10
 MIN_POPULATION = 5  # fewer fingerprints than this say nothing about what is unusual
 STD_FLOOR = 1e-6  # a trait nobody varies in must not make every difference infinite
 
-_WORD = re.compile(r"[^\W\d_]+")  # a run of letters; the same words creativity scoring counts
-
-
-def words(text: str) -> list[str]:
-    """The words of ``text``: runs of letters, lowercased."""
-    return _WORD.findall(text.lower())
-
-
+# The lexicons hold words that mark a register or an affect and nothing else. Words that are just
+# as common in children's stories and plain speech ("once upon a time", "a warm day", "a good
+# friend", "it is cool") are left out, so a model is not called formal, casual or warm for
+# telling an ordinary story or repeating a question.
 # fmt: off
 FORMAL_WORDS: frozenset[str] = frozenset({
     "therefore", "however", "additionally", "furthermore", "moreover", "consequently", "thus",
     "hence", "nevertheless", "nonetheless", "accordingly", "subsequently", "regarding",
-    "concerning", "whereas", "whereby", "thereby", "hereby", "herein", "thereof", "indeed",
-    "notwithstanding", "approximately", "sufficient", "require", "requires", "required", "obtain",
-    "assist", "assistance", "provide", "demonstrate", "indicate", "utilize", "commence",
-    "endeavor", "ensure", "facilitate", "comprehend", "inquire", "otherwise", "respectively",
-    "essentially", "significant", "appropriate", "numerous", "although", "shall", "upon",
-    "unfortunately",
+    "whereas", "whereby", "thereby", "hereby", "herein", "thereof", "therein", "wherein",
+    "thereafter", "henceforth", "hitherto", "whilst", "pursuant", "notwithstanding",
+    "aforementioned", "approximately", "sufficient", "obtain", "assist", "assistance",
+    "demonstrate", "utilize", "commence", "endeavor", "facilitate", "comprehend", "inquire",
+    "respectively", "numerous", "ascertain", "forthwith",
 })
 CASUAL_WORDS: frozenset[str] = frozenset({
-    "yeah", "yep", "yup", "nope", "nah", "lol", "haha", "hehe", "omg", "wow", "hey", "hiya", "yo",
+    "yeah", "yep", "yup", "nope", "nah", "lol", "haha", "hehe", "omg", "hey", "hiya", "yo",
     "gonna", "wanna", "gotta", "kinda", "sorta", "dunno", "lemme", "gimme", "cuz", "tho", "btw",
-    "ya", "cool", "awesome", "stuff", "guys", "dude", "bro", "buddy", "pal", "totally",
-    "whatever", "okay", "ok", "oops", "yay", "yikes", "ugh", "hmm",
+    "ya", "dude", "bro", "idk", "imo", "thx", "pls", "ppl", "lmao", "rofl", "gotcha", "sup",
 })
 POSITIVE_WORDS: frozenset[str] = frozenset({
     "love", "loved", "loves", "loving", "adore", "happy", "happily", "glad", "joy", "joyful",
-    "delighted", "cheerful", "great", "wonderful", "lovely", "beautiful", "amazing", "fantastic",
-    "excellent", "good", "best", "nice", "sweet", "kind", "kindly", "gentle", "warm", "friend",
-    "friends", "friendly", "caring", "thank", "thanks", "grateful", "welcome", "please", "enjoy",
-    "enjoyed", "enjoys", "fun", "smile", "smiles", "hug", "hope", "proud", "brave", "bright",
-    "lucky", "pleasure", "cozy", "generous",
+    "delighted", "cheerful", "great", "wonderful", "lovely", "amazing", "fantastic", "excellent",
+    "kind", "kindly", "caring", "thank", "thanks", "thankful", "grateful", "appreciate",
+    "appreciated", "enjoy", "enjoyed", "enjoys", "smile", "smiles", "hug", "proud", "pleasure",
+    "pleased", "thrilled", "excited", "cherish", "adorable", "affection", "fond", "delight",
 })
 # fmt: on
 
@@ -217,9 +211,19 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(union) if union else 1.0
 
 
+# Single letters joined by periods: "D.C.", "U.S.", "U.S.A" (not "Mr.", "3.5" or "ph.D").
+_ABBREVIATION = re.compile(r"(?<![^\W\d_])[^\W\d_](?:\.[^\W\d_])+\.?(?![^\W\d_])")
+
+
+def answer_words(text: str) -> list[str]:
+    """The words of ``text`` as answers are matched: :func:`words`, with a dotted abbreviation
+    read as its joined form, so ``Washington D.C.`` and ``Washington DC`` are the same."""
+    return words(_ABBREVIATION.sub(lambda m: m.group().replace(".", ""), text))
+
+
 def _phrases(answers: Sequence[str] | None) -> set[tuple[str, ...]]:
     """Each answer as its words; an answer with no letters can never be found."""
-    return {tuple(ws) for answer in answers or () if (ws := words(answer))}
+    return {tuple(ws) for answer in answers or () if (ws := answer_words(answer))}
 
 
 def _spans(ws: Sequence[str], longest: int) -> set[tuple[str, ...]]:
@@ -233,7 +237,7 @@ def _answer_flags(probe: Probe, replies: Sequence[_Reply]) -> list[tuple[bool, b
     longest = max((len(p) for p in right | wrong), default=0)
     flags = []
     for reply in replies:
-        found = _spans(reply.words, longest)
+        found = _spans(answer_words(reply.text), longest)
         flags.append((bool(found & right), bool(found & wrong)))
     return flags
 

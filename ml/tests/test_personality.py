@@ -5,7 +5,8 @@ from collections import Counter
 import numpy as np
 import pytest
 
-from airace_ml.evals.creativity import STORY_PROMPTS, _words
+from airace_ml.evals import creativity
+from airace_ml.evals.creativity import STORY_PROMPTS, words
 from airace_ml.infer.lm import Generation
 from airace_ml.personality.fingerprint import (
     CASUAL_WORDS,
@@ -15,11 +16,11 @@ from airace_ml.personality.fingerprint import (
     TRAITS,
     Fingerprint,
     Probe,
+    answer_words,
     describe,
     fingerprint_distance,
     load_probes,
     measure_fingerprint,
-    words,
 )
 from airace_ml.skills.kb import load_kb
 from airace_ml.tokenizer import encode_chat
@@ -191,12 +192,14 @@ def test_factual_probes_agree_with_the_kb():
         assert not set(probe.wrong_answers) & set(probe.answers)
         assert len(set(probe.wrong_answers)) == len(probe.wrong_answers)
         # a true answer can never read as a slip, whatever form it takes
-        said = [tuple(words(a)) for a in probe.answers]
-        for wrong in map(words, probe.wrong_answers):
+        said = [tuple(answer_words(a)) for a in probe.answers]
+        for wrong in map(answer_words, probe.wrong_answers):
             assert not any(
                 wrong == list(a[i : i + len(wrong)]) for a in said for i in range(len(a))
             )
-        assert not set(words(fact.subject)) & {w for a in probe.wrong_answers for w in words(a)}
+        assert not set(words(fact.subject)) & {
+            w for a in probe.wrong_answers for w in answer_words(a)
+        }
 
 
 def test_every_right_form_scores_and_every_wrong_answer_slips(tiny_tok):
@@ -220,6 +223,63 @@ def test_lexicons(tiny_tok):
     assert {"love", "happy", "great", "kind"} <= POSITIVE_WORDS
 
 
+def test_once_upon_a_time_is_not_formal(tiny_tok):
+    t = traits_of(tiny_tok, ["Once upon a time there was a small dragon."], [open_probe()], 1)
+    assert t["register"] == 0.0
+    # a model that opens only its stories this way is not formal either
+    kinds = {p.text: p.kind for p in load_probes()}
+
+    def reply(ids):
+        text = tiny_tok.decode(ids)
+        creative = any(kind == "creative" and t in text for t, kind in kinds.items())
+        return "Once upon a time, a little bird sang to the moon." if creative else "Hello."
+
+    fp = measure_fingerprint(ScriptedLM(tiny_tok, reply=reply), tiny_tok, k=1)
+    assert sum(w.startswith("Once upon") for w in (s["text"] for s in fp.samples)) == 10
+    assert fp.traits["register"] == 0.0
+
+
+def test_formal_words_are_not_everyday_words():
+    # words that turn up in children's stories and plain speech say nothing about register
+    everyday = {"upon", "indeed", "shall", "unfortunately", "although", "otherwise", "concerning"}
+    everyday |= {"provide", "ensure", "indicate", "require", "requires", "required", "appropriate"}
+    everyday |= {"significant", "essentially"}
+    assert not FORMAL_WORDS & everyday
+
+
+def test_casual_words_have_no_everyday_sense():
+    everyday = {"cool", "stuff", "guys", "buddy", "pal", "totally", "whatever", "awesome", "wow"}
+    everyday |= {"okay", "ok", "oops", "yay", "yikes", "ugh", "hmm"}
+    assert not CASUAL_WORDS & everyday
+
+
+def test_positive_words_are_affective_only():
+    everyday = {"good", "best", "friend", "friends", "warm", "bright", "sweet", "fine", "nice"}
+    everyday |= {"fun", "brave", "lucky", "generous", "gentle", "please", "welcome"}
+    everyday |= {"cozy", "hope", "beautiful"}
+    assert not POSITIVE_WORDS & everyday
+    assert {"love", "loved", "loves", "happy", "great", "kind", "glad", "thanks"} <= POSITIVE_WORDS
+
+
+def test_register_lexicons_stay_silent_on_plain_text(fixture_texts):
+    # the fixture corpus is plain stories, chats, facts and code: no formal or casual markers
+    said = set(words(" ".join(fixture_texts)))
+    assert not said & (FORMAL_WORDS | CASUAL_WORDS)
+
+
+def test_a_model_that_only_restates_the_question_reads_neutral(tiny_tok):
+    fp = measure_fingerprint(ScriptedLM(tiny_tok, reply=tiny_tok.decode), tiny_tok, k=1)
+    assert [s["text"] for s in fp.samples] == [p.text for p in load_probes()]
+    said = Counter(w for s in fp.samples for w in words(s["text"]))
+    assert not set(said) & (FORMAL_WORDS | CASUAL_WORDS)
+    # the one warm word a probe forces on anyone repeating it is "a new kind of fruit"
+    assert {w: n for w, n in said.items() if w in POSITIVE_WORDS} == {"kind": 1}
+    assert fp.traits["register"] == 0.0
+    total = sum(said.values())
+    assert fp.traits["warmth"] == pytest.approx(10 * 2 / total)  # "kind" and the "!" of "Hello!"
+    assert fp.traits["warmth"] < 0.1
+
+
 def test_trait_phrases_are_plain_language():
     assert list(TRAIT_PHRASES) == list(TRAITS)
     phrases = [p for pair in TRAIT_PHRASES.values() for p in pair]
@@ -232,10 +292,12 @@ def test_trait_phrases_are_plain_language():
         assert phrase == phrase.lower() and not jargon & set(words(phrase))
 
 
-def test_words_are_the_words_creativity_counts():
-    for text in ["Café déjà-vu 42 naïve_test", "日本語 😀 Hello, WORLD!", "", "it's 3 o'clock"]:
-        assert words(text) == _words(text)
-    assert words("Hello, WORLD 42! x_y") == ["hello", "world", "x", "y"]
+def test_personality_counts_words_with_creativitys_own_helper():
+    # one definition of a word: boldness mixes len(words) with creativity's repetitiveness
+    from airace_ml.personality import fingerprint
+
+    assert fingerprint.words is creativity.words is words
+    assert not hasattr(fingerprint, "_WORD")
 
 
 # -- each trait's formula, on replies worked out by hand -----------------------------------------
@@ -356,6 +418,58 @@ def test_answers_match_whole_words_and_phrases(tiny_tok):
     assert traits_of(tiny_tok, ["riot", "Rio de Janeiro"], [city], 2)["slip_rate"] == 0.5
 
 
+def test_dotted_abbreviations_match_their_joined_form(tiny_tok):
+    # the KB lists "Washington DC" as the US capital: it is a wrong answer however it is dotted
+    wrong = factual_probe(1, ["Paris"], ["Washington DC"])
+    for text in [
+        "Washington DC",
+        "Washington D.C.",
+        "Washington, D.C.",
+        "washington d.c",
+        "WASHINGTON D.C.!",
+    ]:
+        assert traits_of(tiny_tok, [text], [wrong], 1)["slip_rate"] == 1.0, text
+    # ... and a wrong answer written with dots is found in a reply without them
+    dotted = factual_probe(2, ["Paris"], ["Washington D.C.", "the U.S."])
+    for text in ["Washington DC", "washington, d.c.", "I think the US", "in the U.S. of A"]:
+        assert traits_of(tiny_tok, [text], [dotted], 1)["slip_rate"] == 1.0, text
+    assert (
+        traits_of(tiny_tok, ["the U.S.A. is big"], [dotted], 1)["slip_rate"] == 0.0
+    )  # USA is not US
+    # a right answer is found either way too
+    right = factual_probe(3, ["Washington D.C."], ["Rome"])
+    for text in ["Washington DC", "It is Washington, D.C.", "washington d.c", "WASHINGTON DC!"]:
+        assert traits_of(tiny_tok, [text], [right], 1)["precision"] == 1.0, text
+    assert traits_of(tiny_tok, ["Washington"], [right], 1)["precision"] == 0.0
+
+
+def test_answer_words_join_dotted_abbreviations():
+    assert answer_words("Washington, D.C. is in the U.S.") == [
+        "washington",
+        "dc",
+        "is",
+        "in",
+        "the",
+        "us",
+    ]
+    assert answer_words("D.C") == ["dc"] and answer_words("U.S.A") == ["usa"]
+    assert answer_words("It is the U.S.A.It is big") == [
+        "it",
+        "is",
+        "the",
+        "usa",
+        "it",
+        "is",
+        "big",
+    ]
+    assert answer_words("e.g. Rome") == ["eg", "rome"]
+    # only single letters joined by periods are abbreviations
+    assert answer_words("Mr. A. Smith") == ["mr", "a", "smith"]
+    assert answer_words("xD.C. 3.5 ph.D") == ["xd", "c", "ph", "d"]
+    assert answer_words("Port-au-Prince") == ["port", "au", "prince"]
+    assert answer_words("") == [] and answer_words("1.2.3") == []
+
+
 def test_an_answer_without_letters_never_matches(tiny_tok):
     probe = factual_probe(1, ["4", ""], ["7"])
     t = traits_of(tiny_tok, ["4 7 and more", "anything"], [probe], 2)
@@ -379,9 +493,9 @@ def test_register_pools_all_replies(tiny_tok):
 
 
 def test_warmth_pools_hits_and_exclamation_marks(tiny_tok):
-    # reply 1: love, friend, "!" = 3 hits in 4 words; reply 2: 1 word -> 10 * 3 / 5 (a mean of ratios is 3.75)
-    t = traits_of(tiny_tok, ["I love my friend!", "no"], [open_probe()], 2)
-    assert t["warmth"] == pytest.approx(6.0)
+    # reply 1: love, kind, "!" = 3 hits in 5 words; reply 2: 1 word -> 10 * 3 / 6 (a mean of ratios is 3.0)
+    t = traits_of(tiny_tok, ["I love my kind dog!", "no"], [open_probe()], 2)
+    assert t["warmth"] == pytest.approx(5.0)
     assert traits_of(tiny_tok, ["Wow!!! Great!"], [open_probe()], 1)["warmth"] == pytest.approx(
         10 * 5 / 2
     )

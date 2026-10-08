@@ -74,22 +74,23 @@ _STORIES: tuple[tuple[str, str], ...] = (
 STORY_PROMPTS: tuple[str, ...] = tuple(prompt for _, prompt in _STORIES)
 
 
-def _words(text: str) -> list[str]:
-    """The words of ``text``: runs of letters, lowercased."""
+def words(text: str) -> list[str]:
+    """The words of ``text``: runs of letters, lowercased. Everything that counts words of a
+    model's reply (creativity here, the personality fingerprint) counts them this way."""
     return _WORD.findall(text.lower())
 
 
 def distinct_2(texts: Iterable[str]) -> float:
     """Unique word bigrams over all word bigrams, pooled over ``texts`` (bigrams never span two
     texts); 0.0 when there are none."""
-    bigrams = [pair for text in texts for pair in pairwise(_words(text))]
+    bigrams = [pair for text in texts for pair in pairwise(words(text))]
     return len(set(bigrams)) / len(bigrams) if bigrams else 0.0
 
 
 def repetitiveness(text: str) -> float:
     """``1 - unique word 3-grams / all word 3-grams`` of ``text``; 0.0 when it has no 3-gram."""
-    words = _words(text)
-    trigrams = list(zip(words, words[1:], words[2:]))
+    said = words(text)
+    trigrams = list(zip(said, said[1:], said[2:]))
     return 1 - len(set(trigrams)) / len(trigrams) if trigrams else 0.0
 
 
@@ -127,7 +128,7 @@ def score_creativity(
     results = []
     for k, ((topic, prompt), story, nll) in enumerate(zip(_STORIES, stories, losses, strict=True)):
         score = 0.0
-        if _words(story):
+        if words(story):
             new = novelty.novelty(tok.encode(story), seen=tok.encode(prompt))
             score = (
                 _coherence(nll, judge.calibration)
