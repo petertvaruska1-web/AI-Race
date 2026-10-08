@@ -1028,3 +1028,13 @@ def test_reuse_follows_the_code_that_trains_and_the_code_that_measures(fake_gate
     assert again() == (0, 15, 15)
     fake_gate.digests["training"] = "train-2"  # the trainer changed: train and measure again
     assert again() == (25, 15, 15)
+
+
+def test_timings_wait_for_queued_gpu_work(monkeypatch):
+    synced = []
+    monkeypatch.setattr(torch.cuda, "synchronize", lambda device=None: synced.append(device))
+    gate._clock(torch.device("cpu"))
+    gate._clock(None)
+    assert synced == []
+    gate._clock(torch.device("cuda"))
+    assert synced == [torch.device("cuda")]

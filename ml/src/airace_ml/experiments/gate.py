@@ -960,9 +960,10 @@ class _Gate:
         grown_to = f"{s.grown_shape.n_layer} layers x {s.grown_shape.d_model} wide"
         self.on_progress(f"  starter: timing its growth to {grown_to}")
         model, _ = load_checkpoint(run.dir, self.device)
-        started = _clock(self.device)
+        on = next(model.parameters()).device  # where the growth's copies run
+        started = _clock(on)
         grown = grow(model, s.grown_shape, seed=self.seeds[0])
-        self.growth_seconds = _clock(self.device) - started
+        self.growth_seconds = _clock(on) - started
         self.growth_diff = max_logit_diff(model, grown, self.inputs.growth_sequences)
         del model, grown
         criterion = speed_criterion(
