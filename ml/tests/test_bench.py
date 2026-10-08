@@ -4,7 +4,6 @@ import math
 import sys
 import zlib
 from collections import Counter
-from statistics import fmean
 from types import ModuleType
 
 import pytest
@@ -14,8 +13,6 @@ from airace_ml.evals.scoring import (
     BenchReport,
     CategoryScore,
     ItemResult,
-    agreement,
-    calibrated_choice,
     exact_match,
     extract_answer,
     mc_choice,
@@ -163,13 +160,6 @@ def test_pair_compares_total_logprob_strictly():
     assert not pair_correct(CS(math.nan, 2), CS(-2.0, 2))
 
 
-def test_agreement_arithmetic():
-    assert agreement(["a", "a", "a"]) == 1 and agreement(["a", "b", "c"]) == 0
-    assert agreement(["a", "a", "b"]) == pytest.approx(1 / 3) and agreement(["a", "b"]) == 0
-    with pytest.raises(ValueError):
-        agreement(["a"])
-
-
 def test_mc_item_through_the_runner(tiny_tok):
     short, long = " cat", " elephant seal"
     assert len(tiny_tok.encode(long)) > 2 * len(tiny_tok.encode(short))  # so sum and mean disagree
@@ -263,29 +253,17 @@ def test_generation_prompts_are_greedy_seeded_and_use_default_stops(tiny_tok):
     assert [(r.score, r.output) for r in rep.items] == [(1.0, " Paris.\nQuestion:")] * 2
 
 
-def _expected_requests(tok, category, items):
-    """The distinct (context, continuation) pairs a category's scoring call must contain."""
-    bos, neutral = (tok.bos_id,), tuple(encode_doc(tok, "Answer:"))
-    requests = set()
-    for i in items:
-        if isinstance(i, PairItem):
-            requests |= {(bos, tuple(tok.encode(i.good))), (bos, tuple(tok.encode(i.bad)))}
-        elif isinstance(i, MCItem):
-            for option in i.options:
-                cont = tuple(tok.encode(" " + option))
-                requests.add((tuple(encode_doc(tok, i.prompt)), cont))
-                if category == "consistency":  # calibrated: each option also after "Answer:"
-                    requests.add((neutral, cont))
-    return requests
-
-
 def test_one_batched_call_per_category(tiny_tok):
     suite = build_suite()
     for category in SCORED_CATEGORIES:
         lm = RecordingLM(tiny_tok)
         run_benchmarks(lm, tiny_tok, suite=suite, categories=[category])
         items = suite.items[category]
-        n_scored = len(_expected_requests(tiny_tok, category, items))
+        n_scored = sum(
+            2 if isinstance(i, PairItem) else len(i.options)
+            for i in items
+            if isinstance(i, (PairItem, MCItem))
+        )
         lengths = Counter(i.max_new_tokens for i in items if isinstance(i, (ExactItem, CheckItem)))
         expected = ([("score", n_scored)] if n_scored else []) + [
             ("generate", n, m) for m, n in lengths.items()
@@ -337,7 +315,7 @@ def _group(gid, option_lists, answer, tag_lists):
     ]
 
 
-def test_consistency_agreement_by_text_and_chance(tiny_tok):
+def test_consistency_group_is_right_only_when_every_paraphrase_is(tiny_tok):
     a = _group(
         "a",
         [
@@ -351,35 +329,44 @@ def test_consistency_agreement_by_text_and_chance(tiny_tok):
     b = _group(
         "b", [["yes", "no"], ["no", "yes"], ["yes", "no"]], "yes", [("x",), ("x", "y"), ("z",)]
     )
-    chosen = {
-        "a-0": "Paris",
-        "a-1": "Paris",
-        "a-2": "Paris",
-        "b-0": "no",
-        "b-1": "no",
-        "b-2": "yes",
+    c = _group(
+        "c",
+        [["4", "2", "6", "8"], ["8", "6", "2", "4"], ["2", "4", "8", "6"]],
+        "4",
+        [("legs",)] * 3,
+    )
+    d = _group("d", [["no", "yes"]] * 3, "no", [("y",)] * 3)
+    chosen = {  # what the model answers to each paraphrase of a group
+        "a": ["Paris", "Paris", "Paris"],  # every paraphrase right: 1
+        "b": ["yes", "yes", "no"],  # right on 2 of 3: 0
+        "c": ["6", "6", "6"],  # the same wrong answer every time: 0
+        "d": ["no", "no", "no"],  # every paraphrase right: 1
     }
-    by_prompt = {tuple(encode_doc(tiny_tok, i.prompt)): chosen[i.id] for i in a + b}
+    members = a + b + c + d
+    by_prompt = {
+        tuple(encode_doc(tiny_tok, i.prompt)): chosen[i.group][k % 3] for k, i in enumerate(members)
+    }
 
     def score(ctx, cont):
-        return 0.0 if tiny_tok.decode(cont) == " " + by_prompt.get(tuple(ctx), "") else -10.0
+        return 0.0 if tiny_tok.decode(cont) == " " + by_prompt[tuple(ctx)] else -10.0
 
-    suite = Suite("t", {"consistency": a + b})
+    suite = Suite("t", {"consistency": members})
     rep = run_benchmarks(
         ScriptedLM(tiny_tok, score=score), tiny_tok, suite=suite, categories=["consistency"]
     )
     s = rep.scores["consistency"]
-    chance = (1 / 4 + 1 / 2) / 2  # mean over groups of 1/len(options)
-    assert s.n == 2 and s.raw == pytest.approx(2 / 3)
-    assert s.score == pytest.approx(normalize(2 / 3, chance)) and s.score == pytest.approx(700 / 15)
-    assert [(r.item_id, r.category, r.tags, r.output) for r in rep.items] == [
-        ("a", "consistency", ("rel:capital_of",), None),
-        ("b", "consistency", ("x", "y", "z"), None),
+    chance = (1 / 4 + 1 / 2 + 1 / 4 + 1 / 2) / 4  # mean over groups of 1/len(options)
+    assert s.n == 4 and s.raw == 0.5
+    assert s.score == pytest.approx(normalize(0.5, chance)) and s.score == pytest.approx(20)
+    assert [(r.item_id, r.category, r.score, r.tags, r.output) for r in rep.items] == [
+        ("a", "consistency", 1.0, ("rel:capital_of",), None),
+        ("b", "consistency", 0.0, ("x", "y", "z"), None),
+        ("c", "consistency", 0.0, ("legs",), None),
+        ("d", "consistency", 1.0, ("y",), None),
     ]
-    assert [r.score for r in rep.items] == pytest.approx([1.0, 1 / 3])
-    # a constant model picks the first option every time: agreement is about the text, not the index
+    # a constant model takes the first option: right only where every paraphrase lists it first
     rep = run_benchmarks(ScriptedLM(tiny_tok), tiny_tok, suite=suite, categories=["consistency"])
-    assert [r.score for r in rep.items] == pytest.approx([0.0, 1 / 3])
+    assert [r.score for r in rep.items] == [0.0, 0.0, 0.0, 1.0]
 
 
 def test_consistency_rejects_ungrouped_items(tiny_tok):
@@ -642,25 +629,7 @@ def test_rejects_short_score_lists_and_unknown_items(tiny_tok):
         run_benchmarks(ScriptedLM(tiny_tok), tiny_tok, suite=Suite("t", {"language": ["text"]}))
 
 
-# -- Pre-review rulings: calibrated consistency (A) and reply budgets (C) -------------------------
-
-
-def test_calibrated_choice_subtracts_the_neutral_score():
-    plain = [CS(-1.0, 1), CS(-4.0, 2)]  # per token: -1, -2
-    neutral = [CS(-0.5, 1), CS(-6.0, 2)]  # per token: -0.5, -3
-    assert mc_choice(plain) == 0 and calibrated_choice(plain, neutral) == 1  # gains -0.5 vs +1
-    same = [CS(-1.0, 1), CS(-2.0, 1)]
-    assert calibrated_choice(same, same) == 0  # no gain anywhere: the first option
-    assert calibrated_choice([CS(-1.0, 1), CS(-3.0, 1), CS(-2.0, 1)], [CS(-2.0, 1)] * 3) == 0
-    assert calibrated_choice([CS(-2.0, 1), CS(-1.0, 1), CS(-1.0, 1)], [CS(-3.0, 1)] * 3) == 1
-    # a score that is not finite on either side never wins
-    assert calibrated_choice([CS(math.nan, 1), CS(-5.0, 1)], [CS(-9.0, 1)] * 2) == 1
-    assert calibrated_choice([CS(-1.0, 1), CS(-5.0, 1)], [CS(math.nan, 1), CS(-6.0, 1)]) == 1
-    assert calibrated_choice([CS(-1.0, 1), CS(-5.0, 1)], [CS(-math.inf, 1), CS(-6.0, 1)]) == 1
-    assert calibrated_choice([CS(0.0, 0), CS(-5.0, 1)], [CS(0.0, 0), CS(-6.0, 1)]) == 1
-    assert calibrated_choice([CS(math.nan, 1)] * 2, [CS(math.nan, 1)] * 2) == 0
-    with pytest.raises(ValueError):
-        calibrated_choice(plain, neutral[:1])
+# -- Pre-review rulings: consistency as robust knowledge (A, revised) and reply budgets (C) --------
 
 
 def _text_prior(text: str) -> float:
@@ -668,60 +637,52 @@ def _text_prior(text: str) -> float:
     return -1.0 - zlib.crc32(text.encode("utf-8")) % 997 / 100
 
 
-def test_consistency_ignores_a_question_blind_option_prior(tiny_tok):
+def test_consistency_gives_a_question_blind_option_prior_chance_level(tiny_tok):
     def score(ctx, cont):  # what the model says depends on the option, never on the context
         return _text_prior(tiny_tok.decode(cont)) * len(cont)
 
     lm, suite = ScriptedLM(tiny_tok, score=score), build_suite()
-    plain_choices: dict[str, list[str]] = {}  # the plain rule would agree with itself every time
+    choices: dict[str, set[str]] = {}
     for item in suite.items["consistency"]:
         conts = [tiny_tok.encode(" " + option) for option in item.options]
         scores = lm.score_continuations([encode_doc(tiny_tok, item.prompt)] * len(conts), conts)
-        plain_choices.setdefault(item.group, []).append(item.options[mc_choice(scores)])
-    assert fmean(agreement(choices) for choices in plain_choices.values()) > 0.9
+        choices.setdefault(item.group, set()).add(item.options[mc_choice(scores)])
+    assert all(len(texts) == 1 for texts in choices.values())  # perfectly steady...
     rep = run_benchmarks(lm, tiny_tok, suite=suite, categories=["consistency"])
-    assert rep.scores["consistency"].score <= 25  # chance level, as for a constant model
+    assert rep.scores["consistency"].score <= 25  # ...yet right only where its favourite is
 
 
-@pytest.mark.parametrize("says", ["the right answer", "the same wrong answer"])
-def test_consistency_rewards_answers_that_come_from_the_question(tiny_tok, says):
+@pytest.mark.parametrize(
+    ("says", "expected"),
+    [("the right answer", 100.0), ("right but once wrong", 0.0), ("the same wrong answer", 0.0)],
+)
+def test_consistency_needs_every_paraphrase_right(tiny_tok, says, expected):
     suite = build_suite()
     target = {}  # paraphrase context -> the option the question makes the model say
     for item in suite.items["consistency"]:
         right = item.options[item.answer_index]
-        wrong = min(option for option in item.options if option != right)
-        target[tuple(encode_doc(tiny_tok, item.prompt))] = (
-            right if says == "the right answer" else wrong
-        )
+        wrong = min(option for option in item.options if option != right)  # same in every wording
+        if says == "the right answer" or (says == "right but once wrong" and item.id[-2:] != "-2"):
+            target[tuple(encode_doc(tiny_tok, item.prompt))] = right
+        else:
+            target[tuple(encode_doc(tiny_tok, item.prompt))] = wrong
 
-    def score(ctx, cont):  # a strong text prior everywhere, plus a smaller lift from the question
+    def score(ctx, cont):  # a strong text prior everywhere, outweighed by what the question says
         text = tiny_tok.decode(cont)
-        lift = 2.0 if text == " " + target.get(tuple(ctx), "\0") else 0.0
+        lift = 20.0 if text == " " + target[tuple(ctx)] else 0.0
         return (_text_prior(text) + lift) * len(cont)
 
     rep = run_benchmarks(
         ScriptedLM(tiny_tok, score=score), tiny_tok, suite=suite, categories=["consistency"]
     )
-    assert rep.scores["consistency"] == CategoryScore(100.0, 1.0, 40)
+    assert rep.scores["consistency"] == CategoryScore(expected, expected / 100, 40)
 
 
-def test_only_consistency_is_calibrated(tiny_tok):
-    neutral = encode_doc(tiny_tok, "Answer:")
-    suite = build_suite()
-    for category in ("reasoning", "knowledge", "consistency"):
-        seen = []
-
-        def score(ctx, cont, seen=seen):
-            seen.append(ctx)
-            return 0.0
-
-        run_benchmarks(
-            ScriptedLM(tiny_tok, score=score), tiny_tok, suite=suite, categories=[category]
-        )
-        n_neutral = sum(ctx == neutral for ctx in seen)
-        options = {o for i in suite.items[category] if isinstance(i, MCItem) for o in i.options}
-        assert n_neutral == (len(options) if category == "consistency" else 0), category
-    assert len(options) < sum(len(i.options) for i in suite.items["consistency"])  # deduplicated
+def test_an_untrained_model_is_not_consistent(tiny_lm, tiny_tok):
+    # Agreement-only rules gave untrained models 62-91; this rule gives them about 0 (a group is
+    # right by luck about 1 time in 4, which is chance), so 50 leaves a wide margin.
+    rep = run_benchmarks(tiny_lm, tiny_tok, categories=["consistency"])
+    assert rep.scores["consistency"].n == 40 and rep.scores["consistency"].score <= 50
 
 
 def _reply_budget_overruns(tok: Tok) -> list[tuple[str, str, int, int]]:

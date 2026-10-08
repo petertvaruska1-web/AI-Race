@@ -10,7 +10,6 @@ import math
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from itertools import combinations
 from statistics import fmean
 from typing import Any, Literal
 
@@ -98,36 +97,9 @@ def mc_choice(option_scores: Sequence[ContinuationScore]) -> int:
     return means.index(max(means))
 
 
-def calibrated_choice(
-    option_scores: Sequence[ContinuationScore], neutral_scores: Sequence[ContinuationScore]
-) -> int:
-    """The option the question itself makes most likely (the first one on ties).
-
-    Each option's gain is its mean log-probability per token after the question minus after a
-    neutral context. An option the model likes whatever it is asked gains nothing, so a model
-    that ignores the question cannot pick the same text in every paraphrase. An option whose
-    score is not finite on either side never wins.
-    """
-    if len(option_scores) != len(neutral_scores):
-        raise ValueError(f"{len(option_scores)} option scores but {len(neutral_scores)} neutral")
-    gains = []
-    for asked, neutral in zip(option_scores, neutral_scores, strict=True):
-        gain = mean_logprob(asked) - mean_logprob(neutral)
-        gains.append(gain if math.isfinite(gain) else -math.inf)
-    return gains.index(max(gains))
-
-
 def pair_correct(good: ContinuationScore, bad: ContinuationScore) -> bool:
     """The good text has the strictly higher total log-probability (a tie is not a win)."""
     return _total(good) > _total(bad)
-
-
-def agreement(choices: Sequence[str]) -> float:
-    """The fraction of pairs of ``choices`` that are the same."""
-    pairs = list(combinations(choices, 2))
-    if not pairs:
-        raise ValueError("agreement needs at least two choices")
-    return sum(a == b for a, b in pairs) / len(pairs)
 
 
 # -- results ---------------------------------------------------------------------------------
@@ -135,7 +107,8 @@ def agreement(choices: Sequence[str]) -> float:
 
 @dataclass
 class ItemResult:
-    """One scored item: 1/0 for right/wrong, or a consistency group's agreement.
+    """One scored item: 1 if right, else 0 (a consistency group is right only when every one of
+    its paraphrases is).
 
     ``output`` is what the model answered: its reply for a free answer, the option it chose for
     multiple choice, ``None`` when there is nothing to show (pairs, consistency groups).
@@ -209,7 +182,8 @@ class BenchReport:
 
         Tags are counted per category: the same tag in two categories measures two different
         things (``fam:double`` is a number sequence in ``pattern`` and a function in ``coding``;
-        a ``topic:`` tag is accuracy in ``knowledge`` but agreement in ``consistency``).
+        a ``topic:`` tag counts single questions in ``knowledge`` but whole paraphrase groups in
+        ``consistency``).
         """
         totals: dict[str, list[float]] = {}
         for result in self.items:

@@ -13,26 +13,22 @@ Item                      Asked as                                             C
                           prompt; the best one is the answer (first on ties)
 ``ExactItem``             greedy reply; the extracted answer must match        0
 ``CheckItem``             greedy reply; the item's checker must pass it        0
-consistency group         its members' calibrated multiple-choice answers;     mean 1 / options
-                          the score is the fraction of pairs that chose the
-                          same text
+consistency group         its members' multiple-choice answers (as for         mean 1 / options
+                          ``MCItem``); right only if every paraphrase is
 ========================  ===================================================  ===============
 
 A plain prompt is ``encode_doc(prompt)`` and its options start with a space; a chat prompt is
 ``encode_chat([("user", prompt)], True)`` and its options do not (AI turns start without one).
 
-Consistency answers are **calibrated**: each option is also scored after the neutral context
-``encode_doc("Answer:")`` (the same continuation tokens), and a member's answer is the option with
-the highest gain, its mean log-prob per token after the paraphrase minus after the neutral context
-(first on ties). A model that likes an option text whatever it is asked would otherwise pick that
-text in every paraphrase and look perfectly consistent; calibration cancels the part of a
-preference that does not depend on the context, so such a model agrees only by chance. (A
-preference that follows the paraphrases' shared wording is not cancelled.) Knowledge and
-reasoning keep the plain rule.
+Consistency measures robust knowledge: a group of paraphrases of one question counts only when
+the model answers every paraphrase correctly. Its chance, ``1 / options``, is what a model that
+guesses one option text and keeps to it in every paraphrase expects to score; a model that guesses
+each paraphrase afresh expects less. So a model that ignores the question, however steady,
+normalizes to about 0. (Agreement alone would not do: a model that ignores the question agrees
+with itself perfectly.)
 
-Each category asks the model in as few calls as possible: one scoring call (identical
-context-continuation pairs, such as the neutral ones, are asked once), and one generation call
-per reply length.
+Each category asks the model in as few calls as possible: one scoring call, and one generation
+call per reply length.
 """
 
 import copy
@@ -48,8 +44,6 @@ from airace_ml.evals.scoring import (
     BenchReport,
     CategoryScore,
     ItemResult,
-    agreement,
-    calibrated_choice,
     category_score,
     exact_match,
     mc_choice,
@@ -79,9 +73,6 @@ CATEGORIES = (
 )
 SUITE_VERSION = "bench-v1"
 PAIR_CHANCE = 0.5
-NEUTRAL_CONTEXT = "Answer:"
-"""What consistency options are also scored after, to take out the model's liking for the option
-text itself (see the module docstring)."""
 
 type BenchItem = PairItem | MCItem | ExactItem | CheckItem
 
@@ -144,16 +135,10 @@ def _scoring_requests(tok: Tok, item: PairItem | MCItem) -> list[tuple[list[int]
     return [(context, tok.encode(lead + option)) for option in item.options]
 
 
-def _judge_scores(
-    item: PairItem | MCItem,
-    scores: Sequence[ContinuationScore],
-    neutral: Sequence[ContinuationScore],
-) -> _Outcome:
-    """``neutral`` holds the options' scores after the neutral context when calibrating, or
-    nothing."""
+def _judge_scores(item: PairItem | MCItem, scores: Sequence[ContinuationScore]) -> _Outcome:
     if isinstance(item, PairItem):
         return _Outcome(float(pair_correct(*scores)), PAIR_CHANCE, None)
-    choice = calibrated_choice(scores, neutral) if neutral else mc_choice(scores)
+    choice = mc_choice(scores)
     return _Outcome(float(choice == item.answer_index), 1 / len(item.options), item.options[choice])
 
 
@@ -165,45 +150,29 @@ def _judge_reply(item: ExactItem | CheckItem, reply: str) -> _Outcome:
     return _Outcome(float(passed), 0.0, reply)
 
 
-def _ask(
-    lm: LanguageModel, tok: Tok, items: Sequence[BenchItem], seed: int, *, calibrate: bool = False
-) -> list[_Outcome]:
-    """Every item's outcome, from one scoring call and one generation call per reply length.
-
-    With ``calibrate``, multiple choice is decided by :func:`calibrated_choice` against
-    :data:`NEUTRAL_CONTEXT`. Identical (context, continuation) pairs are asked once.
-    """
+def _ask(lm: LanguageModel, tok: Tok, items: Sequence[BenchItem], seed: int) -> list[_Outcome]:
+    """Every item's outcome, from one scoring call and one generation call per reply length."""
     outcomes: list[_Outcome | None] = [None] * len(items)
-    requests: dict[tuple[tuple[int, ...], tuple[int, ...]], int] = {}  # pair -> its position
-    plans: list[tuple[int, list[int], list[int]]] = []  # item index, its pairs, its neutral pairs
+    contexts: list[list[int]] = []
+    continuations: list[list[int]] = []
+    spans: list[tuple[int, int, int]] = []  # item index, first request, request count
     by_length: dict[int, list[int]] = {}  # max_new_tokens -> item indices
-    neutral = encode_doc(tok, NEUTRAL_CONTEXT)
-
-    def ask(context: Sequence[int], continuation: Sequence[int]) -> int:
-        return requests.setdefault((tuple(context), tuple(continuation)), len(requests))
-
     for k, item in enumerate(items):
         if isinstance(item, (ExactItem, CheckItem)):
             by_length.setdefault(item.max_new_tokens, []).append(k)
             continue
         if not isinstance(item, (PairItem, MCItem)):
             raise TypeError(f"not a benchmark item: {item!r}")
-        pairs = _scoring_requests(tok, item)
-        asked = [ask(context, continuation) for context, continuation in pairs]
-        baseline = []
-        if calibrate and isinstance(item, MCItem):
-            baseline = [ask(neutral, continuation) for _, continuation in pairs]
-        plans.append((k, asked, baseline))
-    if requests:
-        contexts = [list(context) for context, _ in requests]
-        continuations = [list(continuation) for _, continuation in requests]
+        requests = _scoring_requests(tok, item)
+        spans.append((k, len(contexts), len(requests)))
+        contexts.extend(context for context, _ in requests)
+        continuations.extend(continuation for _, continuation in requests)
+    if contexts:
         scores = lm.score_continuations(contexts, continuations)
         if len(scores) != len(contexts):
             raise ValueError(f"asked for {len(contexts)} scores, got {len(scores)}")
-        for k, asked, baseline in plans:
-            outcomes[k] = _judge_scores(
-                items[k], [scores[i] for i in asked], [scores[i] for i in baseline]
-            )
+        for k, first, count in spans:
+            outcomes[k] = _judge_scores(items[k], scores[first : first + count])
     for max_new_tokens, indices in by_length.items():
         prompts = [_prompt_ids(tok, items[k].prompt, items[k].chat) for k in indices]
         replies = lm.generate(
@@ -242,7 +211,7 @@ def _limited(category: str, items: Sequence[BenchItem], limit: int | None) -> li
 def _consistency(
     category: str, items: Sequence[MCItem], outcomes: Sequence[_Outcome]
 ) -> tuple[CategoryScore, list[ItemResult]]:
-    """One result per group: the agreement of its members' (calibrated) chosen option texts."""
+    """One result per group: 1 if every member chose its correct option, else 0."""
     groups: dict[str, list[int]] = {}
     for k, item in enumerate(items):
         groups.setdefault(_group_of(item), []).append(k)
@@ -250,7 +219,7 @@ def _consistency(
     for group, members in groups.items():
         if len(members) < 2:
             raise ValueError(f"consistency group {group!r} has fewer than 2 items")
-        score = agreement([outcomes[k].output for k in members])
+        score = float(all(outcomes[k].score == 1.0 for k in members))
         tags = tuple(dict.fromkeys(tag for k in members for tag in items[k].tags))
         results.append(ItemResult(group, category, score, tags))
         chances.append(fmean(outcomes[k].chance for k in members))
@@ -260,7 +229,7 @@ def _consistency(
 def _run_category(
     lm: LanguageModel, tok: Tok, category: str, items: Sequence[BenchItem], seed: int
 ) -> tuple[CategoryScore, list[ItemResult]]:
-    outcomes = _ask(lm, tok, items, seed, calibrate=category == "consistency")
+    outcomes = _ask(lm, tok, items, seed)
     if category == "consistency":
         return _consistency(category, items, outcomes)
     results = [
