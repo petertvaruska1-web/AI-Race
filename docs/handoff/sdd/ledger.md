@@ -221,3 +221,6 @@ Task 17: Ruling (M1, amends spec §4.12 "well-formed"): a well-formed reply also
 Task 17: Ruling (M2): calibration's conversation replies pass through the same word checks as is_well_formed before their NLL enters the p90, so the threshold is measured on the replies it is applied to — cost if wrong: p90 shifts (expected slightly lower NLL for longer replies).
 Task 17: Ruling: pull M3 (array first, sidecar last via tmp+os.replace, count checked on load), M4 (build_judge skips retraining when a completed checkpoint of the same config exists and only recalibrates; raises a clear error instead of calibrating a run that did not complete), M5 (`_same_config` helper) into fix round 1 — the judge build is a one-time ~1h run on the owner's PC — cost if wrong: none.
 Task 17: fix round 1 dispatched (resume a993c0f).
+Task 17: fix round 1 implemented 435946c (985 passed, 1 skipped, 70s; slow judge tests 75.0s/35.9s); prompt echo 67.13 → 26.85.
+Task 17: Ruling: accept that an echoed prompt now scores like a fluent copy of training text (0.4 × coherence per story, the brief's deliberate floor for coherent-but-unoriginal text); its total stays above the copy case only through cross-story distinct-2 — cost if wrong: a parroting model earns copy-level creativity (~27 vs ~46 for novel stories).
+Task 17: scoped re-review dispatched (sonnet a88b429) over 9098708..435946c.

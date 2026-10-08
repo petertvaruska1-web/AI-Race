@@ -253,3 +253,81 @@ The brief's ordering test still passes.
 ### Remaining notes
 - With the 1 − rep form, repetition scores *about* 0, not exactly 0: a phrase said k times keeps about 1/k of its score. That fits the ruling's "0 (or ≈0)".
 - Concern 3 (hash residues) is deferred per the ruling; no change.
+
+---
+
+## Fix round 1
+
+**Commit:** `435946c fix(ml): prompt echoes are not novel; stricter reply word checks shared with calibration; safer index and judge builds`
+
+### What changed, per finding
+
+**I1: echoing the prompt (`novelty.py`, `creativity.py`).**
+- `NoveltyIndex.novelty(ids, seen=None)`: a sampled window is new only when it is in neither the index nor `ngram_hashes(seen)`.
+- `score_creativity` passes `seen=tok.encode(prompt)`, the prompt's user text tokens.
+- Both module docstrings say so.
+- New scores:
+  - an echo of the prompt went from **67.13** (above the brief's novel case) to **26.85**. Each echo story is now 0.35, the value of a fluent copy of training data, because its novelty is 0.
+  - The category total stays above the copy case (18.23) because the 24 prompts differ from one another, which gives a high distinct-2.
+  - **Unchanged brief cases:** novel **45.57**, copy **18.23**, gibberish **0**, empty **0**, loop **0.50**, repeated phrase **2.80**.
+- If the controller wants echoes near 0 rather than at the copy floor, that would need a further ruling. For example, an echoed prompt could count as repetition.
+
+**M1: distinct words (`judge.py`).**
+- New constant `MIN_DISTINCT_WORDS = 3`, documented in `is_well_formed` as the controller's extension of spec 4.12. "go go go go" and "yes yes yes yes" now fail.
+- I did not edit the spec text itself; recording the amendment is left to the controller.
+
+**M2: calibration uses the same word checks (`judge.py`).**
+- New shared helper `_has_reply_words(reply)`: ≥ `MIN_WORDS` words, ≥ `MIN_DISTINCT_WORDS` different ones, and no word 3-gram said more than `MAX_TRIGRAM_COUNT` times, all case-folded. `is_well_formed` and `calibrate` both call it.
+- `calibrate` decodes each AI segment and keeps it only if it passes, then scores `encode(text.strip())`, exactly the tokens `is_well_formed` would score.
+- With no eligible reply, `calibrate` raises a **clear error**: `ValueError("cannot calibrate the judge: no held-out conversation replies that pass the word checks to score")`. This is documented in its docstring.
+
+**M3: the novelty record can no longer drift from the array (`novelty.py`).**
+- `save` writes `index.npy` first, then `index.json` last. Each goes to a `.tmp` file and is moved into place with `os.replace`.
+- `load` checks the recorded `count` against the array. A mismatched or missing count raises `ValueError` naming both files and saying to rebuild.
+
+**M4: build_judge recovery (`judge.py`).**
+- **(a)** Once a training run completes, `build_judge` writes `train_config.json`, the exact config, atomically. On the next call, if that record matches this config and the checkpoint is there, training is skipped and the judge is only calibrated.
+  - This also makes a rebuild of a complete judge recalibrate only. To retrain the same recipe, delete the directory; this is documented.
+  - The record is deleted before any training starts, so it can never vouch for a checkpoint that a later failed run overwrote.
+- **(b)** A run that ends with a status other than `completed` raises `JudgeBuildError` (a `RuntimeError`) with the status, the steps reached and the telemetry location. The model is not calibrated and no record is written.
+- `Judge.load` now checks for `calibration.json` first, so an incomplete directory raises `FileNotFoundError("… holds no complete judge: calibration.json is missing")` rather than a tokenizers error about a missing file.
+
+**M5: one config comparison (`trainer.py`).** New helper `_same_config(info, cfg)`, used by both `can_resume` and `_read_resume`.
+
+### Covering tests (`tests/test_creativity.py`)
+
+- **I1:**
+  - `test_novelty_counts_windows_seen_in_the_prompt_as_not_new`: exact fraction against a reference; seen windows lower the novelty; a `seen` shorter than n has no effect; seen text alone has novelty 0; also checked against an empty index.
+  - `test_a_story_that_echoes_its_prompt_is_not_new`: each echo is novel to the index on its own (above 0.5), yet scores exactly `0.875 × 0.4 × (1 − rep)`, and the category stays below 0.65 × the novel case.
+  - The exact-formula test now passes `seen=prompt`.
+  - The brief's ordering test is unchanged and passes.
+- **M1:** `test_well_formed_edge_cases` covers:
+  - "go go go go", "yes yes yes yes" and "Go go GO stop" fail, without calling the judge;
+  - "I like the park" and "go go stop now" pass.
+- **M2:**
+  - `test_calibration_scores_only_replies_that_pass_the_word_checks`: a custom root with 3 good and 5 bad replies (too short, too few different words, a 3-gram said 3 times). The judge scores exactly the good ones, and `is_well_formed` agrees reply by reply.
+  - `test_calibration_without_eligible_replies_is_a_clear_error`.
+  - The held-out reply test now filters with an independent reference of the word rules.
+- **M3:**
+  - `test_novelty_save_writes_the_array_first_and_its_record_last`: the `os.replace` order is array then record, and no `.tmp` files are left.
+  - `test_novelty_load_rejects_a_record_that_does_not_match_the_array`: a crash before the record is replaced makes `load` refuse with a count error, and a complete save repairs it. A missing count is also refused.
+- **M4** (real trainer, (2, 64, 64) judge shape, tiny budgets):
+  - `test_build_judge_recalibrates_a_trained_judge_without_retraining`: calibration fails once; the rebuild does not call `train_run`, the weights bytes are unchanged, and the calibration matches. Building a complete judge again only recalibrates. Another budget trains afresh and its record shows the new budget.
+  - `test_build_judge_refuses_a_run_that_did_not_complete`: NaN losses stop the run as `unstable_stopped`, giving `JudgeBuildError`. There is no calibration, record or tokenizer copy, and `Judge.load` raises `FileNotFoundError`. A clean rebuild then trains fresh and loads.
+  - `test_a_failed_rebuild_never_passes_for_the_earlier_judge`: a complete recipe-A judge, then a failed recipe-B rebuild, then recipe A again. A retrains instead of trusting B's leftover weights.
+  - The self-contained build test now expects `train_config.json` and checks it equals the config.
+- **M5:** covered by `test_trainer.py::test_can_resume_…` and the existing resume tests.
+- **Mutation check:** 9 deliberate bugs, one per new behavior, were all caught. Dropping the record deletion first survived the original tests; I then added `test_a_failed_rebuild_never_passes_for_the_earlier_judge`, which catches it.
+
+### Commands and output
+- **RED:**
+  - Command: `uv run --no-sync pytest tests/test_creativity.py -q`.
+  - First it failed at collection with an `ImportError` (`TRAIN_CONFIG_NAME`).
+  - With only the two new names added: **11 failed, 21 passed**, each for its intended reason.
+- **GREEN:**
+  - `uv run --no-sync pytest tests/test_creativity.py tests/test_bench.py tests/test_trainer.py -q -W error::RuntimeWarning` gave **145 passed, 1 skipped, 3 deselected in 27.3 s**. The stale-record test came after that run and passes.
+  - `uv run --no-sync pytest -m slow tests/test_creativity.py -v --durations=4` gave **2 passed in 111.1 s**:
+    - `test_build_judge_smoke` **75.0 s**;
+    - `test_build_judge_resume_smoke` **35.9 s**.
+  - Full suite, `uv run --no-sync pytest -q -W error::RuntimeWarning`: **985 passed, 1 skipped, 6 deselected in 70.0 s**.
+  - `uv run --no-sync ruff check .` reported All checks passed; the touched files are format-clean.
