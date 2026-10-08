@@ -1208,6 +1208,8 @@ def test_a_just_missed_target_shows_the_digits_that_miss_it():
         assert not c.passed and shown in c.detail, c.detail
     c = eval_speed(90.04, None)
     assert not c.passed and "trained on the GPU in 90.04 s (at most 90 s)" in c.detail
+    assert c.detail.startswith("missed: GPU training. ")
+    assert eval_speed(60, 480.5).detail.startswith("missed: CPU training. ")
     met = eval_speed(90, None, first_token_ms=300, tokens_per_second=50, growth_seconds=1.996)
     assert met.passed and "chat first token 300 ms" in met.detail  # met values keep their form
     assert "growth op 2.00 s" in met.detail

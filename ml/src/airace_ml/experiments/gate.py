@@ -201,7 +201,8 @@ def _criterion(gid: str, passed: bool, detail: str, data: dict) -> GateCriterion
 @dataclass(frozen=True)
 class SpeedTarget:
     """One first-model target of spec 4.11: ``key`` names the measurement, which must be at most
-    ``limit`` (at least ``limit`` when ``at_least``)."""
+    ``limit`` (at least ``limit`` when ``at_least``). ``name`` is how a missed target is listed
+    (``label`` when empty)."""
 
     key: str
     label: str
@@ -209,6 +210,7 @@ class SpeedTarget:
     limit: float
     digits: int
     at_least: bool = False
+    name: str = ""
 
     def show(self, value: float, missed: bool = False) -> str:
         """``value`` with this target's usual digits; a missed value gets as many more as it
@@ -223,8 +225,12 @@ class SpeedTarget:
 
 
 SPEED_TARGETS: tuple[SpeedTarget, ...] = (
-    SpeedTarget("gpu_seconds", "trained on the GPU in", "s", GPU_SECONDS_LIMIT, 1),
-    SpeedTarget("cpu_seconds", "trained on the CPU in", "s", CPU_SECONDS_LIMIT, 1),
+    SpeedTarget(
+        "gpu_seconds", "trained on the GPU in", "s", GPU_SECONDS_LIMIT, 1, name="GPU training"
+    ),
+    SpeedTarget(
+        "cpu_seconds", "trained on the CPU in", "s", CPU_SECONDS_LIMIT, 1, name="CPU training"
+    ),
     SpeedTarget("bench_seconds", "full benchmark suite", "s", 30.0, 1),
     SpeedTarget("first_token_ms", "chat first token", "ms", 300.0, 0),
     SpeedTarget("tokens_per_second", "chat throughput", "tokens/s", 50.0, 0, at_least=True),
@@ -279,7 +285,7 @@ def eval_speed(
         bound = "at least" if t.at_least else "at most"
         parts.append(f"{t.show(value, missed=not t.met(value))} ({bound} {t.limit:g} {t.unit})")
         if not t.met(value):
-            missed.append(t.label)
+            missed.append(t.name or t.label)
     if data["cpu_seconds"] is None:
         parts.append("CPU not timed")
     detail = "; ".join(parts)
