@@ -234,3 +234,4 @@ Task 18: implemented d29e0b7 (sonnet a28560d, on top of WIP 7e8ffb5) — DONE_WI
 Task 18: Ruling: factual probes follow the KB safety flags — 8 capitals, 4 landmark→country, 3 continent probes (languages and animal homes are mc_safe=False; baby_animal objects are common words) — my dispatch example list was wrong — cost if wrong: precision/slip_rate probe only geography.
 Task 18: Ruling: accept brief-mandated edge readings — a silent model reads steadiness 1.0 (Jaccard(∅,∅)=1), warmth is unbounded ("!!!" → 30), "ok" counts as casual — descriptions are population-relative, so these extremes only mark genuine outliers — cost if wrong: a silent model is described as "steady".
 Note: default-suite headroom is shrinking (118s of 180s here); Tasks 19-20 must keep their default tests light (CLI/gate heavy paths go under @pytest.mark.slow).
+Task 18: review dispatched (sonnet a6c08c1) over e2e7c7e..d29e0b7.
