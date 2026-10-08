@@ -260,3 +260,4 @@ Task 19: Ruling: the CLI never discards saved progress silently — if out holds
 Task 19: fix round 2 dispatched (resume ae1197a).
 Task 19: fix round 2 implemented 5070a03 (1171 passed, 1 skipped, 123.3s); trainer.py gains CHECKPOINT_EVERY (train_run default) and public has_resume_state; the stray ml/ck* probe dirs (not the implementer's) were deleted, never committed.
 Task 19: minor (deferred → final review): `build-judge` on a data root with no held-out creative text or eligible replies ends in calibrate's ValueError traceback (message is user-ready; a narrow fix needs a CalibrationError subclass in judge.py).
+Task 19: round-2 scoped re-review dispatched (sonnet a02f0b5) over 3deb52c..5070a03.
