@@ -342,3 +342,111 @@ No test depends on these random-init numbers.
   - (iii) Normalize against a control: the model's agreement on paraphrase triples whose subject is swapped, keeping the frame and changing the fact.
   - (iv) Accept the metric and caption it in the UI as "steadiness of answers", not knowledge.
 - Until then, an untrained model will still post a high consistency score.
+
+---
+
+## Pre-review change 2 (revised consistency ruling)
+
+**Commit:** `3dfc3ed fix(ml): score consistency as robust knowledge (every paraphrase right), drop calibrated choice`. It sits on top of the controller's `d2a8070`. Not pushed.
+
+### What changed
+
+**Calibration removed.**
+- Gone: `scoring.calibrated_choice`, `suite.NEUTRAL_CONTEXT`, the neutral-context requests and the `calibrate` flag.
+- The request dedup is gone too. Without neutral pairs, bench-v1 has no repeated (context, continuation) pairs, so it no longer earned its place.
+- `_ask` and `_judge_scores` are back to exactly their `20a6e53` form: one `score_continuations` call per category, built from spans.
+- Each consistency member uses the plain MC rule: the argmax of mean log-prob per token, with the first option winning ties.
+
+**New group rule.** In `_consistency`:
+- A group's score is `float(all(member outcome == 1.0))`, i.e. 1 only if every paraphrase chose its own `answer_index`.
+- `raw` is the mean over groups.
+- Chance is the mean over groups of the members' mean `1/len(options)`.
+- `score = normalize(raw, chance)`.
+- `n` is the number of groups.
+- ItemResults are still one per group: the group id, unioned tags, the 0/1 score and `output=None`.
+- A group with fewer than 2 members, or an ungrouped item, still raises `ValueError`.
+
+**`scoring.agreement` removed.** Nothing uses it any more.
+
+**Docstrings.**
+- `suite.py` module docstring: the table row, plus a paragraph on why chance is `1/options`. That is the expected score of a guesser that keeps one option text across all paraphrases; one that guesses each paraphrase afresh scores below it. So a question-blind model normalizes to about 0, and agreement-only rules can be gamed.
+- `ItemResult`: 1 or 0, and a group counts as right only when every paraphrase is.
+- `tag_breakdown`: in consistency, a `topic:` tag counts whole groups.
+- `answer_key_lm`: it answers every paraphrase correctly, so consistency scores 100. Its behaviour is unchanged.
+
+### Tests
+
+Removed, since the rule they pinned is gone: `test_agreement_arithmetic`, `test_calibrated_choice_subtracts_the_neutral_score` and `test_only_consistency_is_calibrated`. `test_one_batched_call_per_category` is back to plain counts (480 consistency pairs, no neutral ones).
+
+New or rewritten:
+- `test_consistency_group_is_right_only_when_every_paraphrase_is` (the arithmetic). It uses 4 groups:
+
+  | Group | Options | Answers given | Group score |
+  |---|---|---|---|
+  | a | 4 | all right | 1 |
+  | b | 2 | right on 2 of 3 | 0 |
+  | c | 4 | the same wrong answer every time | 0 |
+  | d | 2 | all right | 1 |
+
+  - It expects raw = 0.5, chance = (¼ + ½ + ¼ + ½)/4 = 0.375 and score = `normalize(0.5, 0.375)` = 20.
+  - It checks per-group ItemResults: ids, 0/1 scores, unioned tags `("x", "y", "z")`, and `output=None`.
+  - A constant model is right only in group d, where every paraphrase lists the answer first.
+- `test_consistency_gives_a_question_blind_option_prior_chance_level`: the option-text-prior fake.
+  - The test proves the fake picks the same text in every paraphrase of all 40 groups.
+  - It asserts a score ≤ 25. The measured score is **0.00** (raw 0.250 = 10/40 groups, which is chance).
+- `test_consistency_needs_every_paraphrase_right`: a strong text prior, outweighed by a +20 lift that the question gives one option.
+
+  | Variant | Expected |
+  |---|---|
+  | the right answer | `CategoryScore(100.0, 1.0, 40)` |
+  | right but once wrong (wrong on each group's third paraphrase) | `CategoryScore(0.0, 0.0, 40)` |
+  | the same wrong answer | `CategoryScore(0.0, 0.0, 40)` |
+- `test_an_untrained_model_is_not_consistent`: the untrained `tiny_lm` fixture scores ≤ 50 on all 40 groups.
+  - This is a robust bound. The measured score is 0.0; theory says about 0, since a group is right by luck about 1 time in 4. Agreement-only rules gave 62–91.
+  - It guards against regressing to an agreement-only rule.
+
+**Mutation check.** I tried 5 mutations of the new rule, and every one was caught:
+- any member right
+- the fraction of members right
+- the old text-agreement rule
+- chance 0
+- independent-guesser chance, `(1/k)^3`
+
+### Commands and output
+
+```
+$ cd ml && uv run --no-sync pytest tests/test_bench.py -q        # RED: new tests, calibrated code still in place
+E           assert [('score', 575)] == [('score', 480)]          # (consistency still sent neutral pairs)
+E       KeyError: (1, 48, 93, 98, 102, 278, 41)                    # (neutral context sent to fakes that know only paraphrases)
+FAILED tests/test_bench.py::test_one_batched_call_per_category
+FAILED tests/test_bench.py::test_consistency_group_is_right_only_when_every_paraphrase_is
+FAILED tests/test_bench.py::test_consistency_needs_every_paraphrase_right[the right answer-100.0]
+FAILED tests/test_bench.py::test_consistency_needs_every_paraphrase_right[right but once wrong-0.0]
+FAILED tests/test_bench.py::test_consistency_needs_every_paraphrase_right[the same wrong answer-0.0]
+5 failed, 64 passed, 1 skipped in 3.06s
+$ uv run --no-sync pytest tests/test_bench.py -q -rs             # GREEN
+SKIPPED [1] tests/test_bench.py:710: needs the real tok-v1 tokenizer
+70 passed, 1 skipped in 2.90s
+$ uv run --no-sync pytest
+=========== 930 passed, 1 skipped, 4 deselected in 69.31s (0:01:09) ============
+$ uv run --no-sync ruff check .
+All checks passed!
+$ uv run --no-sync ruff format --check src/airace_ml/evals tests/fakes.py tests/test_bench.py
+5 files already formatted
+```
+
+### Scores after the change
+
+- Answer-key model: 100.00 in all 7 categories. `run_benchmarks` takes 82 ms over the full suite.
+- Constant model: 0.00 in all categories. Its consistency raw is now 0.000 (it was 0.225 under agreement), and `run_benchmarks` takes 56 ms.
+  - At 40 items per category: reasoning 9.09; consistency is now 0.00 (it was 7.69).
+
+**Untrained real models.** Each is a `TorchLM` with 2 layers, d64, ctx 64, the 512-vocab test tokenizer, CPU, full suite.
+
+| Init seed | Plain agreement (ruling 5) | Calibrated agreement (ruling A) | **Every paraphrase right (revised)** | Groups right | Knowledge |
+|---|---|---|---|---|---|
+| 0 | 86.7 | 83.3 | **0.0** (raw 0.250) | 10/40 | 0.3 |
+| 1 | 91.1 | 62.2 | **0.0** (raw 0.200) | 8/40 | 0.0 |
+| 2 | 90.0 | 77.8 | **3.3** (raw 0.275) | 11/40 | 0.0 |
+
+Their overall scores are now 0.76 / 0.57 / 1.88; under ruling 5 they were about 13. Concerns A and A2 are resolved by this ruling. Concern C (the real-tokenizer budget test) is unchanged and still waits on `tok-v1`.
