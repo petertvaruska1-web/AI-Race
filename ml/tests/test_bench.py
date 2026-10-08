@@ -2,7 +2,9 @@ import copy
 import json
 import math
 import sys
+import zlib
 from collections import Counter
+from statistics import fmean
 from types import ModuleType
 
 import pytest
@@ -13,6 +15,7 @@ from airace_ml.evals.scoring import (
     CategoryScore,
     ItemResult,
     agreement,
+    calibrated_choice,
     exact_match,
     extract_answer,
     mc_choice,
@@ -23,6 +26,7 @@ from airace_ml.evals.scoring import (
 from airace_ml.evals.suite import CATEGORIES, Suite, build_suite, run_benchmarks
 from airace_ml.infer.lm import ContinuationScore as CS
 from airace_ml.infer.lm import Generation
+from airace_ml.paths import tokenizer_path
 from airace_ml.skills.checkers import CHECKERS
 from airace_ml.skills.code import code_bench_items
 from airace_ml.skills.facts import consistency_groups, knowledge_bench_items
@@ -32,7 +36,7 @@ from airace_ml.skills.kb import load_kb
 from airace_ml.skills.patterns import pattern_bench_items
 from airace_ml.skills.reasoning import reasoning_bench_items
 from airace_ml.skills.types import CheckItem, ExactItem, MCItem, PairItem, skill_rng
-from airace_ml.tokenizer import encode_chat, encode_doc
+from airace_ml.tokenizer import Tok, encode_chat, encode_doc
 from tests.fakes import ScriptedLM, answer_key_lm
 
 
@@ -259,17 +263,29 @@ def test_generation_prompts_are_greedy_seeded_and_use_default_stops(tiny_tok):
     assert [(r.score, r.output) for r in rep.items] == [(1.0, " Paris.\nQuestion:")] * 2
 
 
+def _expected_requests(tok, category, items):
+    """The distinct (context, continuation) pairs a category's scoring call must contain."""
+    bos, neutral = (tok.bos_id,), tuple(encode_doc(tok, "Answer:"))
+    requests = set()
+    for i in items:
+        if isinstance(i, PairItem):
+            requests |= {(bos, tuple(tok.encode(i.good))), (bos, tuple(tok.encode(i.bad)))}
+        elif isinstance(i, MCItem):
+            for option in i.options:
+                cont = tuple(tok.encode(" " + option))
+                requests.add((tuple(encode_doc(tok, i.prompt)), cont))
+                if category == "consistency":  # calibrated: each option also after "Answer:"
+                    requests.add((neutral, cont))
+    return requests
+
+
 def test_one_batched_call_per_category(tiny_tok):
     suite = build_suite()
     for category in SCORED_CATEGORIES:
         lm = RecordingLM(tiny_tok)
         run_benchmarks(lm, tiny_tok, suite=suite, categories=[category])
         items = suite.items[category]
-        n_scored = sum(
-            2 if isinstance(i, PairItem) else len(i.options)
-            for i in items
-            if isinstance(i, (PairItem, MCItem))
-        )
+        n_scored = len(_expected_requests(tiny_tok, category, items))
         lengths = Counter(i.max_new_tokens for i in items if isinstance(i, (ExactItem, CheckItem)))
         expected = ([("score", n_scored)] if n_scored else []) + [
             ("generate", n, m) for m, n in lengths.items()
@@ -346,7 +362,7 @@ def test_consistency_agreement_by_text_and_chance(tiny_tok):
     by_prompt = {tuple(encode_doc(tiny_tok, i.prompt)): chosen[i.id] for i in a + b}
 
     def score(ctx, cont):
-        return 0.0 if tiny_tok.decode(cont) == " " + by_prompt[tuple(ctx)] else -10.0
+        return 0.0 if tiny_tok.decode(cont) == " " + by_prompt.get(tuple(ctx), "") else -10.0
 
     suite = Suite("t", {"consistency": a + b})
     rep = run_benchmarks(
@@ -624,3 +640,112 @@ def test_rejects_short_score_lists_and_unknown_items(tiny_tok):
         run_benchmarks(ShortLM(tiny_tok), tiny_tok, categories=["language"])
     with pytest.raises(TypeError, match="benchmark item"):
         run_benchmarks(ScriptedLM(tiny_tok), tiny_tok, suite=Suite("t", {"language": ["text"]}))
+
+
+# -- Pre-review rulings: calibrated consistency (A) and reply budgets (C) -------------------------
+
+
+def test_calibrated_choice_subtracts_the_neutral_score():
+    plain = [CS(-1.0, 1), CS(-4.0, 2)]  # per token: -1, -2
+    neutral = [CS(-0.5, 1), CS(-6.0, 2)]  # per token: -0.5, -3
+    assert mc_choice(plain) == 0 and calibrated_choice(plain, neutral) == 1  # gains -0.5 vs +1
+    same = [CS(-1.0, 1), CS(-2.0, 1)]
+    assert calibrated_choice(same, same) == 0  # no gain anywhere: the first option
+    assert calibrated_choice([CS(-1.0, 1), CS(-3.0, 1), CS(-2.0, 1)], [CS(-2.0, 1)] * 3) == 0
+    assert calibrated_choice([CS(-2.0, 1), CS(-1.0, 1), CS(-1.0, 1)], [CS(-3.0, 1)] * 3) == 1
+    # a score that is not finite on either side never wins
+    assert calibrated_choice([CS(math.nan, 1), CS(-5.0, 1)], [CS(-9.0, 1)] * 2) == 1
+    assert calibrated_choice([CS(-1.0, 1), CS(-5.0, 1)], [CS(math.nan, 1), CS(-6.0, 1)]) == 1
+    assert calibrated_choice([CS(-1.0, 1), CS(-5.0, 1)], [CS(-math.inf, 1), CS(-6.0, 1)]) == 1
+    assert calibrated_choice([CS(0.0, 0), CS(-5.0, 1)], [CS(0.0, 0), CS(-6.0, 1)]) == 1
+    assert calibrated_choice([CS(math.nan, 1)] * 2, [CS(math.nan, 1)] * 2) == 0
+    with pytest.raises(ValueError):
+        calibrated_choice(plain, neutral[:1])
+
+
+def _text_prior(text: str) -> float:
+    """A fixed log-prob per token for each option text (a different one for nearly every text)."""
+    return -1.0 - zlib.crc32(text.encode("utf-8")) % 997 / 100
+
+
+def test_consistency_ignores_a_question_blind_option_prior(tiny_tok):
+    def score(ctx, cont):  # what the model says depends on the option, never on the context
+        return _text_prior(tiny_tok.decode(cont)) * len(cont)
+
+    lm, suite = ScriptedLM(tiny_tok, score=score), build_suite()
+    plain_choices: dict[str, list[str]] = {}  # the plain rule would agree with itself every time
+    for item in suite.items["consistency"]:
+        conts = [tiny_tok.encode(" " + option) for option in item.options]
+        scores = lm.score_continuations([encode_doc(tiny_tok, item.prompt)] * len(conts), conts)
+        plain_choices.setdefault(item.group, []).append(item.options[mc_choice(scores)])
+    assert fmean(agreement(choices) for choices in plain_choices.values()) > 0.9
+    rep = run_benchmarks(lm, tiny_tok, suite=suite, categories=["consistency"])
+    assert rep.scores["consistency"].score <= 25  # chance level, as for a constant model
+
+
+@pytest.mark.parametrize("says", ["the right answer", "the same wrong answer"])
+def test_consistency_rewards_answers_that_come_from_the_question(tiny_tok, says):
+    suite = build_suite()
+    target = {}  # paraphrase context -> the option the question makes the model say
+    for item in suite.items["consistency"]:
+        right = item.options[item.answer_index]
+        wrong = min(option for option in item.options if option != right)
+        target[tuple(encode_doc(tiny_tok, item.prompt))] = (
+            right if says == "the right answer" else wrong
+        )
+
+    def score(ctx, cont):  # a strong text prior everywhere, plus a smaller lift from the question
+        text = tiny_tok.decode(cont)
+        lift = 2.0 if text == " " + target.get(tuple(ctx), "\0") else 0.0
+        return (_text_prior(text) + lift) * len(cont)
+
+    rep = run_benchmarks(
+        ScriptedLM(tiny_tok, score=score), tiny_tok, suite=suite, categories=["consistency"]
+    )
+    assert rep.scores["consistency"] == CategoryScore(100.0, 1.0, 40)
+
+
+def test_only_consistency_is_calibrated(tiny_tok):
+    neutral = encode_doc(tiny_tok, "Answer:")
+    suite = build_suite()
+    for category in ("reasoning", "knowledge", "consistency"):
+        seen = []
+
+        def score(ctx, cont, seen=seen):
+            seen.append(ctx)
+            return 0.0
+
+        run_benchmarks(
+            ScriptedLM(tiny_tok, score=score), tiny_tok, suite=suite, categories=[category]
+        )
+        n_neutral = sum(ctx == neutral for ctx in seen)
+        options = {o for i in suite.items[category] if isinstance(i, MCItem) for o in i.options}
+        assert n_neutral == (len(options) if category == "consistency" else 0), category
+    assert len(options) < sum(len(i.options) for i in suite.items["consistency"])  # deduplicated
+
+
+def _reply_budget_overruns(tok: Tok) -> list[tuple[str, str, int, int]]:
+    """(item id, text, tokens, max_new_tokens) for every answer or reference that cannot fit."""
+    overruns = []
+    for items in build_suite().items.values():
+        for item in items:
+            if isinstance(item, ExactItem):  # a plain reply usually starts with a space
+                texts = [t for a in item.answers for t in ([a] if item.chat else [a, " " + a])]
+            elif isinstance(item, CheckItem):
+                texts = [item.reference]
+            else:
+                continue
+            for text in texts:
+                if (n := len(tok.encode(text))) > item.max_new_tokens:
+                    overruns.append((item.id, text, n, item.max_new_tokens))
+    return overruns
+
+
+def test_reply_budget_check_finds_overruns(tiny_tok):  # the check itself, on the test tokenizer
+    overruns = {item_id for item_id, *_ in _reply_budget_overruns(tiny_tok)}
+    assert {"knowledge-0168", "instruction-0004", "instruction-0053"} <= overruns
+
+
+@pytest.mark.skipif(not tokenizer_path().exists(), reason="needs the real tok-v1 tokenizer")
+def test_every_answer_fits_its_reply_budget_with_the_real_tokenizer():
+    assert _reply_budget_overruns(Tok.load(tokenizer_path())) == []

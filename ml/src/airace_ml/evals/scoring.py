@@ -98,6 +98,25 @@ def mc_choice(option_scores: Sequence[ContinuationScore]) -> int:
     return means.index(max(means))
 
 
+def calibrated_choice(
+    option_scores: Sequence[ContinuationScore], neutral_scores: Sequence[ContinuationScore]
+) -> int:
+    """The option the question itself makes most likely (the first one on ties).
+
+    Each option's gain is its mean log-probability per token after the question minus after a
+    neutral context. An option the model likes whatever it is asked gains nothing, so a model
+    that ignores the question cannot pick the same text in every paraphrase. An option whose
+    score is not finite on either side never wins.
+    """
+    if len(option_scores) != len(neutral_scores):
+        raise ValueError(f"{len(option_scores)} option scores but {len(neutral_scores)} neutral")
+    gains = []
+    for asked, neutral in zip(option_scores, neutral_scores, strict=True):
+        gain = mean_logprob(asked) - mean_logprob(neutral)
+        gains.append(gain if math.isfinite(gain) else -math.inf)
+    return gains.index(max(gains))
+
+
 def pair_correct(good: ContinuationScore, bad: ContinuationScore) -> bool:
     """The good text has the strictly higher total log-probability (a tie is not a win)."""
     return _total(good) > _total(bad)

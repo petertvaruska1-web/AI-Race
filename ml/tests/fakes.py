@@ -69,8 +69,9 @@ def answer_key_lm(tok: Tok, suite: Suite) -> ScriptedLM:
     It scores the correct option and the good sentence of a pair at 0.0 and everything else at
     -10, and replies with an exact item's first answer or a checked item's reference. Lookups
     are by exact token ids, encoded the way the benchmark specifies, so a prompt or option
-    encoded any other way gets -10 and no reply. Raises ``ValueError`` if two items disagree on
-    the same key.
+    encoded any other way gets -10 and no reply. So do the options after consistency's neutral
+    context, which leaves the correct option the only one the question lifts (calibrated choice
+    still picks it). Raises ``ValueError`` if two items disagree on the same key.
     """
     scores: dict[tuple[tuple[int, ...], tuple[int, ...]], float] = {}
     replies: dict[tuple[int, ...], str] = {}
