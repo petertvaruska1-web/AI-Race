@@ -1,14 +1,18 @@
 """The creativity category: stories a model writes, scored as coherence x novelty x diversity.
 
 The model writes one story for each of the 24 :data:`STORY_PROMPTS`, all sampled in one batched
-call (temperature 0.9, top-p 0.95, seeded). Each story is measured three ways:
+call (temperature 0.9, top-p 0.95, seeded). Each story is measured four ways:
 
 * **coherence** ``c``: its per-token loss under the reference judge, placed on the judge's own
   scale for real stories, ``clip((p90 - loss) / (p90 - p10), 0, 1)``. As fluent as the best real
   stories is 1; stranger than 90% of them is 0.
 * **novelty** ``nov``: the fraction of its sampled 8-grams that no corpus contains.
-* together, ``story = c * (0.4 + 0.6 * nov)``: an incoherent story is worth nothing however new,
-  and a fluent copy of the training data keeps 40%.
+* **repetitiveness** ``rep``: ``1 - unique word 3-grams / all word 3-grams`` within the story (0
+  when it has no 3-gram). A loop reads as easy to a judge and every repeat of a new phrase counts
+  as new, so without it "the the the ..." would score about 50; with it, a phrase said ``k``
+  times keeps about ``1 / k`` and endless repetition scores about 0.
+* together, ``story = c * (0.4 + 0.6 * nov) * (1 - rep)``: an incoherent story is worth nothing
+  however new, a fluent copy of the training data keeps 40%, and a loop keeps almost nothing.
 
 **Diversity** ``d`` is distinct-2 over all the stories: unique word bigrams over all word bigrams
 (words are runs of lowercase letters). The category score is ``100 * mean(story) * (0.5 + 0.5 *
@@ -81,6 +85,13 @@ def distinct_2(texts: Iterable[str]) -> float:
     return len(set(bigrams)) / len(bigrams) if bigrams else 0.0
 
 
+def repetitiveness(text: str) -> float:
+    """``1 - unique word 3-grams / all word 3-grams`` of ``text``; 0.0 when it has no 3-gram."""
+    words = _words(text)
+    trigrams = list(zip(words, words[1:], words[2:]))
+    return 1 - len(set(trigrams)) / len(trigrams) if trigrams else 0.0
+
+
 def _coherence(nll: float, calibration: JudgeCalibration) -> float:
     """``clip((p90 - nll) / (p90 - p10), 0, 1)``; a NaN loss is 0, and a calibration with no
     spread (p90 <= p10) is a plain test against p90."""
@@ -117,7 +128,11 @@ def score_creativity(
         score = 0.0
         if _words(story):
             new = novelty.novelty(tok.encode(story))
-            score = _coherence(nll, judge.calibration) * (NOVELTY_FLOOR + (1 - NOVELTY_FLOOR) * new)
+            score = (
+                _coherence(nll, judge.calibration)
+                * (NOVELTY_FLOOR + (1 - NOVELTY_FLOOR) * new)
+                * (1 - repetitiveness(story))
+            )
         results.append(
             ItemResult(f"story-{k:02d}", CATEGORY, score, ("fmt:story", f"topic:{topic}"), story)
         )

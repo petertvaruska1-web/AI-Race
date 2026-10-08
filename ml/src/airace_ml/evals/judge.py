@@ -8,7 +8,8 @@ judge finds it no stranger than most real conversation replies (:func:`is_well_f
 :func:`build_judge` trains it into :func:`~airace_ml.paths.judge_dir`, which ends up
 self-contained: the checkpoint, a copy of the frozen tokenizer (``tokenizer.json``) and
 ``calibration.json``, the loss levels the judge gives real held-out text (:func:`calibrate`).
-``calibration.json`` is written last, so a directory with it holds a complete judge.
+``calibration.json`` is written last, so a directory with it holds a complete judge. A build cut
+short (about an hour on the reference GPU) resumes from its last saved state when run again.
 """
 
 import json
@@ -34,7 +35,7 @@ from airace_ml.skills.checkers import words
 from airace_ml.tokenizer import SPECIAL_TOKENS, Tok
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.train.events import TrainEvent
-from airace_ml.train.trainer import train_run
+from airace_ml.train.trainer import can_resume, train_run
 
 TOKENIZER_NAME = "tokenizer.json"
 CALIBRATION_NAME = "calibration.json"
@@ -204,8 +205,11 @@ def build_judge(
     given) into :func:`~airace_ml.paths.judge_dir`, copy the tokenizer in, calibrate it and write
     ``calibration.json``. Returns the directory.
 
-    ``on_event`` receives the run's training telemetry. A previous judge's calibration is removed
-    before training starts, so the directory never pairs a new model with an old calibration.
+    ``on_event`` receives the run's training telemetry. A build that was cut short continues
+    where it stopped: when the directory holds the resume state of this exact training run, the
+    run resumes from it; any other state (another budget, an incomplete save) is deleted and
+    training starts fresh. A previous judge's calibration is removed before training starts, so
+    the directory never pairs a new model with an old calibration.
     """
     data_root = Path(data_root)
     device = torch.device(device) if device is not None else pick_device()
@@ -214,7 +218,14 @@ def build_judge(
         cfg = replace(cfg, token_budget=token_budget)
     out = judge_dir(data_root)
     (out / CALIBRATION_NAME).unlink(missing_ok=True)
-    train_run(cfg, out_dir=out, data_root=data_root, device=device, on_event=on_event)
+    train_run(
+        cfg,
+        out_dir=out,
+        data_root=data_root,
+        device=device,
+        on_event=on_event,
+        resume=can_resume(out, cfg),
+    )
     shutil.copyfile(tokenizer_path(data_root), out / TOKENIZER_NAME)
     model, _ = load_checkpoint(out, device)
     tok = Tok.load(out / TOKENIZER_NAME)

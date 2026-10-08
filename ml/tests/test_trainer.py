@@ -9,7 +9,7 @@ from airace_ml.model.growth import GrowthError
 from airace_ml.model.shape import ModelShape
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.train.events import Done, HeldoutEval, Instability, Progress, Sample
-from airace_ml.train.trainer import TrainHooks, train_run
+from airace_ml.train.trainer import TrainHooks, can_resume, train_run
 
 
 @pytest.fixture(autouse=True)
@@ -390,3 +390,19 @@ def test_starter_speed_gpu(tiny_data_root, tmp_path):
     )
     assert r.status == "completed"
     assert r.tokens / r.wall_seconds > 30_000
+
+
+def test_can_resume_only_a_complete_state_of_the_same_config(tiny_data_root, tmp_path):
+    c = cfg(token_budget=1024 * 40)
+    out = tmp_path / "p"
+    assert not can_resume(out, c)  # no directory yet
+    train_run(c, out_dir=out, data_root=tiny_data_root, _hooks=TrainHooks(stop_after_steps=20))
+    assert can_resume(out, c)
+    assert not can_resume(out, cfg(token_budget=1024 * 40, seed=2))  # another run's state
+    assert not can_resume(out, cfg(token_budget=1024 * 50))
+    (out / "resume").rename(out / "resume.tmp.crashed")  # still complete under another name
+    assert can_resume(out, c)
+    (out / "resume.tmp.crashed" / "state.json").unlink()  # incomplete: no state.json
+    assert not can_resume(out, c)
+    (out / "resume.tmp.crashed" / "state.json").write_text("{not json", encoding="utf-8")
+    assert not can_resume(out, c)

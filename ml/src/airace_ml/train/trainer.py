@@ -270,8 +270,8 @@ def _remove_resume_states(out_dir: Path, keep: tuple[Path, ...] = ()) -> None:
             shutil.rmtree(path, ignore_errors=True)
 
 
-def _read_resume(out_dir: Path, cfg: TrainRunConfig) -> tuple[dict, dict]:
-    """The newest complete resume state (JSON part, tensor part), checked against ``cfg``.
+def _newest_resume_state(out_dir: Path) -> tuple[Path, dict] | None:
+    """The newest complete resume state in ``out_dir`` (its directory and JSON part), if any.
 
     Normally that is ``out_dir/resume/``. After a crash or a refused rename in the middle of a
     save it may sit under a ``resume.tmp.*`` or ``resume.old.*`` name instead. A directory whose
@@ -286,6 +286,19 @@ def _read_resume(out_dir: Path, cfg: TrainRunConfig) -> tuple[dict, dict]:
         best_step = best[1]["step"] if best is not None else -1
         if info["step"] > best_step or (info["step"] == best_step and path.name == RESUME_DIR):
             best = (path, info)
+    return best
+
+
+def can_resume(out_dir: Path, cfg: TrainRunConfig) -> bool:
+    """Whether ``train_run(cfg, out_dir=out_dir, resume=True)`` has a run to continue: ``out_dir``
+    holds a complete resume state saved by a run of exactly ``cfg``."""
+    best = _newest_resume_state(Path(out_dir))
+    return best is not None and best[1]["config"] == json.loads(cfg.to_json())
+
+
+def _read_resume(out_dir: Path, cfg: TrainRunConfig) -> tuple[dict, dict]:
+    """The newest complete resume state (JSON part, tensor part), checked against ``cfg``."""
+    best = _newest_resume_state(out_dir)
     if best is None:
         raise FileNotFoundError(f"no resume state in {out_dir / RESUME_DIR}")
     path, info = best

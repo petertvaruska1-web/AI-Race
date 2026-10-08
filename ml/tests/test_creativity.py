@@ -40,6 +40,8 @@ from airace_ml.model.shape import ModelShape
 from airace_ml.model.transformer import Transformer
 from airace_ml.paths import corpus_dir, judge_dir, novelty_path
 from airace_ml.tokenizer import encode_chat, encode_doc
+from airace_ml.train.events import Done, Progress
+from airace_ml.train.trainer import TrainHooks, train_run
 from tests.fakes import ScriptedLM
 
 
@@ -152,6 +154,13 @@ def ref_hashes(ids, n):
 
 def ref_words(text):
     return re.findall(r"[a-z]+", text.lower())
+
+
+def ref_repetitiveness(text):
+    """1 - unique word 3-grams / all word 3-grams of one text; 0 with no 3-grams."""
+    words = ref_words(text)
+    trigrams = list(zip(words, words[1:], words[2:]))
+    return 1 - len(set(trigrams)) / len(trigrams) if trigrams else 0.0
 
 
 def ref_distinct_2(texts):
@@ -411,13 +420,102 @@ def test_build_judge_writes_a_self_contained_judge(tiny_data_root, tiny_tok, tmp
     assert built == out
     [(cfg, kwargs)] = calls
     assert cfg == replace(judge_train_config(), token_budget=65536)
-    assert kwargs == {"out_dir": out, "data_root": root, "device": CPU, "on_event": events.append}
+    assert kwargs == {
+        "out_dir": out,
+        "data_root": root,
+        "device": CPU,
+        "on_event": events.append,
+        "resume": False,  # nothing to resume: a previous judge left no resume state
+    }
     names = sorted(p.name for p in out.iterdir())
     assert names == ["calibration.json", "meta.json", "model.safetensors", "tokenizer.json"]
     moved = Path(shutil.move(out, tmp_path / "moved"))
     judge = Judge.load(moved, device="cpu")
     assert judge.calibration == calibrate(judge, root)
     assert judge.calibration.creative_p10 <= judge.calibration.creative_p90
+
+
+def _small_judge_config(monkeypatch):
+    """Make build_judge train a 2-layer, 64-wide judge on 1024-token steps (everything else as
+    the real recipe), so a build takes about a second."""
+    real = judge_module.judge_train_config
+
+    def small(seed=1234):
+        return replace(real(seed), shape=ModelShape(2, 64, 64), batch_tokens=1024)
+
+    monkeypatch.setattr(judge_module, "judge_train_config", small)
+    return small
+
+
+def _spy_train_run(monkeypatch):
+    """Record the ``resume`` flag of every train_run that build_judge starts."""
+    flags = []
+
+    def spy(cfg, **kwargs):
+        flags.append(kwargs.get("resume", False))
+        return train_run(cfg, **kwargs)
+
+    monkeypatch.setattr(judge_module, "train_run", spy)
+    return flags
+
+
+def _interrupted_judge_build(root, cfg, after_steps):
+    """What a judge build leaves behind when it stops after ``after_steps`` steps."""
+    train_run(
+        cfg,
+        out_dir=judge_dir(root),
+        data_root=root,
+        device="cpu",
+        _hooks=TrainHooks(stop_after_steps=after_steps),
+    )
+    assert (judge_dir(root) / "resume").is_dir()
+
+
+def test_build_judge_resumes_an_interrupted_build(tiny_data_root, tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    shutil.copytree(tiny_data_root, root)
+    small = _small_judge_config(monkeypatch)
+    _interrupted_judge_build(root, replace(small(), token_budget=1024 * 6), after_steps=3)
+    flags = _spy_train_run(monkeypatch)
+    events = []
+    built = build_judge(root, device="cpu", on_event=events.append, token_budget=1024 * 6)
+    assert flags == [True]
+    assert [e.step for e in events if isinstance(e, Progress)] == [6]  # steps 4-6 only
+    assert [e.status for e in events if isinstance(e, Done)] == ["completed"]
+    assert not [p for p in built.iterdir() if p.name.startswith("resume")]
+    result = json.loads((built / "result.json").read_text(encoding="utf-8"))
+    assert result["steps"] == 6 and result["status"] == "completed"
+    judge = Judge.load(built, device="cpu")
+    assert math.isfinite(judge.calibration.creative_p90)
+    assert judge.calibration == calibrate(judge, root)
+
+
+def test_build_judge_starts_fresh_over_another_builds_state(tiny_data_root, tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    shutil.copytree(tiny_data_root, root)
+    small = _small_judge_config(monkeypatch)
+    _interrupted_judge_build(root, replace(small(), token_budget=1024 * 6), after_steps=3)
+    flags = _spy_train_run(monkeypatch)
+    events = []
+    built = build_judge(root, device="cpu", on_event=events.append, token_budget=1024 * 4)
+    assert flags == [False]  # a 4-step build cannot continue a 6-step one
+    assert [e.step for e in events if isinstance(e, Progress)] == [1, 4]
+    assert not [p for p in built.iterdir() if p.name.startswith("resume")]
+    assert math.isfinite(Judge.load(built, device="cpu").calibration.conv_reply_p90)
+
+
+@pytest.mark.slow
+def test_build_judge_resume_smoke(tiny_data_root, tmp_path, monkeypatch):
+    """The real judge recipe: interrupted after 1 of 2 steps, then finished by build_judge."""
+    root = tmp_path / "root"
+    shutil.copytree(tiny_data_root, root)
+    _interrupted_judge_build(root, replace(judge_train_config(), token_budget=32768 * 2), 1)
+    flags = _spy_train_run(monkeypatch)
+    events = []
+    built = build_judge(root, device="cpu", on_event=events.append, token_budget=32768 * 2)
+    assert flags == [True] and [e.step for e in events if isinstance(e, Progress)] == [2]
+    judge = Judge.load(built, device="cpu")
+    assert math.isfinite(judge.calibration.creative_p90)
 
 
 def test_judge_config_is_the_reference_recipe():
@@ -463,6 +561,10 @@ def _story(k):
         return ""
     if k == 6:
         return "  123 456 !!!  "  # no words
+    if k == 7:
+        return "the red cat sat, the red cat sat"  # 6 word 3-grams, 4 different
+    if k == 8:
+        return "hello friend"  # no 3-gram: nothing repeated
     return f"  the {ANIMALS[k % 12]} found a shiny stone near the {PLACES[k % 6]} today  "
 
 
@@ -483,11 +585,18 @@ def test_creativity_scores_every_story_and_the_mix(tiny_tok):
     stories = [_story(k).strip() for k in range(24)]
     assert seen == [tiny_tok.encode(s) for s in stories]
     expected = [
-        0.75 * (0.4 + 0.6 * idx.novelty(tiny_tok.encode(s))) if ref_words(s) else 0.0
+        0.75 * (0.4 + 0.6 * idx.novelty(tiny_tok.encode(s))) * (1 - ref_repetitiveness(s))
+        if ref_words(s)
+        else 0.0
         for s in stories
     ]
     assert [r.score for r in items] == pytest.approx(expected)
     assert items[5].score == items[6].score == 0.0 and min(expected[:5]) > 0.3
+    assert ref_repetitiveness(stories[7]) == pytest.approx(1 / 3)
+    assert ref_repetitiveness(stories[8]) == ref_repetitiveness(stories[0]) == 0.0
+    assert items[8].score == pytest.approx(
+        0.75 * (0.4 + 0.6 * idx.novelty(tiny_tok.encode("hello friend")))
+    )
     assert [r.item_id for r in items] == [f"story-{k:02d}" for k in range(24)]
     assert [r.output for r in items] == stories and {r.category for r in items} == {"creativity"}
     topics = [r.tags for r in items]
@@ -521,6 +630,21 @@ def test_creativity_degenerate_outputs_score_finite(tiny_tok):
             assert math.isfinite(category.score) and 0 <= category.score <= 100
             assert all(math.isfinite(r.score) and 0 <= r.score <= 1 for r in items)
     assert score_creativity(repeated, tiny_tok, weird[0], idx)[0].score == 0.0  # NaN loss
+
+
+def test_endless_repetition_scores_about_zero(tiny_tok):
+    idx = NoveltyIndex.build([np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)])
+    fluent = StubJudge(tiny_tok, lambda ids: 2.5)  # the judge finds loops easy: coherence 0.875
+
+    def score(reply):
+        return score_creativity(ScriptedLM(tiny_tok, reply=lambda p: reply), tiny_tok, fluent, idx)
+
+    looping, items = score("the the the " * 30)
+    assert looping.score < 1 and all(r.score < 0.01 for r in items)
+    novel = score("a curious robot painted purple stars across the quiet ocean sky")[0].score
+    repeated, items = score("purple robots dance on frozen moons " * 16)  # ~ the story budget
+    assert novel > 40 and repeated.score < 5 and repeated.score < novel / 10
+    assert all(r.score == pytest.approx(0.875 * 6 / 94, rel=0.05) for r in items)
 
 
 def test_story_prompts_are_simple_varied_and_not_in_any_generator():
