@@ -213,3 +213,5 @@ Task 17: Ruling: each story's score is multiplied by (1 − repetitiveness), whe
 Task 17: Ruling: build_judge resumes from judge_dir's resume state when one exists for the same config (train_run(resume=True)), so an interrupted ~1h build on the owner's PC continues instead of restarting — cost if wrong: none (train_run's resume is validated, bit-exact on CPU and CUDA per Task 8).
 Task 17: minor (deferred): hash base 1,000,003 ≡ 3 (mod 8), so `hash % 8 == 0` sampling depends only on token ids mod 8 (consistent between index and query, ~1/8 of windows; rare texts may have no sampled windows → novelty 0).
 Task 17: concerns sent back before review (resume a993c0f).
+Task 17: rulings 1-2 implemented 9098708 (976 passed, 1 skipped, 75.2s); looping story 43.77 → 0.50; added public trainer.can_resume(out_dir, cfg) (Task 8 file) used by build_judge.
+Task 17: review dispatched (opus a864f48) over 2815283..9098708.

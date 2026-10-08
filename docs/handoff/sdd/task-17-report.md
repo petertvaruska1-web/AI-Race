@@ -175,3 +175,81 @@ Then I timed `build_novelty_index`:
 3. **The hash's low bits are linear in the token ids** (note; the brief's hash is followed verbatim). Because 1,000,003 ≡ 3 (mod 8), `hash % 8` depends only on each token id mod 8. Sampling is still content-defined, consistent between the index and queries, and about 1/8 of windows. Every constant window (for example "the the … the") is always sampled. This does no harm to correctness.
 4. **The judge directory also keeps the trainer's `telemetry.jsonl` and `result.json`.** `result.json` records the training status. `build_judge` does not raise on `unstable_stopped`: the calibration is relative to whatever judge was trained, and the status shows in `result.json` and the `Done` event.
 5. **The novelty index for the M1 corpus is about 120 MB** and must be held in memory by any process that scores creativity. That is fine on the reference PC; flagged only for M3 worker sizing.
+
+---
+
+## Pre-review changes (rulings 1, 2)
+
+**Commit:** `9098708 fix(ml): mark down repetitive stories in creativity; resume an interrupted judge build`
+
+### What changed
+
+**Ruling 1: repetition factor (`evals/creativity.py`).**
+- New public `repetitiveness(text) = 1 − unique word 3-grams / all word 3-grams`. It is 0 when the text has no 3-gram, and it uses the same `_words` extraction as distinct-2.
+- Each story is now `c * (0.4 + 0.6 * nov) * (1 − repetitiveness)`. Distinct-2 across stories is unchanged.
+- The module docstring documents the factor and why it is there: a loop reads as easy to the judge and counts as novel, so without the factor it scores about 50. With it, a phrase said k times keeps about 1/k.
+
+**Ruling 2: resuming a judge build (`train/trainer.py`, `evals/judge.py`).**
+- `train_run` raises a plain `ValueError` for a mismatched state, which is the same type it uses for config errors. So instead of catching it, I decide before training:
+  - New public `trainer.can_resume(out_dir, cfg) -> bool`: True only when `out_dir` holds a complete resume state saved by a run of exactly `cfg`.
+  - It shares the state selection with `_read_resume`, which I refactored into `_newest_resume_state` plus a validator. `_read_resume` behaves exactly as before.
+- `build_judge` passes `resume=can_resume(out, cfg)` to `train_run`. Nothing is caught. A missing, incomplete or mismatched state means `resume=False`, and `train_run`'s fresh path already deletes stale resume states. So a build never errors on a stale state.
+- `trainer.py` is a Task 8 file; the change is additive plus that one refactor.
+
+### Tests
+- **RED first:**
+  - `test_can_resume_…` failed with an `ImportError` (no `can_resume`).
+  - `test_build_judge_resumes_an_interrupted_build` failed with `assert [False] == [True]`.
+  - The exact-formula test failed: story 7 differed by 0.25, the missing factor.
+  - `test_endless_repetition_scores_about_zero` failed: the loop scored 43.77 (`assert 43.77 < 1`).
+- **Added or updated tests:**
+  - **`test_trainer.py::test_can_resume_only_a_complete_state_of_the_same_config`:**
+    - no directory gives False;
+    - an interrupted run gives True;
+    - another seed or another budget gives False;
+    - a complete state renamed to `resume.tmp.*` still gives True;
+    - an incomplete state (no `state.json`, or unreadable JSON) gives False.
+  - **`test_creativity.py::test_creativity_scores_every_story_and_the_mix`:** now includes
+    - a story with repeated 3-grams, "the red cat sat, the red cat sat" (rep = 1/3);
+    - a story with no 3-gram, "hello friend" (factor 1).
+
+    The exact expected scores include `(1 − ref_repetitiveness)`, computed by an independent reference.
+  - **`test_endless_repetition_scores_about_zero`:**
+    - `"the the the " * 30` scores **0.50**, and every story is under 0.01;
+    - `"purple robots dance on frozen moons " * 16` (about the 96-token budget) scores **2.80**, against **45.57** for the brief's novel sentence. Each story is about 0.875 × 6/94.
+  - **`test_build_judge_resumes_an_interrupted_build`** (fast; `judge_train_config` patched to a (2, 64, 64) shape with 1024-token steps, every other recipe value real):
+    1. A real `train_run` is interrupted with `TrainHooks(stop_after_steps=3)` in `judge_dir`.
+    2. `build_judge` then passes `resume=True` (checked with a spy around the real `train_run`).
+    3. Only step 6 emits Progress, so steps 1–3 were not re-run; `Done` reports completed.
+    4. No resume directories are left; `result.json` shows 6 steps, completed.
+    5. `Judge.load` works, and its calibration equals a fresh `calibrate`.
+  - **`test_build_judge_starts_fresh_over_another_builds_state`** (fast): a 6-step interrupted state followed by a 4-step build gives `resume=False`, Progress at [1, 4], completion, and a loadable judge.
+  - **`@slow test_build_judge_resume_smoke`**: the real judge recipe (8×384×256), interrupted after 1 of 2 steps of 32768 tokens. `build_judge` resumes (spy shows True; Progress only at step 2) and leaves a loadable judge with a finite calibration.
+  - **`test_build_judge_writes_a_self_contained_judge`**: the expected `train_run` keyword arguments now include `resume: False`.
+- **Mutation check of the new logic:** I applied 5 deliberate bugs one at a time (`can_resume` ignoring the config, checked from both test files; `build_judge` never resuming; the repetition factor dropped; bigrams in place of 3-grams). All 5 were caught.
+
+### Commands and output
+- `cd ml && uv run --no-sync pytest tests/test_creativity.py tests/test_bench.py tests/test_trainer.py -q -W error::RuntimeWarning` gave **137 passed, 1 skipped, 3 deselected in 28.2 s**.
+- `uv run --no-sync pytest -m slow tests/test_creativity.py -v --durations=4` gave **2 passed in 123.5 s**:
+  - `test_build_judge_smoke` **83.9 s**;
+  - `test_build_judge_resume_smoke` **39.4 s**.
+- Full suite, `uv run --no-sync pytest -q -W error::RuntimeWarning`: **976 passed, 1 skipped, 6 deselected in 75.2 s**. After that I changed only docstrings: "three ways" became "four ways", and "set aside" became "deleted", which is accurate because a fresh run removes stale states. I then re-ran `test_creativity` and `test_bench`: 115 passed.
+- `uv run --no-sync ruff check .` reported All checks passed; ruff format is clean on the touched files.
+  - Process note: an accidental `ruff format tests/` reformatted 7 unrelated test files that were never format-clean. I reverted them with `git checkout` before committing, so only my files are in the commit.
+
+### Brief's cases after ruling 1
+
+| Case | Score | Change |
+|---|---|---|
+| novel | 45.57 | unchanged; no repeated 3-gram |
+| copy | 18.23 | unchanged |
+| gibberish | 0.00 | — |
+| empty | 0.00 | — |
+| `"the the the " * 30` | **0.50** | was about 43.8 |
+| novel phrase × 16 | **2.80** | — |
+
+The brief's ordering test still passes.
+
+### Remaining notes
+- With the 1 − rep form, repetition scores *about* 0, not exactly 0: a phrase said k times keeps about 1/k of its score. That fits the ruling's "0 (or ≈0)".
+- Concern 3 (hash residues) is deferred per the ruling; no change.
