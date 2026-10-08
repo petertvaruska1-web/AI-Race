@@ -293,3 +293,4 @@ Task 20: Ruling: m6 was scoped to G1; the same rounding in G4/G5/G6 tables (seed
 Task 20: minor (deferred → final review): non-CUDA G1 detail prints the same CPU time with :.1f and with the "digits that miss" format in one sentence; G4-G6 data-table rounding near thresholds.
 Task 20: complete (commits 0243951..93f2737, review clean after 3 fix rounds; steps 6-9 pending on the local GPU machine)
 FINAL REVIEW: starting whole-branch review workflow (c28acd2..HEAD) — 15 subsystem×lens finders + deferred-minor triage + tests-health + spec-coverage + completeness critic + dedup + adversarial verification + synthesis.
+FINAL REVIEW: workflow wf_c9a5295d-a19 launched at HEAD adcc1f8 (script saved in the session scratchpad as final-review.js; resume with resumeFromRunId if interrupted).
