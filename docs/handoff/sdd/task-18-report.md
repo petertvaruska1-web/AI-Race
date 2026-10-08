@@ -198,3 +198,168 @@ No other file was touched.
    - A probe set whose text changes is a new measurement. The set is frozen, but a rename would silently change fingerprints; nothing records a probe-set version yet.
 8. **Probe edit during work.** I shortened `creative-09` from 16 words to "Name a pet fish and tell me why you picked that name." so that all probes are 14 words or fewer. It was before the final commit, so the commit holds the final text.
 9. **Process.** The container restarted once mid-task. The controller committed my in-progress files as `7e8ffb5` and `7f38f5b`; I committed the finished work on top as `d29e0b7` without rewriting either.
+
+---
+
+# Fix round 1
+
+**Commit:** `1f0ab4f fix(ml): fingerprint lexicons mark only register and warmth; one public words(); dotted abbreviations match` (on top of `d29e0b7`; nothing amended). Same two trailer lines.
+
+All four findings are fixed. Some statements in the first report are superseded and noted below: lexicon sizes (now 44 / 35 / 43), the terse and answering rows of the trait table, concern 3 ("ok" is casual) and concern 5 (duplicated word regex).
+
+## I1 (Important): "Once upon a time" read as formal
+
+**What changed.** `FORMAL_WORDS` (`fingerprint.py`) lost `upon` and every other word that is as common in children's stories and plain speech as in formal writing:
+
+- Dropped: `upon`, `indeed`, `shall`, `unfortunately`, `although`, `otherwise`, `concerning`, `provide`, `ensure`, `indicate`, `require`, `requires`, `required`, `appropriate`, `significant`, `essentially`.
+- Added formal-only words: `therein`, `wherein`, `thereafter`, `henceforth`, `hitherto`, `whilst`, `pursuant`, `aforementioned`, `ascertain`, `forthwith`.
+- Kept `thus` and `hence` (rare in plain speech).
+- The set has 44 words. The brief's `therefore`, `however` and `additionally` are all still in it.
+
+**Audit.** I ran every lexicon over the fixture corpus (stories, chats, facts, code, unicode) and over the probe texts:
+
+| lexicon | hits before | after |
+|---|---|---|
+| FORMAL | `provide` (facts) | none |
+| CASUAL | `okay`, `wow` (chats) | none |
+
+**Measured.** A model that opens only the 10 creative probes with "Once upon a time, a little bird sang to the moon." (and says "Hello." elsewhere) had register 0.968 before the fix (the reviewer's number). It now has register 0.0.
+
+**Covering tests** (`tests/test_personality.py`):
+- `test_once_upon_a_time_is_not_formal`: one reply, and the 10-creative-probes model.
+- `test_formal_words_are_not_everyday_words`.
+- `test_register_lexicons_stay_silent_on_plain_text`: no formal or casual word occurs in the fixture corpus.
+
+## M1: `words()` duplicated creativity's private regex
+
+**What changed.**
+- `airace_ml/evals/creativity.py`: `_words` is now the public `words`. The body is untouched, and the local variable in `repetitiveness` that would have shadowed it was renamed. Creativity behaviour is identical. No other module referenced `_words`.
+- `fingerprint.py` imports `words` from creativity. The local regex, the local `words()` and the pin test are deleted.
+- Boldness now takes `len(words)` and `repetitiveness(text)` from one definition.
+
+**Covering tests.**
+- `tests/test_creativity.py::test_words_is_the_public_lowercase_letter_run_extractor`: case, digits, underscores, accents, CJK and emoji.
+- `tests/test_personality.py::test_personality_counts_words_with_creativitys_own_helper`: `fingerprint.words is creativity.words`, and the local regex is gone.
+
+## M2: lexicon entries that are ambiguous or echo the probes
+
+**What changed.**
+- `POSITIVE_WORDS` (43 words) now holds affect only. Removed:
+  - `good`, `best`, `friend`, `friends`, `warm`, `bright`, `sweet`
+  - the same kind of word, found by the same audit: `nice`, `fine`, `fun`, `brave`, `lucky`, `generous`, `gentle`, `please`, `welcome`, `cozy`, `hope`, `beautiful`
+  - Added affect words (`thankful`, `appreciate`, `pleased`, `thrilled`, `excited`, `cherish`, `adorable`, `affection`, `fond`, `delight`) to stay in 30-60.
+  - `love`, `loved`, `loves`, `loving`, `great`, `kind` and `happy` all stay.
+- `CASUAL_WORDS` (35 words) lost `cool`, `stuff`, `guys`, `buddy`, `pal`, `totally`, `whatever`, `awesome`, `okay`, `ok`, plus the interjections that appear in story dialogue (`wow`, `oops`, `yay`, `yikes`, `ugh`, `hmm`). It gained text-speak (`idk`, `imo`, `thx`, `pls`, `ppl`, `lmao`, `rofl`, `gotcha`, `sup`). `yeah`, `lol`, `gonna` and `hey` stay.
+- **Probe `creative-04`** now reads "Describe a dragon who **likes** to bake." instead of "loves". I did this rather than drop `loves`, so every inflection of "love" counts and no probe echoes a warm word. That is the only probe edit.
+- **`kind` stays**, as mandated. It is echoed once, by `creative-03` ("a new kind of fruit").
+
+**Measured.** A model that only repeats each probe's text:
+
+| | before | after |
+|---|---|---|
+| warmth | 0.195 | 0.043 |
+| register | n/a | 0.0 |
+| positive hits | good, best, friend, friends, loves, kind | `kind` only |
+
+The 0.043 is the one `kind` plus the "!" of "Hello!", over 461 words.
+
+**Covering tests.**
+- `test_a_model_that_only_restates_the_question_reads_neutral`: replies equal the probes; no formal or casual hit; the only positive hit is `kind`, once; register is exactly 0.0; warmth is `10 * 2 / total` and below 0.1.
+- `test_positive_words_are_affective_only`
+- `test_casual_words_have_no_everyday_sense`
+- `test_register_lexicons_stay_silent_on_plain_text`
+- the existing `test_lexicons` (sizes 30-60, disjoint, the brief's test words)
+
+The hand-computed warmth test used `friend`, so I re-derived it with `kind`. "I love my kind dog!" and "no" give 3 hits in 6 words, so 5.0; a mean of ratios would be 3.0.
+
+## M3: "Washington D.C." was not a slip but "Washington DC" was
+
+**What changed.** New public helper `answer_words(text)`: `words()` after joining dotted abbreviations of single letters (`D.C.` to `DC`, `U.S.` to `US`, `U.S.A` to `USA`). The regex needs at least two letters, each separated by a period, with no letter before or after. It is used for answer matching only, on both sides: the answer and wrong-answer lists, and the reply. Verbosity and the other traits still count plain `words`.
+
+**Measured.** Slip rate for a probe whose wrong answer is "Washington DC":
+
+| reply | before | after |
+|---|---|---|
+| "Washington DC" | 1.0 | 1.0 |
+| "Washington D.C." | 0.0 | 1.0 |
+| "Washington, D.C." | 0.0 | 1.0 |
+
+The module docstring documents the rule.
+
+**Covering tests.**
+- `test_dotted_abbreviations_match_their_joined_form`: wrong answers, dotted wrong answers found undotted, and right answers both ways. `U.S.A.` does not match `US`.
+- `test_answer_words_join_dotted_abbreviations`: the joins, plus the negatives `Mr. A. Smith`, `xD.C.`, `3.5`, `ph.D` and `1.2.3`.
+- `test_factual_probes_agree_with_the_kb` now uses `answer_words`, the same splitting as the matcher.
+- `test_every_right_form_scores_and_every_wrong_answer_slips` still passes: every accepted and wrong form of all 15 probes is detected.
+
+## TDD and commands
+
+**RED.**
+
+M1, before the refactor:
+
+```
+$ cd ml && uv run --no-sync pytest tests/test_creativity.py -q -x
+E   ImportError: cannot import name 'words' from 'airace_ml.evals.creativity'
+```
+
+I1 and M2, tests added, lexicons unchanged: `6 failed, 59 passed`. The first failure was the I1 case:
+
+```
+FAILED test_once_upon_a_time_is_not_formal      assert 0.5 == 0.0
+FAILED test_formal_words_are_not_everyday_words
+FAILED test_casual_words_have_no_everyday_sense
+FAILED test_positive_words_are_affective_only
+FAILED test_register_lexicons_stay_silent_on_plain_text
+FAILED test_a_model_that_only_restates_the_question_reads_neutral
+        {'good': 2, ..., 'kind': 1} == {'kind': 1}   (extra: best 2, friend 1, friends 1, good 2, loves 1)
+```
+
+M3, tests added, matcher unchanged: `2 failed, 65 passed`.
+
+```
+FAILED test_dotted_abbreviations_match_their_joined_form   "Washington D.C." assert 0.0 == 1.0
+FAILED test_answer_words_join_dotted_abbreviations         ImportError: cannot import name 'answer_words'
+```
+
+**GREEN.**
+
+```
+$ uv run --no-sync pytest tests/test_personality.py tests/test_creativity.py -q -W error
+101 passed, 2 deselected in 9.70s
+$ uv run --no-sync ruff check .
+All checks passed!
+$ uv run --no-sync pytest -q
+1053 passed, 1 skipped, 6 deselected in 115.14s (0:01:55)
+```
+
+`tests/test_personality.py` has 67 tests. `ruff format --check` is clean on every file I touched.
+
+**Mutation check.** Eight mutants, each run against `tests/test_personality.py`, all killed:
+- the reply not joined, and the answers not joined
+- the abbreviation regex without the trailing dot, joining longer words, allowed after a letter, and keeping the dots
+- `upon` back in FORMAL, `okay` back in CASUAL, and `warm` back in POSITIVE
+- `creative-04` echoing "loves" again
+
+A first run of the script crashed on a placeholder entry and left one mutant in the source. I caught it, restored the file from a saved copy, confirmed it was byte-identical, and re-ran the mutants with a `finally` restore.
+
+## Brief's fake models, after the fix
+
+| model | verbos | confid | invent | steadi | precis | boldne | slip_r | regist | warmth | repeti |
+|---|---|---|---|---|---|---|---|---|---|---|
+| talky `"well " * 40`, k=2 | 40.000 | 0.500 | 0.000 | 1.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.974 |
+| terse `"ok"`, k=2 | 1.000 | 0.500 | 0.000 | 1.000 | 0.000 | 0.000 | 0.000 | **0.000** | 0.000 | 0.000 |
+| formal `"Therefore, however, additionally."`, k=1 | 3.000 | 0.500 | 0.017 | 0.000 | 0.000 | 1.000 | 0.000 | 0.994 | 0.000 | 0.000 |
+| casual `"yeah lol gonna hey"`, k=1 | 4.000 | 0.500 | 0.017 | 0.000 | 0.000 | 1.000 | 0.000 | -0.996 | 0.000 | 0.000 |
+| answering fake, k=1 | 2.283 | 0.500 | 0.247 | 0.000 | 1.000 | 0.250 | 0.000 | 0.000 | **0.000** | 0.000 |
+| empty model, k=2 | 0.000 | 0.000 | 0.000 | 1.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+
+The terse model's register was -0.992 (`ok` was casual) and the answering fake's warmth was 3.285 (its "Hello friend." hit `friend`). The brief's assertions (`formal > 0 > casual`, precision 1, slip 0) still hold.
+
+## Judgment calls to confirm
+
+1. **Beyond the eight named entries.** I removed the same kind of word wherever the audit found it (`nice`, `fine`, `fun`, `please`, `welcome`, `hope`, `beautiful`, `okay` and others, listed above). If you want any of them back they can return without touching the tests, except those listed in the "everyday" sets of `test_positive_words_are_affective_only` and `test_casual_words_have_no_everyday_sense`.
+2. **`creative-04` was reworded** to keep `loves` in the lexicon. The alternative is to leave the probe and drop `loves`, which would make "love" count but "loves" not.
+3. **Spaced abbreviations** ("D. C.") are not joined, because the finding asked for single letters separated by periods. Nothing pins that either way.
+4. **`kind` stays warm** by mandate, so a model that only repeats the probes reads warmth 0.043, not exactly 0.
+5. **Suite time** is about 115 s on this container, the same as the first round and above the roughly 70 s the dispatch noted; the personality tests are about 2 s of it.

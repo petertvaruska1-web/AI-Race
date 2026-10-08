@@ -239,3 +239,5 @@ Task 18: review (sonnet a6c08c1): spec ✅; Important I1: "upon" in FORMAL_WORDS
 Task 18: Ruling: pull M1 (promote creativity's word helper to a public shared function and import it), M2 (affective-only positive words; casual words without common neutral senses; keep 30-60 each), M3 (matching treats dotted abbreviations like "D.C." as "DC") into fix round 1 — trait validity, public profile — cost if wrong: small lexicon churn.
 Task 18: minor (deferred): M4 distance std floor 1e-6 (only matters for fingerprints outside the population; G4 uses its own fingerprints as population); M5 callers must measure every fingerprint of a population with the same k (record k when M2's registry stores fingerprints).
 Task 18: fix round 1 dispatched (resume a28560d).
+Task 18: fix round 1 implemented 1f0ab4f (1053 passed, 1 skipped, 115s); register for story openers 0.968 → 0.0; echo-model warmth 0.195 → 0.043; lexicons 44/35/43; probe creative-04 reworded loves→likes.
+Task 18: scoped re-review dispatched (haiku a16c3ab) over d29e0b7..1f0ab4f.
