@@ -724,3 +724,94 @@ Updated tests, as the rulings required:
 
 ## Note
 Adding `minipy` changes the measuring digest, so any benches or fingerprints cached by an earlier gate run are measured again on the next run. The runs themselves are reused.
+
+---
+
+# Fix round 3
+
+**Status:** DONE. N-b, N-e and m1–m6 are all addressed.
+
+**Commit:** `93f2737 fix(ml): gate summary names stopped runs only and keeps the whole detail, every G1 path shows the digits that miss, infer/ joins the training digest`, on `claude/upbeat-franklin-k1192h`, not pushed.
+
+## What changed, per item
+
+### N-b: the Summary prefix is names only
+- **Prefix.** New `gate.stopped_prefix(names)` returns `"stopped early: <name>, <name>. "`, with names only. `require_completed` uses it.
+- **Steps.** Each run's steps now appear only in the Runs table and in the "Cannot pass" line under Measurements, e.g. `g3-code-s2 did not complete (unstable_stopped after 2 of 6 steps)`.
+- **Room for the prefix.** The Summary detail cell's limit grows by exactly the prefix's length: `CELL_CHARS + len(stopped_prefix(...))`. A prefix never cuts the detail it opens, and the original detail keeps its usual 400-character budget.
+- **Test:** `test_summary_keeps_the_whole_original_detail_beside_the_stopped_runs`, with 2 cases.
+  - The detail is realistic, made by `eval_differentiation` with three seeds, two-decimal scores and four mixes, and is asserted to be 330–400 characters.
+  - The cases have 1 and 2 stopped full-scale runs, with names like `g3-conversations-s3` and 256 of 512 steps.
+  - The detail must be exactly `stopped early: <names>. <original>`.
+  - The Summary row must equal `| G3 | Differentiation | FAIL | <that whole detail> |`, with no `…`.
+- **Updated tests:**
+  - `test_a_criterion_fails_and_says_so…` now expects `stopped early: g5-grown. all fine`.
+  - The fake-gate stopped-run test now finds each run's name in the detail's prefix and in `unfinished_runs`, exactly where the run is used.
+  - The grouped-table test's row now starts `stopped early: g3-code-s2. creat`.
+
+### N-e: every G1 path shows the digits that miss
+- **One formatter.** A shared `_shown(target, value)` prints a measurement against its target, using `show(missed=…)` for the extra digits. Both `eval_speed` and the off-CUDA branch of `speed_criterion` use it, so a just-missed value is never rounded onto its limit.
+- **CPU time.** The off-CUDA branch now reports the CPU time through the CPU target too, as "trained on the CPU in … (at most 480 s)".
+- **Example**, off-CUDA, at the boundaries:
+
+  ```
+  no CUDA device; GPU speed target not measured (the first model trained in 3.0 s on the CPU; trained on the CPU in 480.04 s (at most 480 s); full benchmark suite 30.04 s (at most 30 s); chat first token 300.4 ms (at most 300 ms); chat throughput 49.96 tokens/s (at least 50 tokens/s); growth op 2.0004 s (at most 2 s))
+  ```
+
+- **Test:** `test_speed_off_cuda_shows_the_digits_that_miss_a_target`. It covers all five boundary values above, and checks that values which meet their target keep their usual form ("12.3 s", "12 ms").
+
+### m1: the "Cannot pass" line
+- It now uses the same limit as the detail line (4 × `CELL_CHARS`).
+- **Test:** `test_cannot_pass_line_names_every_stopped_run_in_full`. With 8 stopped runs, every run and its steps appear, the line ends with its closing sentence, and there is no `…`.
+
+### m2: `infer/` is training code
+- `TRAINING_SOURCES = ("train", "model", "data", "tokenizer.py", "infer")`. The stated reason is that the trainer samples telemetry text with `infer/lm.py`, and that sampling is part of the training time G1 judges.
+- `infer/` also stays in `MEASURING_SOURCES`. The overlap is harmless: a change re-trains, which re-measures anyway.
+- `TRAINING_MAY_USE` is removed, since it is now empty. The training-closure check is back to `TRAINING_SOURCES` plus `UNDIGESTED` only.
+- **Test:** `test_code_digests_cover_everything_that_code_imports` asserts that `infer` is in the training group, and that the walk from `train/` really reaches `infer/lm.py`.
+
+### m3: no `airace_content` imports
+- The import walk's name collection is factored into `_import_names`. The digest test now asserts that no file reached from either group imports `airace_content`, since no digest covers it.
+- **New test:** `test_the_import_walk_sees_every_kind_of_import`. On a temporary module, it shows that a top-level `airace_content` import, a function-level one, and a function-level `airace_ml` import are all seen. The `airace_ml` one resolves to `__init__.py`, `minipy/__init__.py` and `minipy/interpreter.py`.
+
+### m4: calibration finiteness
+`test_structurally_wrong_judge_or_index_files_ask_for_a_rebuild` gains three `calibration.json` cases, each of which must ask for `airace-ml build-judge`:
+- a non-numeric value (`"low"`)
+- a NaN
+- a boolean (`true` is not a number for calibration)
+
+### m5: plain names in the not-finite list
+- The not-finite detail now reads `not a finite number: GPU training, CPU training, chat first token`, using the same names as the missed list.
+- **Test:** `test_unmeasurable_timings_are_listed_by_their_plain_names` checks the exact detail.
+
+### m6: no rounding onto a target in the data tables
+- New `report._near(value, target)`. It starts at the usual 4 significant digits and adds digits until the printed value lies on the same side of its target as the real one. It is applied wherever a measure has a `*_target` sibling.
+- Examples: 300.04 shows as "300.04", 49.996 as "49.996", 1.9999 as "1.9999". Exactly 300 stays "300", and values far from their targets keep 4 digits ("60").
+- **Test:** `test_report_shows_the_digits_that_tell_a_value_from_its_target`.
+
+## TDD and mutations
+- **RED.** After writing the new tests and the updates the rulings require: `12 failed, 45 passed`.
+  - The m4 cases and the import-walk helper test passed from the start. The finiteness check existed and only lacked tests, and the helper test exercises test code.
+- **GREEN.** `57 passed, 2 deselected in 3.26s`.
+- **Mutations.** I applied 9 and caught all 9, restoring each file afterwards:
+  - steps back in the prefix
+  - no Summary room for the prefix (caught by the two-run case)
+  - the default cell limit on "Cannot pass"
+  - the missed-digits flag forced off
+  - `t.label` in the not-finite list
+  - `_near` replaced by plain formatting
+  - `infer` dropped from `TRAINING_SOURCES`
+  - the calibration finiteness check removed
+  - a planted, never-executed `if False: import airace_content.build` in `minipy/__init__.py`
+
+## Commands and output (final tree, `93f2737`)
+
+| Command (from `ml/`) | Result |
+|---|---|
+| `uv run --no-sync ruff check .` | All checks passed (formatting also clean) |
+| `uv run --no-sync pytest tests/test_gate.py tests/test_cli.py -q` | 191 passed, 2 deselected |
+| `uv run --no-sync pytest` | **1247 passed, 1 skipped, 8 deselected in 108.61 s** |
+| `uv run --no-sync pytest -m slow tests/test_gate.py -v` | **2 passed in 96.11 s**: `test_run_gate_quick` 41.73 s plus 3.16 s of fixture setup; the CLI run-twice test 51.13 s |
+
+## Note
+Adding `infer/` to the training digest invalidates any gate runs already trained into an existing `--out`, so they will be retrained. This is what the ruling intends, and no real gate has been run yet.

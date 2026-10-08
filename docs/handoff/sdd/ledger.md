@@ -286,3 +286,4 @@ Task 20: fix round 2/5 re-review (workflow wf_e7b5fa71-60e): I2, N-a, N-c, N-d A
 Task 20: Ruling: infer/ joins TRAINING_SOURCES (training wall time includes telemetry sampling through infer/lm.py, and G1 judges that time) — cost if wrong: an inference-only change retrains the gate's runs.
 Task 20: fix round 3 dispatched (resume aced838).
 Task 20: fix round 3 implementer hit a usage limit before any change (reset 13:20 UTC); resumed at 13:20 on a clean tree (61d9a6d).
+Task 20: fix round 3 implemented 93f2737 (1247 passed, 1 skipped, 108.6s; slow quick gate 96.1s).
