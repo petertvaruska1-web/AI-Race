@@ -1,5 +1,8 @@
+import ast
 import json
 import math
+from collections.abc import Sequence
+from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -46,11 +49,11 @@ from airace_ml.experiments.gate import (
 from airace_ml.experiments.report import TRANSCRIPT_CHARS, write_gate_report
 from airace_ml.experiments.runs import GateRun, GateRuns
 from airace_ml.infer.lm import Generation
-from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME
+from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME, CheckpointMeta
 from airace_ml.model.growth import grow
 from airace_ml.model.shape import ModelShape
 from airace_ml.model.transformer import Transformer
-from airace_ml.paths import corpus_dir
+from airace_ml.paths import corpus_dir, judge_dir
 from airace_ml.personality.fingerprint import TRAITS, Fingerprint, load_probes
 from airace_ml.skills.facts import FalseFactPlan
 from airace_ml.skills.kb import KB, Fact, Relation, load_kb
@@ -725,10 +728,10 @@ def test_a_criterion_fails_and_says_so_when_a_run_it_uses_stopped_early():
     assert gate.require_completed(good, [_run("starter"), _run("g5-grown")]) is good
     stopped = _run("g5-grown", "unstable_stopped", steps=3)
     c = gate.require_completed(good, [_run("starter"), stopped, stopped])
-    assert not c.passed and c.id == "G5"
-    assert c.detail.startswith("g5-grown stopped early (unstable_stopped after 3 of 6 steps)")
-    assert c.detail.endswith("all fine") and c.data == {"x": 1.0, "unfinished_runs": ["g5-grown"]}
-    assert good.passed  # the original is not changed
+    assert not c.passed and c.id == "G5" and c.unfinished_runs == ["g5-grown"]
+    assert c.detail == "stopped early: g5-grown (3 of 6 steps). all fine"
+    assert c.data == {"x": 1.0}  # the measurements stay as they were
+    assert good.passed and good.unfinished_runs == []  # the original is not changed
 
 
 def test_report_lists_every_run(tmp_path):
@@ -804,6 +807,7 @@ def test_judge_and_index_loading_blame_only_damaged_files(tmp_path, monkeypatch)
 
         return load
 
+    _write_judge_files(tmp_path)
     monkeypatch.setattr(gate.Judge, "load", raising(ValueError("bad calibration")))
     with pytest.raises(gate.GateSetupError, match="airace-ml build-judge"):
         gate._load_judge(tmp_path, CPU)
@@ -814,7 +818,8 @@ def test_judge_and_index_loading_blame_only_damaged_files(tmp_path, monkeypatch)
     index = gate.novelty_path(tmp_path)
     index.parent.mkdir(parents=True)
     index.write_bytes(b"")
-    index.with_suffix(".json").write_text('{"hash_base": 1000003, "count": 0}', encoding="utf-8")
+    record = {"hash_base": 1000003, "n": 8, "sample_mod": 8, "count": 0}  # a sound record
+    index.with_suffix(".json").write_text(json.dumps(record), encoding="utf-8")
     with pytest.raises(gate.GateSetupError, match="airace-ml build-novelty-index"):
         gate._load_novelty(tmp_path)
     monkeypatch.setattr(gate.NoveltyIndex, "load", raising(RuntimeError("a bug")))
@@ -1004,8 +1009,9 @@ def test_a_run_that_stopped_early_fails_every_criterion_that_uses_it(fake_gate, 
         "g7-web-light": {"G7"},
     }
     for c in outcome.criteria:
+        assert c.detail.startswith("stopped early: ") == (c.id in failing)
         for name in stopped:
-            named = f"{name} stopped early (unstable_stopped after 2 of 4 steps)" in c.detail
+            named = f"{name} (2 of 4 steps)" in c.detail and name in c.unfinished_runs
             assert named == (c.id in users[name]), (c.id, name, c.detail)
     for name in stopped:
         assert outcome.raw["runs"][name]["status"] == "unstable_stopped"
@@ -1038,3 +1044,170 @@ def test_timings_wait_for_queued_gpu_work(monkeypatch):
     assert synced == []
     gate._clock(torch.device("cuda"))
     assert synced == [torch.device("cuda")]
+
+
+# -- fix round 2 -------------------------------------------------------------------------------------
+
+
+def _write_judge_files(root: Path, calibration=None, meta=None) -> None:
+    folder = judge_dir(root)
+    folder.mkdir(parents=True, exist_ok=True)
+    if calibration is None:
+        calibration = asdict(JudgeCalibration(1.0, 2.0, 3.0))
+    if meta is None:
+        meta = json.loads(
+            CheckpointMeta("tok-v1", ModelShape(2, 64, 64), "l", "v", None, 0, {}, []).to_json()
+        )
+    (folder / "calibration.json").write_text(json.dumps(calibration), encoding="utf-8")
+    (folder / META_NAME).write_text(json.dumps(meta), encoding="utf-8")
+
+
+def _source_files(part: str) -> list[Path]:
+    path = gate_runs.PACKAGE_ROOT / part
+    return sorted(path.rglob("*.py")) if path.is_dir() else [path]
+
+
+def _module_file(name: str) -> Path | None:
+    """The file of module ``name`` of airace_ml; None for a name that is not a module."""
+    if name == "airace_ml":
+        return gate_runs.PACKAGE_ROOT / "__init__.py"
+    rel = Path(*name.split(".")[1:])
+    for candidate in (rel.with_suffix(".py"), rel / "__init__.py"):
+        if (gate_runs.PACKAGE_ROOT / candidate).is_file():
+            return gate_runs.PACKAGE_ROOT / candidate
+    return None
+
+
+def _imported_modules(path: Path) -> set[Path]:
+    """Every airace_ml module file that ``path`` imports (anywhere in it, under any condition),
+    with the packages they sit in, which importing them runs too."""
+    names = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            names |= {alias.name for alias in node.names}
+        elif isinstance(node, ast.ImportFrom):
+            assert node.level == 0, f"{path} uses a relative import; resolve it here first"
+            names |= {node.module} | {f"{node.module}.{alias.name}" for alias in node.names}
+    files = set()
+    for name in names:
+        parts = name.split(".")
+        if parts[0] == "airace_ml":
+            for k in range(1, len(parts) + 1):
+                found = _module_file(".".join(parts[:k]))
+                if found is not None:
+                    files.add(found)
+    return files
+
+
+def _import_closure(parts: Sequence[str]) -> set[str]:
+    """The airace_ml files that the sources of ``parts`` import, directly or not."""
+    todo = [path for part in parts for path in _source_files(part)]
+    seen: set[Path] = set()
+    while todo:
+        path = todo.pop()
+        if path not in seen:
+            seen.add(path)
+            todo += _imported_modules(path) - seen
+    return {path.relative_to(gate_runs.PACKAGE_ROOT).as_posix() for path in seen}
+
+
+def _covered(module: str, parts: Sequence[str]) -> bool:
+    return any(module == part or module.startswith(part + "/") for part in parts)
+
+
+def test_code_digests_cover_everything_that_code_imports():
+    training, measuring = gate_runs.TRAINING_SOURCES, gate_runs.MEASURING_SOURCES
+    assert "minipy" in measuring  # the coding benchmark runs and grades programs with it
+    reached = _import_closure(measuring)
+    assert "minipy/interpreter.py" in reached  # the walk follows real imports
+    for module in reached:  # a training change re-trains and so re-measures everything
+        assert _covered(module, (*training, *measuring)) or module in gate_runs.UNDIGESTED, module
+    for module in _import_closure(training):  # a measuring change does not re-train
+        allowed = module in gate_runs.UNDIGESTED or module in gate_runs.TRAINING_MAY_USE
+        assert _covered(module, training) or allowed, module
+    for module in (*gate_runs.UNDIGESTED, *gate_runs.TRAINING_MAY_USE):
+        assert (gate_runs.PACKAGE_ROOT / module).is_file(), module  # no stale exemptions
+
+
+def test_a_stopped_run_keeps_grouped_measurements_grouped_and_the_summary_short(tmp_path):
+    grouped = {t: {"category": k, "mean": 50.0, "leads": True} for t, k in TARGET_CATEGORY.items()}
+    long_detail = "creative-heavy creativity 60.0 vs code-heavy 30.0 (lead +30.0); " * 6
+    g3 = GateCriterion("G3", "Differentiation", True, long_detail, grouped)
+    c = gate.require_completed(g3, [_run("g3-code-s2", "unstable_stopped", steps=2, planned=6)])
+    assert c.data == grouped and c.unfinished_runs == ["g3-code-s2"]
+    raw = {"runs": {"g3-code-s2": {"status": "unstable_stopped", "steps": 2, "planned_steps": 6}}}
+    outcome = GateOutcome([c], {}, raw)
+    write_gate_report(outcome, tmp_path / "r.md")
+    text = (tmp_path / "r.md").read_text(encoding="utf-8")
+    summary = next(line for line in text.splitlines() if line.startswith("| G3 |"))
+    assert summary.startswith("| G3 | Differentiation | FAIL | stopped early: g3-code-s2 (2 of 6")
+    assert "|  | category | mean | leads |" in text  # still one row per mix
+    assert "| code | coding | 50 | yes |" in text and "unfinished" not in text
+    assert (
+        "**Cannot pass:** g3-code-s2 did not complete (unstable\\_stopped after 2 of 6 steps)"
+        in text
+    )
+
+
+def test_structurally_wrong_judge_or_index_files_ask_for_a_rebuild(tmp_path, monkeypatch):
+    monkeypatch.setattr(gate.Judge, "load", lambda *a, **k: pytest.fail("must not get this far"))
+    for calibration, meta in (
+        ({"p10": 1.0}, None),  # an out-of-date calibration.json
+        ([1.0, 2.0, 3.0], None),
+        (None, {"format": 1, "tokenizer": "tok-v1"}),  # meta.json without its other fields
+        (None, ["not", "a", "meta"]),
+    ):
+        _write_judge_files(tmp_path, calibration, meta)
+        with pytest.raises(gate.GateSetupError, match="Rebuild it with: airace-ml build-judge"):
+            gate._load_judge(tmp_path, CPU)
+    index = gate.novelty_path(tmp_path)
+    index.parent.mkdir(parents=True)
+    np.save(index, np.zeros(0, np.uint64))
+    monkeypatch.setattr(gate.NoveltyIndex, "load", lambda *a: pytest.fail("must not get this far"))
+    for record in ([1, 2], {"hash_base": 1000003, "count": 0}, "text", {"n": 8}):
+        index.with_suffix(".json").write_text(json.dumps(record), encoding="utf-8")
+        with pytest.raises(gate.GateSetupError, match="airace-ml build-novelty-index"):
+            gate._load_novelty(tmp_path)
+
+
+def test_chat_speed_waits_for_a_cuda_device_before_each_clock_reading(tiny_tok, monkeypatch):
+    events = []
+    monkeypatch.setattr(torch.cuda, "synchronize", lambda device=None: events.append("sync"))
+    monkeypatch.setattr(gate.time, "perf_counter", lambda: events.append("clock") or len(events))
+
+    class OnCuda:
+        device = torch.device("cuda")
+
+        def generate(self, prompts, *, max_new_tokens, temperature, top_p, seed, stop_ids=None):
+            events.append("generate")
+            n = max_new_tokens
+            return [Generation([20] * n, [0.5] * n, [0.5] * n, False) for _ in prompts]
+
+    gate.chat_speed(OnCuda(), tiny_tok)
+    assert events.count("clock") == 4
+    assert all(events[i - 1] == "sync" for i, e in enumerate(events) if e == "clock")
+
+
+def test_growth_is_timed_on_the_grown_models_own_device(monkeypatch):
+    seen = []
+    monkeypatch.setattr(gate, "_clock", lambda device: seen.append(device) or float(len(seen)))
+    model = Transformer(ModelShape(2, 64, 64), 64).to("meta")  # stands in for a GPU model
+    grown, seconds = gate.time_growth(model, ModelShape(3, 96, 64), seed=1)
+    assert seen == [torch.device("meta")] * 2 and seconds == 1.0
+    assert grown.shape == ModelShape(3, 96, 64)
+
+
+def test_a_just_missed_target_shows_the_digits_that_miss_it():
+    for kwargs, shown in (
+        ({"first_token_ms": 300.4}, "chat first token 300.4 ms (at most 300 ms)"),
+        ({"tokens_per_second": 49.96}, "chat throughput 49.96 tokens/s (at least 50 tokens/s)"),
+        ({"growth_seconds": 2.0004}, "growth op 2.0004 s (at most 2 s)"),
+        ({"bench_seconds": 30.000001}, "full benchmark suite 30.000001 s (at most 30 s)"),
+    ):
+        c = eval_speed(60, None, **kwargs)
+        assert not c.passed and shown in c.detail, c.detail
+    c = eval_speed(90.04, None)
+    assert not c.passed and "trained on the GPU in 90.04 s (at most 90 s)" in c.detail
+    met = eval_speed(90, None, first_token_ms=300, tokens_per_second=50, growth_seconds=1.996)
+    assert met.passed and "chat first token 300 ms" in met.detail  # met values keep their form
+    assert "growth op 2.00 s" in met.detail

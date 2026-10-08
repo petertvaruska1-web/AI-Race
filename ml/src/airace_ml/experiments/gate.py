@@ -25,8 +25,8 @@ The evaluators (``eval_*``) are pure: they turn measurements into a :class:`Gate
 never raise, whatever they are given. Missing, non-finite or degenerate measurements (no seed
 pairs, a single seed, nothing to lower) fail with a detail that says why, and ``data`` holds only
 finite numbers (``None`` where nothing could be measured). A criterion that uses a run which
-stopped early (unstable) fails and names that run (:func:`require_completed`): its arms did not
-get the compute they were meant to.
+stopped early (unstable) fails, opening its detail with ``stopped early:`` and that run
+(:func:`require_completed`): its arms did not get the compute they were meant to.
 
 :func:`run_gate` trains every run under ``out_dir/runs/<name>`` and is safe to stop and start
 again (:mod:`airace_ml.experiments.runs`). A run that finished is reused while its config, the
@@ -39,6 +39,7 @@ the novelty index are unchanged. So the same command can simply be run again aft
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import numbers
 import statistics
@@ -64,7 +65,7 @@ from airace_ml.data.corpus import (
 from airace_ml.data.prep import PrepConfig, heldout_docs
 from airace_ml.device import pick_device
 from airace_ml.evals.creativity import words
-from airace_ml.evals.judge import CALIBRATION_NAME, Judge, is_well_formed
+from airace_ml.evals.judge import CALIBRATION_NAME, Judge, JudgeCalibration, is_well_formed
 from airace_ml.evals.novelty import NoveltyIndex
 from airace_ml.evals.scoring import mean_logprob
 from airace_ml.evals.suite import CATEGORIES, SUITE_VERSION, build_suite, run_benchmarks
@@ -86,7 +87,7 @@ from airace_ml.experiments.runs import (
     source_digest,
 )
 from airace_ml.infer.lm import LanguageModel, TorchLM
-from airace_ml.model.checkpoint import load_checkpoint
+from airace_ml.model.checkpoint import META_NAME, CheckpointMeta, load_checkpoint
 from airace_ml.model.growth import grow
 from airace_ml.model.shape import ModelShape
 from airace_ml.model.transformer import Transformer
@@ -156,11 +157,15 @@ class GateSetupError(ValueError):
 
 @dataclass
 class GateCriterion:
+    """One criterion's verdict. ``unfinished_runs`` names the runs it used that stopped early
+    (:func:`require_completed`); ``data`` holds only its measurements."""
+
     id: str
     title: str
     passed: bool
     detail: str
     data: dict
+    unfinished_runs: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -205,8 +210,13 @@ class SpeedTarget:
     digits: int
     at_least: bool = False
 
-    def show(self, value: float) -> str:
-        return f"{self.label} {value:.{self.digits}f} {self.unit}"
+    def show(self, value: float, missed: bool = False) -> str:
+        """``value`` with this target's usual digits; a missed value gets as many more as it
+        takes to see that it misses (300.4 ms must not read "300 ms" against a 300 ms limit)."""
+        digits = self.digits
+        while missed and digits < 12 and self.met(float(f"{value:.{digits}f}")):
+            digits += 1
+        return f"{self.label} {value:.{digits}f} {self.unit}"
 
     def met(self, value: float) -> bool:
         return value >= self.limit if self.at_least else value <= self.limit
@@ -267,7 +277,7 @@ def eval_speed(
         if value is None:
             continue
         bound = "at least" if t.at_least else "at most"
-        parts.append(f"{t.show(value)} ({bound} {t.limit:g} {t.unit})")
+        parts.append(f"{t.show(value, missed=not t.met(value))} ({bound} {t.limit:g} {t.unit})")
         if not t.met(value):
             missed.append(t.label)
     if data["cpu_seconds"] is None:
@@ -301,21 +311,19 @@ def speed_criterion(
 
 
 def require_completed(criterion: GateCriterion, runs: Sequence[GateRun]) -> GateCriterion:
-    """``criterion`` unchanged if every run it used completed; otherwise a failed copy whose detail
-    first names each run that stopped early and how far it got (its arms did not get the
-    compute they were meant to, so the comparison does not hold)."""
+    """``criterion`` unchanged if every run it used completed. Otherwise a failed copy (its arms
+    did not get the compute they were meant to, so the comparison does not hold) that lists
+    those runs in ``unfinished_runs`` and opens its detail with a short ``stopped early: <run>
+    (<steps> of <planned> steps).``; its measurements are left as they were."""
     unfinished = list({r.name: r for r in runs if r.status != "completed"}.values())
     if not unfinished:
         return criterion
-    named = "; ".join(
-        f"{r.name} stopped early ({r.status} after {r.steps} of {r.planned_steps} steps)"
-        for r in unfinished
-    )
+    named = ", ".join(f"{r.name} ({r.steps} of {r.planned_steps} steps)" for r in unfinished)
     return replace(
         criterion,
         passed=False,
-        detail=f"{named}, so this cannot pass. {criterion.detail}",
-        data={**criterion.data, "unfinished_runs": [r.name for r in unfinished]},
+        detail=f"stopped early: {named}. {criterion.detail}",
+        unfinished_runs=[r.name for r in unfinished],
     )
 
 
@@ -628,6 +636,15 @@ def chat_speed(lm: LanguageModel, tok: Tok) -> tuple[float, float]:
     return 1000 * first, len(reply.tokens) / elapsed
 
 
+def time_growth(model: Transformer, target: ModelShape, *, seed: int) -> tuple[Transformer, float]:
+    """``model`` grown to ``target`` (:func:`~airace_ml.model.growth.grow`), and the seconds that
+    took on the model's own device, its queued GPU work included."""
+    on = next(model.parameters()).device
+    started = _clock(on)
+    grown = grow(model, target, seed=seed)
+    return grown, _clock(on) - started
+
+
 @torch.inference_mode()
 def max_logit_diff(a: Transformer, b: Transformer, sequences: Sequence[Sequence[int]]) -> float:
     """The largest absolute difference between the two models' logits over ``sequences`` (both in
@@ -747,28 +764,57 @@ def _growth_sequences(root: Path, n: int, length: int) -> list[list[int]]:
     return picked[:n]
 
 
+def _check_judge_files(folder: Path) -> None:
+    """Build what the judge's ``calibration.json`` and ``meta.json`` describe, as
+    :meth:`Judge.load` will: a file of the wrong structure (an older build's, say) raises
+    TypeError, KeyError or ValueError here, where nothing else can."""
+    values = json.loads((folder / CALIBRATION_NAME).read_text(encoding="utf-8"))
+    calibration = JudgeCalibration(**values)
+    if not all(_finite(v) is not None for v in asdict(calibration).values()):
+        raise ValueError(f"calibration values must be finite numbers, got {values!r}")
+    CheckpointMeta.from_json((folder / META_NAME).read_text(encoding="utf-8"))
+
+
+def _check_novelty_record(index: Path) -> None:
+    """Read the index's ``.json`` record as :meth:`NoveltyIndex.load` will: a record of the wrong
+    structure raises TypeError or KeyError here, where nothing else can."""
+    record = json.loads(index.with_suffix(".json").read_text(encoding="utf-8"))
+    for name in ("hash_base", "n", "sample_mod", "count"):
+        _ = record[name]  # TypeError for a record that is not an object, KeyError for a gap
+
+
+def _rebuild(what: str, where: Path, error: Exception, command: str) -> GateSetupError:
+    return GateSetupError(
+        f"{what} at {where} is damaged or out of date ({error}). Rebuild it with: {command}"
+    )
+
+
 def _load_judge(root: Path, device: torch.device) -> Judge:
-    """The reference judge; a judge whose files cannot be read or parsed is a
-    :class:`GateSetupError` naming the command that rebuilds it."""
+    """The reference judge; a judge whose files cannot be read, or parse into the wrong
+    structure, is a :class:`GateSetupError` naming the command that rebuilds it."""
+    folder, command = judge_dir(root), "airace-ml build-judge"
     try:
-        return Judge.load(judge_dir(root), device)
+        _check_judge_files(folder)
+    except (*_LOAD_ERRORS, TypeError, KeyError) as e:
+        raise _rebuild("the reference judge", folder, e, command) from e
+    try:
+        return Judge.load(folder, device)
     except _LOAD_ERRORS as e:
-        raise GateSetupError(
-            f"the reference judge in {judge_dir(root)} is damaged or out of date ({e}). "
-            f"Rebuild it with: airace-ml build-judge"
-        ) from e
+        raise _rebuild("the reference judge", folder, e, command) from e
 
 
 def _load_novelty(root: Path) -> NoveltyIndex:
-    """The novelty index; one whose files cannot be read or parsed is a :class:`GateSetupError`
-    naming the command that rebuilds it."""
+    """The novelty index; one whose files cannot be read, or parse into the wrong structure, is a
+    :class:`GateSetupError` naming the command that rebuilds it."""
+    index, command = novelty_path(root), "airace-ml build-novelty-index"
     try:
-        return NoveltyIndex.load(novelty_path(root))
+        _check_novelty_record(index)
+    except (*_LOAD_ERRORS, TypeError, KeyError) as e:
+        raise _rebuild("the novelty index", index, e, command) from e
+    try:
+        return NoveltyIndex.load(index)
     except _LOAD_ERRORS as e:
-        raise GateSetupError(
-            f"the novelty index at {novelty_path(root)} is damaged or out of date ({e}). "
-            f"Rebuild it with: airace-ml build-novelty-index"
-        ) from e
+        raise _rebuild("the novelty index", index, e, command) from e
 
 
 def _load_inputs(root: Path, device: torch.device, length: int) -> _Inputs:
@@ -960,10 +1006,7 @@ class _Gate:
         grown_to = f"{s.grown_shape.n_layer} layers x {s.grown_shape.d_model} wide"
         self.on_progress(f"  starter: timing its growth to {grown_to}")
         model, _ = load_checkpoint(run.dir, self.device)
-        on = next(model.parameters()).device  # where the growth's copies run
-        started = _clock(on)
-        grown = grow(model, s.grown_shape, seed=self.seeds[0])
-        self.growth_seconds = _clock(on) - started
+        grown, self.growth_seconds = time_growth(model, s.grown_shape, seed=self.seeds[0])
         self.growth_diff = max_logit_diff(model, grown, self.inputs.growth_sequences)
         del model, grown
         criterion = speed_criterion(

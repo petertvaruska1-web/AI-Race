@@ -90,9 +90,27 @@ def _criteria(outcome: GateOutcome) -> list[str]:
     for c in outcome.criteria:
         lines += ["", f"### {cell(c.id)} {cell(c.title)}: {'PASS' if c.passed else 'FAIL'}", ""]
         lines.append(cell(c.detail, limit=4 * CELL_CHARS))
+        if c.unfinished_runs:
+            lines += ["", "**Cannot pass:** " + cell(_stopped(c.unfinished_runs, outcome.raw))]
         if c.data:
             lines += ["", *_data_table(c.data)]
     return lines
+
+
+def _stopped(names: Sequence[str], raw: Mapping) -> str:
+    """Which runs did not complete and how far they got, as one sentence."""
+    runs = raw.get("runs") or {}
+    said = []
+    for name in names:
+        run = runs.get(name) or {}
+        if run:
+            said.append(
+                f"{name} did not complete ({_format(run.get('status'))} after "
+                f"{_format(run.get('steps'))} of {_format(run.get('planned_steps'))} steps)"
+            )
+        else:
+            said.append(f"{name} did not complete")
+    return "; ".join(said) + ", so what this criterion compares did not get its full compute."
 
 
 def _data_table(data: Mapping) -> list[str]:
