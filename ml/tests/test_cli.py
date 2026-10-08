@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import math
 import re
 import shutil
 import sys
@@ -21,7 +22,7 @@ from airace_ml.paths import judge_dir, novelty_path, tokenizer_path
 from airace_ml.personality.fingerprint import TRAITS
 from airace_ml.tokenizer import train_tokenizer
 from airace_ml.train.config import TrainRunConfig
-from airace_ml.train.events import Progress
+from airace_ml.train.events import Done, Progress
 from airace_ml.train.trainer import TrainHooks, train_run
 
 
@@ -161,6 +162,8 @@ def _chat(model, root, text: str, monkeypatch, *extra: str) -> tuple[int, str, s
 
 def test_train_prints_progress_samples_and_a_summary(trained):
     lines = trained.output.splitlines()
+    assert lines[0].startswith("training shared: 6 steps, 6,144 tokens, on cpu, into ")
+    assert lines[1].startswith("step 1/6  ")  # the header comes once the data has loaded
     assert any(
         re.fullmatch(r"step 1/6  loss \d+\.\d{3}  lr \d\.\d{2}e[+-]\d{2}", ln) for ln in lines
     )
@@ -217,12 +220,50 @@ def test_train_resume_continues_an_interrupted_run(tiny_data_root, tmp_path):
     assert json.loads((out_dir / "result.json").read_text(encoding="utf-8"))["steps"] == 6
 
 
-def test_train_resume_without_a_run_to_resume_is_a_plain_error(tiny_data_root, tmp_path):
+def test_train_resume_without_a_run_to_resume_says_to_run_without_resume(tiny_data_root, tmp_path):
     argv = ["train", "--config", str(_write_config(tmp_path, _small_config())), "--resume"]
-    code, _, err = _run([*argv, "--out", str(tmp_path / "fresh"), *_common(tiny_data_root)])
-    assert code == 2
-    assert err.startswith("error: ") and "resume" in err
-    assert "Traceback" not in err
+    code, out, err = _run([*argv, "--out", str(tmp_path / "fresh"), *_common(tiny_data_root)])
+    assert code == 2 and out == ""
+    assert err.startswith("error: ") and "nothing saved to resume" in err
+    assert "without --resume" in err and "Traceback" not in err
+    assert not (tmp_path / "fresh").exists()
+
+
+def _unfinished_run(root, tmp_path, steps: int = 6, stop_after: int = 3):
+    """What a run cut short on the owner's PC leaves behind: (config file, out folder)."""
+    cfg = _small_config("unfinished", steps=steps)
+    out_dir = tmp_path / "run"
+    train_run(
+        cfg,
+        out_dir=out_dir,
+        data_root=root,
+        device="cpu",
+        _hooks=TrainHooks(stop_after_steps=stop_after),
+    )
+    assert (out_dir / "resume").is_dir()
+    return _write_config(tmp_path, cfg), out_dir
+
+
+def test_train_refuses_to_start_over_an_unfinished_run(tiny_data_root, tmp_path):
+    config, out_dir = _unfinished_run(tiny_data_root, tmp_path)
+    saved = sorted(p.name for p in (out_dir / "resume").iterdir())
+    argv = ["train", "--config", str(config), "--out", str(out_dir), *_common(tiny_data_root)]
+    code, out, err = _run(argv)
+    assert code == 2 and out == ""  # refused before any training step
+    assert err.startswith("error: ") and "unfinished run of this config" in err
+    assert "--resume" in err and "delete the folder" in err and str(out_dir) in err
+    assert sorted(p.name for p in (out_dir / "resume").iterdir()) == saved  # nothing was lost
+    code, out, err = _run([*argv, "--resume"])  # and the way it suggests works
+    assert code == 0, err
+    assert "step 1/6" not in out and "step 6/6" in out
+
+
+def test_train_into_a_folder_with_a_finished_run_is_not_refused(trained, tiny_data_root, tmp_path):
+    finished = tmp_path / "finished"
+    shutil.copytree(trained.dir, finished)  # a completed run: its resume state is gone
+    argv = ["train", "--config", str(trained.config), "--out", str(finished)]
+    code, _, err = _run([*argv, *_common(tiny_data_root)])
+    assert code == 0, err
 
 
 @pytest.mark.parametrize(
@@ -267,20 +308,40 @@ def test_training_data_that_was_never_built_is_a_plain_error(tiny_tok_path, tmp_
     tokenizer_path(root).parent.mkdir(parents=True)
     shutil.copyfile(tiny_tok_path, tokenizer_path(root))
     argv = ["train", "--config", str(_write_config(tmp_path, _small_config()))]
-    code, _, err = _run([*argv, "--out", str(tmp_path / "o"), *_common(root)])
+    code, out, err = _run([*argv, "--out", str(tmp_path / "o"), *_common(root)])
     assert code == 2 and "cannot find" in err and "airace-content build" in err
     assert "Traceback" not in err
+    assert out == ""  # no "training ..." header for a run that cannot start
 
 
-def test_interrupting_train_says_how_to_resume(monkeypatch, tiny_data_root, tmp_path):
-    def interrupted(*args, **kwargs):
+def _interrupting_train_run(save_first: int | None):
+    """A ``train_run`` that is interrupted, after saving resume state at ``save_first`` steps."""
+    real = train_run
+
+    def interrupted(cfg, **kwargs):
+        if save_first is not None:
+            real(cfg, **kwargs, _hooks=TrainHooks(stop_after_steps=save_first))
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(cli, "train_run", interrupted)
+    return interrupted
+
+
+def test_interrupting_train_after_a_save_says_to_add_resume(monkeypatch, tiny_data_root, tmp_path):
+    monkeypatch.setattr(cli, "train_run", _interrupting_train_run(3))
     argv = ["train", "--config", str(_write_config(tmp_path, _small_config()))]
     code, _, err = _run([*argv, "--out", str(tmp_path / "o"), *_common(tiny_data_root)])
     assert code == 130
-    assert "interrupted" in err and "--resume" in err
+    assert "interrupted" in err and "again with --resume" in err and "without" not in err
+
+
+def test_interrupting_train_before_any_save_says_to_run_again_without_resume(
+    monkeypatch, tiny_data_root, tmp_path
+):
+    monkeypatch.setattr(cli, "train_run", _interrupting_train_run(None))
+    argv = ["train", "--config", str(_write_config(tmp_path, _small_config()))]
+    code, _, err = _run([*argv, "--out", str(tmp_path / "o"), *_common(tiny_data_root)])
+    assert code == 130
+    assert "interrupted" in err and "without --resume" in err and "200 steps" in err
 
 
 # -- missing pieces are usage errors (exit 2) -----------------------------------------------------
@@ -571,6 +632,7 @@ def test_build_judge_shows_training_progress_and_where_the_judge_is(judged):
     code, out, err = judged.judge
     assert code == 0, err
     assert re.search(r"^step 3/3  loss \d+\.\d{3}  lr ", out, re.MULTILINE)
+    assert out.index("step 3/3") < out.index("calibrating") < out.index("ready in")
     assert f"ready in {judge_dir(judged.root)}" in out
     assert (judge_dir(judged.root) / "calibration.json").is_file()
 
@@ -598,9 +660,9 @@ def test_build_judge_passes_its_budget_and_shows_progress(monkeypatch, tiny_data
         return tmp_path / "judge"
 
     monkeypatch.setattr(cli, "build_judge", fake_build)
-    code, out, err = _run(["build-judge", "--budget-tokens", "1234", *_common(tiny_data_root)])
+    code, out, err = _run(["build-judge", "--budget-tokens", "65536", *_common(tiny_data_root)])
     assert code == 0, err
-    assert seen == {"root": tiny_data_root, "budget": 1234, "device": torch.device("cpu")}
+    assert seen == {"root": tiny_data_root, "budget": 65536, "device": torch.device("cpu")}
     assert "step 1/2  loss 5.500  lr 1.00e-03" in out and "judge" in out
 
 
@@ -612,6 +674,246 @@ def test_a_judge_that_did_not_finish_training_exits_1(monkeypatch, tiny_data_roo
     code, _, err = _run(["build-judge", *_common(tiny_data_root)])
     assert code == 1
     assert err.startswith("error: the judge's training ended") and "Traceback" not in err
+
+
+# -- unstable runs, bad paths, damaged files: plain errors, never a traceback ----------------------
+
+
+def test_a_run_that_goes_unstable_stops_early_and_says_what_to_try(
+    tiny_data_root, tmp_path, monkeypatch
+):
+    real = cli.train_run
+    spikes = TrainHooks(loss_override=lambda step, loss: math.nan if step in (2, 3, 4) else loss)
+    monkeypatch.setattr(cli, "train_run", lambda cfg, **kw: real(cfg, **kw, _hooks=spikes))
+    argv = ["train", "--config", str(_write_config(tmp_path, _small_config("wobbly", steps=6)))]
+    code, out, err = _run([*argv, "--out", str(tmp_path / "o"), *_common(tiny_data_root)])
+    assert code == 0, err  # the last good weights were saved, so the run is a result
+    assert out.count("  warning [step") == 3
+    assert "training stopped early because it became unstable" in out
+    assert re.search(r"after 4 of 6 steps", out)
+    assert "last good weights were kept" in out and str(tmp_path / "o") in out
+    assert "lower boldness" in out and "more careful learning style" in out
+    result = json.loads((tmp_path / "o" / "result.json").read_text(encoding="utf-8"))
+    assert result["status"] == "unstable_stopped" and result["steps"] == 4
+
+
+@pytest.mark.parametrize("where", ["file", "inside-a-file"])
+def test_an_output_path_that_is_a_file_is_a_plain_error(where, tiny_data_root, tmp_path):
+    taken = tmp_path / "taken"
+    taken.write_text("keep me", encoding="utf-8")
+    target = taken if where == "file" else taken / "run"
+    argv = ["train", "--config", str(_write_config(tmp_path, _small_config()))]
+    code, out, err = _run([*argv, "--out", str(target), *_common(tiny_data_root)])
+    assert code == 2 and out == ""
+    assert err.startswith("error: ") and str(taken) in err and "folder" in err
+    assert "Traceback" not in err and taken.read_text(encoding="utf-8") == "keep me"
+
+
+def _no_benchmark(monkeypatch):
+    def refused(*args, **kwargs):
+        raise AssertionError("the benchmark must not start")
+
+    monkeypatch.setattr(cli, "run_benchmarks", refused)
+
+
+def test_a_report_path_that_is_a_folder_is_refused_before_the_benchmark(
+    trained, tiny_data_root, tmp_path, monkeypatch
+):
+    _no_benchmark(monkeypatch)
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    argv = ["bench", "--model", str(trained.dir), "--no-creativity", "--out", str(reports)]
+    code, out, err = _run([*argv, *_common(tiny_data_root)])
+    assert code == 2 and out == ""
+    assert err.startswith("error: ") and str(reports) in err and "folder" in err
+    assert "Traceback" not in err
+
+
+def test_a_report_path_inside_a_file_is_refused_before_the_benchmark(
+    trained, tiny_data_root, tmp_path, monkeypatch
+):
+    _no_benchmark(monkeypatch)
+    taken = tmp_path / "taken"
+    taken.write_text("x", encoding="utf-8")
+    argv = ["bench", "--model", str(trained.dir), "--no-creativity", "--out", str(taken / "b.json")]
+    code, out, err = _run([*argv, *_common(tiny_data_root)])
+    assert code == 2 and out == "" and str(taken) in err and "Traceback" not in err
+
+
+def test_a_report_that_cannot_be_written_is_a_plain_error_after_the_table(
+    trained, tiny_data_root, tmp_path, monkeypatch
+):
+    real = Path.write_text
+
+    def deny(self, *args, **kwargs):
+        if self.name == "bench.json":
+            raise PermissionError(13, "Permission denied", str(self))
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", deny)
+    argv = ["bench", "--model", str(trained.dir), "--no-creativity", "--max-items", "1"]
+    code, out, err = _run([*argv, "--out", str(tmp_path / "bench.json"), *_common(tiny_data_root)])
+    assert code == 2 and "overall" in out  # the scores were still shown
+    assert err.startswith("error: ") and "bench.json" in err and "Traceback" not in err
+
+
+@pytest.fixture
+def damaged(judged, tmp_path):
+    """A private copy of the judged data root, for tests that break something in it."""
+    root = tmp_path / "damaged_root"
+    shutil.copytree(judged.root, root)
+    return root
+
+
+def _damage_index_record(root):
+    record = novelty_path(root).with_suffix(".json")
+    meta = json.loads(record.read_text(encoding="utf-8"))
+    meta["count"] += 1  # a save cut short: the record no longer matches the array
+    record.write_text(json.dumps(meta), encoding="utf-8")
+
+
+def _damage_index_array(root):
+    novelty_path(root).write_bytes(b"this is not an array")
+
+
+def _damage_judge_calibration(root):
+    (judge_dir(root) / "calibration.json").write_text("{}", encoding="utf-8")
+
+
+def _damage_judge_json(root):
+    (judge_dir(root) / "calibration.json").write_text("{ half a file", encoding="utf-8")
+
+
+def _damage_judge_weights(root):
+    (judge_dir(root) / "model.safetensors").write_bytes(b"not a model at all")
+
+
+@pytest.mark.parametrize(
+    "damage, rebuild",
+    [
+        (_damage_index_record, "airace-ml build-novelty-index"),
+        (_damage_index_array, "airace-ml build-novelty-index"),
+        (_damage_judge_calibration, "airace-ml build-judge"),
+        (_damage_judge_json, "airace-ml build-judge"),
+        (_damage_judge_weights, "airace-ml build-judge"),
+    ],
+)
+def test_a_damaged_judge_or_index_is_an_error_that_names_the_rebuild(
+    damage, rebuild, trained, damaged
+):
+    damage(damaged)
+    argv = ["bench", "--model", str(trained.dir), "--max-items", "1", *_common(damaged)]
+    code, out, err = _run(argv)
+    assert code == 2 and out == ""  # refused before the benchmark ran
+    assert err.startswith("error: ") and rebuild in err and "Traceback" not in err
+    # creativity is the only thing that needs them
+    code, out, err = _run([*argv, "--no-creativity"])
+    assert code == 0, err
+
+
+@pytest.mark.parametrize("command", ["chat", "bench", "fingerprint"])
+@pytest.mark.parametrize("damage", ["garbage", "truncated"])
+def test_a_damaged_model_file_is_a_plain_error(command, damage, trained, tiny_data_root, tmp_path):
+    model = tmp_path / "model"
+    shutil.copytree(trained.dir, model)
+    weights = model / "model.safetensors"
+    weights.write_bytes(b"garbage" * 50 if damage == "garbage" else weights.read_bytes()[:200])
+    code, out, err = _run([command, "--model", str(model), *_common(tiny_data_root)])
+    assert code == 2 and out == ""
+    assert err.startswith("error: ") and "cannot load the model" in err and str(model) in err
+    assert "Traceback" not in err
+
+
+# -- build-judge budget, and options with a minimum -----------------------------------------------
+
+
+def _no_judge_build(monkeypatch):
+    def refused(*args, **kwargs):
+        raise AssertionError("no training may start")
+
+    monkeypatch.setattr(cli, "build_judge", refused)
+
+
+def test_a_judge_budget_below_one_step_of_the_real_recipe_is_refused_up_front(
+    tiny_data_root, monkeypatch
+):
+    _no_judge_build(monkeypatch)  # the real recipe: 32,768 tokens per step, not shrunk
+    code, out, err = _run(["build-judge", "--budget-tokens", "2048", *_common(tiny_data_root)])
+    assert code == 2 and out == ""
+    assert err.startswith("error: ") and "2048" in err and "32,768" in err
+    assert "Traceback" not in err
+
+
+def test_a_judge_budget_of_exactly_one_step_is_accepted(tiny_data_root, monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(cli, "build_judge", lambda root, **kw: seen.append(kw) or tmp_path)
+    argv = ["build-judge", "--budget-tokens", "32768", *_common(tiny_data_root)]
+    code, _, err = _run(argv)
+    assert code == 0, err
+    assert seen[0]["token_budget"] == 32768
+
+
+def test_a_judge_build_that_hits_a_config_error_is_a_plain_error(tiny_data_root, monkeypatch):
+    def invalid(*args, **kwargs):
+        raise ValueError("token_budget (5) must be at least batch_tokens (32768)")
+
+    monkeypatch.setattr(cli, "build_judge", invalid)
+    code, _, err = _run(["build-judge", *_common(tiny_data_root)])
+    assert code == 2 and err.startswith("error: token_budget") and "Traceback" not in err
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["chat", "--model", "m", "--max-tokens", "0"],
+        ["bench", "--model", "m", "--max-items", "0"],
+        ["bench", "--model", "m", "--max-items", "-1"],
+        ["fingerprint", "--model", "m", "--k", "0"],
+        ["fingerprint", "--model", "m", "--seed", "-1"],
+        ["fingerprint", "--model", "m", "--seed", "soon"],
+        ["build-judge", "--budget-tokens", "0"],
+    ],
+)
+def test_options_with_a_minimum_reject_values_below_it(argv):
+    code, out, err = _run(argv)
+    assert code == 2 and out == ""
+    assert err.startswith("error: ") and "whole number" in err and "--help" in err
+
+
+def test_a_seed_of_zero_and_a_max_items_of_one_are_fine(trained, tiny_data_root):
+    argv = ["fingerprint", "--model", str(trained.dir), "--k", "1", "--seed", "0"]
+    assert _run([*argv, *_common(tiny_data_root)])[0] == 0
+    argv = ["bench", "--model", str(trained.dir), "--no-creativity", "--max-items", "1"]
+    assert _run([*argv, *_common(tiny_data_root)])[0] == 0
+
+
+def test_build_judge_says_when_it_moves_on_to_calibrating(monkeypatch, tiny_data_root, tmp_path):
+    def fake_build(root, *, device, on_event, token_budget):
+        on_event(Progress(1, 2, 1024, 5.5, 1e-3))
+        on_event(Progress(2, 2, 2048, 5.1, 1e-4))
+        on_event(Done("completed", {}))
+        return tmp_path / "judge"
+
+    monkeypatch.setattr(cli, "build_judge", fake_build)
+    code, out, err = _run(["build-judge", *_common(tiny_data_root)])
+    assert code == 0, err
+    lines = out.splitlines()
+    step2 = lines.index("step 2/2  loss 5.100  lr 1.00e-04")
+    calibrating = next(i for i, ln in enumerate(lines) if "calibrating" in ln)
+    ready = next(i for i, ln in enumerate(lines) if "ready in" in ln)
+    assert step2 < calibrating < ready
+
+
+def test_build_judge_does_not_say_calibrating_when_training_did_not_complete(
+    monkeypatch, tiny_data_root
+):
+    def fake_build(root, *, device, on_event, token_budget):
+        on_event(Done("unstable_stopped", {}))
+        raise JudgeBuildError("the judge's training ended 'unstable_stopped' after 3 of 9 steps")
+
+    monkeypatch.setattr(cli, "build_judge", fake_build)
+    code, out, _ = _run(["build-judge", *_common(tiny_data_root)])
+    assert code == 1 and "calibrating" not in out
 
 
 # -- gate -----------------------------------------------------------------------------------------

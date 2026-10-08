@@ -11,11 +11,14 @@
 Every command also takes ``--data-root PATH`` (default: ``AIRACE_DATA`` or ``<repo>/data``) and
 ``--device {cpu,cuda}`` (default: the GPU when there is one).
 
-Exit codes: 0 on success; 2 when the request itself is wrong (a bad option, a malformed or invalid
-config, a missing model, tokenizer or training data, a command that is not available yet); 1 when
-a run fails for a reason that is not the user's input (the judge's training went unstable); 130
-when the user interrupts a run. Each of those prints one ``error: ...`` line on stderr and never a
-traceback; anything unexpected is a bug and propagates.
+Exit codes: 0 on success; 2 when the request or the state of the files it names is wrong (a bad
+option, a malformed or invalid config, a missing, damaged or unwritable model, tokenizer, data,
+index, judge or output path, an unfinished run that would be overwritten, a command that is not
+available yet); 1 when a run fails for a reason that is not the user's input (the judge's training
+went unstable, the disk filled up); 130 when the user interrupts a run. Each of those prints one
+``error: ...`` line on stderr and never a traceback; anything unexpected is a bug and propagates.
+A training run that goes unstable and stops early still saved its last good weights, so it exits 0
+and says so.
 
 ``main`` returns the exit code and never calls ``sys.exit`` (argparse's own exits are turned into
 return values), so it can be driven from tests and from other tools.
@@ -36,7 +39,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import torch
+from safetensors import SafetensorError
 
+import airace_ml.evals.judge as judge_module
 from airace_ml.device import pick_device
 from airace_ml.evals.judge import Judge, JudgeBuildError, build_judge
 from airace_ml.evals.novelty import NoveltyIndex, build_novelty_index
@@ -49,6 +54,7 @@ from airace_ml.personality.fingerprint import TRAITS, measure_fingerprint
 from airace_ml.tokenizer import Role, Tok
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.train.events import (
+    Done,
     HeldoutEval,
     Instability,
     Progress,
@@ -56,7 +62,7 @@ from airace_ml.train.events import (
     TrainEvent,
     json_safe,
 )
-from airace_ml.train.trainer import TrainResult, train_run
+from airace_ml.train.trainer import TrainResult, can_resume, train_run
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -68,6 +74,9 @@ DEFAULT_MAX_TOKENS = 96
 CHAT_COMMANDS = ("/reset", "/raw", "/quit")
 _COMMAND_LIKE = re.compile(r"/[A-Za-z]+")  # looks like a chat command, so a typo is not chatted
 GATE_SEEDS = (1, 2, 3)
+CHECKPOINT_EVERY = 200  # steps between a training run's saved resume points
+# Everything that can be wrong with a file someone else wrote or that a crash left half-saved.
+_DAMAGED = (OSError, ValueError, KeyError, TypeError, EOFError, SafetensorError)
 
 BUILD_DATA_HINT = "airace-content build --scale tiny (a quick test set) or --scale full"
 
@@ -78,6 +87,14 @@ class _UsageError(Exception):
 
 class _RunFailed(Exception):
     """The request was fine but the run failed: reported as ``error: ...``, exit code 1."""
+
+
+class _Interrupted(Exception):
+    """The user stopped a run (Ctrl-C); ``hint`` says what to do next. Exit code 130."""
+
+    def __init__(self, hint: str) -> None:
+        super().__init__(hint)
+        self.hint = hint
 
 
 class _Exit(Exception):
@@ -103,24 +120,19 @@ class _Parser(argparse.ArgumentParser):
 # -- argument types -------------------------------------------------------------------------------
 
 
-def _positive_int(text: str) -> int:
-    try:
-        value = int(text)
-    except ValueError:
-        value = 0
-    if value < 1:
-        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number of at least 1")
-    return value
+def _whole_number(minimum: int):
+    """An argparse type: a whole number that is at least ``minimum``."""
 
+    def parse(text: str) -> int:
+        try:
+            value = int(text)
+        except ValueError:
+            value = minimum - 1
+        if value < minimum:
+            raise argparse.ArgumentTypeError(f"{text!r} is not a whole number of {minimum} or more")
+        return value
 
-def _non_negative_int(text: str) -> int:
-    try:
-        value = int(text)
-    except ValueError:
-        value = -1
-    if value < 0:
-        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number of 0 or more")
-    return value
+    return parse
 
 
 def _temperature(text: str) -> float:
@@ -168,12 +180,7 @@ def _parser() -> argparse.ArgumentParser:
         sub.set_defaults(run=run, interrupt_hint=hint)
         return sub
 
-    train = add(
-        "train",
-        _cmd_train,
-        "train a model from a run config",
-        "To carry on where it stopped, run the same command again with --resume.",
-    )
+    train = add("train", _cmd_train, "train a model from a run config")
     train.add_argument("--config", type=Path, required=True, help="the run config (JSON file)")
     train.add_argument("--out", type=Path, required=True, help="folder to save the model in")
     train.add_argument("--parent", type=Path, help="folder of the model to continue from")
@@ -191,7 +198,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     chat.add_argument(
         "--max-tokens",
-        type=_positive_int,
+        type=_whole_number(1),
         default=DEFAULT_MAX_TOKENS,
         help=f"longest reply, in tokens (default {DEFAULT_MAX_TOKENS})",
     )
@@ -206,7 +213,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     bench.add_argument(
         "--max-items",
-        type=_non_negative_int,
+        type=_whole_number(1),
         metavar="N",
         help="score at most N items per category (a quick, rough look)",
     )
@@ -216,10 +223,10 @@ def _parser() -> argparse.ArgumentParser:
         "--model", type=Path, required=True, help="folder of the trained model"
     )
     fingerprint.add_argument(
-        "--k", type=_positive_int, default=3, help="replies per question (default 3)"
+        "--k", type=_whole_number(1), default=3, help="replies per question (default 3)"
     )
     fingerprint.add_argument(
-        "--seed", type=_non_negative_int, default=0, help="random seed (default 0)"
+        "--seed", type=_whole_number(0), default=0, help="random seed (default 0)"
     )
 
     add(
@@ -232,11 +239,12 @@ def _parser() -> argparse.ArgumentParser:
         "build-judge",
         _cmd_build_judge,
         "train the reference judge that creativity is scored against",
-        "Run the same command again to carry on where it stopped.",
+        f"Run the same command again: it carries on from the last saved point if there was one "
+        f"(progress is saved every {CHECKPOINT_EVERY} steps), and starts over if not.",
     )
     judge.add_argument(
         "--budget-tokens",
-        type=_positive_int,
+        type=_whole_number(1),
         metavar="N",
         help="train on N tokens instead of the full recipe (for a quick test)",
     )
@@ -270,10 +278,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _fail(str(e), EXIT_USAGE)
     except _RunFailed as e:
         return _fail(str(e), EXIT_FAILED)
+    except _Interrupted as e:
+        return _interrupted(e.hint)
     except KeyboardInterrupt:
-        hint = getattr(args, "interrupt_hint", "")
-        print(f"\ninterrupted. {hint}".rstrip(), file=sys.stderr, flush=True)
-        return EXIT_INTERRUPTED
+        return _interrupted(getattr(args, "interrupt_hint", ""))
+
+
+def _interrupted(hint: str) -> int:
+    print(f"\ninterrupted. {hint}".rstrip(), file=sys.stderr, flush=True)
+    return EXIT_INTERRUPTED
 
 
 def _fail(message: str, code: int) -> int:
@@ -344,6 +357,42 @@ def _require_tokenizer(root: Path) -> Tok:
     return Tok.load(path)
 
 
+def _why(error: BaseException) -> str:
+    """A short reason for a damaged file, for the people who have to fix it."""
+    text = str(error) if isinstance(error, (OSError, ValueError, SafetensorError)) else ""
+    reason = text or f"{type(error).__name__}: {error}"
+    return reason if len(reason) <= 300 else reason[:297] + "..."
+
+
+def _os_problem(error: OSError, doing: str) -> Exception:
+    """A plain error for a file system problem: a path the user chose that cannot be used is a
+    usage error (2); anything else (a full disk, say) is a failed run (1)."""
+    message = f"cannot {doing}: {error.strerror or error}"
+    if isinstance(error, (PermissionError, NotADirectoryError, IsADirectoryError, FileExistsError)):
+        return _UsageError(message)
+    return _RunFailed(message)
+
+
+def _require_folder_path(path: Path, option: str) -> None:
+    """``path`` can be a folder: neither it nor any folder above it is a file."""
+    for candidate in (path, *path.parents):
+        if candidate.exists() and not candidate.is_dir():
+            what = "it" if candidate == path else str(candidate)
+            raise _UsageError(
+                f"cannot use {path} for {option}: {what} is a file, not a folder. "
+                f"Choose another folder name."
+            )
+
+
+def _require_report_path(path: Path) -> None:
+    """``path`` can be a report file: not a folder, and no folder above it is a file."""
+    if path.is_dir():
+        raise _UsageError(
+            f"--out {path} is a folder; give a file name instead, such as {path / 'bench.json'}"
+        )
+    _require_folder_path(path.parent, "the folder of --out")
+
+
 def _require_model_dir(path: Path, what: str = "model") -> None:
     if not (path / META_NAME).is_file() or not (path / WEIGHTS_NAME).is_file():
         raise _UsageError(
@@ -357,9 +406,10 @@ def _load_lm(model_dir: Path, root: Path, device: torch.device) -> TorchLM:
     tok = _require_tokenizer(root)
     try:
         net, _ = load_checkpoint(model_dir, device)
-    except (OSError, ValueError, KeyError) as e:
+    except _DAMAGED as e:
         raise _UsageError(
-            f"cannot load the model in {model_dir} ({e}). Is it a folder made by 'airace-ml train'?"
+            f"cannot load the model in {model_dir} ({_why(e)}). "
+            f"Is it a folder made by 'airace-ml train', and is the file complete?"
         ) from e
     if net.tok_emb.num_embeddings != tok.vocab_size:
         raise _UsageError(
@@ -400,12 +450,20 @@ def _print_event(event: TrainEvent) -> None:
     print(line, flush=True)
 
 
-def _print_summary(result: TrainResult) -> None:
+def _print_summary(result: TrainResult, total_steps: int) -> None:
     print()
     if result.status == "completed":
         print("training finished")
     else:
-        print(f"training stopped early ({result.status}): the last good weights were kept")
+        print(
+            f"training stopped early because it became unstable, after {result.steps} of "
+            f"{total_steps} steps."
+        )
+        print("The last good weights were kept, so the model can still be used.")
+        print(
+            "To try again, use a more careful learning style: lower boldness in the config, "
+            "which also makes the learning steps smaller."
+        )
     print(f"  run         {result.run_id}")
     print(f"  steps       {result.steps}")
     print(f"  tokens      {result.tokens:,}")
@@ -427,6 +485,26 @@ def _read_config(path: Path) -> TrainRunConfig:
         raise _UsageError(f"the config file {path} cannot be used: {e}") from e
 
 
+def _saved_progress(out: Path, cfg: TrainRunConfig) -> bool:
+    """Whether ``out`` holds resume state saved by a run of exactly ``cfg``."""
+    try:
+        return can_resume(out, cfg)
+    except _DAMAGED:
+        return False
+
+
+def _interrupted_train_hint(out: Path, cfg: TrainRunConfig) -> str:
+    if _saved_progress(out, cfg):
+        return (
+            "Its progress up to the last saved point is kept: run the same command again "
+            "with --resume to carry on from there."
+        )
+    return (
+        f"No progress had been saved yet (a run saves its progress every {CHECKPOINT_EVERY} "
+        f"steps), so run the same command again without --resume to start over."
+    )
+
+
 def _cmd_train(args: argparse.Namespace) -> int:
     device = _device(args)
     root = _data_root(args)
@@ -438,25 +516,58 @@ def _cmd_train(args: argparse.Namespace) -> int:
         if cfg.parent_dir is not None:
             _require_model_dir(Path(cfg.parent_dir), "parent model")
         _require_tokenizer(root)
-        print(
+        _require_folder_path(args.out, "--out")
+        saved = _saved_progress(args.out, cfg)
+        if args.resume and not saved:
+            raise _UsageError(
+                f"there is nothing saved to resume in {args.out} for this config (a run saves "
+                f"its progress every {CHECKPOINT_EVERY} steps, so one stopped sooner has "
+                f"none). Run the command again without --resume to start the run."
+            )
+        if saved and not args.resume:
+            raise _UsageError(
+                f"{args.out} holds an unfinished run of this config; add --resume to carry "
+                f"on, or delete the folder to start over"
+            )
+        header = (
             f"{'resuming' if args.resume else 'training'} {cfg.run_id}: {cfg.steps} steps, "
-            f"{cfg.token_budget:,} tokens, on {device.type}, into {args.out}",
-            flush=True,
+            f"{cfg.token_budget:,} tokens, on {device.type}, into {args.out}"
         )
         result = train_run(
             cfg,
             out_dir=args.out,
             data_root=root,
             device=device,
-            on_event=_print_event,
+            on_event=_announcing(header, _print_event),
             resume=args.resume,
+            checkpoint_every=CHECKPOINT_EVERY,
         )
+    except KeyboardInterrupt:
+        raise _Interrupted(_interrupted_train_hint(args.out, cfg)) from None
     except FileNotFoundError as e:
         raise _UsageError(_missing(e)) from e
+    except OSError as e:
+        raise _os_problem(e, f"write the run to {args.out}") from e
     except ValueError as e:
         raise _UsageError(str(e)) from e
-    _print_summary(result)
+    _print_summary(result, cfg.steps)
     return EXIT_OK
+
+
+def _announcing(header: str, handler):
+    """An event handler that prints ``header`` just before the first event. The first event
+    comes once the data has loaded and the model is set up, so a run that cannot start (no
+    corpus, a bad mix) never prints a header as if it had."""
+    shown = False
+
+    def on_event(event: TrainEvent) -> None:
+        nonlocal shown
+        if not shown:
+            shown = True
+            print(header, flush=True)
+        handler(event)
+
+    return on_event
 
 
 def _cmd_chat(args: argparse.Namespace) -> int:
@@ -512,18 +623,29 @@ def _cmd_chat(args: argparse.Namespace) -> int:
 
 
 def _creativity_tools(root: Path, device: torch.device) -> tuple[Judge, NoveltyIndex] | None:
-    """The judge and the novelty index under ``root``, or ``None`` (with a note saying what is
-    missing and how to build it) if either is missing."""
+    """The judge and the novelty index under ``root``. ``None`` (with a note saying what is
+    missing and how to build it) if either is missing; an error naming the command that rebuilds
+    it if either is damaged or out of date."""
     judge = index = None
     todo = []
     try:
         judge = Judge.load(judge_dir(root), device)
     except FileNotFoundError:
         todo.append("  - the reference judge: build it with 'airace-ml build-judge'")
+    except _DAMAGED as e:
+        raise _UsageError(
+            f"the reference judge in {judge_dir(root)} is damaged or out of date "
+            f"({_why(e)}). Rebuild it with: airace-ml build-judge"
+        ) from e
     try:
         index = NoveltyIndex.load(novelty_path(root))
     except FileNotFoundError:
         todo.append("  - the novelty index: build it with 'airace-ml build-novelty-index'")
+    except _DAMAGED as e:
+        raise _UsageError(
+            f"the novelty index at {novelty_path(root)} is damaged or out of date "
+            f"({_why(e)}). Rebuild it with: airace-ml build-novelty-index"
+        ) from e
     if judge is None or index is None:
         print(
             "note: creativity was left out of this run. Still to build:",
@@ -549,6 +671,8 @@ def _print_report(report: BenchReport) -> None:
 def _cmd_bench(args: argparse.Namespace) -> int:
     device = _device(args)
     root = _data_root(args)
+    if args.out is not None:
+        _require_report_path(args.out)  # before the benchmark, which can take a long time
     lm = _load_lm(args.model, root, device)
     categories = [c for c in CATEGORIES if not (args.no_creativity and c == "creativity")]
     tools = None if args.no_creativity else _creativity_tools(root, device)
@@ -563,9 +687,12 @@ def _cmd_bench(args: argparse.Namespace) -> int:
     )
     _print_report(report)
     if args.out is not None:
-        args.out.parent.mkdir(parents=True, exist_ok=True)
         document = json.dumps(json_safe(report.to_dict()), allow_nan=False, indent=2)
-        args.out.write_text(document, encoding="utf-8")
+        try:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(document, encoding="utf-8")
+        except OSError as e:
+            raise _os_problem(e, f"write the report to {args.out}") from e
         print(f"full report written to {args.out}", flush=True)
     return EXIT_OK
 
@@ -588,18 +715,38 @@ def _cmd_build_novelty_index(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _print_judge_event(event: TrainEvent) -> None:
+    _print_event(event)
+    if isinstance(event, Done) and event.status == "completed":
+        print(
+            "training finished; now calibrating the judge on real held-out text "
+            "(this takes a little while)",
+            flush=True,
+        )
+
+
 def _cmd_build_judge(args: argparse.Namespace) -> int:
     device = _device(args)
     root = _data_root(args)
+    one_step = judge_module.judge_train_config().batch_tokens
+    if args.budget_tokens is not None and args.budget_tokens < one_step:
+        raise _UsageError(
+            f"--budget-tokens {args.budget_tokens} is too small: the judge learns in steps of "
+            f"{one_step:,} tokens, so the budget must be at least {one_step:,}."
+        )
     _require_tokenizer(root)
     try:
         path = build_judge(
-            root, device=device, on_event=_print_event, token_budget=args.budget_tokens
+            root, device=device, on_event=_print_judge_event, token_budget=args.budget_tokens
         )
     except FileNotFoundError as e:
         raise _UsageError(_missing(e)) from e
     except JudgeBuildError as e:
         raise _RunFailed(str(e)) from e
+    except OSError as e:
+        raise _os_problem(e, f"write the judge into {judge_dir(root)}") from e
+    except ValueError as e:
+        raise _UsageError(str(e)) from e
     print(f"\nreference judge ready in {path}", flush=True)
     return EXIT_OK
 
