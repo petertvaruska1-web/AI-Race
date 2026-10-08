@@ -234,3 +234,58 @@ Final checks: `cd ml && uv run --no-sync pytest -q` -> `1135 passed, 1 skipped, 
 - `_DAMAGED` also lists `EOFError` and `TypeError`/`KeyError`. I checked rather than assumed: a truncated `.npy` raises `ValueError`, but a zero-byte `.npy` raises `EOFError`, so `EOFError` is needed and now has its own test case (removing it makes that case fail); `TypeError`/`KeyError` come from a calibration or meta record with the wrong fields. They are caught only where a file written by an earlier build is being read.
 - The zero-byte-index test case was added after the main fix commit, as its own small commit (history is not rewritten): `test(ml): cover a zero-byte novelty index in the CLI's damaged-file errors`.
 - In this round I ran `ruff format` only on the two task files (the round-0 mistake of formatting the whole tree was not repeated); `git status` after the commit is clean.
+
+---
+
+# Fix round 2
+
+**Commit:** `5070a03` fix(ml): CLI never discards another config's saved progress and explains damaged checkpoints
+**Files:** `ml/src/airace_ml/cli.py`, `ml/src/airace_ml/train/trainer.py` (9 lines: one constant, one default, one public helper), `ml/tests/test_cli.py`, `ml/tests/test_trainer.py`. Not pushed; working tree clean after the commit.
+
+## Housekeeping
+The six `ml/ck*` directories (`ck`, `ck_empty_w`, `ck_layers_mismatch`, `ck_metabad`, `ck_shape_mismatch`, `ck_trunc90`) were already untracked in `ml/` when this round started. `git status` was clean at the end of round 1 and my own scratch files always went to the scratchpad, so I did not create them (most likely the re-reviewer's probes), but I deleted them as asked after checking they held only `model.safetensors` and `meta.json` (about 2.5 MB). None was committed. The damaged checkpoints my new tests need are built in `tmp_path` by copying the shared trained model and editing the copy. All manual repros below ran in the scratchpad.
+
+## TDD evidence
+RED, before implementing:
+- `tests/test_trainer.py` and `tests/test_cli.py` failed at collection (`ImportError`: no `CHECKPOINT_EVERY` or `has_resume_state` in `trainer`). I added those two trainer pieces first (trainer tests: `25 passed`), then ran the CLI tests against the old `cli.py`: `26 failed, 88 passed`. Failures were for the intended reasons: the unfinished-progress refusals did not happen, `SafetensorError`/`RuntimeError` escaped for parent and shape-mismatch checkpoints, the parent was not validated before `train_run` ("training must not start"), the blanket `ValueError` hid the "propagates" test, and messages said "cannot write".
+GREEN: `tests/test_cli.py` `115 passed in 10.6 s` (was 82); `tests/test_trainer.py` `25 passed` (3 new). Full suite: `1171 passed, 1 skipped, 6 deselected in 123.25s (0:02:03)`, wall 2m07 (was 1135). `uv run --no-sync ruff check .` -> `All checks passed!`; `uv run --no-sync airace-ml --help` works.
+Mutation checks (each reverted, `diff` confirmed identical): turning off the different-config refusal, treating an unreadable state as "no progress", skipping the parent check, dropping `RuntimeError`, restoring the blanket `ValueError` in `build-judge`, putting "cannot write" back, and giving the CLI its own interval constant each make the covering tests fail (7 of 7; the `RuntimeError` one fails 11 tests across model, parent and judge).
+
+## What changed, per item
+
+**N1 (another config's resume state).**
+- New public `trainer.has_resume_state(out_dir)`: true when the trainer's own `_newest_resume_state` finds a complete resume state of any run. Incomplete states (no readable `state.json`) are not progress, matching the trainer.
+- `_cmd_train`: if the folder holds resume state and it does not match this config, exit 2 with or without `--resume`: `<out> holds unfinished progress from a different run config; running there would discard it. Use another --out folder, or delete this one to start over.` Nothing is touched. The "nothing saved to resume ... run without --resume" message is now only reachable for a folder with no resume state at all. A state too broken to read (valid JSON that the trainer's selector cannot parse) counts as held and gets the same refusal, so it is protected rather than crashing or being deleted.
+- Tests: `test_train_refuses_a_folder_holding_another_configs_unfinished_progress[False|True]` (changed `boldness`; exit 2; no output; the `resume/` files compared byte for byte before and after; neither bad piece of advice appears), `test_train_protects_a_resume_state_it_cannot_read`, the unchanged empty-folder test `test_train_resume_without_a_run_to_resume_says_to_run_without_resume`, and the unchanged same-config refusal and `--resume` success tests. Trainer: `test_has_resume_state_is_true_for_any_complete_state_whatever_its_config` (no folder, empty folder, any-config state, renamed `resume.tmp.*`, incomplete, unreadable) and `test_has_resume_state_is_false_once_the_run_has_finished`.
+
+**Narrower except clauses.**
+- `build-judge`: the `except ValueError` is gone. The budget is checked up front, so any other `ValueError` is a bug and propagates (test `test_an_unexpected_value_error_out_of_the_judge_build_is_not_hidden` asserts it does). One consequence worth knowing: `calibrate` raises a clear `ValueError("cannot calibrate the judge: no held-out ...")` if a data root has no held-out creative text or eligible replies. Real builds always have them, so I treated it as a bug-class error per the ruling; say if it should be mapped.
+- The `OSError` handlers around `train_run` and `build_judge` now say `error: could not read or write files: <OS message>: <path>` (`_files_problem`); permission/not-a-directory/is-a-directory/exists problems stay exit 2 and anything else (a full disk) exit 1. The bench report write keeps its accurate wording (`could not write the report to <file>: ...`) because that one really is a write. Test: `test_a_file_system_error_does_not_claim_it_was_a_write` (train and build-judge, `PermissionError` -> 2, `OSError(28, "No space left on device")` -> 1).
+
+**The "every 200 steps" constant.** `trainer.CHECKPOINT_EVERY = 200` is now `train_run`'s default (`checkpoint_every: int = CHECKPOINT_EVERY`), and `cli.py` imports it for the train hint, the `--resume` message and the build-judge hint (`build_judge` calls `train_run` with the default, so the hint describes what actually happens). The CLI no longer has its own copy or passes the interval explicitly. Tests: `test_the_default_checkpoint_interval_is_the_exported_constant` (trainer) and `test_the_judge_hint_and_the_train_default_share_the_trainers_interval` (CLI: the hint says the constant's value, follows a changed constant, and equals `train_run`'s signature default).
+
+**R1 (corrupt checkpoints).**
+- New `_load_checkpoint(folder, device, what)` wraps `load_checkpoint` and nothing else, catching `_CHECKPOINT_DAMAGED` (the earlier `_DAMAGED` tuple plus `RuntimeError`, which is what `load_state_dict` raises when `meta.json`'s shape disagrees with the weights). It is used by `_load_lm` (chat, bench, fingerprint) and, with `what="parent model"`, to validate the parent before `train_run` is called, whether the parent came from `--parent` or from the config's `parent_dir`. `Judge.load` in `bench` catches the same tuple and names `airace-ml build-judge`. The torch message is collapsed to one line and capped at 300 characters.
+- Tests: `test_a_damaged_model_folder_is_a_plain_error` (chat, bench, fingerprint x six damages: garbage weights, truncated weights, `meta.json` not JSON, `meta.json` missing `shape`, shape wider than the weights, shape deeper than the weights; each asserts exit 2, the folder named, one line, no traceback), `test_a_damaged_parent_model_is_a_plain_error_before_training` (the same six damages x `--parent` and config `parent_dir`; `train_run` replaced by a function that fails if called; the output folder is never created), and a sixth judge damage (`_damage_judge_shape`) in `test_a_damaged_judge_or_index_is_an_error_that_names_the_rebuild`.
+
+## Commands and output (real entry point, tiny data)
+```
+# u2 holds a run stopped at step 3; changed.json is the same config with boldness 0.9
+$ airace-ml train --config changed.json --out u2 --resume
+error: .../u2 holds unfinished progress from a different run config; running there would discard it. Use another --out folder, or delete this one to start over.     (exit 2)
+$ airace-ml train --config changed.json --out u2
+error: (same message)     (exit 2)       $ ls u2/resume  ->  state.json  state.pt   (intact)
+$ airace-ml train --config changed.json --out none --resume       # empty folder
+error: there is nothing saved to resume in .../none for this config (a run saves its progress every 200 steps, so one stopped sooner has none). Run the command again without --resume to start the run.     (exit 2)
+$ airace-ml train --config changed.json --out child --parent par  # par has truncated weights
+error: cannot load the parent model in .../par (Error while deserializing header: invalid header length). Is it a folder made by 'airace-ml train', and is the file complete?     (exit 2; child not created)
+$ airace-ml fingerprint --model shp                                # meta.json says d_model 96, weights are 64
+error: cannot load the model in .../shp (Error(s) in loading state_dict for Transformer: size mismatch for blocks.0.attn_norm.weight: copying a param with shape torch.Size([64]) from checkpoint, ...     (exit 2, one line)
+$ airace-ml train ... --parent shp
+error: cannot load the parent model in .../shp (Error(s) in loading state_dict for Transformer: size mismatch ...     (exit 2)
+```
+Final checks: `cd ml && uv run --no-sync pytest -q` -> `1171 passed, 1 skipped, 6 deselected in 123.25s (0:02:03)`; `uv run --no-sync ruff check .` -> `All checks passed!`.
+
+## Notes
+- `ruff format` was run only on the files I changed. For `test_trainer.py` I checked the diff: the only removed line is the old import, replaced by a multi-line one.
+- Still deferred as ruled: M3 (narrowing the `except ValueError` around `train_run` in `train`).
