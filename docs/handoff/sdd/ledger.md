@@ -271,3 +271,4 @@ Task 20: implemented 8d50f5d (opus aced838) — DONE_WITH_CONCERNS; default suit
 Task 20: Ruling: false_fact_rate skips only pairs whose template has no subject text before {o} (my ruling-6 wording was contradictory; 0 of 300 planned facts skipped) — cost if wrong: none.
 Task 20: Ruling: accept the `gate_data_root` fixture as a real tiny corpus build (+ novelty index + shrunk judge) used by the slow gate tests, leaving tiny_data_root untouched (ruling 10's allowed alternative) — cost if wrong: none.
 Task 20: notes: gate run reuse does not detect training-code changes (CLAUDE.md says use a fresh --out after code changes); gate.py is 1216 lines (run-reuse code could split into runs.py — review decides).
+Task 20: review dispatched (opus a692219) over 0243951..8d50f5d (ml + CLAUDE.md).
