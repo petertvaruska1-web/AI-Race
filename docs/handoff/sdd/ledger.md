@@ -253,3 +253,5 @@ Task 19: review (sonnet addb789): spec ❌ — I1 `train` without --resume silen
 Task 19: Ruling: pull M1, M2, M4 (reject --max-items 0 as a usage error), M5, M6 into fix round 1; for I1 the CLI refuses (exit 2) when the out dir holds an unfinished run of the same config and --resume is absent, and an early-interrupt --resume with no saved state says to run without --resume — cost if wrong: one extra flag for users who really want to start over (delete the folder).
 Task 19: minor (deferred): M3 narrowing needs a distinct trainer validation exception (cross-task change) — note for the final review.
 Task 19: fix round 1 dispatched (resume ae1197a).
+Task 19: fix round 1 implemented e489538, 3deb52c (1135 passed, 1 skipped, 121.4s). Trade-offs: train header prints on the first training event (silent wait during corpus loading); no 'calibrating' line when build_judge only recalibrates.
+Task 19: scoped re-review dispatched (sonnet a04e3d1) over cedcfa4..3deb52c.
