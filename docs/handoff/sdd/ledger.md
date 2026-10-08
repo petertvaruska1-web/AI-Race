@@ -241,3 +241,8 @@ Task 18: minor (deferred): M4 distance std floor 1e-6 (only matters for fingerpr
 Task 18: fix round 1 dispatched (resume a28560d).
 Task 18: fix round 1 implemented 1f0ab4f (1053 passed, 1 skipped, 115s); register for story openers 0.968 → 0.0; echo-model warmth 0.195 → 0.043; lexicons 44/35/43; probe creative-04 reworded loves→likes.
 Task 18: scoped re-review dispatched (haiku a16c3ab) over d29e0b7..1f0ab4f.
+Task 18: fix round 1/5 (4 addressed, 0 open; commits d29e0b7..1f0ab4f). Re-review (haiku a16c3ab): all addressed, no new breakage.
+Task 18: Ruling: accept the creative-04 probe reword ("loves" → "likes") and the extra lexicon trims — the probe set and lexicons freeze with this commit as the fingerprint's v1 — cost if wrong: none (nothing measured yet).
+Task 18: minor (deferred): "appreciate(d)" has a neutral value sense in POSITIVE_WORDS; spaced "D. C." is not joined; formal-word removals were judged against a small fixture corpus only.
+Task 18: complete (commits e2e7c7e..1f0ab4f, review clean after 1 fix round)
+Task 19: Rulings 1-10 in task-19-dispatch-notes.md (docs/handoff): guarded UTF-8 reconfigure; exit codes 0/2 usage-config/1 runtime/130 interrupt with `error:` lines and no tracebacks for expected errors; train progress format exact, --resume and --parent; chat REPL /reset /raw /quit and EOF; bench loads judge+novelty when present (note otherwise), --no-creativity, --max-items; fingerprint prints traits; build-judge progress; gate accepts its args and returns 2 until Task 20; --data-root/--device defaults; missing tokenizer = exit 2; main(argv) never sys.exits; light default tests — cost if wrong: rework in Task 19.
