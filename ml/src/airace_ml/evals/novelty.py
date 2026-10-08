@@ -8,7 +8,8 @@ model's text alike, and the index is ``sample_mod`` times smaller than the full 
 The index of a data root (:func:`build_novelty_index`) holds the sorted, unique sampled hashes of
 every document of the eight base corpora that is not held out, with no window spanning two
 documents. :meth:`NoveltyIndex.novelty` is the fraction of a text's sampled windows that are not in
-it: 0 for text copied from the corpora, near 1 for text no corpus contains.
+it: 0 for text copied from the corpora, near 1 for text no corpus contains. Windows a text shares
+with what it was given (a story's own prompt) are not new either.
 
 On disk an index is a ``.npy`` array of the hashes plus a ``.json`` file beside it that records
 how they were made.
@@ -136,43 +137,61 @@ class NoveltyIndex:
         return cls(_unique(parts), n, sample_mod)
 
     def save(self, path: Path) -> None:
-        """Write the hashes to ``path`` (``.npy``) and how they were made to the ``.json`` file
-        beside it. The array is written to a temporary file first and then renamed into place."""
+        """Write the hashes to ``path`` (``.npy``), then how they were made, with their count, to
+        the ``.json`` record beside it. Each file is written to a temporary name and renamed into
+        place, and the record goes last, so a save cut short leaves a record whose count does not
+        match the array, which :meth:`load` refuses."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        with open(tmp, "wb") as f:  # a file object, so numpy adds no ".npy" to the name
+            np.save(f, self.hashes)
+        os.replace(tmp, path)
         meta = {
             "hash_base": HASH_BASE,
             "n": self.n,
             "sample_mod": self.sample_mod,
             "count": len(self),
         }
-        _meta_path(path).write_text(json.dumps(meta), encoding="utf-8")
-        tmp = path.with_name(path.name + ".tmp")
-        with open(tmp, "wb") as f:  # a file object, so numpy adds no ".npy" to the name
-            np.save(f, self.hashes)
-        os.replace(tmp, path)
+        record = _meta_path(path)
+        tmp = record.with_name(record.name + ".tmp")
+        tmp.write_text(json.dumps(meta), encoding="utf-8")
+        os.replace(tmp, record)
 
     @classmethod
     def load(cls, path: Path) -> "NoveltyIndex":
+        """The index saved at ``path``; ``ValueError`` if its record does not describe it."""
         path = Path(path)
-        meta = json.loads(_meta_path(path).read_text(encoding="utf-8"))
+        record = _meta_path(path)
+        meta = json.loads(record.read_text(encoding="utf-8"))
         if meta.get("hash_base") != HASH_BASE:
             raise ValueError(
                 f"{path} was hashed with base {meta.get('hash_base')!r}, not {HASH_BASE}"
             )
-        return cls(np.load(path), meta["n"], meta["sample_mod"])
+        hashes = np.load(path)
+        if meta.get("count") != hashes.size:
+            raise ValueError(
+                f"{path} holds {hashes.size} hashes but {record.name} records a count of "
+                f"{meta.get('count')!r}: they come from different saves; build the index again"
+            )
+        return cls(hashes, meta["n"], meta["sample_mod"])
 
-    def novelty(self, ids: Sequence[int] | np.ndarray) -> float:
-        """The fraction of the sampled windows of ``ids`` absent from the index (each occurrence
-        counts); 0.0 when ``ids`` has no sampled window."""
+    def novelty(
+        self, ids: Sequence[int] | np.ndarray, seen: Sequence[int] | np.ndarray | None = None
+    ) -> float:
+        """The fraction of the sampled windows of ``ids`` that are new (each occurrence counts):
+        absent from the index and, if ``seen`` is given (say, the prompt the text answers), from
+        ``seen`` as well. 0.0 when ``ids`` has no sampled window."""
         sampled = _sampled(ngram_hashes(ids, self.n), self.sample_mod)
         if sampled.size == 0:
             return 0.0
-        if self.hashes.size == 0:
-            return 1.0
-        pos = np.minimum(np.searchsorted(self.hashes, sampled), self.hashes.size - 1)
-        absent = np.count_nonzero(self.hashes[pos] != sampled)
-        return absent / sampled.size
+        known = np.zeros(sampled.size, bool)
+        if self.hashes.size:
+            pos = np.minimum(np.searchsorted(self.hashes, sampled), self.hashes.size - 1)
+            known = self.hashes[pos] == sampled
+        if seen is not None:
+            known |= np.isin(sampled, ngram_hashes(seen, self.n))
+        return np.count_nonzero(~known) / sampled.size
 
 
 def build_novelty_index(data_root: Path) -> Path:

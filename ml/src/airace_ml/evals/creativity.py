@@ -6,7 +6,8 @@ call (temperature 0.9, top-p 0.95, seeded). Each story is measured four ways:
 * **coherence** ``c``: its per-token loss under the reference judge, placed on the judge's own
   scale for real stories, ``clip((p90 - loss) / (p90 - p10), 0, 1)``. As fluent as the best real
   stories is 1; stranger than 90% of them is 0.
-* **novelty** ``nov``: the fraction of its sampled 8-grams that no corpus contains.
+* **novelty** ``nov``: the fraction of its sampled 8-grams that no corpus contains and its own
+  prompt does not contain either, so a model that echoes the prompt gains nothing by it.
 * **repetitiveness** ``rep``: ``1 - unique word 3-grams / all word 3-grams`` within the story (0
   when it has no 3-gram). A loop reads as easy to a judge and every repeat of a new phrase counts
   as new, so without it "the the the ..." would score about 50; with it, a phrase said ``k``
@@ -124,10 +125,10 @@ def score_creativity(
     stories = [tok.decode(g.tokens).strip() for g in generations]
     losses = judge.nll_per_token([judge.tok.encode(story) for story in stories])
     results = []
-    for k, ((topic, _), story, nll) in enumerate(zip(_STORIES, stories, losses, strict=True)):
+    for k, ((topic, prompt), story, nll) in enumerate(zip(_STORIES, stories, losses, strict=True)):
         score = 0.0
         if _words(story):
-            new = novelty.novelty(tok.encode(story))
+            new = novelty.novelty(tok.encode(story), seen=tok.encode(prompt))
             score = (
                 _coherence(nll, judge.calibration)
                 * (NOVELTY_FLOOR + (1 - NOVELTY_FLOOR) * new)

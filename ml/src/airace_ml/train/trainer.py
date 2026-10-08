@@ -289,11 +289,16 @@ def _newest_resume_state(out_dir: Path) -> tuple[Path, dict] | None:
     return best
 
 
+def _same_config(info: dict, cfg: TrainRunConfig) -> bool:
+    """The resume state's JSON part ``info`` was saved by a run of exactly ``cfg``."""
+    return info["config"] == json.loads(cfg.to_json())
+
+
 def can_resume(out_dir: Path, cfg: TrainRunConfig) -> bool:
     """Whether ``train_run(cfg, out_dir=out_dir, resume=True)`` has a run to continue: ``out_dir``
     holds a complete resume state saved by a run of exactly ``cfg``."""
     best = _newest_resume_state(Path(out_dir))
-    return best is not None and best[1]["config"] == json.loads(cfg.to_json())
+    return best is not None and _same_config(best[1], cfg)
 
 
 def _read_resume(out_dir: Path, cfg: TrainRunConfig) -> tuple[dict, dict]:
@@ -302,7 +307,7 @@ def _read_resume(out_dir: Path, cfg: TrainRunConfig) -> tuple[dict, dict]:
     if best is None:
         raise FileNotFoundError(f"no resume state in {out_dir / RESUME_DIR}")
     path, info = best
-    if info["config"] != json.loads(cfg.to_json()):
+    if not _same_config(info, cfg):
         raise ValueError(f"the resume state in {path} belongs to a different run config")
     tensors = torch.load(path / _RESUME_TENSORS, map_location="cpu", weights_only=True)
     return info, tensors

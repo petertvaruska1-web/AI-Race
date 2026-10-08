@@ -1,10 +1,12 @@
 import json
 import math
+import os
 import re
 import shutil
 import warnings
 from dataclasses import asdict, replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -20,7 +22,9 @@ from airace_ml.evals.creativity import STORY_PROMPTS, score_creativity
 from airace_ml.evals.judge import (
     CALIBRATION_NAME,
     TOKENIZER_NAME,
+    TRAIN_CONFIG_NAME,
     Judge,
+    JudgeBuildError,
     JudgeCalibration,
     build_judge,
     calibrate,
@@ -39,6 +43,7 @@ from airace_ml.model.checkpoint import CheckpointMeta, save_checkpoint
 from airace_ml.model.shape import ModelShape
 from airace_ml.model.transformer import Transformer
 from airace_ml.paths import corpus_dir, judge_dir, novelty_path
+from airace_ml.skills.checkers import words as checker_words
 from airace_ml.tokenizer import encode_chat, encode_doc
 from airace_ml.train.events import Done, Progress
 from airace_ml.train.trainer import TrainHooks, train_run
@@ -183,6 +188,29 @@ def ref_replies(doc, ai_id, end_id):
     return replies
 
 
+def ref_word_checks(reply):
+    """The word rules of a well-formed reply, written out: 4+ words, 3+ different words, and no
+    word 3-gram said 3 or more times (case aside)."""
+    said = [w.casefold() for w in checker_words(reply)]
+    trigrams = list(zip(said, said[1:], said[2:]))
+    return len(said) >= 4 and len(set(said)) >= 3 and all(trigrams.count(g) < 3 for g in trigrams)
+
+
+def _write_corpus(root, ds, docs, heldout=None):
+    n = len(docs)
+    tags = DocTags(
+        quality=np.ones(n),
+        dup_cluster=np.full(n, -1),
+        dup_canonical=np.zeros(n, bool),
+        false_fact=np.zeros(n, bool),
+        topic=np.zeros(n),
+        noise_kind=np.zeros(n),
+        heldout=np.ones(n, bool) if heldout is None else heldout,
+        purchase_rank=np.zeros(n),
+    )
+    write_corpus(corpus_dir(root) / ds, docs, tags, {"dataset": ds})
+
+
 def tiny_judge_model(vocab_size, seed=0):
     torch.manual_seed(seed)
     return Transformer(ModelShape(2, 64, 64), vocab_size)
@@ -254,6 +282,68 @@ def test_novelty_index_save_load_keeps_its_parameters(tmp_path):
     (path.parent / "index.json").write_text(json.dumps(meta), encoding="utf-8")
     with pytest.raises(ValueError, match="base"):
         NoveltyIndex.load(path)
+
+
+def test_novelty_save_writes_the_array_first_and_its_record_last(tmp_path, monkeypatch):
+    idx = NoveltyIndex.build([np.arange(16, 400)], sample_mod=2)
+    replaced = []
+    real_replace = os.replace
+
+    def recording_replace(src, dst):
+        replaced.append(Path(dst).name)
+        real_replace(src, dst)
+
+    monkeypatch.setattr(novelty_module.os, "replace", recording_replace)
+    idx.save(tmp_path / "index.npy")
+    assert replaced == ["index.npy", "index.json"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["index.json", "index.npy"]
+    meta = json.loads((tmp_path / "index.json").read_text(encoding="utf-8"))
+    assert meta["count"] == len(idx) > 0
+
+
+def test_novelty_load_rejects_a_record_that_does_not_match_the_array(tmp_path, monkeypatch):
+    path = tmp_path / "index.npy"
+    NoveltyIndex.build([np.arange(16, 400)], sample_mod=2).save(path)
+    bigger = NoveltyIndex.build([np.arange(16, 900)], sample_mod=2)
+    real_replace = os.replace
+
+    def crash_on_the_record(src, dst):  # the new array lands, then the build dies
+        if Path(dst).suffix == ".json":
+            raise OSError("disk full")
+        real_replace(src, dst)
+
+    monkeypatch.setattr(novelty_module.os, "replace", crash_on_the_record)
+    with pytest.raises(OSError):
+        bigger.save(path)
+    monkeypatch.undo()
+    with pytest.raises(ValueError, match="count"):
+        NoveltyIndex.load(path)
+    bigger.save(path)  # a complete save repairs it
+    assert NoveltyIndex.load(path).hashes.tolist() == bigger.hashes.tolist()
+    meta = json.loads((tmp_path / "index.json").read_text(encoding="utf-8"))
+    del meta["count"]
+    (tmp_path / "index.json").write_text(json.dumps(meta), encoding="utf-8")
+    with pytest.raises(ValueError, match="count"):
+        NoveltyIndex.load(path)
+
+
+def test_novelty_counts_windows_seen_in_the_prompt_as_not_new():
+    rng = np.random.default_rng(5)
+    corpus, prompt, fresh = (rng.integers(16, 4096, k).tolist() for k in (200, 30, 40))
+    idx = NoveltyIndex.build([np.array(corpus)], sample_mod=1)
+    text = corpus[:20] + prompt + fresh
+    known = set(ref_hashes(corpus, 8)) | set(ref_hashes(prompt, 8))
+    windows = ref_hashes(text, 8)
+    expected = sum(h not in known for h in windows) / len(windows)
+    assert idx.novelty(text, seen=prompt) == pytest.approx(expected)
+    assert idx.novelty(text, seen=prompt) < idx.novelty(text)  # the prompt's windows were new
+    assert idx.novelty(text, seen=prompt[:7]) == idx.novelty(text)  # too short for a window
+    assert idx.novelty(prompt, seen=prompt) == 0.0
+    empty = NoveltyIndex(np.zeros(0, np.uint64), sample_mod=1)
+    assert empty.novelty(prompt + fresh, seen=prompt) == pytest.approx(
+        sum(h not in set(ref_hashes(prompt, 8)) for h in ref_hashes(prompt + fresh, 8))
+        / (len(prompt + fresh) - 7)
+    )
 
 
 def _write_root(root, rng):
@@ -371,6 +461,7 @@ def test_calibrate_scores_heldout_openings_and_ai_replies(tiny_data_root, tiny_t
         r
         for i in heldout_docs(conv)
         for r in ref_replies(conv.doc(int(i)).tolist(), tiny_tok.ai_id, tiny_tok.end_id)
+        if ref_word_checks(tiny_tok.decode(r))
     ]
     assert sorted(openings) == sorted(expected_openings)
     assert sorted(replies) == sorted(expected_replies) and len(replies) >= 5
@@ -383,6 +474,38 @@ def test_calibrate_scores_heldout_openings_and_ai_replies(tiny_data_root, tiny_t
     assert asdict(cal) == pytest.approx(
         {"creative_p10": p10, "creative_p90": p90, "conv_reply_p90": reply_p90}
     )
+
+
+def test_calibration_scores_only_replies_that_pass_the_word_checks(tmp_path, tiny_tok):
+    good = ["I like to play in the park.", "The red bus goes up the hill.", "We had 2 pies."]
+    bad = [
+        "Yes.",
+        "Thank you so",
+        "go go go go",
+        "yes yes yes yes",
+        "the cat sat the cat sat the cat sat",
+    ]
+    turns = [t for reply in good + bad for t in (("user", "Hi"), ("ai", reply))]
+    _write_corpus(tmp_path, "conversations", [encode_chat(tiny_tok, turns)])
+    _write_corpus(tmp_path, "creative", [encode_doc(tiny_tok, CORPUS_TEXT)])
+    assert all(ref_word_checks(r) for r in good) and not any(ref_word_checks(r) for r in bad)
+    lm = RecordingLM(tiny_tok, score=lambda ctx, cont: -2.0 * len(cont))
+    calibrate(Judge(lm, tiny_tok), tmp_path)
+    (_, openings), (_, replies) = lm.scored
+    assert openings == [tiny_tok.encode(CORPUS_TEXT)[:96]]
+    assert replies == [tiny_tok.encode(r) for r in good]
+    for reply in good + bad:  # is_well_formed applies the very same word checks
+        judge = StubJudge(tiny_tok, lambda ids: 0.0)
+        assert is_well_formed(reply, judge) == (reply in good)
+
+
+def test_calibration_without_eligible_replies_is_a_clear_error(
+    tiny_data_root, tiny_tok, monkeypatch
+):
+    monkeypatch.setattr(judge_module, "MIN_WORDS", 1000)  # no real reply is that long
+    lm = RecordingLM(tiny_tok, score=lambda ctx, cont: -2.0 * len(cont))
+    with pytest.raises(ValueError, match="no held-out conversation replies"):
+        calibrate(Judge(lm, tiny_tok), tiny_data_root)
 
 
 def test_calibrate_samples_deterministically(tiny_data_root, tiny_tok, monkeypatch):
@@ -413,6 +536,7 @@ def test_build_judge_writes_a_self_contained_judge(tiny_data_root, tiny_tok, tmp
         calls.append((cfg, kwargs))
         model = tiny_judge_model(tiny_tok.vocab_size)
         save_checkpoint(model, tiny_meta(model), kwargs["out_dir"])
+        return SimpleNamespace(status="completed")
 
     monkeypatch.setattr(judge_module, "train_run", fake_train_run)
     events = []
@@ -428,7 +552,15 @@ def test_build_judge_writes_a_self_contained_judge(tiny_data_root, tiny_tok, tmp
         "resume": False,  # nothing to resume: a previous judge left no resume state
     }
     names = sorted(p.name for p in out.iterdir())
-    assert names == ["calibration.json", "meta.json", "model.safetensors", "tokenizer.json"]
+    assert names == [
+        "calibration.json",
+        "meta.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "train_config.json",
+    ]
+    record = json.loads((out / TRAIN_CONFIG_NAME).read_text(encoding="utf-8"))
+    assert record == json.loads(cfg.to_json())
     moved = Path(shutil.move(out, tmp_path / "moved"))
     judge = Judge.load(moved, device="cpu")
     assert judge.calibration == calibrate(judge, root)
@@ -518,6 +650,80 @@ def test_build_judge_resume_smoke(tiny_data_root, tmp_path, monkeypatch):
     assert math.isfinite(judge.calibration.creative_p90)
 
 
+def test_build_judge_recalibrates_a_trained_judge_without_retraining(
+    tiny_data_root, tmp_path, monkeypatch
+):
+    root = tmp_path / "root"
+    shutil.copytree(tiny_data_root, root)
+    _small_judge_config(monkeypatch)
+    real_calibrate = judge_module.calibrate
+
+    def failing_calibrate(judge, data_root):
+        raise RuntimeError("the machine went to sleep")
+
+    monkeypatch.setattr(judge_module, "calibrate", failing_calibrate)
+    with pytest.raises(RuntimeError, match="sleep"):
+        build_judge(root, device="cpu", token_budget=1024 * 4)
+    out = judge_dir(root)
+    assert (out / "model.safetensors").exists() and not (out / CALIBRATION_NAME).exists()
+    weights = (out / "model.safetensors").read_bytes()
+    monkeypatch.setattr(judge_module, "calibrate", real_calibrate)
+    flags = _spy_train_run(monkeypatch)
+    assert build_judge(root, device="cpu", token_budget=1024 * 4) == out
+    assert flags == []  # trained already: only calibrated
+    assert (out / "model.safetensors").read_bytes() == weights
+    judge = Judge.load(out, device="cpu")
+    assert judge.calibration == real_calibrate(judge, root)
+    build_judge(root, device="cpu", token_budget=1024 * 4)  # a complete judge: recalibrated only
+    assert flags == [] and Judge.load(out, device="cpu").calibration == judge.calibration
+    build_judge(root, device="cpu", token_budget=1024 * 5)  # another recipe: trained afresh
+    assert flags == [False]
+    record = json.loads((out / TRAIN_CONFIG_NAME).read_text(encoding="utf-8"))
+    assert record["token_budget"] == 1024 * 5
+
+
+def test_build_judge_refuses_a_run_that_did_not_complete(tiny_data_root, tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    shutil.copytree(tiny_data_root, root)
+    _small_judge_config(monkeypatch)
+
+    def unstable_train_run(cfg, **kwargs):  # every loss is NaN: the third spike stops the run
+        return train_run(cfg, **kwargs, _hooks=TrainHooks(loss_override=lambda s, x: math.nan))
+
+    monkeypatch.setattr(judge_module, "train_run", unstable_train_run)
+    with pytest.raises(JudgeBuildError, match="unstable_stopped"):
+        build_judge(root, device="cpu", token_budget=1024 * 6)
+    out = judge_dir(root)
+    assert (out / "model.safetensors").exists()  # the trainer kept its last good weights
+    for name in (CALIBRATION_NAME, TRAIN_CONFIG_NAME, TOKENIZER_NAME):
+        assert not (out / name).exists()  # not calibrated, not frozen
+    with pytest.raises(FileNotFoundError):
+        Judge.load(out, device="cpu")
+    flags = _spy_train_run(monkeypatch)  # the real trainer again
+    build_judge(root, device="cpu", token_budget=1024 * 6)
+    assert flags == [False]  # an unfinished run is never taken as trained
+    assert math.isfinite(Judge.load(out, device="cpu").calibration.creative_p90)
+
+
+def test_a_failed_rebuild_never_passes_for_the_earlier_judge(tiny_data_root, tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    shutil.copytree(tiny_data_root, root)
+    _small_judge_config(monkeypatch)
+    build_judge(root, device="cpu", token_budget=1024 * 4)  # a complete judge of recipe A
+    out = judge_dir(root)
+
+    def unstable_train_run(cfg, **kwargs):
+        return train_run(cfg, **kwargs, _hooks=TrainHooks(loss_override=lambda s, x: math.nan))
+
+    monkeypatch.setattr(judge_module, "train_run", unstable_train_run)
+    with pytest.raises(JudgeBuildError):  # recipe B overwrites the checkpoint, then fails
+        build_judge(root, device="cpu", token_budget=1024 * 6)
+    assert not (out / TRAIN_CONFIG_NAME).exists()  # recipe A's record went before training
+    flags = _spy_train_run(monkeypatch)
+    build_judge(root, device="cpu", token_budget=1024 * 4)
+    assert flags == [False]  # recipe A is trained again, not taken from B's leftover weights
+
+
 def test_judge_config_is_the_reference_recipe():
     c = judge_train_config()
     assert (c.shape.n_layer, c.shape.d_model, c.shape.ctx_len) == (8, 384, 256)
@@ -538,8 +744,17 @@ def test_well_formed_edge_cases(tiny_tok):
     assert seen == [tiny_tok.encode("I like big dogs")]  # judged on the stripped reply
     assert is_well_formed("I have 3 cats", judge)  # a number is a word
     assert is_well_formed("the cat sat and the cat sat on a mat", judge)  # a 3-gram twice
+    assert is_well_formed("I like the park", judge) and is_well_formed("go go stop now", judge)
     seen.clear()
-    for reply in ("I like dogs", "", "  ... !!! ???", "The cat sat, the cat sat, THE CAT SAT."):
+    for reply in (
+        "I like dogs",
+        "",
+        "  ... !!! ???",
+        "The cat sat, the cat sat, THE CAT SAT.",
+        "go go go go",  # 4 words but only 1 different
+        "yes yes yes yes",
+        "Go go GO stop",  # 2 different words
+    ):
         assert not is_well_formed(reply, judge)
     assert seen == []  # the judge is only asked about replies that pass the word checks
     at_limit = StubJudge(tiny_tok, lambda ids: 5.0)  # conv_reply_p90 is 5.0
@@ -585,10 +800,12 @@ def test_creativity_scores_every_story_and_the_mix(tiny_tok):
     stories = [_story(k).strip() for k in range(24)]
     assert seen == [tiny_tok.encode(s) for s in stories]
     expected = [
-        0.75 * (0.4 + 0.6 * idx.novelty(tiny_tok.encode(s))) * (1 - ref_repetitiveness(s))
+        0.75
+        * (0.4 + 0.6 * idx.novelty(tiny_tok.encode(s), seen=tiny_tok.encode(p)))
+        * (1 - ref_repetitiveness(s))
         if ref_words(s)
         else 0.0
-        for s in stories
+        for s, p in zip(stories, STORY_PROMPTS)
     ]
     assert [r.score for r in items] == pytest.approx(expected)
     assert items[5].score == items[6].score == 0.0 and min(expected[:5]) > 0.3
@@ -630,6 +847,24 @@ def test_creativity_degenerate_outputs_score_finite(tiny_tok):
             assert math.isfinite(category.score) and 0 <= category.score <= 100
             assert all(math.isfinite(r.score) and 0 <= r.score <= 1 for r in items)
     assert score_creativity(repeated, tiny_tok, weird[0], idx)[0].score == 0.0  # NaN loss
+
+
+def test_a_story_that_echoes_its_prompt_is_not_new(tiny_tok):
+    idx = NoveltyIndex.build([np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)])
+    fluent = StubJudge(tiny_tok, lambda ids: 2.5)  # coherence 0.875
+    echo = ScriptedLM(tiny_tok, reply=lambda prompt: tiny_tok.decode(prompt))  # the user text
+    category, items = score_creativity(echo, tiny_tok, fluent, idx)
+    assert [r.output for r in items] == list(STORY_PROMPTS)
+    # No corpus holds the prompts, so without the prompt check every echo would count as new.
+    assert all(idx.novelty(tiny_tok.encode(p)) > 0.5 for p in STORY_PROMPTS)
+    assert [r.score for r in items] == pytest.approx(
+        [0.875 * 0.4 * (1 - ref_repetitiveness(p)) for p in STORY_PROMPTS]
+    )  # novelty 0: an echo is worth what a fluent copy of the training data is
+    novel = ScriptedLM(
+        tiny_tok,
+        reply=lambda p: f"a curious robot {len(p)} painted purple stars across the quiet ocean sky",
+    )
+    assert category.score < 0.65 * score_creativity(novel, tiny_tok, fluent, idx)[0].score
 
 
 def test_endless_repetition_scores_about_zero(tiny_tok):

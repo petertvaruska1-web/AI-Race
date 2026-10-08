@@ -28,7 +28,7 @@ from airace_ml.data.corpus import DATASET_IDS, Corpus
 from airace_ml.data.prep import PrepConfig, heldout_docs
 from airace_ml.device import pick_device
 from airace_ml.infer.lm import ContinuationScore, LanguageModel, TorchLM
-from airace_ml.model.checkpoint import load_checkpoint
+from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME, load_checkpoint
 from airace_ml.model.shape import ModelShape
 from airace_ml.paths import corpus_dir, judge_dir, tokenizer_path
 from airace_ml.skills.checkers import words
@@ -39,12 +39,18 @@ from airace_ml.train.trainer import can_resume, train_run
 
 TOKENIZER_NAME = "tokenizer.json"
 CALIBRATION_NAME = "calibration.json"
+TRAIN_CONFIG_NAME = "train_config.json"
 CALIBRATION_DOCS = 500  # held-out creative documents, and conversation replies, calibrated on
 CALIBRATION_SEED = 0
 CREATIVE_TOKENS = 96  # a creative document is judged on its first 96 tokens after <|bos|>
 MIN_WORDS = 4
+MIN_DISTINCT_WORDS = 3  # "go go go go" and "yes yes yes yes" say nothing
 MAX_TRIGRAM_COUNT = 2  # a word 3-gram said 3 or more times makes a reply degenerate
 _FIRST_TEXT_ID = len(SPECIAL_TOKENS)  # ids below this are special tokens
+
+
+class JudgeBuildError(RuntimeError):
+    """The judge's training did not finish, so it was neither calibrated nor frozen."""
 
 
 @dataclass
@@ -82,13 +88,16 @@ class Judge:
     @classmethod
     def load(cls, dir: Path, device: torch.device | str | None = None) -> "Judge":
         """The judge in ``dir``, which needs nothing outside it. ``device=None`` picks one with
-        :func:`~airace_ml.device.pick_device`."""
+        :func:`~airace_ml.device.pick_device`. A directory without ``calibration.json`` (written
+        last) holds no complete judge: ``FileNotFoundError``."""
         dir = Path(dir)
         device = torch.device(device) if device is not None else pick_device()
-        tok = Tok.load(dir / TOKENIZER_NAME)
+        if not (dir / CALIBRATION_NAME).is_file():
+            raise FileNotFoundError(f"{dir} holds no complete judge: {CALIBRATION_NAME} is missing")
         calibration = JudgeCalibration(
             **json.loads((dir / CALIBRATION_NAME).read_text(encoding="utf-8"))
         )
+        tok = Tok.load(dir / TOKENIZER_NAME)
         model, _ = load_checkpoint(dir, device)
         if model.tok_emb.num_embeddings != tok.vocab_size:
             raise ValueError(
@@ -124,6 +133,21 @@ def judge_train_config(seed: int = 1234) -> TrainRunConfig:
         boldness=0.4,
         batch_tokens=32768,
     )
+
+
+# -- word checks ------------------------------------------------------------------------------
+
+
+def _has_reply_words(reply: str) -> bool:
+    """The word checks of a well-formed reply, shared by :func:`is_well_formed` and
+    :func:`calibrate` so the two never drift apart: at least :data:`MIN_WORDS` words, at least
+    :data:`MIN_DISTINCT_WORDS` different ones, and no word 3-gram said more than
+    :data:`MAX_TRIGRAM_COUNT` times (case aside)."""
+    said = [w.casefold() for w in words(reply)]
+    if len(said) < MIN_WORDS or len(set(said)) < MIN_DISTINCT_WORDS:
+        return False
+    trigrams = Counter(zip(said, said[1:], said[2:]))
+    return max(trigrams.values(), default=0) <= MAX_TRIGRAM_COUNT
 
 
 # -- calibration ------------------------------------------------------------------------------
@@ -168,9 +192,11 @@ def calibrate(judge: Judge, data_root: Path) -> JudgeCalibration:
     """Score real held-out text under ``judge``: the openings of up to
     :data:`CALIBRATION_DOCS` creative documents and up to as many conversation AI replies.
 
-    A reply is scored exactly as :func:`is_well_formed` scores one (its own tokens after
-    ``<|bos|>``, no chat context). Where there are more than enough, a fixed-seed sample of
-    documents is used, so calibration is deterministic.
+    A reply is scored exactly as :func:`is_well_formed` scores one: replies that fail its word
+    checks are left out (it rejects those without asking the judge), and the rest are scored as
+    their own stripped text after ``<|bos|>``, with no chat context. Where there are more than
+    enough, a fixed-seed sample of documents is used, so calibration is deterministic. With no
+    creative opening or no eligible reply to score, it raises ``ValueError``.
     """
     tok = judge.tok
     creative = Corpus.open(corpus_dir(data_root) / "creative")
@@ -184,14 +210,37 @@ def calibrate(judge: Judge, data_root: Path) -> JudgeCalibration:
     for i in order:
         if len(replies) >= CALIBRATION_DOCS:
             break
-        replies.extend(_ai_replies(conversations.doc(int(i)), tok.ai_id, tok.end_id))
+        for segment in _ai_replies(conversations.doc(int(i)), tok.ai_id, tok.end_id):
+            text = tok.decode(segment)
+            if _has_reply_words(text):
+                replies.append(tok.encode(text.strip()))
     replies = replies[:CALIBRATION_DOCS]
     p10, p90 = _percentiles(judge.nll_per_token(openings), [10, 90], "creative text")
-    (reply_p90,) = _percentiles(judge.nll_per_token(replies), [90], "conversation replies")
+    (reply_p90,) = _percentiles(
+        judge.nll_per_token(replies), [90], "conversation replies that pass the word checks"
+    )
     return JudgeCalibration(p10, p90, reply_p90)
 
 
 # -- building ---------------------------------------------------------------------------------
+
+
+def _write_json(path: Path, data: dict) -> None:
+    """Write ``data`` to a temporary file, then rename it into place."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, allow_nan=False, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _trained(out: Path, cfg: TrainRunConfig) -> bool:
+    """``out`` holds the checkpoint of a completed training run of exactly ``cfg``: the record
+    :func:`build_judge` writes once such a run completes, and the checkpoint beside it."""
+    try:
+        record = json.loads((out / TRAIN_CONFIG_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    complete = (out / WEIGHTS_NAME).is_file() and (out / META_NAME).is_file()
+    return complete and record == json.loads(cfg.to_json())
 
 
 def build_judge(
@@ -205,11 +254,18 @@ def build_judge(
     given) into :func:`~airace_ml.paths.judge_dir`, copy the tokenizer in, calibrate it and write
     ``calibration.json``. Returns the directory.
 
-    ``on_event`` receives the run's training telemetry. A build that was cut short continues
-    where it stopped: when the directory holds the resume state of this exact training run, the
-    run resumes from it; any other state (another budget, an incomplete save) is deleted and
-    training starts fresh. A previous judge's calibration is removed before training starts, so
-    the directory never pairs a new model with an old calibration.
+    ``on_event`` receives the run's training telemetry. Running it again recovers from wherever
+    the last build stopped:
+
+    * if training of this exact run completed (``train_config.json`` records it, written once the
+      run completes), the model is not trained again, only calibrated;
+    * else if the directory holds the resume state of this exact run, training resumes from it;
+    * else training starts fresh, and any other state (another budget, an incomplete save) is
+      deleted.
+
+    A training run that does not complete (it stopped as unstable) raises
+    :class:`JudgeBuildError`: the model is neither calibrated nor recorded as trained. A previous
+    calibration is removed first, so the directory never pairs a model with an old calibration.
     """
     data_root = Path(data_root)
     device = torch.device(device) if device is not None else pick_device()
@@ -218,21 +274,27 @@ def build_judge(
         cfg = replace(cfg, token_budget=token_budget)
     out = judge_dir(data_root)
     (out / CALIBRATION_NAME).unlink(missing_ok=True)
-    train_run(
-        cfg,
-        out_dir=out,
-        data_root=data_root,
-        device=device,
-        on_event=on_event,
-        resume=can_resume(out, cfg),
-    )
+    if not _trained(out, cfg):
+        (out / TRAIN_CONFIG_NAME).unlink(missing_ok=True)
+        result = train_run(
+            cfg,
+            out_dir=out,
+            data_root=data_root,
+            device=device,
+            on_event=on_event,
+            resume=can_resume(out, cfg),
+        )
+        if result.status != "completed":
+            raise JudgeBuildError(
+                f"the judge's training ended {result.status!r} after {result.steps} of "
+                f"{cfg.steps} steps, so it was not calibrated; its telemetry is in {out}"
+            )
+        _write_json(out / TRAIN_CONFIG_NAME, json.loads(cfg.to_json()))
     shutil.copyfile(tokenizer_path(data_root), out / TOKENIZER_NAME)
     model, _ = load_checkpoint(out, device)
     tok = Tok.load(out / TOKENIZER_NAME)
     calibration = calibrate(Judge(TorchLM(model, tok, device), tok), data_root)
-    tmp = out / f"{CALIBRATION_NAME}.tmp"
-    tmp.write_text(json.dumps(asdict(calibration), allow_nan=False, indent=2), encoding="utf-8")
-    os.replace(tmp, out / CALIBRATION_NAME)
+    _write_json(out / CALIBRATION_NAME, asdict(calibration))
     return out
 
 
@@ -240,13 +302,15 @@ def build_judge(
 
 
 def is_well_formed(reply: str, judge: Judge) -> bool:
-    """A reply that reads like real conversation: at least :data:`MIN_WORDS` words, no word
-    3-gram said 3 or more times (case aside), and a per-token loss under the judge no higher than
-    the 90th percentile of real held-out conversation replies."""
-    said = [w.casefold() for w in words(reply)]
-    if len(said) < MIN_WORDS:
-        return False
-    if max(Counter(zip(said, said[1:], said[2:])).values()) > MAX_TRIGRAM_COUNT:
+    """A reply that reads like real conversation: at least :data:`MIN_WORDS` words, at least
+    :data:`MIN_DISTINCT_WORDS` different words, no word 3-gram said 3 or more times (case aside),
+    and a per-token loss under the judge no higher than the 90th percentile of real held-out
+    conversation replies.
+
+    The distinct-word rule extends spec 4.12's definition (a controller ruling): without it,
+    "go go go go" passes every word check and is left to the judge alone.
+    """
+    if not _has_reply_words(reply):
         return False
     nll = judge.nll_per_token([judge.tok.encode(reply.strip())])[0]
     return nll <= judge.calibration.conv_reply_p90
