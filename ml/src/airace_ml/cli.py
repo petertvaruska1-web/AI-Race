@@ -62,7 +62,13 @@ from airace_ml.train.events import (
     TrainEvent,
     json_safe,
 )
-from airace_ml.train.trainer import TrainResult, can_resume, train_run
+from airace_ml.train.trainer import (
+    CHECKPOINT_EVERY,
+    TrainResult,
+    can_resume,
+    has_resume_state,
+    train_run,
+)
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -74,9 +80,11 @@ DEFAULT_MAX_TOKENS = 96
 CHAT_COMMANDS = ("/reset", "/raw", "/quit")
 _COMMAND_LIKE = re.compile(r"/[A-Za-z]+")  # looks like a chat command, so a typo is not chatted
 GATE_SEEDS = (1, 2, 3)
-CHECKPOINT_EVERY = 200  # steps between a training run's saved resume points
 # Everything that can be wrong with a file someone else wrote or that a crash left half-saved.
 _DAMAGED = (OSError, ValueError, KeyError, TypeError, EOFError, SafetensorError)
+# Loading a checkpoint adds one more: torch's RuntimeError when meta.json's shape does not match
+# the weights. Catch this only around the load itself, never around a whole run.
+_CHECKPOINT_DAMAGED = (*_DAMAGED, RuntimeError)
 
 BUILD_DATA_HINT = "airace-content build --scale tiny (a quick test set) or --scale full"
 
@@ -359,18 +367,27 @@ def _require_tokenizer(root: Path) -> Tok:
 
 def _why(error: BaseException) -> str:
     """A short reason for a damaged file, for the people who have to fix it."""
-    text = str(error) if isinstance(error, (OSError, ValueError, SafetensorError)) else ""
-    reason = text or f"{type(error).__name__}: {error}"
+    shown = (OSError, ValueError, SafetensorError, RuntimeError)
+    text = str(error) if isinstance(error, shown) else ""
+    reason = " ".join((text or f"{type(error).__name__}: {error}").split())  # one line
     return reason if len(reason) <= 300 else reason[:297] + "..."
 
 
-def _os_problem(error: OSError, doing: str) -> Exception:
-    """A plain error for a file system problem: a path the user chose that cannot be used is a
-    usage error (2); anything else (a full disk, say) is a failed run (1)."""
-    message = f"cannot {doing}: {error.strerror or error}"
+def _os_problem(error: OSError, what: str) -> Exception:
+    """A plain error for a file system problem, ``what`` first and then the operating system's own
+    words. A path the user chose that cannot be used is a usage error (2); anything else (a full
+    disk, say) is a failed run (1)."""
+    message = f"{what}: {error.strerror or error}"
+    if error.filename and str(error.filename) not in what:
+        message += f": {error.filename}"
     if isinstance(error, (PermissionError, NotADirectoryError, IsADirectoryError, FileExistsError)):
         return _UsageError(message)
     return _RunFailed(message)
+
+
+def _files_problem(error: OSError) -> Exception:
+    """A file system problem somewhere in a whole run, which may be a read or a write."""
+    return _os_problem(error, "could not read or write files")
 
 
 def _require_folder_path(path: Path, option: str) -> None:
@@ -401,16 +418,22 @@ def _require_model_dir(path: Path, what: str = "model") -> None:
         )
 
 
+def _load_checkpoint(folder: Path, device: torch.device, what: str = "model"):
+    """``load_checkpoint``, with every way the files can be wrong turned into a plain error that
+    names ``folder``. Wraps the load and nothing else."""
+    try:
+        return load_checkpoint(folder, device)
+    except _CHECKPOINT_DAMAGED as e:
+        raise _UsageError(
+            f"cannot load the {what} in {folder} ({_why(e)}). "
+            f"Is it a folder made by 'airace-ml train', and is the file complete?"
+        ) from e
+
+
 def _load_lm(model_dir: Path, root: Path, device: torch.device) -> TorchLM:
     _require_model_dir(model_dir)
     tok = _require_tokenizer(root)
-    try:
-        net, _ = load_checkpoint(model_dir, device)
-    except _DAMAGED as e:
-        raise _UsageError(
-            f"cannot load the model in {model_dir} ({_why(e)}). "
-            f"Is it a folder made by 'airace-ml train', and is the file complete?"
-        ) from e
+    net, _ = _load_checkpoint(model_dir, device)
     if net.tok_emb.num_embeddings != tok.vocab_size:
         raise _UsageError(
             f"the model in {model_dir} was trained with a {net.tok_emb.num_embeddings}-word "
@@ -485,6 +508,15 @@ def _read_config(path: Path) -> TrainRunConfig:
         raise _UsageError(f"the config file {path} cannot be used: {e}") from e
 
 
+def _holds_progress(out: Path) -> bool:
+    """Whether ``out`` holds resume state of any run. A state too broken to read counts as held:
+    it may be someone's progress, and a fresh run would delete it."""
+    try:
+        return has_resume_state(out)
+    except _DAMAGED:
+        return True
+
+
 def _saved_progress(out: Path, cfg: TrainRunConfig) -> bool:
     """Whether ``out`` holds resume state saved by a run of exactly ``cfg``."""
     try:
@@ -515,9 +547,16 @@ def _cmd_train(args: argparse.Namespace) -> int:
         cfg.validate()
         if cfg.parent_dir is not None:
             _require_model_dir(Path(cfg.parent_dir), "parent model")
+            _load_checkpoint(Path(cfg.parent_dir), torch.device("cpu"), "parent model")
         _require_tokenizer(root)
         _require_folder_path(args.out, "--out")
         saved = _saved_progress(args.out, cfg)
+        if _holds_progress(args.out) and not saved:
+            raise _UsageError(
+                f"{args.out} holds unfinished progress from a different run config; running "
+                f"there would discard it. Use another --out folder, or delete this one to "
+                f"start over."
+            )
         if args.resume and not saved:
             raise _UsageError(
                 f"there is nothing saved to resume in {args.out} for this config (a run saves "
@@ -540,14 +579,13 @@ def _cmd_train(args: argparse.Namespace) -> int:
             device=device,
             on_event=_announcing(header, _print_event),
             resume=args.resume,
-            checkpoint_every=CHECKPOINT_EVERY,
         )
     except KeyboardInterrupt:
         raise _Interrupted(_interrupted_train_hint(args.out, cfg)) from None
     except FileNotFoundError as e:
         raise _UsageError(_missing(e)) from e
     except OSError as e:
-        raise _os_problem(e, f"write the run to {args.out}") from e
+        raise _files_problem(e) from e
     except ValueError as e:
         raise _UsageError(str(e)) from e
     _print_summary(result, cfg.steps)
@@ -632,7 +670,7 @@ def _creativity_tools(root: Path, device: torch.device) -> tuple[Judge, NoveltyI
         judge = Judge.load(judge_dir(root), device)
     except FileNotFoundError:
         todo.append("  - the reference judge: build it with 'airace-ml build-judge'")
-    except _DAMAGED as e:
+    except _CHECKPOINT_DAMAGED as e:
         raise _UsageError(
             f"the reference judge in {judge_dir(root)} is damaged or out of date "
             f"({_why(e)}). Rebuild it with: airace-ml build-judge"
@@ -692,7 +730,7 @@ def _cmd_bench(args: argparse.Namespace) -> int:
             args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(document, encoding="utf-8")
         except OSError as e:
-            raise _os_problem(e, f"write the report to {args.out}") from e
+            raise _os_problem(e, f"could not write the report to {args.out}") from e
         print(f"full report written to {args.out}", flush=True)
     return EXIT_OK
 
@@ -744,9 +782,7 @@ def _cmd_build_judge(args: argparse.Namespace) -> int:
     except JudgeBuildError as e:
         raise _RunFailed(str(e)) from e
     except OSError as e:
-        raise _os_problem(e, f"write the judge into {judge_dir(root)}") from e
-    except ValueError as e:
-        raise _UsageError(str(e)) from e
+        raise _files_problem(e) from e
     print(f"\nreference judge ready in {path}", flush=True)
     return EXIT_OK
 

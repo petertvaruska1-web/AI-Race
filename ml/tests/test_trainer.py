@@ -1,3 +1,4 @@
+import inspect
 import math
 
 import pytest
@@ -9,7 +10,13 @@ from airace_ml.model.growth import GrowthError
 from airace_ml.model.shape import ModelShape
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.train.events import Done, HeldoutEval, Instability, Progress, Sample
-from airace_ml.train.trainer import TrainHooks, can_resume, train_run
+from airace_ml.train.trainer import (
+    CHECKPOINT_EVERY,
+    TrainHooks,
+    can_resume,
+    has_resume_state,
+    train_run,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -406,3 +413,36 @@ def test_can_resume_only_a_complete_state_of_the_same_config(tiny_data_root, tmp
     assert not can_resume(out, c)
     (out / "resume.tmp.crashed" / "state.json").write_text("{not json", encoding="utf-8")
     assert not can_resume(out, c)
+
+
+def test_has_resume_state_is_true_for_any_complete_state_whatever_its_config(
+    tiny_data_root, tmp_path
+):
+    c = cfg(token_budget=1024 * 12)
+    out = tmp_path / "p"
+    assert not has_resume_state(out)  # no folder yet
+    out.mkdir()
+    assert not has_resume_state(out)  # an empty folder
+    train_run(c, out_dir=out, data_root=tiny_data_root, _hooks=TrainHooks(stop_after_steps=6))
+    assert has_resume_state(out) and has_resume_state(str(out))
+    assert can_resume(out, c) and not can_resume(out, cfg(token_budget=1024 * 12, seed=2))
+    (out / "resume").rename(out / "resume.tmp.crashed")  # still complete under another name
+    assert has_resume_state(out)
+    (out / "resume.tmp.crashed" / "state.json").write_text("{not json", encoding="utf-8")
+    assert not has_resume_state(out)  # incomplete states are not progress
+    (out / "resume.tmp.crashed" / "state.json").unlink()
+    assert not has_resume_state(out)
+
+
+def test_has_resume_state_is_false_once_the_run_has_finished(tiny_data_root, tmp_path):
+    c = cfg(token_budget=1024 * 12)
+    out = tmp_path / "p"
+    train_run(c, out_dir=out, data_root=tiny_data_root, _hooks=TrainHooks(stop_after_steps=6))
+    assert has_resume_state(out)
+    train_run(c, out_dir=out, data_root=tiny_data_root, resume=True)
+    assert not has_resume_state(out)
+
+
+def test_the_default_checkpoint_interval_is_the_exported_constant():
+    default = inspect.signature(train_run).parameters["checkpoint_every"].default
+    assert default == CHECKPOINT_EVERY == 200

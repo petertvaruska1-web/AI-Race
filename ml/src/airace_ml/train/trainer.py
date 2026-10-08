@@ -74,6 +74,7 @@ PROBE_PROMPTS: tuple[tuple[Literal["doc", "chat"], str], ...] = (
 SNAPSHOT_EVERY = 25  # steps between the in-memory snapshots a spike rolls back to
 MAX_SPIKES = 3  # the third spike stops the run
 PROGRESS_EVERY = 10
+CHECKPOINT_EVERY = 200  # steps between the resume points a run saves (``train_run`` default)
 MIN_EVAL_EVERY = 25  # held-out eval and samples every max(25, steps // 20) steps
 EVAL_SEQS = 8  # held-out sequences per dataset
 SAMPLE_TOKENS = 32
@@ -131,7 +132,7 @@ def train_run(
     device: torch.device | None = None,
     on_event: Callable[[TrainEvent], None] | None = None,
     resume: bool = False,
-    checkpoint_every: int = 200,
+    checkpoint_every: int = CHECKPOINT_EVERY,
     _hooks: TrainHooks | None = None,
 ) -> TrainResult:
     """Train ``cfg`` into ``out_dir`` and return what came out.
@@ -292,6 +293,12 @@ def _newest_resume_state(out_dir: Path) -> tuple[Path, dict] | None:
 def _same_config(info: dict, cfg: TrainRunConfig) -> bool:
     """The resume state's JSON part ``info`` was saved by a run of exactly ``cfg``."""
     return info["config"] == json.loads(cfg.to_json())
+
+
+def has_resume_state(out_dir: Path) -> bool:
+    """Whether ``out_dir`` holds a complete resume state of any run, whatever its config. A fresh
+    (non-resuming) ``train_run`` into such a folder deletes that state."""
+    return _newest_resume_state(Path(out_dir)) is not None
 
 
 def can_resume(out_dir: Path, cfg: TrainRunConfig) -> bool:

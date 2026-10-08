@@ -1,4 +1,5 @@
 import contextlib
+import inspect
 import io
 import json
 import math
@@ -23,7 +24,7 @@ from airace_ml.personality.fingerprint import TRAITS
 from airace_ml.tokenizer import train_tokenizer
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.train.events import Done, Progress
-from airace_ml.train.trainer import TrainHooks, train_run
+from airace_ml.train.trainer import CHECKPOINT_EVERY, TrainHooks, train_run
 
 
 def _cfg(tmp_path):
@@ -258,6 +259,44 @@ def test_train_refuses_to_start_over_an_unfinished_run(tiny_data_root, tmp_path)
     assert "step 1/6" not in out and "step 6/6" in out
 
 
+def _saved_files(out_dir: Path) -> dict[str, bytes]:
+    return {
+        str(p.relative_to(out_dir)): p.read_bytes()
+        for p in sorted((out_dir / "resume").rglob("*"))
+        if p.is_file()
+    }
+
+
+@pytest.mark.parametrize("resume", [False, True])
+def test_train_refuses_a_folder_holding_another_configs_unfinished_progress(
+    resume, tiny_data_root, tmp_path
+):
+    _, out_dir = _unfinished_run(tiny_data_root, tmp_path)
+    saved = _saved_files(out_dir)
+    assert saved
+    changed = _small_config("unfinished", steps=6, boldness=0.9)  # the same run, a new style
+    config = _write_config(tmp_path, changed, "changed.json")
+    argv = ["train", "--config", str(config), "--out", str(out_dir), *_common(tiny_data_root)]
+    code, out, err = _run([*argv, "--resume"] if resume else argv)
+    assert code == 2 and out == ""  # refused before any training step
+    assert err.startswith("error: ") and "Traceback" not in err and str(out_dir) in err
+    assert "unfinished progress from a different run config" in err
+    assert "discard" in err and "another --out folder" in err and "delete this one" in err
+    assert "nothing saved" not in err and "without --resume" not in err  # the advice that hurts
+    assert _saved_files(out_dir) == saved  # nothing was lost
+
+
+def test_train_protects_a_resume_state_it_cannot_read(tiny_data_root, tmp_path):
+    out_dir = tmp_path / "run"
+    (out_dir / "resume").mkdir(parents=True)
+    broken = out_dir / "resume" / "state.json"
+    broken.write_text("{}", encoding="utf-8")  # valid JSON, but not a state a run would write
+    argv = ["train", "--config", str(_write_config(tmp_path, _small_config()))]
+    code, out, err = _run([*argv, "--out", str(out_dir), *_common(tiny_data_root)])
+    assert code == 2 and out == "" and "different run config" in err and "Traceback" not in err
+    assert broken.read_text(encoding="utf-8") == "{}"
+
+
 def test_train_into_a_folder_with_a_finished_run_is_not_refused(trained, tiny_data_root, tmp_path):
     finished = tmp_path / "finished"
     shutil.copytree(trained.dir, finished)  # a completed run: its resume state is gone
@@ -341,7 +380,8 @@ def test_interrupting_train_before_any_save_says_to_run_again_without_resume(
     argv = ["train", "--config", str(_write_config(tmp_path, _small_config()))]
     code, _, err = _run([*argv, "--out", str(tmp_path / "o"), *_common(tiny_data_root)])
     assert code == 130
-    assert "interrupted" in err and "without --resume" in err and "200 steps" in err
+    assert "interrupted" in err and "without --resume" in err
+    assert f"every {CHECKPOINT_EVERY} steps" in err
 
 
 # -- missing pieces are usage errors (exit 2) -----------------------------------------------------
@@ -788,6 +828,10 @@ def _damage_judge_json(root):
     (judge_dir(root) / "calibration.json").write_text("{ half a file", encoding="utf-8")
 
 
+def _damage_judge_shape(root):
+    _change_meta_shape(d_model=96)(judge_dir(root))  # meta no longer matches the weights
+
+
 def _damage_judge_weights(root):
     (judge_dir(root) / "model.safetensors").write_bytes(b"not a model at all")
 
@@ -801,6 +845,7 @@ def _damage_judge_weights(root):
         (_damage_judge_calibration, "airace-ml build-judge"),
         (_damage_judge_json, "airace-ml build-judge"),
         (_damage_judge_weights, "airace-ml build-judge"),
+        (_damage_judge_shape, "airace-ml build-judge"),
     ],
 )
 def test_a_damaged_judge_or_index_is_an_error_that_names_the_rebuild(
@@ -816,17 +861,84 @@ def test_a_damaged_judge_or_index_is_an_error_that_names_the_rebuild(
     assert code == 0, err
 
 
+def _break_weights_with_garbage(model: Path) -> None:
+    (model / "model.safetensors").write_bytes(b"garbage" * 50)
+
+
+def _break_weights_by_truncating(model: Path) -> None:
+    weights = model / "model.safetensors"
+    weights.write_bytes(weights.read_bytes()[:200])
+
+
+def _break_meta_json(model: Path) -> None:
+    (model / "meta.json").write_text("{not json", encoding="utf-8")
+
+
+def _break_meta_field(model: Path) -> None:
+    meta = json.loads((model / "meta.json").read_text(encoding="utf-8"))
+    del meta["shape"]
+    (model / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+
+
+def _change_meta_shape(**changes):
+    """A meta.json whose shape no longer matches the weights next to it."""
+
+    def edit(model: Path) -> None:
+        meta = json.loads((model / "meta.json").read_text(encoding="utf-8"))
+        meta["shape"].update(changes)
+        (model / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+
+    return edit
+
+
+DAMAGES = {
+    "garbage": _break_weights_with_garbage,
+    "truncated": _break_weights_by_truncating,
+    "meta-not-json": _break_meta_json,
+    "meta-field-missing": _break_meta_field,
+    "wider-than-weights": _change_meta_shape(d_model=96),  # RuntimeError in load_state_dict
+    "deeper-than-weights": _change_meta_shape(n_layer=3),
+}
+
+
 @pytest.mark.parametrize("command", ["chat", "bench", "fingerprint"])
-@pytest.mark.parametrize("damage", ["garbage", "truncated"])
-def test_a_damaged_model_file_is_a_plain_error(command, damage, trained, tiny_data_root, tmp_path):
+@pytest.mark.parametrize("damage", list(DAMAGES))
+def test_a_damaged_model_folder_is_a_plain_error(
+    command, damage, trained, tiny_data_root, tmp_path
+):
     model = tmp_path / "model"
     shutil.copytree(trained.dir, model)
-    weights = model / "model.safetensors"
-    weights.write_bytes(b"garbage" * 50 if damage == "garbage" else weights.read_bytes()[:200])
+    DAMAGES[damage](model)
     code, out, err = _run([command, "--model", str(model), *_common(tiny_data_root)])
     assert code == 2 and out == ""
     assert err.startswith("error: ") and "cannot load the model" in err and str(model) in err
-    assert "Traceback" not in err
+    assert "Traceback" not in err and "\n" not in err.strip()  # one line, even for a torch error
+
+
+def _no_training(monkeypatch):
+    monkeypatch.setattr(cli, "train_run", _raising(AssertionError("training must not start")))
+
+
+@pytest.mark.parametrize("via", ["--parent", "config"])
+@pytest.mark.parametrize("damage", list(DAMAGES))
+def test_a_damaged_parent_model_is_a_plain_error_before_training(
+    via, damage, trained, tiny_data_root, tmp_path, monkeypatch
+):
+    _no_training(monkeypatch)
+    parent = tmp_path / "parent"
+    shutil.copytree(trained.dir, parent)
+    DAMAGES[damage](parent)
+    if via == "--parent":
+        config = _write_config(tmp_path, _small_config("child"))
+        extra = ["--parent", str(parent)]
+    else:
+        config = _write_config(tmp_path, _small_config("child", parent_dir=str(parent)))
+        extra = []
+    argv = ["train", "--config", str(config), "--out", str(tmp_path / "child"), *extra]
+    code, out, err = _run([*argv, *_common(tiny_data_root)])
+    assert code == 2 and out == ""
+    assert err.startswith("error: ") and "cannot load the parent model" in err
+    assert str(parent) in err and "Traceback" not in err and not (tmp_path / "child").exists()
 
 
 # -- build-judge budget, and options with a minimum -----------------------------------------------
@@ -858,13 +970,58 @@ def test_a_judge_budget_of_exactly_one_step_is_accepted(tiny_data_root, monkeypa
     assert seen[0]["token_budget"] == 32768
 
 
-def test_a_judge_build_that_hits_a_config_error_is_a_plain_error(tiny_data_root, monkeypatch):
-    def invalid(*args, **kwargs):
-        raise ValueError("token_budget (5) must be at least batch_tokens (32768)")
+def test_an_unexpected_value_error_out_of_the_judge_build_is_not_hidden(
+    tiny_data_root, monkeypatch
+):
+    def bug(*args, **kwargs):
+        raise ValueError("something nobody expected")
 
-    monkeypatch.setattr(cli, "build_judge", invalid)
+    monkeypatch.setattr(cli, "build_judge", bug)
+    with pytest.raises(ValueError, match="nobody expected"):
+        _run(["build-judge", *_common(tiny_data_root)])
+
+
+def _raising(error: BaseException):
+    def raiser(*args, **kwargs):
+        raise error
+
+    return raiser
+
+
+@pytest.mark.parametrize("command", ["train", "build-judge"])
+@pytest.mark.parametrize(
+    "error, code, os_message",
+    [
+        (PermissionError(13, "Permission denied", "/somewhere/file.bin"), 2, "Permission denied"),
+        (OSError(28, "No space left on device", "/somewhere/file.bin"), 1, "No space left"),
+    ],
+)
+def test_a_file_system_error_does_not_claim_it_was_a_write(
+    command, error, code, os_message, tiny_data_root, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(cli, "train_run", _raising(error))
+    monkeypatch.setattr(cli, "build_judge", _raising(error))
+    extra = {"train": ["--config", str(_write_config(tmp_path, _small_config()))]}.get(command, [])
+    if command == "train":
+        extra += ["--out", str(tmp_path / "o")]
+    result = _run([command, *extra, *_common(tiny_data_root)])
+    assert result[0] == code
+    err = result[2]
+    assert err.startswith("error: could not read or write files: ") and os_message in err
+    assert "/somewhere/file.bin" in err and "cannot write" not in err and "Traceback" not in err
+
+
+def test_the_judge_hint_and_the_train_default_share_the_trainers_interval(
+    tiny_data_root, monkeypatch
+):
+    default = inspect.signature(train_run).parameters["checkpoint_every"].default
+    assert cli.CHECKPOINT_EVERY == CHECKPOINT_EVERY == default  # what build_judge's run saves by
+    monkeypatch.setattr(cli, "build_judge", _raising(KeyboardInterrupt()))
     code, _, err = _run(["build-judge", *_common(tiny_data_root)])
-    assert code == 2 and err.startswith("error: token_budget") and "Traceback" not in err
+    assert code == 130 and f"every {CHECKPOINT_EVERY} steps" in err
+    monkeypatch.setattr(cli, "CHECKPOINT_EVERY", 7)  # the hint reads the constant, not a literal
+    code, _, err = _run(["build-judge", *_common(tiny_data_root)])
+    assert code == 130 and "every 7 steps" in err
 
 
 @pytest.mark.parametrize(
