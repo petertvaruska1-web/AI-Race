@@ -375,3 +375,231 @@ _None yet. Each attempt to fix a failing criterion is recorded here: the hypothe
 2. **`gate.py` is 1216 lines.** It is cohesive and follows the brief's file plan. If you prefer, `GateRuns`, `_cached` and the input loading could move to `experiments/runs.py` without other changes. I did not restructure on my own.
 3. **A training-code change is not detected by run reuse;** only changes to the config, data, device or parent are. This matters during step 8 iterations on, for example, the boldness mapping. It is documented in the `gate.py` docstring and CLAUDE.md (use a fresh `--out`).
 4. **Quick-mode G2 "passes" on word salad** because the tiny judge is lenient. This is expected at tiny scale and has no bearing on the real gate.
+
+---
+
+# Fix round 1
+
+**Status:** DONE. Every item on the round-1 list is addressed.
+
+**Commits.** The work is in two commits on `claude/upbeat-franklin-k1192h`, neither pushed:
+- `0beb670 wip(ml): Task 20 fix round 1 in progress`: the bulk of the round, saved by the controller when a usage limit stopped me. I did not amend it.
+- `2e9d39c fix(ml): gate fails criteria on runs that stopped early, keys reuse on code digests, checks every first-model target`: finishes the round.
+  - On CUDA, growth's timer waits for the grown model's device.
+  - A test for that wait.
+
+## What changed, per finding
+
+### I1: a run that stops early
+
+**What changed**
+- `GateRun` gains `planned_steps`. `gate_run.json` records it next to the steps actually run.
+- New `gate.require_completed(criterion, runs)`. If any run used did not complete, it returns a failed copy of the criterion.
+  - The detail starts with each such run, for example `g5-grown stopped early (unstable_stopped after 128 of 256 steps), so this cannot pass.`, followed by the original detail.
+  - The run's name is added to `data["unfinished_runs"]`.
+- Every experiment now returns the criterion and the runs it used, and `run_gate` applies `require_completed` to each one:
+
+  | Criterion | Runs it uses |
+  |---|---|
+  | G1 | `starter`, plus `starter-cpu` when that run happens |
+  | G2 | `starter` |
+  | G3 | every `g3-*` run |
+  | G4 | every `g3-*` and `g4-*` run (all of them form the fingerprint population) |
+  | G5 | `starter`, `g5-grown`, `g5-ungrown` |
+  | G6 | `g3-creative-s<first seed>`, both `g6-*` runs |
+  | G7 | all four `g7-*` runs |
+
+- **`report.md` has a new "## Runs" section**, with the columns run, status, steps (`run/planned`), wall time (s), mean held-out loss and reused. `outcome.json` carries the same fields.
+
+**Tests**
+- `test_a_criterion_fails_and_says_so_when_a_run_it_uses_stopped_early`: the pure helper.
+- `test_a_run_that_stopped_early_fails_every_criterion_that_uses_it`: 3 cases on the fake gate.
+  - Each case makes some runs unstable and checks the exact set of failing criteria.
+  - For every pair of criterion and stopped run, it also checks that the run is named exactly where it is used.
+- `test_report_lists_every_run`: the Runs table.
+
+**Fake gate.** The new fixture `fake_gate` runs `run_gate` end to end with faked training, models, benches and fingerprints. Growth stays real, on a tiny model. On a pretend CUDA device it passes all 7 criteria, which gives the tests a positive control. It costs about 0.1 s per run.
+
+### I2: cached results ignore the code that measured them
+
+**What changed** (`runs.py`)
+- `source_digest(parts, root=PACKAGE_ROOT)` is a sha256 over every file under `parts`.
+  - It hashes each file's posix path relative to the installed `airace_ml` package plus its bytes, length-prefixed, in sorted path order.
+  - `__pycache__` folders and `*.pyc` files are skipped. Data files such as `kb_data/*.json` and `probes.json` count.
+- `TRAINING_SOURCES = ("train", "model", "data", "tokenizer.py")`. Its digest joins the run key as `"code"`.
+- `MEASURING_SOURCES = ("evals", "personality", "infer", "skills")`. Its digest joins the bench and fingerprint keys.
+- A change to the training code retrains the run. The run gets a new token, so its benches and fingerprints are measured again too.
+
+**Docs.** The `gate.py` and `runs.py` docstrings and CLAUDE.md now say that rerunning the same command reuses whatever is unchanged and redoes the rest. A fresh `--out` is no longer needed.
+
+**Tests**
+- `test_source_digest_follows_the_bytes_and_paths_of_the_sources` checks five things:
+  - order-independence
+  - that caches are ignored, including a `*.pyc.<id>` temp file left mid-write
+  - that data-file edits change the digest
+  - that renames change the digest
+  - that a missing part raises
+- `test_a_run_is_trained_again_when_the_training_code_changes`: at the `GateRuns` level.
+- `test_reuse_follows_the_code_that_trains_and_the_code_that_measures`: on the fake gate. Counts are (trainings, benches, fingerprints):
+
+  | Run of the gate | Counts |
+  |---|---|
+  | First | 25, 15, 15 |
+  | Again, nothing changed | 0, 0, 0 |
+  | After a measuring-code change | 0, 15, 15 |
+  | After a training-code change | 25, 15, 15 |
+
+### M7: G1 checks every §4.11 first-model target
+
+**`eval_speed`**
+- It keeps its positional arguments, so the brief's tests stay verbatim and still pass.
+- It gains the keyword arguments `bench_seconds`, `first_token_ms`, `tokens_per_second` and `growth_seconds`.
+- Targets are in `SPEED_TARGETS`:
+  - GPU training at most 90 s
+  - CPU training at most 480 s
+  - full bench at most 30 s
+  - first token at most 300 ms
+  - throughput at least 50 tokens/s
+  - growth at most 2 s
+- A measurement that is not given is not checked. One that is given but not finite fails.
+- The detail starts with `missed: <targets>.` when a target is missed. `data` holds each value and its `<key>_target`.
+
+**`speed_criterion`** on a device that is not CUDA still fails per ruling 1. Its detail now lists every measurement it took, and so does `data`.
+
+**What `gate.speed()` measures on the starter.** The starter is trained, then measured:
+- **Full bench:** its full bench with creativity, cached. The time used is `BenchReport.seconds`. The suite is now built before the timer starts, so building it is not counted.
+- **Chat speed** (`chat_speed`), on the gate's device:
+  - one warm-up `generate(max_new_tokens=1)`, then a second one timed;
+  - a 64-token generation that never stops early (capped by the context length), timed, and its tokens counted.
+- **Growth:** the time of `grow` to the grown shape, plus the logit diff. G5 now uses this one measurement instead of growing a second time.
+- **Waiting for the GPU:** both timings wait for queued CUDA work first, via `_clock`. For growth that is the grown model's own device.
+
+**Tests**
+- `test_speed_checks_every_first_model_target`: every boundary, each target failing alone, non-finite values, and omitted measurements.
+- `test_speed_off_cuda_still_reports_every_measurement`
+- `test_chat_speed_times_one_token_after_a_warm_up_and_a_full_reply`: the call sequence `(1), (1), (64, stop_ids=())`.
+- `test_timings_wait_for_queued_gpu_work`: with `torch.cuda.synchronize` patched; CUDA is synced, CPU is not.
+- The fake gate's positive control checks G1's data:
+  - training 1.0 on the GPU and 1.0 on the CPU;
+  - bench 1.0;
+  - first token under 300 ms and throughput over 50 tokens/s;
+  - growth under 2 s;
+  - exactly one starter bench.
+
+### M3: G7(a) prompts end on a whole word
+
+`trim_to_word` cuts a prefix back to its last whitespace and drops that whitespace. Text with no whitespace after its first character is kept whole. `_web_prefixes` applies it to every 32-token prefix.
+
+**Tests**
+- `test_prompts_are_cut_back_to_a_whole_word`: the pure function.
+- `test_web_prefixes_end_on_a_word_boundary`: on `tiny_data_root`, each prompt is the start of a held-out web document, cut where a word ends.
+
+### M4: damaged-file catches are narrow
+
+`_DAMAGED` is gone.
+- **New error set:** `_LOAD_ERRORS = (OSError, ValueError, EOFError, SafetensorError)`. It is used only around loading:
+  - in the data block of `_load_inputs`;
+  - in the new `_load_judge`;
+  - in the new `_load_novelty`.
+- **RuntimeError, TypeError and KeyError now propagate.** A CUDA error, a bug, or the shape mismatch inside `Judge.load` (which cannot be isolated from the gate) is no longer reported as "damaged, rebuild".
+- **Resume check:** `GateRuns._can_resume` catches only `(OSError, ValueError)`.
+
+**Tests**
+- `test_judge_and_index_loading_blame_only_damaged_files`:
+  - a `ValueError` becomes a `GateSetupError` naming `build-judge`;
+  - `RuntimeError`, `TypeError` and `KeyError` propagate;
+  - a zero-byte index becomes a `GateSetupError` naming `build-novelty-index`;
+  - a `RuntimeError` from the index load propagates.
+- `test_resume_check_blames_only_damaged_files`
+
+### M5: `runs.py`
+
+`ml/src/airace_ml/experiments/runs.py` now holds:
+- `GATE_RUN_FILE`
+- `_read_json`, `_write_json`, `_plain`, `_cached`
+- `GateRun`, `GateRuns`, `_heldout_mean`
+- and, from I2, `source_digest` and the source lists
+
+This was a move with no change in behaviour. The tests now patch `runs.train_run` and `runs.can_resume`.
+
+`gate.py` is 1235 lines, `runs.py` 255 and `report.py` 228. `gate.py` stays large because M7 added the speed targets and chat timing that the move offset.
+
+### M6
+
+`.gitignore` gains `ml/runs/`, checked with `git check-ignore -v ml/runs/gate-x/report.md`, which matched `.gitignore:23:ml/runs/`.
+
+### M8
+
+No change, as ruled.
+
+## TDD evidence
+- **RED.** I wrote the new tests and updated the existing ones for the move, then ran `cd ml && uv run --no-sync pytest tests/test_gate.py -q`. It failed as expected, because `runs.py` did not exist yet:
+  ```
+  E   ModuleNotFoundError: No module named 'airace_ml.experiments.runs'
+  ERROR tests/test_gate.py
+  ```
+- **GREEN.** `uv run --no-sync pytest tests/test_gate.py -q` gave `44 passed, 2 deselected in 1.51s`.
+- **Two test mistakes I fixed along the way:**
+  - The first word-boundary test assumed re-trimming changes nothing. That is false by design, since trimming always drops the trailing partial word. It now tests the real property, that each prompt ends on a word boundary of its document.
+  - A rounding case: 12.5 ms shows as "12 ms" under round-half-even, so the test now uses 12.6.
+- **Mutations.** I applied 19 single-line mutations across `gate.py`, `runs.py` and `report.py`, ran the covering tests each time, and restored the files. **All 19 were caught.** The mutations removed or broke:
+  - `require_completed` in `run_gate`
+  - each of the used-run lists for G5, G6, G1's `starter-cpu` and G4
+  - the code digest in the bench key, the fingerprint key and the run key
+  - the `__pycache__` skip. This was caught once the test wrote a `.pyc.<id>` temp file.
+  - prefix trimming, and its "keep whole" rule
+  - the check that a target is met
+  - passing `bench_seconds` through
+  - the narrow load errors, both in loading and in the resume check
+  - the chat warm-up
+  - the Runs section
+  - the measurements in the off-CUDA detail
+  - the CUDA sync
+
+## Commands and their output (final tree, `2e9d39c`)
+
+| Command (from `ml/`) | Result |
+|---|---|
+| `uv run --no-sync ruff check .` | All checks passed |
+| `uv run --no-sync pytest tests/test_gate.py -q` | 44 passed, 2 deselected in 1.51 s |
+| `uv run --no-sync pytest tests/test_gate.py tests/test_cli.py -q` | 177 passed, 2 deselected |
+| `uv run --no-sync pytest` | **1234 passed, 1 skipped, 8 deselected in 125.12 s**. The only "warning" line is uv's own `UV_NATIVE_TLS` environment notice. |
+| `uv run --no-sync pytest -m slow tests/test_gate.py -v` | **2 passed in 110.84 s**: `test_run_gate_quick` took 50.54 s plus 4.23 s of fixture setup; the CLI run-twice test took 55.63 s |
+
+- **Run-twice test.** Its second pass still trains nothing. It now compares every verdict and detail except G1's, which re-times chat and growth live; for G1 it compares pass/fail only.
+- **Quick gate through the CLI:**
+  - Command: `airace-ml gate --out <scratch> --quick --data-root <tiny gate root> --device cpu`.
+  - Wall time 54.7 s, exit 1.
+  - 14 runs, all `completed 20/20`, as listed in the new Runs table.
+  - G7's garble rates moved slightly (16.2% light against 17.6% thorough) now that prompts end on whole words.
+
+## The quick gate's new G1 detail (CPU)
+
+```
+G1  Speed            FAIL  no CUDA device; GPU speed target not measured (the first model trained in 2.5 s on the CPU; full benchmark suite 2.9 s; chat first token 3 ms; chat throughput 429 tokens/s; growth op 0.02 s)
+```
+
+The G1 data table in the report now reads:
+
+| Measure | Value |
+|---|---|
+| gpu_seconds | n/a (target 90) |
+| cpu_seconds | n/a (target 480) |
+| bench_seconds | 2.929 (target 30) |
+| first_token_ms | 2.84 (target 300) |
+| tokens_per_second | 428.9 (target 50) |
+| growth_seconds | 0.02388 (target 2) |
+| measured_seconds | 2.52 |
+| device | cpu |
+
+On a CUDA device the detail takes this form. **The numbers below are invented to show the format; they were not measured; there is no GPU here:**
+
+```
+trained on the GPU in 31.2 s (at most 90 s); full benchmark suite 24.0 s (at most 30 s); chat first token 9 ms (at most 300 ms); chat throughput 310 tokens/s (at least 50 tokens/s); growth op 0.05 s (at most 2 s); CPU not timed
+```
+
+When a target is missed, the detail starts with `missed: <target>, ...`.
+
+## Notes
+- **G1 now benches the starter** with the full bench. In the real gate that adds about 30 s and 1 more bench, for 13 full benches in total.
+- **The Ruling 6 skip-rule concern from round 0 is still open.** I made no change without a ruling.

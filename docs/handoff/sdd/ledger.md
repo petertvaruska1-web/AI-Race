@@ -278,3 +278,4 @@ Task 20: Ruling (M7, spec §4.12.1): G1 checks every §4.11 first-model target �
 Task 20: Ruling: pull M3 (trim prefixes back to the last whitespace), M4 (narrow damage catches to file-format errors), M5 (move run reuse to experiments/runs.py), M6 (ignore ml/runs/ in .gitignore) into fix round 1; accept M8 (G6 children keep the base shape, as in the full gate) — cost if wrong: none.
 Task 20: fix round 1 dispatched (resume aced838).
 Task 20: fix round 1 implementer (aced838) stopped by a usage limit mid-M7; controller WIP commit 0beb670 of its uncommitted work; resuming it.
+Task 20: fix round 1 completed 2e9d39c on top of WIP 0beb670 (1234 passed, 1 skipped, 125.1s; slow quick gate 50.5s/55.6s).
