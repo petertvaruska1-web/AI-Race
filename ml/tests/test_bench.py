@@ -13,6 +13,7 @@ from airace_ml.evals.scoring import (
     BenchReport,
     CategoryScore,
     ItemResult,
+    constant_reply_floor,
     exact_match,
     extract_answer,
     mc_choice,
@@ -20,7 +21,13 @@ from airace_ml.evals.scoring import (
     normalize_answer,
     pair_correct,
 )
-from airace_ml.evals.suite import CATEGORIES, Suite, build_suite, run_benchmarks
+from airace_ml.evals.suite import (
+    CATEGORIES,
+    CONSTANT_REPLIES,
+    Suite,
+    build_suite,
+    run_benchmarks,
+)
 from airace_ml.infer.lm import ContinuationScore as CS
 from airace_ml.infer.lm import Generation
 from airace_ml.paths import tokenizer_path
@@ -255,6 +262,7 @@ def test_generation_prompts_are_greedy_seeded_and_use_default_stops(tiny_tok):
 
 def test_one_batched_call_per_category(tiny_tok):
     suite = build_suite()
+    generate_calls = {}
     for category in SCORED_CATEGORIES:
         lm = RecordingLM(tiny_tok)
         run_benchmarks(lm, tiny_tok, suite=suite, categories=[category])
@@ -273,7 +281,16 @@ def test_one_batched_call_per_category(tiny_tok):
             for call in lm.calls
         ]
         assert got == expected, category
-    assert len(lengths) == 1  # instruction: one reply length; coding has two (outputs, functions)
+        generate_calls[category] = sum(call[0] == "generate" for call in got)
+    assert generate_calls == {  # coding has two reply lengths (outputs, functions)
+        "language": 0,
+        "reasoning": 0,
+        "pattern": 1,
+        "knowledge": 1,
+        "coding": 2,
+        "consistency": 0,
+        "instruction": 1,
+    }
 
 
 def test_checkers_get_the_full_reply_and_untouched_check_args(tiny_tok, monkeypatch):
@@ -293,9 +310,13 @@ def test_checkers_get_the_full_reply_and_untouched_check_args(tiny_tok, monkeypa
     rep = run_benchmarks(
         answer_key_lm(tiny_tok, suite), tiny_tok, suite=suite, categories=["coding", "instruction"]
     )
-    assert len(seen) == len(checked) == 170
-    for item, original, (reply, args) in zip(checked, before, seen, strict=True):
-        assert reply == item.reference and args is item.check_args and args == original
+    assert len(checked) == 170
+    model_calls = {(reply, id(args)) for reply, args in seen}
+    for item, original in zip(checked, before, strict=True):
+        assert (item.reference, id(item.check_args)) in model_calls  # the full reply, the args
+        assert item.check_args == original  # untouched by any call
+    args_ids = {id(i.check_args) for i in checked}
+    assert all(id(args) in args_ids for _, args in seen)  # never a copy
     assert {"instruction", "not", "min_words"} <= {key for _, args in seen for key in args}
     assert all(s.score == 100 for s in rep.scores.values())
 
@@ -359,10 +380,10 @@ def test_consistency_group_is_right_only_when_every_paraphrase_is(tiny_tok):
     assert s.n == 4 and s.raw == 0.5
     assert s.score == pytest.approx(normalize(0.5, chance)) and s.score == pytest.approx(20)
     assert [(r.item_id, r.category, r.score, r.tags, r.output) for r in rep.items] == [
-        ("a", "consistency", 1.0, ("rel:capital_of",), None),
-        ("b", "consistency", 0.0, ("x", "y", "z"), None),
-        ("c", "consistency", 0.0, ("legs",), None),
-        ("d", "consistency", 1.0, ("y",), None),
+        ("a", "consistency", 1.0, ("rel:capital_of",), "Paris | Paris | Paris"),
+        ("b", "consistency", 0.0, ("x", "y", "z"), "yes | yes | no"),
+        ("c", "consistency", 0.0, ("legs",), "6 | 6 | 6"),
+        ("d", "consistency", 1.0, ("y",), "no | no | no"),
     ]
     # a constant model takes the first option: right only where every paraphrase lists it first
     rep = run_benchmarks(ScriptedLM(tiny_tok), tiny_tok, suite=suite, categories=["consistency"])
@@ -703,10 +724,110 @@ def _reply_budget_overruns(tok: Tok) -> list[tuple[str, str, int, int]]:
 
 
 def test_reply_budget_check_finds_overruns(tiny_tok):  # the check itself, on the test tokenizer
-    overruns = {item_id for item_id, *_ in _reply_budget_overruns(tiny_tok)}
-    assert {"knowledge-0168", "instruction-0004", "instruction-0053"} <= overruns
+    overruns = _reply_budget_overruns(tiny_tok)
+    assert overruns  # the 512-token test vocabulary is too small for some answers
+    items = {i.id: i for its in build_suite().items.values() for i in its}
+    for item_id, text, n, budget in overruns:
+        item = items[item_id]
+        assert budget == item.max_new_tokens and n == len(tiny_tok.encode(text)) > budget
+        accepted = item.answers if isinstance(item, ExactItem) else [item.reference]
+        assert text.strip() in accepted
 
 
 @pytest.mark.skipif(not tokenizer_path().exists(), reason="needs the real tok-v1 tokenizer")
 def test_every_answer_fits_its_reply_budget_with_the_real_tokenizer():
     assert _reply_budget_overruns(Tok.load(tokenizer_path())) == []
+
+
+# -- Fix round 1: the instruction floor (I1) ------------------------------------------------------
+
+
+def _instruction_items():
+    def item(k, prompt, check, args, reference):
+        return CheckItem(f"instruction-{k}", "instruction", prompt, check, args, reference, ())
+
+    return [
+        item(0, "Is ice cold?", "yes_no", {}, "Yes."),
+        item(1, "Is fire cold?", "yes_no", {}, "No."),
+        item(2, "One word: the capital of France?", "one_word", {"not": ["yes", "no"]}, "Paris"),
+        item(3, "Name three colours.", "list_n", {"n": 3}, "red, blue, green"),
+    ]
+
+
+def test_constant_reply_floor_arithmetic():
+    items = _instruction_items()
+    assert constant_reply_floor(items, ["yes"]) == 0.5  # passes both yes-or-no items
+    assert (
+        constant_reply_floor(items, ["Paris"]) == 0.25
+        and constant_reply_floor(items, ["1, 2, 3"]) == 0.25
+    )
+    assert constant_reply_floor(items, ["Paris", "yes", ""]) == 0.5  # the best reply sets it
+    assert constant_reply_floor(items, ["", "maybe so"]) == 0.0
+    assert constant_reply_floor(items, []) == 0.0 and constant_reply_floor([], ["yes"]) == 0.0
+
+
+def test_instruction_chance_is_the_constant_reply_floor(tiny_tok):
+    items = _instruction_items()
+    said = ["Yes.", "Maybe.", "Paris", "red, blue, green"]  # three of four right
+    replies = {
+        tuple(encode_chat(tiny_tok, [("user", i.prompt)], True)): text
+        for i, text in zip(items, said, strict=True)
+    }
+    lm = ScriptedLM(tiny_tok, reply=lambda p: replies[tuple(p)])
+    rep = run_benchmarks(lm, tiny_tok, suite=Suite("t", {"instruction": items}))
+    # "yes", "Yes." or "No." said to every item passes 2 of 4: the floor is 0.5
+    assert rep.scores["instruction"] == CategoryScore(50.0, 0.75, 4)
+    assert [r.score for r in rep.items] == [1.0, 0.0, 1.0, 1.0]
+    rep = run_benchmarks(lm, tiny_tok, suite=Suite("t", {"coding": items}))
+    assert rep.scores["coding"] == CategoryScore(75.0, 0.75, 4)  # coding checks keep chance 0
+
+
+REVIEWER_REPLIES = ("Paris", "True", "0", "None", "A")
+
+
+@pytest.mark.parametrize("reply", [*CONSTANT_REPLIES, *REVIEWER_REPLIES, "best reference"])
+def test_no_constant_reply_beats_the_instruction_floor(tiny_tok, reply):
+    suite = build_suite()
+    items = suite.items["instruction"]
+    if reply == "best reference":  # the reference that passes the most items said to every item
+        reply = max(
+            (i.reference for i in items),
+            key=lambda r: sum(CHECKERS[i.check](r, i.check_args) for i in items),
+        )
+    lm = ScriptedLM(tiny_tok, reply=lambda p: reply)
+    rep = run_benchmarks(lm, tiny_tok, suite=suite, categories=["instruction"])
+    assert rep.scores["instruction"].score == 0 and rep.scores["instruction"].n == 120
+
+
+def test_instruction_floor_follows_the_items_run(tiny_tok):
+    suite = build_suite()
+    first = suite.items["instruction"][:10]
+    best = max(
+        (i.reference for i in first),
+        key=lambda r: sum(CHECKERS[i.check](r, i.check_args) for i in first),
+    )
+    rate = sum(CHECKERS[i.check](best, i.check_args) for i in first) / len(first)
+    assert rate > constant_reply_floor(suite.items["instruction"], [best])  # it does better here
+    lm = ScriptedLM(tiny_tok, reply=lambda p: best)
+    rep = run_benchmarks(
+        lm, tiny_tok, suite=suite, categories=["instruction"], max_items_per_category=10
+    )
+    assert rep.scores["instruction"] == CategoryScore(0.0, rate, 10)
+
+
+def test_instruction_floor_includes_the_fixed_replies(tiny_tok):
+    def item(k, check, args, reference):
+        return CheckItem(f"i-{k}", "instruction", f"Question {k}?", check, args, reference, ())
+
+    items = [  # each reference fails the other items; "ok" passes both one-word items
+        item(0, "one_word", {"not": ["rome", "yes", "no"]}, "Paris"),
+        item(1, "one_word", {"not": ["paris", "yes", "no"]}, "Rome"),
+        item(2, "list_n", {"n": 3}, "red, blue, green"),
+    ]
+    assert constant_reply_floor(items, [i.reference for i in items]) == pytest.approx(1 / 3)
+    rep = run_benchmarks(
+        ScriptedLM(tiny_tok, reply=lambda p: "ok"),
+        tiny_tok,
+        suite=Suite("t", {"instruction": items}),
+    )
+    assert rep.scores["instruction"] == CategoryScore(0.0, 2 / 3, 3)

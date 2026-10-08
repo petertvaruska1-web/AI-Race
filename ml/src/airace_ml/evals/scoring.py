@@ -8,12 +8,14 @@ diverged model) always yields a finite score, never NaN or a division by zero.
 
 import math
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from statistics import fmean
 from typing import Any, Literal
 
 from airace_ml.infer.lm import ContinuationScore
+from airace_ml.skills.checkers import CHECKERS
+from airace_ml.skills.types import CheckItem
 
 MIN_TAG_ITEMS = 10
 """A tag needs at least this many items in a category before :meth:`BenchReport.tag_breakdown`
@@ -76,6 +78,20 @@ def exact_match(
     return bool(said) and said in {normalize_answer(answer) for answer in answers}
 
 
+def constant_reply_floor(items: Sequence[CheckItem], replies: Iterable[str]) -> float:
+    """The best pass rate over ``items`` of any one of ``replies`` given to every item.
+
+    This is the chance level of checks on the form of a reply: a lone "Yes" passes every
+    yes-or-no item without reading it. 0.0 when there are no items or no replies.
+    """
+    if not items:
+        return 0.0
+    best = 0
+    for reply in dict.fromkeys(replies):
+        best = max(best, sum(CHECKERS[item.check](reply, item.check_args) for item in items))
+    return best / len(items)
+
+
 # -- log-probability comparisons -------------------------------------------------------------
 
 
@@ -111,7 +127,8 @@ class ItemResult:
     its paraphrases is).
 
     ``output`` is what the model answered: its reply for a free answer, the option it chose for
-    multiple choice, ``None`` when there is nothing to show (pairs, consistency groups).
+    multiple choice, the options its paraphrases chose (in order, joined by ``" | "``) for a
+    consistency group, and ``None`` for a pair.
     """
 
     item_id: str
@@ -179,6 +196,9 @@ class BenchReport:
     def tag_breakdown(self) -> dict[str, tuple[float, int]]:
         """``"<category>/<tag>"`` -> (mean item score x 100, item count), for every tag with at
         least :data:`MIN_TAG_ITEMS` items in its category.
+
+        The values are raw accuracy (the share of the tag's items that are right, x 100), not
+        normalized against chance like category scores: a tag of 4-option items is at 25 by luck.
 
         Tags are counted per category: the same tag in two categories measures two different
         things (``fam:double`` is a number sequence in ``pattern`` and a function in ``coding``;
