@@ -288,3 +288,8 @@ Task 20: fix round 3 dispatched (resume aced838).
 Task 20: fix round 3 implementer hit a usage limit before any change (reset 13:20 UTC); resumed at 13:20 on a clean tree (61d9a6d).
 Task 20: fix round 3 implemented 93f2737 (1247 passed, 1 skipped, 108.6s; slow quick gate 96.1s).
 Task 20: fix round 3 scoped re-review dispatched (workflow wf_d6fb8e42-8e4).
+Task 20: fix round 3/5 re-review (workflow wf_d6fb8e42-8e4): N-b, N-e, m1-m5 ADDRESSED; m6 ADDRESSED as scoped (G1's *_target tables).
+Task 20: Ruling: m6 was scoped to G1; the same rounding in G4/G5/G6 tables (seed_mean vs min_seed_mean, max_logit_diff vs max_allowed, drop/recovery vs min_drop/min_recovery) is a new cosmetic minor carried into the final-review fix wave — cost if wrong: a just-missed G4-G6 value reads equal to its threshold in the report table (the verdict and detail are still right).
+Task 20: minor (deferred → final review): non-CUDA G1 detail prints the same CPU time with :.1f and with the "digits that miss" format in one sentence; G4-G6 data-table rounding near thresholds.
+Task 20: complete (commits 0243951..93f2737, review clean after 3 fix rounds; steps 6-9 pending on the local GPU machine)
+FINAL REVIEW: starting whole-branch review workflow (c28acd2..HEAD) — 15 subsystem×lens finders + deferred-minor triage + tests-health + spec-coverage + completeness critic + dedup + adversarial verification + synthesis.
