@@ -450,3 +450,99 @@ $ uv run --no-sync ruff format --check src/airace_ml/evals tests/fakes.py tests/
 | 2 | 90.0 | 77.8 | **3.3** (raw 0.275) | 11/40 | 0.0 |
 
 Their overall scores are now 0.76 / 0.57 / 1.88; under ruling 5 they were about 13. Concerns A and A2 are resolved by this ruling. Concern C (the real-tokenizer budget test) is unchanged and still waits on `tok-v1`.
+
+---
+
+## Fix round 1
+
+**Commit:** `10b1edf fix(ml): instruction chance is the best constant-reply pass rate; consistency groups show their choices`. It sits on top of the controller's `276013d`. Not pushed.
+
+### I1: the instruction chance is a measured floor
+
+What changed:
+- **`scoring.constant_reply_floor(items, replies)`**: the best pass rate over `items` of any single reply in `replies` given to every item. It looks up `CHECKERS[item.check](reply, item.check_args)` at call time, dedupes replies, and returns 0.0 when there are no items or no replies.
+- **`suite.CONSTANT_REPLIES`**: `""`, `"yes"`, `"no"`, `"Yes."`, `"No."`, `"ok"`, `"I don't know."`, `"1, 2, 3"`, `"a, b and c"`, `"HELLO"` (the all-caps word) and `"the"` repeated 40 times (the long repeated word).
+- **`_run_category`, instruction category only**:
+  - The floor is computed over the instruction `CheckItem`s actually scored (after `max_items_per_category`).
+  - Its candidates are `CONSTANT_REPLIES` plus every scored item's own `reference`.
+  - Each checked item's chance becomes the floor, so `score = normalize(raw, floor)`.
+  - Item scores stay 0/1, and the checkers are unchanged.
+  - Coding's checked items and all Exact items keep chance 0.
+- **Docs**: the chance table now says "0; instruction: the floor below", and a module-docstring paragraph explains the rule and why it exists.
+
+Measured on the full suite:
+- **Floor = 0.1583 (19/120)**. It is set by a reference used as a constant reply: "ZOOLOGISTS PUT THE CHIMPANZEE IN THE MAMMAL GROUP OF ANIMALS." passes the 18 all-caps items and 1 more. The fixed replies alone reach 0.1417 (17/120).
+- The floor follows the item limits. Over the first 5, 10, 20 and 40 items it is 0.200, 0.300, 0.200 and 0.175.
+- A constant `"Yes"` now scores 0.00 on instruction (raw 0.1417), where the review measured 14.2.
+- The answer key still scores 100.00.
+- A format-cue reader at the review's raw 0.258 would now score about 11.8, not 25.8. Reading the format cue is a legitimate part of instruction following.
+- `run_benchmarks` over the full suite with `ScriptedLM` now takes 235–278 ms, up from 56–87 ms. Computing the floor costs about 0.19 s per full instruction run (115 candidates × 120 items of checker calls).
+
+Covering tests:
+- `test_constant_reply_floor_arithmetic` (unit, 4 hand-made items). "yes" gives 0.5; "Paris" or "1, 2, 3" gives 0.25; the best of several replies is what counts; "" and "maybe so" give 0; no items or no replies give 0.
+- `test_instruction_chance_is_the_constant_reply_floor`: 3 of 4 right against a floor of 0.5 gives `CategoryScore(50.0, 0.75, 4)`. The same items under `coding` give `CategoryScore(75.0, 0.75, 4)`, so coding keeps chance 0.
+- `test_no_constant_reply_beats_the_instruction_floor`, 17 cases over the full instruction set (120 items). Each of the 11 `CONSTANT_REPLIES`, the reviewer's "Paris", "True", "0", "None" and "A", and the best reference used as a constant must score exactly 0.
+  - The best reference is the highest-scoring of all references, so every other reference scores 0 too.
+  - Before the fix these cases failed with scores of 14.17, 3.33 and 11.67.
+- `test_instruction_floor_follows_the_items_run`: with `max_items_per_category=10`, the best reference among those 10 scores `CategoryScore(0.0, 0.3, 10)`. A floor computed over all 120 items would give it a positive score.
+- `test_instruction_floor_includes_the_fixed_replies`: in a 3-item suite where every reference fails the others, a constant "ok" (raw 2/3) must score 0. This needs the fixed replies; the references alone give 1/3.
+- `test_answer_key_scores_100`: instruction is still 100.
+- `test_checkers_get_the_full_reply_and_untouched_check_args` was restructured, because the floor now also calls the checkers. It checks that every item's own reply reaches its checker with the identical `check_args` object, that all args stay unmodified, and that no call ever gets a copy.
+
+### M1: `tag_breakdown()` values are raw accuracy
+
+The docstring now says the values are raw accuracy (the share of a tag's items that are right, × 100), not normalized against chance like category scores. For example, a tag of 4-option items sits at 25 by luck.
+
+### M2: consistency groups show their choices
+
+- A consistency group's `ItemResult.output` is now the members' chosen option texts, in member order, joined by `" | "`, e.g. `"yes | yes | no"`.
+- The `ItemResult` docstring is updated.
+- Covered by `test_consistency_group_is_right_only_when_every_paraphrase_is`, which expects `"Paris | Paris | Paris"`, `"yes | yes | no"`, `"6 | 6 | 6"` and `"no | no | no"`.
+
+### M4: two fragile tests fixed
+
+- `test_one_batched_call_per_category` no longer asserts on the leftover loop variable. It records the generate calls per category and asserts the whole map: `{language 0, reasoning 0, pattern 1, knowledge 1, coding 2, consistency 0, instruction 1}`.
+- `test_reply_budget_check_finds_overruns` now asserts a property instead of tokenizer-dependent ids. It must find at least one overrun, and every reported overrun must name a real item, carry its `max_new_tokens`, really exceed it, and quote one of that item's accepted answers or its reference.
+
+### Mutation check (11, all caught)
+
+| Mutation | Caught by |
+|---|---|
+| No floor (chance 0) | 16 failures |
+| Floor applied to coding too | the coding assertion |
+| Fixed replies only | the best-reference and limits tests |
+| References only | `test_instruction_floor_includes_the_fixed_replies`; the fix round's first version missed this, so I added that test |
+| Floor computed over the whole suite instead of the items run | the limits test |
+| Mean instead of best | the floor tests |
+| First reply only | the floor tests |
+| Consistency output dropped | the consistency arithmetic test |
+| Consistency output reordered | the consistency arithmetic test |
+
+Two of the 11 were rewrites of a malformed and a surviving first attempt, so the table has 9 rows.
+
+### Commands and output
+
+```
+$ cd ml && uv run --no-sync pytest tests/test_bench.py -q     # RED 1: tests written first
+E   ImportError: cannot import name 'constant_reply_floor' from 'airace_ml.evals.scoring'
+1 error in 0.19s
+$ uv run --no-sync pytest tests/test_bench.py -q              # RED 2: floor function added, runner not wired
+E       assert (14.166666666666666 == 0)        # "yes", "no", "Yes.", "No.", "ok", "HELLO", "Paris", "True", "0", "None", "A"
+E       assert (3.3333333333333335 == 0)        # "1, 2, 3", "a, b and c"
+E       assert (11.666666666666666 == 0)        # best reference
+FAILED tests/test_bench.py::test_consistency_group_is_right_only_when_every_paraphrase_is   # M2
+FAILED tests/test_bench.py::test_instruction_chance_is_the_constant_reply_floor
+FAILED tests/test_bench.py::test_no_constant_reply_beats_the_instruction_floor[...]   (14 cases)
+16 failed, 73 passed, 1 skipped in 3.92s
+$ uv run --no-sync pytest tests/test_bench.py -q -rs          # GREEN
+SKIPPED [1] tests/test_bench.py:737: needs the real tok-v1 tokenizer
+91 passed, 1 skipped in 8.49s
+$ uv run --no-sync pytest
+=========== 951 passed, 1 skipped, 4 deselected in 73.58s (0:01:13) ============
+$ uv run --no-sync ruff check .
+All checks passed!
+$ uv run --no-sync ruff format --check src/airace_ml/evals tests/fakes.py tests/test_bench.py
+5 files already formatted
+```
+
+The default suite takes 73.6 s, well under 3 minutes. `test_bench.py` grew from 2.9 s to 8.5 s, mostly from the 17 full-set constant-reply runs at about 0.2 s each.
