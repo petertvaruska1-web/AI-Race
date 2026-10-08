@@ -18,7 +18,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
 from airace_ml.evals.suite import CATEGORIES
-from airace_ml.experiments.gate import GateOutcome
+from airace_ml.experiments.gate import GateOutcome, stopped_prefix
 
 MAX_EXCHANGES = 10  # transcript exchanges shown per criterion
 TRANSCRIPT_CHARS = 300  # longest prompt or reply shown
@@ -60,6 +60,21 @@ def _format(value: object) -> str:
     return str(value)
 
 
+def _near(value: object, target: object) -> str:
+    """``value`` with the usual 4 significant digits, or as many more as it takes to see on which
+    side of ``target`` it lies (300.04 must not read as its 300 target)."""
+    if not all(isinstance(v, int | float) and not isinstance(v, bool) for v in (value, target)):
+        return _format(value)
+    if not (math.isfinite(value) and math.isfinite(target)):
+        return _format(value)
+    side = (value > target) - (value < target)
+    for digits in range(4, 18):
+        text = f"{value:.{digits}g}"
+        if (float(text) > target) - (float(text) < target) == side:
+            return text
+    return repr(value)
+
+
 def _flatten(data: Mapping, prefix: str = "") -> Iterable[tuple[str, object]]:
     for key, value in data.items():
         name = f"{prefix}{key}"
@@ -78,8 +93,14 @@ def _table(header: Sequence[str], rows: Iterable[Sequence[str]]) -> list[str]:
 def _summary(outcome: GateOutcome) -> list[str]:
     passed = sum(c.passed for c in outcome.criteria)
     lines = [f"**{passed} of {len(outcome.criteria)} criteria passed.**", ""]
+    # A stopped-run prefix gets its own room, so it never cuts the detail it opens.
     rows = [
-        (cell(c.id), cell(c.title), "PASS" if c.passed else "FAIL", cell(c.detail))
+        (
+            cell(c.id),
+            cell(c.title),
+            "PASS" if c.passed else "FAIL",
+            cell(c.detail, CELL_CHARS + len(stopped_prefix(c.unfinished_runs))),
+        )
         for c in outcome.criteria
     ]
     return lines + _table(("ID", "Criterion", "Result", "Detail"), rows)
@@ -91,7 +112,8 @@ def _criteria(outcome: GateOutcome) -> list[str]:
         lines += ["", f"### {cell(c.id)} {cell(c.title)}: {'PASS' if c.passed else 'FAIL'}", ""]
         lines.append(cell(c.detail, limit=4 * CELL_CHARS))
         if c.unfinished_runs:
-            lines += ["", "**Cannot pass:** " + cell(_stopped(c.unfinished_runs, outcome.raw))]
+            stopped = _stopped(c.unfinished_runs, outcome.raw)
+            lines += ["", "**Cannot pass:** " + cell(stopped, limit=4 * CELL_CHARS)]
         if c.data:
             lines += ["", *_data_table(c.data)]
     return lines
@@ -122,7 +144,9 @@ def _data_table(data: Mapping) -> list[str]:
             [cell(key), *(cell(group.get(name)) for name in names)] for key, group in data.items()
         ]
         return _table(["", *(cell(name) for name in names)], rows)
-    return _table(("Measure", "Value"), ((cell(k), cell(v)) for k, v in _flatten(data)))
+    flat = dict(_flatten(data))
+    rows = ((cell(k), cell(_near(v, flat.get(f"{k}_target")))) for k, v in flat.items())
+    return _table(("Measure", "Value"), rows)
 
 
 def _runs(outcome: GateOutcome) -> list[str]:

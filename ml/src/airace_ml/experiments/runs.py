@@ -35,19 +35,15 @@ GATE_RUN_FILE = "gate_run.json"
 PACKAGE_ROOT = Path(airace_ml.__file__).resolve().parent
 # What a trained model depends on, and what a benchmark or fingerprint result depends on. A test
 # walks the real imports of both groups, so a module they come to depend on cannot slip through.
-TRAINING_SOURCES: tuple[str, ...] = ("train", "model", "data", "tokenizer.py")
+# infer/ is in both: the trainer samples telemetry text with it, and that sampling is part of the
+# training time G1 judges.
+TRAINING_SOURCES: tuple[str, ...] = ("train", "model", "data", "tokenizer.py", "infer")
 MEASURING_SOURCES: tuple[str, ...] = ("evals", "personality", "infer", "skills", "minipy")
 # Modules either group imports that no digest holds, and why that is safe.
 UNDIGESTED: dict[str, str] = {
     "__init__.py": "the empty package marker",
     "paths.py": "where generated files live, never what they hold",
     "device.py": "which device computes; the device type is part of every run's key",
-}
-# Measuring code the trainer imports without it shaping what a model learns. A change to it
-# re-measures but does not re-train, which is right for these.
-TRAINING_MAY_USE: dict[str, str] = {
-    "infer/__init__.py": "the package marker of infer/lm.py",
-    "infer/lm.py": "the trainer only samples text with it for telemetry; it never updates weights",
 }
 
 

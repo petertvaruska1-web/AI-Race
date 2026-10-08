@@ -729,7 +729,7 @@ def test_a_criterion_fails_and_says_so_when_a_run_it_uses_stopped_early():
     stopped = _run("g5-grown", "unstable_stopped", steps=3)
     c = gate.require_completed(good, [_run("starter"), stopped, stopped])
     assert not c.passed and c.id == "G5" and c.unfinished_runs == ["g5-grown"]
-    assert c.detail == "stopped early: g5-grown (3 of 6 steps). all fine"
+    assert c.detail == "stopped early: g5-grown. all fine"
     assert c.data == {"x": 1.0}  # the measurements stay as they were
     assert good.passed and good.unfinished_runs == []  # the original is not changed
 
@@ -1010,8 +1010,9 @@ def test_a_run_that_stopped_early_fails_every_criterion_that_uses_it(fake_gate, 
     }
     for c in outcome.criteria:
         assert c.detail.startswith("stopped early: ") == (c.id in failing)
+        prefix = c.detail.split(". ", 1)[0]
         for name in stopped:
-            named = f"{name} (2 of 4 steps)" in c.detail and name in c.unfinished_runs
+            named = name in prefix.split(": ", 1)[-1].split(", ") and name in c.unfinished_runs
             assert named == (c.id in users[name]), (c.id, name, c.detail)
     for name in stopped:
         assert outcome.raw["runs"][name]["status"] == "unstable_stopped"
@@ -1078,9 +1079,8 @@ def _module_file(name: str) -> Path | None:
     return None
 
 
-def _imported_modules(path: Path) -> set[Path]:
-    """Every airace_ml module file that ``path`` imports (anywhere in it, under any condition),
-    with the packages they sit in, which importing them runs too."""
+def _import_names(path: Path) -> set[str]:
+    """Every module name ``path`` imports, anywhere in it and under any condition."""
     names = set()
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
         if isinstance(node, ast.Import):
@@ -1088,8 +1088,14 @@ def _imported_modules(path: Path) -> set[Path]:
         elif isinstance(node, ast.ImportFrom):
             assert node.level == 0, f"{path} uses a relative import; resolve it here first"
             names |= {node.module} | {f"{node.module}.{alias.name}" for alias in node.names}
+    return names
+
+
+def _imported_modules(path: Path) -> set[Path]:
+    """Every airace_ml module file that ``path`` imports (anywhere in it, under any condition),
+    with the packages they sit in, which importing them runs too."""
     files = set()
-    for name in names:
+    for name in _import_names(path):
         parts = name.split(".")
         if parts[0] == "airace_ml":
             for k in range(1, len(parts) + 1):
@@ -1122,11 +1128,31 @@ def test_code_digests_cover_everything_that_code_imports():
     assert "minipy/interpreter.py" in reached  # the walk follows real imports
     for module in reached:  # a training change re-trains and so re-measures everything
         assert _covered(module, (*training, *measuring)) or module in gate_runs.UNDIGESTED, module
+    # infer/ is training code too: telemetry samples are part of the timed training run.
+    assert "infer" in training and "infer/lm.py" in _import_closure(("train",))
     for module in _import_closure(training):  # a measuring change does not re-train
-        allowed = module in gate_runs.UNDIGESTED or module in gate_runs.TRAINING_MAY_USE
-        assert _covered(module, training) or allowed, module
-    for module in (*gate_runs.UNDIGESTED, *gate_runs.TRAINING_MAY_USE):
+        assert _covered(module, training) or module in gate_runs.UNDIGESTED, module
+    for module in gate_runs.UNDIGESTED:
         assert (gate_runs.PACKAGE_ROOT / module).is_file(), module  # no stale exemptions
+    # Neither group may depend on the content build, which no digest covers.
+    for module in _import_closure((*training, *measuring)):
+        names = _import_names(gate_runs.PACKAGE_ROOT / module)
+        assert not any(name.split(".")[0] == "airace_content" for name in names), module
+
+
+def test_the_import_walk_sees_every_kind_of_import(tmp_path):
+    source = tmp_path / "m.py"
+    source.write_text(
+        "import airace_content.build\n"
+        "def f():\n"
+        "    from airace_content.sources import fixture_fetch\n"
+        "    from airace_ml.minipy import interpreter\n",
+        encoding="utf-8",
+    )
+    names = _import_names(source)
+    assert {"airace_content.build", "airace_content.sources.fixture_fetch"} <= names
+    found = {p.relative_to(gate_runs.PACKAGE_ROOT).as_posix() for p in _imported_modules(source)}
+    assert found == {"__init__.py", "minipy/__init__.py", "minipy/interpreter.py"}
 
 
 def test_a_stopped_run_keeps_grouped_measurements_grouped_and_the_summary_short(tmp_path):
@@ -1140,7 +1166,7 @@ def test_a_stopped_run_keeps_grouped_measurements_grouped_and_the_summary_short(
     write_gate_report(outcome, tmp_path / "r.md")
     text = (tmp_path / "r.md").read_text(encoding="utf-8")
     summary = next(line for line in text.splitlines() if line.startswith("| G3 |"))
-    assert summary.startswith("| G3 | Differentiation | FAIL | stopped early: g3-code-s2 (2 of 6")
+    assert summary.startswith("| G3 | Differentiation | FAIL | stopped early: g3-code-s2. creat")
     assert "|  | category | mean | leads |" in text  # still one row per mix
     assert "| code | coding | 50 | yes |" in text and "unfinished" not in text
     assert (
@@ -1153,6 +1179,9 @@ def test_structurally_wrong_judge_or_index_files_ask_for_a_rebuild(tmp_path, mon
     monkeypatch.setattr(gate.Judge, "load", lambda *a, **k: pytest.fail("must not get this far"))
     for calibration, meta in (
         ({"p10": 1.0}, None),  # an out-of-date calibration.json
+        ({"creative_p10": "low", "creative_p90": 2.0, "conv_reply_p90": 3.0}, None),
+        ({"creative_p10": float("nan"), "creative_p90": 2.0, "conv_reply_p90": 3.0}, None),
+        ({"creative_p10": 1.0, "creative_p90": True, "conv_reply_p90": 3.0}, None),
         ([1.0, 2.0, 3.0], None),
         (None, {"format": 1, "tokenizer": "tok-v1"}),  # meta.json without its other fields
         (None, ["not", "a", "meta"]),
@@ -1213,3 +1242,94 @@ def test_a_just_missed_target_shows_the_digits_that_miss_it():
     met = eval_speed(90, None, first_token_ms=300, tokens_per_second=50, growth_seconds=1.996)
     assert met.passed and "chat first token 300 ms" in met.detail  # met values keep their form
     assert "growth op 2.00 s" in met.detail
+
+
+# -- fix round 3 -------------------------------------------------------------------------------------
+
+
+def _realistic_g3_detail() -> str:
+    """A G3 detail of the length the real gate writes (three seeds, four mixes)."""
+    means = _means()
+    for t in means:
+        for c in means[t]:
+            means[t][c] += 0.37  # two decimals' worth of realistic digits
+    scores = _mix_scores(means, offsets=(-1.25, 0.5, 1.75))
+    detail = eval_differentiation(scores).detail
+    assert 330 <= len(detail) <= 400, len(detail)
+    return detail
+
+
+@pytest.mark.parametrize(
+    "stopped", [("g3-conversations-s3",), ("g3-conversations-s3", "g3-conversations-s2")]
+)
+def test_summary_keeps_the_whole_original_detail_beside_the_stopped_runs(tmp_path, stopped):
+    detail = _realistic_g3_detail()
+    g3 = GateCriterion("G3", "Differentiation", True, detail, {"x": 1.0})
+    runs = [_run(name, "unstable_stopped", steps=256, planned=512) for name in stopped]
+    c = gate.require_completed(g3, runs)
+    assert c.detail == f"stopped early: {', '.join(stopped)}. {detail}"  # names only
+    write_gate_report(GateOutcome([c], {}, {}), tmp_path / "r.md")
+    text = (tmp_path / "r.md").read_text(encoding="utf-8")
+    summary = next(line for line in text.splitlines() if line.startswith("| G3 |"))
+    assert summary == f"| G3 | Differentiation | FAIL | {c.detail} |"  # nothing cut
+    assert "…" not in summary
+
+
+def test_cannot_pass_line_names_every_stopped_run_in_full(tmp_path):
+    names = [f"g3-{t}-s{s}" for t in TARGET_CATEGORY for s in (1, 2)]
+    runs = {n: {"status": "unstable_stopped", "steps": 250, "planned_steps": 512} for n in names}
+    g3 = GateCriterion("G3", "Differentiation", True, "ok", {"x": 1.0})
+    stopped = [_run(n, "unstable_stopped", steps=250, planned=512) for n in names]
+    write_gate_report(
+        GateOutcome([gate.require_completed(g3, stopped)], {}, {"runs": runs}), tmp_path / "r.md"
+    )
+    text = (tmp_path / "r.md").read_text(encoding="utf-8")
+    line = next(line for line in text.splitlines() if line.startswith("**Cannot pass:**"))
+    assert "…" not in line and line.endswith("did not get its full compute.")
+    assert all(
+        f"{n} did not complete (unstable\\_stopped after 250 of 512 steps)" in line for n in names
+    )
+
+
+def test_speed_off_cuda_shows_the_digits_that_miss_a_target():
+    c = speed_criterion(
+        "cpu",
+        3.0,
+        480.04,
+        bench_seconds=30.04,
+        first_token_ms=300.4,
+        tokens_per_second=49.96,
+        growth_seconds=2.0004,
+    )
+    assert not c.passed and c.detail.startswith(NO_CUDA_DETAIL)
+    for shown in (
+        "trained on the CPU in 480.04 s (at most 480 s)",
+        "full benchmark suite 30.04 s (at most 30 s)",
+        "chat first token 300.4 ms (at most 300 ms)",
+        "chat throughput 49.96 tokens/s (at least 50 tokens/s)",
+        "growth op 2.0004 s (at most 2 s)",
+    ):
+        assert shown in c.detail, c.detail
+    met = speed_criterion("cpu", 3.0, 12.34, first_token_ms=12.0)
+    assert "trained on the CPU in 12.3 s (at most 480 s)" in met.detail
+    assert "chat first token 12 ms (at most 300 ms)" in met.detail
+
+
+def test_unmeasurable_timings_are_listed_by_their_plain_names():
+    c = eval_speed(math.nan, math.inf, first_token_ms=math.nan)
+    assert not c.passed
+    assert c.detail == "not a finite number: GPU training, CPU training, chat first token"
+
+
+def test_report_shows_the_digits_that_tell_a_value_from_its_target(tmp_path):
+    c = eval_speed(60, None, first_token_ms=300.04, tokens_per_second=49.996, growth_seconds=1.9999)
+    write_gate_report(GateOutcome([c], {}, {}), tmp_path / "r.md")
+    text = (tmp_path / "r.md").read_text(encoding="utf-8")
+    assert "| first\\_token\\_ms | 300.04 |" in text
+    assert "| tokens\\_per\\_second | 49.996 |" in text
+    assert "| growth\\_seconds | 1.9999 |" in text
+    assert "| first\\_token\\_ms\\_target | 300 |" in text
+    assert "| gpu\\_seconds | 60 |" in text  # far from its target: the usual 4 digits
+    exact = eval_speed(60, None, first_token_ms=300.0)
+    write_gate_report(GateOutcome([exact], {}, {}), tmp_path / "exact.md")
+    assert "| first\\_token\\_ms | 300 |" in (tmp_path / "exact.md").read_text(encoding="utf-8")

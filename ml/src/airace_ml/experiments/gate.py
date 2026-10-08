@@ -238,6 +238,13 @@ SPEED_TARGETS: tuple[SpeedTarget, ...] = (
 )
 
 
+def _shown(target: SpeedTarget, value: float) -> str:
+    """``value`` against ``target``, with the digits it takes to see whether it misses."""
+    bound = "at least" if target.at_least else "at most"
+    missed = not target.met(value)
+    return f"{target.show(value, missed=missed)} ({bound} {target.limit:g} {target.unit})"
+
+
 def _speed_data(values: Mapping[str, float | None]) -> dict:
     data: dict = {}
     for target in SPEED_TARGETS:
@@ -270,20 +277,18 @@ def eval_speed(
     }
     data = _speed_data(values)
     broken = [
-        t.label
+        t.name or t.label
         for t in SPEED_TARGETS
         if (values[t.key] is not None or t.key == "gpu_seconds") and data[t.key] is None
     ]
     if broken:
-        detail = f"{', '.join(broken)}: a measurement is not a finite number"
-        return _criterion("G1", False, detail, data)
+        return _criterion("G1", False, f"not a finite number: {', '.join(broken)}", data)
     parts, missed = [], []
     for t in SPEED_TARGETS:
         value = data[t.key]
         if value is None:
             continue
-        bound = "at least" if t.at_least else "at most"
-        parts.append(f"{t.show(value, missed=not t.met(value))} ({bound} {t.limit:g} {t.unit})")
+        parts.append(_shown(t, value))
         if not t.met(value):
             missed.append(t.name or t.label)
     if data["cpu_seconds"] is None:
@@ -307,29 +312,29 @@ def speed_criterion(
     data.update({"measured_seconds": measured, "device": device_type})
     took = "an unmeasurable time" if measured is None else f"{measured:.1f} s"
     shown = [f"the first model trained in {took} on the {device_type.upper()}"]
-    for t in SPEED_TARGETS[2:]:
-        if data[t.key] is not None:
-            shown.append(t.show(data[t.key]))
-    detail = f"{NO_CUDA_DETAIL} ({'; '.join(shown)})"
-    if data["cpu_seconds"] is not None:
-        detail += f"; CPU {data['cpu_seconds']:.1f} s (at most {CPU_SECONDS_LIMIT:g} s)"
-    return _criterion("G1", False, detail, data)
+    shown += [_shown(t, data[t.key]) for t in SPEED_TARGETS[1:] if data[t.key] is not None]
+    return _criterion("G1", False, f"{NO_CUDA_DETAIL} ({'; '.join(shown)})", data)
+
+
+def stopped_prefix(names: Sequence[str]) -> str:
+    """How a criterion's detail opens when runs it used stopped early: their names only (how far
+    each got is in the report's Runs table and its "Cannot pass" line)."""
+    return f"stopped early: {', '.join(names)}. " if names else ""
 
 
 def require_completed(criterion: GateCriterion, runs: Sequence[GateRun]) -> GateCriterion:
     """``criterion`` unchanged if every run it used completed. Otherwise a failed copy (its arms
     did not get the compute they were meant to, so the comparison does not hold) that lists
-    those runs in ``unfinished_runs`` and opens its detail with a short ``stopped early: <run>
-    (<steps> of <planned> steps).``; its measurements are left as they were."""
-    unfinished = list({r.name: r for r in runs if r.status != "completed"}.values())
-    if not unfinished:
+    those runs in ``unfinished_runs`` and opens its detail with :func:`stopped_prefix`; its
+    measurements are left as they were."""
+    names = list(dict.fromkeys(r.name for r in runs if r.status != "completed"))
+    if not names:
         return criterion
-    named = ", ".join(f"{r.name} ({r.steps} of {r.planned_steps} steps)" for r in unfinished)
     return replace(
         criterion,
         passed=False,
-        detail=f"stopped early: {named}. {criterion.detail}",
-        unfinished_runs=[r.name for r in unfinished],
+        detail=stopped_prefix(names) + criterion.detail,
+        unfinished_runs=names,
     )
 
 
