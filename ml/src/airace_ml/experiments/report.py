@@ -2,7 +2,8 @@
 
 It holds a summary of the seven criteria, each criterion's measurements, sample transcripts for
 human review, the four differentiation models' benchmark scores side by side, what each model's
-personality is measured to be, and an "Iterations" section that later attempts fill in.
+personality is measured to be, every run the gate trained (and whether it completed), and an
+"Iterations" section that later attempts fill in.
 
 Model text is arbitrary (an untrained model writes anything), so every table cell is escaped:
 Markdown and HTML punctuation is backslash-escaped, line breaks become ``<br>``, and transcript
@@ -106,6 +107,33 @@ def _data_table(data: Mapping) -> list[str]:
     return _table(("Measure", "Value"), ((cell(k), cell(v)) for k, v in _flatten(data)))
 
 
+def _runs(outcome: GateOutcome) -> list[str]:
+    runs = outcome.raw.get("runs") or {}
+    if not runs:
+        return []
+    lines = [
+        "## Runs",
+        "",
+        "Every model the gate trained. A run that did not complete fails each criterion that uses it.",
+        "",
+    ]
+    rows = []
+    for name, run in runs.items():
+        steps = f"{_format(run.get('steps'))}/{_format(run.get('planned_steps'))}"
+        rows.append(
+            (
+                cell(name),
+                cell(run.get("status")),
+                cell(steps),
+                cell(run.get("wall_seconds")),
+                cell(run.get("heldout_loss")),
+                cell(run.get("reused")),
+            )
+        )
+    header = ("Run", "Status", "Steps", "Wall time (s)", "Held-out loss", "Reused")
+    return lines + _table(header, rows)
+
+
 def _transcripts(outcome: GateOutcome) -> list[str]:
     if not outcome.transcripts:
         return []
@@ -190,7 +218,7 @@ def write_gate_report(outcome: GateOutcome, path: Path) -> None:
     """Write ``outcome`` to ``path`` as Markdown (UTF-8), creating its folder if needed."""
     raw = outcome.raw or {}
     lines = ["# M1 feasibility gate", "", *_setup(raw), "## Summary", "", *_summary(outcome)]
-    for section in (_criteria, _transcripts, _benchmarks, _personalities):
+    for section in (_criteria, _runs, _transcripts, _benchmarks, _personalities):
         part = section(outcome)
         if part:
             lines += ["", *part]

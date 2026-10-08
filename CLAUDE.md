@@ -36,7 +36,7 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 - Slow tests (incl. the quick feasibility gate): `cd ml && python -m uv run pytest -m slow`
 - Build corpora + tokenizer: `cd ml && python -m uv run airace-content build --scale {tiny,full}`
 - ML CLI (`--help` on each): `cd ml && python -m uv run airace-ml train|chat|bench|fingerprint|build-novelty-index|build-judge|gate`
-- Feasibility gate: `airace-ml gate --out runs/gate-1 [--cpu-speed] [--quick]` (needs `build-novelty-index` and `build-judge` first). Rerunning reuses finished runs; after a training-code change use a fresh `--out`.
+- Feasibility gate: `airace-ml gate --out runs/gate-1 [--cpu-speed] [--quick]` (needs `build-novelty-index` and `build-judge` first). Rerunning it reuses every run and measurement whose data and code are unchanged, and redoes the rest.
 - (More commands are added here as they come to exist.)
 
 ## Conventions

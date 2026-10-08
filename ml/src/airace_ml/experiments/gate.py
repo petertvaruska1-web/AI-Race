@@ -2,8 +2,11 @@
 a game, and the experiments that measure them.
 
 ==  ===============  =========================================================================
-G1  Speed            the first model (balanced mix, starter shape and budget) trains in at most
-                     90 s on the GPU, and, when asked, in at most 8 minutes on the CPU
+G1  Speed            the first model (balanced mix, starter shape and budget) meets every
+                     first-model target of spec 4.11 on the GPU: it trains in at most 90 s (and,
+                     when asked, in at most 8 minutes on the CPU), its full benchmark takes at
+                     most 30 s, its first chat token at most 300 ms at 50 tokens/s or more, and
+                     growing it at most 2 s
 G2  Legibility       at least 70% of that model's replies to 20 probe prompts are well-formed
 G3  Differentiation  four contrasting mixes (story, code, fact and conversation heavy) at equal
                      compute each lead their benchmark category by more than twice the seed
@@ -21,26 +24,25 @@ G7  Preparation      thorough cleaning lowers the garbled-word rate, and fact-ch
 The evaluators (``eval_*``) are pure: they turn measurements into a :class:`GateCriterion` and
 never raise, whatever they are given. Missing, non-finite or degenerate measurements (no seed
 pairs, a single seed, nothing to lower) fail with a detail that says why, and ``data`` holds only
-finite numbers (``None`` where nothing could be measured).
+finite numbers (``None`` where nothing could be measured). A criterion that uses a run which
+stopped early (unstable) fails and names that run (:func:`require_completed`): its arms did not
+get the compute they were meant to.
 
 :func:`run_gate` trains every run under ``out_dir/runs/<name>`` and is safe to stop and start
-again. A run that finished is reused when its ``gate_run.json`` matches the run's config, the
-training data, the device and the exact parent model it continued from; an interrupted run
-carries on from its last saved point. Benchmark and fingerprint results are cached beside each
-run and reused while the run, the judge and the novelty index are unchanged. A change to the
-training code is not detected: measure it in a fresh ``out_dir``.
+again (:mod:`airace_ml.experiments.runs`). A run that finished is reused while its config, the
+training data, the training code, the device and the exact parent model it continued from are
+unchanged; an interrupted run carries on from its last saved point. Benchmark and fingerprint
+results are cached beside each run and reused while the run, the measuring code, the judge and
+the novelty index are unchanged. So the same command can simply be run again after any change.
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
 import math
 import numbers
-import os
 import statistics
 import time
-import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, replace
 from itertools import combinations
@@ -65,7 +67,7 @@ from airace_ml.evals.creativity import words
 from airace_ml.evals.judge import CALIBRATION_NAME, Judge, is_well_formed
 from airace_ml.evals.novelty import NoveltyIndex
 from airace_ml.evals.scoring import mean_logprob
-from airace_ml.evals.suite import CATEGORIES, SUITE_VERSION, run_benchmarks
+from airace_ml.evals.suite import CATEGORIES, SUITE_VERSION, build_suite, run_benchmarks
 from airace_ml.experiments.configs import (
     BALANCED_MIX,
     FULL_SCALE,
@@ -74,8 +76,17 @@ from airace_ml.experiments.configs import (
     GateScale,
     mix_heavy,
 )
+from airace_ml.experiments.runs import (
+    MEASURING_SOURCES,
+    TRAINING_SOURCES,
+    GateRun,
+    GateRuns,
+    _cached,
+    _plain,
+    source_digest,
+)
 from airace_ml.infer.lm import LanguageModel, TorchLM
-from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME, load_checkpoint
+from airace_ml.model.checkpoint import load_checkpoint
 from airace_ml.model.growth import grow
 from airace_ml.model.shape import ModelShape
 from airace_ml.model.transformer import Transformer
@@ -89,10 +100,8 @@ from airace_ml.personality.fingerprint import (
 )
 from airace_ml.skills.facts import FalseFactPlan
 from airace_ml.skills.kb import KB, load_kb
-from airace_ml.tokenizer import Tok, encode_doc
+from airace_ml.tokenizer import Tok, encode_chat, encode_doc
 from airace_ml.train.config import TrainRunConfig
-from airace_ml.train.events import Instability, Progress, TrainEvent, json_safe
-from airace_ml.train.trainer import can_resume, train_run
 
 TITLES: dict[str, str] = {
     "G1": "Speed",
@@ -131,13 +140,13 @@ MEASURE_SEED = 0  # benchmarks, fingerprints and the choice of held-out prompts
 G3_TRANSCRIPT_PROBES: tuple[str, ...] = ("creative-10", "factual-01")
 
 RUNS_DIR = "runs"
-GATE_RUN_FILE = "gate_run.json"
 BENCH_FILE = "gate_bench.json"
 FINGERPRINT_FILE = "gate_fingerprint.json"
 KNOWN_VOCAB_FILE = "known_vocab.txt"
 FALSE_FACTS_FILE = "false_facts.json"
-# Everything that can be wrong with a file a crash left half-written or another version made.
-_DAMAGED = (OSError, ValueError, KeyError, TypeError, EOFError, RuntimeError, SafetensorError)
+# A file that cannot be read or does not parse. Only these blame (and ask to rebuild) a file;
+# anything else (a CUDA error, a bug) propagates.
+_LOAD_ERRORS = (OSError, ValueError, EOFError, SafetensorError)
 
 
 class GateSetupError(ValueError):
@@ -184,49 +193,130 @@ def _criterion(gid: str, passed: bool, detail: str, data: dict) -> GateCriterion
     return GateCriterion(gid, TITLES[gid], passed, detail, data)
 
 
-def eval_speed(gpu_seconds: float, cpu_seconds: float | None) -> GateCriterion:
-    """G1: the first model trains in at most 90 s on the GPU and, if the CPU was timed too, in at
-    most 480 s there."""
-    gpu = _finite(gpu_seconds)
-    cpu = None if cpu_seconds is None else _finite(cpu_seconds)
-    data = {
-        "gpu_seconds": gpu,
-        "gpu_limit": GPU_SECONDS_LIMIT,
-        "cpu_seconds": cpu,
-        "cpu_limit": CPU_SECONDS_LIMIT,
+@dataclass(frozen=True)
+class SpeedTarget:
+    """One first-model target of spec 4.11: ``key`` names the measurement, which must be at most
+    ``limit`` (at least ``limit`` when ``at_least``)."""
+
+    key: str
+    label: str
+    unit: str
+    limit: float
+    digits: int
+    at_least: bool = False
+
+    def show(self, value: float) -> str:
+        return f"{self.label} {value:.{self.digits}f} {self.unit}"
+
+    def met(self, value: float) -> bool:
+        return value >= self.limit if self.at_least else value <= self.limit
+
+
+SPEED_TARGETS: tuple[SpeedTarget, ...] = (
+    SpeedTarget("gpu_seconds", "trained on the GPU in", "s", GPU_SECONDS_LIMIT, 1),
+    SpeedTarget("cpu_seconds", "trained on the CPU in", "s", CPU_SECONDS_LIMIT, 1),
+    SpeedTarget("bench_seconds", "full benchmark suite", "s", 30.0, 1),
+    SpeedTarget("first_token_ms", "chat first token", "ms", 300.0, 0),
+    SpeedTarget("tokens_per_second", "chat throughput", "tokens/s", 50.0, 0, at_least=True),
+    SpeedTarget("growth_seconds", "growth op", "s", 2.0, 2),
+)
+
+
+def _speed_data(values: Mapping[str, float | None]) -> dict:
+    data: dict = {}
+    for target in SPEED_TARGETS:
+        given = values.get(target.key)
+        data[target.key] = None if given is None else _finite(given)
+        data[f"{target.key}_target"] = target.limit
+    return data
+
+
+def eval_speed(
+    gpu_seconds: float,
+    cpu_seconds: float | None,
+    *,
+    bench_seconds: float | None = None,
+    first_token_ms: float | None = None,
+    tokens_per_second: float | None = None,
+    growth_seconds: float | None = None,
+) -> GateCriterion:
+    """G1: every first-model target of spec 4.11 that was measured is met (:data:`SPEED_TARGETS`):
+    training in at most 90 s on the GPU (and 480 s on the CPU, if timed), the full benchmark in
+    at most 30 s, a first chat token in at most 300 ms at 50 tokens/s or more, and growth in at
+    most 2 s. A measurement not given is not checked; the GPU training time is required."""
+    values = {
+        "gpu_seconds": gpu_seconds,
+        "cpu_seconds": cpu_seconds,
+        "bench_seconds": bench_seconds,
+        "first_token_ms": first_token_ms,
+        "tokens_per_second": tokens_per_second,
+        "growth_seconds": growth_seconds,
     }
-    if gpu is None or (cpu_seconds is not None and cpu is None):
-        return _criterion("G1", False, "a training time is not a finite number of seconds", data)
-    parts = [f"first model trained in {gpu:.1f} s on the GPU (target {GPU_SECONDS_LIMIT:g} s)"]
-    if cpu is None:
+    data = _speed_data(values)
+    broken = [
+        t.label
+        for t in SPEED_TARGETS
+        if (values[t.key] is not None or t.key == "gpu_seconds") and data[t.key] is None
+    ]
+    if broken:
+        detail = f"{', '.join(broken)}: a measurement is not a finite number"
+        return _criterion("G1", False, detail, data)
+    parts, missed = [], []
+    for t in SPEED_TARGETS:
+        value = data[t.key]
+        if value is None:
+            continue
+        bound = "at least" if t.at_least else "at most"
+        parts.append(f"{t.show(value)} ({bound} {t.limit:g} {t.unit})")
+        if not t.met(value):
+            missed.append(t.label)
+    if data["cpu_seconds"] is None:
         parts.append("CPU not timed")
-    else:
-        parts.append(f"{cpu:.1f} s on the CPU (target {CPU_SECONDS_LIMIT:g} s)")
-    passed = gpu <= GPU_SECONDS_LIMIT and (cpu is None or cpu <= CPU_SECONDS_LIMIT)
-    return _criterion("G1", passed, "; ".join(parts), data)
+    detail = "; ".join(parts)
+    if missed:
+        detail = f"missed: {', '.join(missed)}. {detail}"
+    return _criterion("G1", not missed, detail, data)
 
 
-def speed_criterion(device_type: str, seconds: float, cpu_seconds: float | None) -> GateCriterion:
-    """G1 for a first model timed on ``device_type``: :func:`eval_speed` when that is CUDA. Any
-    other device fails, saying so with the time it measured: a CPU time is never passed off as a
-    GPU time."""
+def speed_criterion(
+    device_type: str, seconds: float, cpu_seconds: float | None, **measurements: float | None
+) -> GateCriterion:
+    """G1 for a first model timed on ``device_type``, with the other first-model measurements of
+    :func:`eval_speed` as keywords: :func:`eval_speed` when that is CUDA. Any other device fails,
+    reporting every measurement: a CPU time is never passed off as a GPU time."""
     if device_type == "cuda":
-        return eval_speed(seconds, cpu_seconds)
+        return eval_speed(seconds, cpu_seconds, **measurements)
     measured = _finite(seconds)
-    cpu = None if cpu_seconds is None else _finite(cpu_seconds)
+    data = _speed_data({**measurements, "cpu_seconds": cpu_seconds})
+    data.update({"measured_seconds": measured, "device": device_type})
     took = "an unmeasurable time" if measured is None else f"{measured:.1f} s"
-    detail = f"{NO_CUDA_DETAIL} (the first model trained in {took} on the {device_type.upper()})"
-    if cpu is not None:
-        detail += f"; CPU {cpu:.1f} s (target {CPU_SECONDS_LIMIT:g} s)"
-    data = {
-        "gpu_seconds": None,
-        "gpu_limit": GPU_SECONDS_LIMIT,
-        "cpu_seconds": cpu,
-        "cpu_limit": CPU_SECONDS_LIMIT,
-        "measured_seconds": measured,
-        "device": device_type,
-    }
+    shown = [f"the first model trained in {took} on the {device_type.upper()}"]
+    for t in SPEED_TARGETS[2:]:
+        if data[t.key] is not None:
+            shown.append(t.show(data[t.key]))
+    detail = f"{NO_CUDA_DETAIL} ({'; '.join(shown)})"
+    if data["cpu_seconds"] is not None:
+        detail += f"; CPU {data['cpu_seconds']:.1f} s (at most {CPU_SECONDS_LIMIT:g} s)"
     return _criterion("G1", False, detail, data)
+
+
+def require_completed(criterion: GateCriterion, runs: Sequence[GateRun]) -> GateCriterion:
+    """``criterion`` unchanged if every run it used completed; otherwise a failed copy whose detail
+    first names each run that stopped early and how far it got (its arms did not get the
+    compute they were meant to, so the comparison does not hold)."""
+    unfinished = list({r.name: r for r in runs if r.status != "completed"}.values())
+    if not unfinished:
+        return criterion
+    named = "; ".join(
+        f"{r.name} stopped early ({r.status} after {r.steps} of {r.planned_steps} steps)"
+        for r in unfinished
+    )
+    return replace(
+        criterion,
+        passed=False,
+        detail=f"{named}, so this cannot pass. {criterion.detail}",
+        data={**criterion.data, "unfinished_runs": [r.name for r in unfinished]},
+    )
 
 
 def eval_legibility(flags: Sequence[bool]) -> GateCriterion:
@@ -508,6 +598,36 @@ def false_fact_rate(lm: LanguageModel, tok: Tok, kb: KB, plan: FalseFactPlan) ->
     return preferred / len(probes)
 
 
+CHAT_SPEED_PROMPT = "Hello! How are you today?"
+CHAT_SPEED_TOKENS = 64
+
+
+def _clock(device: object) -> float:
+    """``time.perf_counter()``, once ``device`` (if it is a CUDA device) has finished its queued
+    work, so GPU work is timed when it is done rather than when it was queued."""
+    if isinstance(device, torch.device) and device.type == "cuda":
+        torch.cuda.synchronize(device)
+    return time.perf_counter()
+
+
+def chat_speed(lm: LanguageModel, tok: Tok) -> tuple[float, float]:
+    """The first-token latency (ms) and the throughput (tokens/s) of a chat reply on ``lm``'s
+    device: a one-token reply is generated once to warm up and once timed, then a
+    :data:`CHAT_SPEED_TOKENS`-token reply that never stops early (an attention span too short
+    for all of them caps it) is timed and its tokens counted."""
+    prompt = encode_chat(tok, [("user", CHAT_SPEED_PROMPT)], add_generation_prompt=True)
+    options = {"temperature": SAMPLE_TEMPERATURE, "top_p": SAMPLE_TOP_P, "seed": MEASURE_SEED}
+    device = getattr(lm, "device", None)
+    lm.generate([prompt], max_new_tokens=1, **options)
+    started = _clock(device)
+    lm.generate([prompt], max_new_tokens=1, **options)
+    first = _clock(device) - started
+    started = _clock(device)
+    reply = lm.generate([prompt], max_new_tokens=CHAT_SPEED_TOKENS, stop_ids=(), **options)[0]
+    elapsed = max(_clock(device) - started, 1e-9)
+    return 1000 * first, len(reply.tokens) / elapsed
+
+
 @torch.inference_mode()
 def max_logit_diff(a: Transformer, b: Transformer, sequences: Sequence[Sequence[int]]) -> float:
     """The largest absolute difference between the two models' logits over ``sequences`` (both in
@@ -587,17 +707,29 @@ def _data_identity(root: Path) -> str:
     return digest.hexdigest()
 
 
+def trim_to_word(text: str) -> str:
+    """``text`` cut back to its last whitespace (dropping the whitespace), so a prompt never ends
+    inside a word. Text with no whitespace after its first non-space character is kept whole."""
+    for i in range(len(text) - 1, -1, -1):
+        if text[i].isspace():
+            head = text[:i].rstrip()
+            return head if head else text
+    return text
+
+
 def _web_prefixes(root: Path, tok: Tok) -> list[str]:
     """:data:`GARBLE_SAMPLES` prompts: the first :data:`GARBLE_PREFIX_TOKENS` tokens (after
-    ``<|bos|>``) of held-out web documents in a seeded order, as text. With fewer held-out
-    documents than samples, the documents are used again in the same order."""
+    ``<|bos|>``) of held-out web documents in a seeded order, as text cut back to a whole word
+    (:func:`trim_to_word`). With fewer held-out documents than samples, the documents are used
+    again in the same order."""
     corpus = Corpus.open(corpus_dir(root) / "web")
     order = np.random.default_rng(MEASURE_SEED).permutation(heldout_docs(corpus))
     texts = []
     for i in order[:GARBLE_SAMPLES]:
         doc = corpus.doc(int(i))
         start = 1 if len(doc) and doc[0] == tok.bos_id else 0
-        texts.append(tok.decode(doc[start : start + GARBLE_PREFIX_TOKENS].tolist()))
+        prefix = tok.decode(doc[start : start + GARBLE_PREFIX_TOKENS].tolist())
+        texts.append(trim_to_word(prefix))
     return [texts[k % len(texts)] for k in range(GARBLE_SAMPLES)] if texts else []
 
 
@@ -615,6 +747,30 @@ def _growth_sequences(root: Path, n: int, length: int) -> list[list[int]]:
     return picked[:n]
 
 
+def _load_judge(root: Path, device: torch.device) -> Judge:
+    """The reference judge; a judge whose files cannot be read or parsed is a
+    :class:`GateSetupError` naming the command that rebuilds it."""
+    try:
+        return Judge.load(judge_dir(root), device)
+    except _LOAD_ERRORS as e:
+        raise GateSetupError(
+            f"the reference judge in {judge_dir(root)} is damaged or out of date ({e}). "
+            f"Rebuild it with: airace-ml build-judge"
+        ) from e
+
+
+def _load_novelty(root: Path) -> NoveltyIndex:
+    """The novelty index; one whose files cannot be read or parsed is a :class:`GateSetupError`
+    naming the command that rebuilds it."""
+    try:
+        return NoveltyIndex.load(novelty_path(root))
+    except _LOAD_ERRORS as e:
+        raise GateSetupError(
+            f"the novelty index at {novelty_path(root)} is damaged or out of date ({e}). "
+            f"Rebuild it with: airace-ml build-novelty-index"
+        ) from e
+
+
 def _load_inputs(root: Path, device: torch.device, length: int) -> _Inputs:
     """Everything the gate reads besides its own runs, checked before any training starts."""
     missing = _missing_inputs(root)
@@ -624,210 +780,19 @@ def _load_inputs(root: Path, device: torch.device, length: int) -> _Inputs:
     try:
         tok = Tok.load(tokenizer_path(root))
         identity = _data_identity(root)
-        known_vocab = {
-            line
-            for line in (corpus_dir(root) / KNOWN_VOCAB_FILE).read_text(encoding="utf-8").split()
-        }
+        known_vocab = set((corpus_dir(root) / KNOWN_VOCAB_FILE).read_text(encoding="utf-8").split())
         plan = FalseFactPlan.from_json(
             (corpus_dir(root) / FALSE_FACTS_FILE).read_text(encoding="utf-8")
         )
         prefixes = _web_prefixes(root, tok)
         sequences = _growth_sequences(root, GROWTH_SEQUENCES, length)
-    except _DAMAGED as e:
+    except _LOAD_ERRORS as e:
         raise GateSetupError(f"the training data cannot be read ({e}); {data_hint}") from e
     if not prefixes or len(sequences) < GROWTH_SEQUENCES:
         raise GateSetupError(f"the corpora hold too few held-out documents to measure; {data_hint}")
-    try:
-        judge = Judge.load(judge_dir(root), device)
-    except _DAMAGED as e:
-        raise GateSetupError(
-            f"the reference judge in {judge_dir(root)} is damaged or out of date ({e}). "
-            f"Rebuild it with: airace-ml build-judge"
-        ) from e
-    try:
-        novelty = NoveltyIndex.load(novelty_path(root))
-    except _DAMAGED as e:
-        raise GateSetupError(
-            f"the novelty index at {novelty_path(root)} is damaged or out of date ({e}). "
-            f"Rebuild it with: airace-ml build-novelty-index"
-        ) from e
+    judge = _load_judge(root, device)
+    novelty = _load_novelty(root)
     return _Inputs(tok, judge, novelty, known_vocab, plan, load_kb(), identity, prefixes, sequences)
-
-
-# -- runs and their caches ----------------------------------------------------------------------
-
-
-def _read_json(path: Path) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-
-
-def _write_json(path: Path, value: Any) -> None:
-    """Write ``value`` as strict JSON to a temporary file, then rename it into place."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(json_safe(value), allow_nan=False, indent=1), encoding="utf-8")
-    os.replace(tmp, path)
-
-
-def _plain(value: Any) -> Any:
-    """``value`` as it reads back from JSON (tuples become lists), so keys compare equal."""
-    return json.loads(json.dumps(json_safe(value), allow_nan=False))
-
-
-def _cached(path: Path, key: dict, compute: Callable[[], Any]) -> Any:
-    """The value cached at ``path`` under ``key``, or ``compute()``'s, cached there."""
-    key = _plain(key)
-    record = _read_json(path)
-    if isinstance(record, dict) and record.get("key") == key:
-        return record["value"]
-    value = _plain(compute())
-    _write_json(path, {"key": key, "value": value})
-    return value
-
-
-@dataclass
-class GateRun:
-    """A trained run of the gate. ``token`` names this exact training: a run trained again gets a
-    new one, so caches and children of the old training are not reused."""
-
-    name: str
-    dir: Path
-    token: str
-    status: str
-    device: str
-    steps: int
-    wall_seconds: float
-    heldout_mean: float | None
-    reused: bool
-
-
-def _heldout_mean(losses: Mapping[str, float | None]) -> float | None:
-    finite = [v for v in map(_finite, losses.values()) if v is not None]
-    return _mean(finite) if finite else None
-
-
-class GateRuns:
-    """Trains the gate's runs under ``runs_dir``, reusing finished ones and resuming unfinished
-    ones (see the module docstring)."""
-
-    def __init__(
-        self,
-        data_root: Path,
-        runs_dir: Path,
-        identity: str,
-        on_progress: Callable[[str], None] = print,
-    ) -> None:
-        self.data_root = Path(data_root)
-        self.runs_dir = Path(runs_dir)
-        self.identity = identity
-        self.on_progress = on_progress
-
-    def _key(self, cfg: TrainRunConfig, device: torch.device, parent: GateRun | None) -> dict:
-        config = json.loads(cfg.to_json())
-        config["parent_dir"] = parent.name if parent is not None else None
-        return _plain(
-            {
-                "config": config,
-                "data": self.identity,
-                "device": device.type,
-                "parent": parent.token if parent is not None else None,
-            }
-        )
-
-    def train(
-        self, cfg: TrainRunConfig, device: torch.device, parent: GateRun | None = None
-    ) -> GateRun:
-        """The finished run of ``cfg`` on ``device`` (continuing from ``parent``, if given)."""
-        out = self.runs_dir / cfg.run_id
-        cfg = replace(cfg, parent_dir=str(parent.dir) if parent is not None else None)
-        key = self._key(cfg, device, parent)
-        record = _read_json(out / GATE_RUN_FILE)
-        same = isinstance(record, dict) and record.get("key") == key
-        if same and record.get("status") == "completed" and self._has_checkpoint(out):
-            self.on_progress(f"  {cfg.run_id}: finished earlier, reusing it")
-            return self._run(cfg.run_id, out, record, reused=True)
-        resume = same and self._can_resume(out, cfg)
-        _write_json(out / GATE_RUN_FILE, {"key": key, "status": "started"})
-        action = "resuming" if resume else "training"
-        self.on_progress(
-            f"  {cfg.run_id}: {action} ({cfg.steps} steps, {cfg.token_budget:,} tokens, "
-            f"on {device.type})"
-        )
-        result = train_run(
-            cfg,
-            out_dir=out,
-            data_root=self.data_root,
-            device=device,
-            on_event=self._events(cfg.run_id, cfg.steps),
-            resume=resume,
-        )
-        record = {
-            "key": key,
-            "status": result.status,
-            "token": uuid.uuid4().hex,
-            "result": {
-                "steps": result.steps,
-                "wall_seconds": result.wall_seconds,
-                "final_loss": result.final_loss,
-                "heldout_losses": result.heldout_losses,
-            },
-        }
-        _write_json(out / GATE_RUN_FILE, record)
-        run = self._run(cfg.run_id, out, _plain(record), reused=False)
-        loss = "n/a" if run.heldout_mean is None else f"{run.heldout_mean:.3f}"
-        self.on_progress(
-            f"  {cfg.run_id}: {result.status} in {result.wall_seconds:.1f} s, held-out loss {loss}"
-        )
-        return run
-
-    @staticmethod
-    def _has_checkpoint(out: Path) -> bool:
-        return (out / WEIGHTS_NAME).is_file() and (out / META_NAME).is_file()
-
-    @staticmethod
-    def _can_resume(out: Path, cfg: TrainRunConfig) -> bool:
-        try:
-            return can_resume(out, cfg)
-        except _DAMAGED:
-            return False  # a state too damaged to read is started over
-
-    @staticmethod
-    def _run(name: str, out: Path, record: dict, *, reused: bool) -> GateRun:
-        result = record["result"]
-        return GateRun(
-            name=name,
-            dir=out,
-            token=record["token"],
-            status=record["status"],
-            device=record["key"]["device"],
-            steps=result["steps"],
-            wall_seconds=result["wall_seconds"],
-            heldout_mean=_heldout_mean(result["heldout_losses"]),
-            reused=reused,
-        )
-
-    def _events(self, name: str, steps: int) -> Callable[[TrainEvent], None]:
-        """Progress at each quarter of the run, and every instability."""
-        marks = [steps * q // 4 for q in (1, 2, 3)]
-
-        def on_event(event: TrainEvent) -> None:
-            if isinstance(event, Progress) and marks and event.step >= marks[0]:
-                while marks and event.step >= marks[0]:
-                    marks.pop(0)
-                self.on_progress(
-                    f"  {name}: step {event.step}/{event.total_steps}, loss {event.loss:.3f}"
-                )
-            elif isinstance(event, Instability):
-                if event.action == "rollback":
-                    what = "went back to its last good weights"
-                else:
-                    what = "stopped, keeping its last good weights"
-                self.on_progress(f"  {name}: unstable at step {event.step}; {what}")
-
-        return on_event
 
 
 # -- the gate -----------------------------------------------------------------------------------
@@ -835,15 +800,24 @@ class GateRuns:
 
 @dataclass
 class _Gate:
+    """One gate run's state. Each experiment returns its criterion and the runs it used."""
+
     inputs: _Inputs
     runs: GateRuns
     scale: GateScale
     seeds: tuple[int, ...]
     device: torch.device
+    measuring_code: str
+    include_cpu_speed: bool
     on_progress: Callable[[str], None]
     raw: dict = field(default_factory=dict)
     transcripts: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
+    starter_run: GateRun | None = None
+    g3_runs: dict[str, list[GateRun]] = field(default_factory=dict)
+    growth_diff: float = math.inf
+    growth_seconds: float | None = None
     _loaded: tuple[str, TorchLM] | None = None
+    _suite: Any = None
 
     # -- helpers ----------------------------------------------------------------------------
 
@@ -881,6 +855,7 @@ class _Gate:
             "status": run.status,
             "device": run.device,
             "steps": run.steps,
+            "planned_steps": run.planned_steps,
             "wall_seconds": run.wall_seconds,
             "heldout_loss": run.heldout_mean,
             "reused": run.reused,
@@ -893,10 +868,13 @@ class _Gate:
             self._loaded = (run.token, TorchLM(model, self.inputs.tok, self.device))
         return self._loaded[1]
 
-    def bench(self, run: GateRun, categories: Sequence[str] = CATEGORIES) -> dict[str, float]:
+    def bench_report(self, run: GateRun, categories: Sequence[str] = CATEGORIES) -> dict:
+        """The (cached) benchmark report of ``run``: ``BenchReport.to_dict()``, whose ``seconds``
+        time the benchmark alone (the suite is built beforehand)."""
         judge, novelty = self.inputs.judge, self.inputs.novelty
         key = {
             "run": run.token,
+            "code": self.measuring_code,
             "suite": SUITE_VERSION,
             "categories": list(categories),
             "seed": MEASURE_SEED,
@@ -905,10 +883,13 @@ class _Gate:
         }
 
         def compute() -> dict:
+            if self._suite is None:
+                self._suite = build_suite()
             self.on_progress(f"  {run.name}: benchmarks ({', '.join(categories)})")
             report = run_benchmarks(
                 self.lm(run),
                 self.inputs.tok,
+                suite=self._suite,
                 judge=judge,
                 novelty=novelty,
                 categories=categories,
@@ -917,12 +898,22 @@ class _Gate:
             return report.to_dict()
 
         report = _cached(run.dir / BENCH_FILE, key, compute)
-        scores = {c: s["score"] for c, s in report["scores"].items()}
-        self.raw.setdefault("bench", {})[run.name] = scores
-        return scores
+        self.raw.setdefault("bench", {})[run.name] = {
+            c: s["score"] for c, s in report["scores"].items()
+        }
+        return report
+
+    def bench(self, run: GateRun, categories: Sequence[str] = CATEGORIES) -> dict[str, float]:
+        report = self.bench_report(run, categories)
+        return {c: s["score"] for c, s in report["scores"].items()}
 
     def fingerprint(self, run: GateRun) -> Fingerprint:
-        key = {"run": run.token, "k": self.scale.fingerprint_k, "seed": MEASURE_SEED}
+        key = {
+            "run": run.token,
+            "code": self.measuring_code,
+            "k": self.scale.fingerprint_k,
+            "seed": MEASURE_SEED,
+        }
 
         def compute() -> dict:
             self.on_progress(f"  {run.name}: personality fingerprint")
@@ -940,7 +931,9 @@ class _Gate:
 
     # -- experiments ------------------------------------------------------------------------
 
-    def starter(self, include_cpu_speed: bool) -> tuple[GateRun, GateCriterion]:
+    def speed(self) -> tuple[GateCriterion, list[GateRun]]:
+        """G1: train the first model, then time everything spec 4.11 sets a first-model target
+        for: training, the full benchmark, chat, and growing it (kept for G5)."""
         self.announce("G1", "training the first model (balanced mix)")
         s = self.scale
         cfg = self.config(
@@ -950,24 +943,46 @@ class _Gate:
             mixture=BALANCED_MIX,
             seed=self.seeds[0],
         )
-        run = self.train(cfg)
+        run = self.starter_run = self.train(cfg)
+        used = [run]
         cpu_seconds = None
-        if include_cpu_speed:
+        if self.include_cpu_speed:
             if self.device.type == "cpu":
                 cpu_seconds = run.wall_seconds
             else:
                 self.on_progress("  timing the same run on the CPU")
                 cpu_run = self.train(replace(cfg, run_id="starter-cpu"), device=torch.device("cpu"))
                 cpu_seconds = cpu_run.wall_seconds
-        return run, speed_criterion(run.device, run.wall_seconds, cpu_seconds)
+                used.append(cpu_run)
+        bench_seconds = self.bench_report(run)["seconds"]
+        self.on_progress("  starter: timing a chat reply")
+        first_token_ms, tokens_per_second = chat_speed(self.lm(run), self.inputs.tok)
+        grown_to = f"{s.grown_shape.n_layer} layers x {s.grown_shape.d_model} wide"
+        self.on_progress(f"  starter: timing its growth to {grown_to}")
+        model, _ = load_checkpoint(run.dir, self.device)
+        started = _clock(self.device)
+        grown = grow(model, s.grown_shape, seed=self.seeds[0])
+        self.growth_seconds = _clock(self.device) - started
+        self.growth_diff = max_logit_diff(model, grown, self.inputs.growth_sequences)
+        del model, grown
+        criterion = speed_criterion(
+            run.device,
+            run.wall_seconds,
+            cpu_seconds,
+            bench_seconds=bench_seconds,
+            first_token_ms=first_token_ms,
+            tokens_per_second=tokens_per_second,
+            growth_seconds=self.growth_seconds,
+        )
+        return criterion, used
 
-    def legibility(self, starter: GateRun) -> GateCriterion:
+    def legibility(self) -> tuple[GateCriterion, list[GateRun]]:
         self.announce("G2", "the first model answers 20 probe prompts")
         probes = load_probes()
         chosen = [p for p in probes if p.kind == "open"][:10] + [
             p for p in probes if p.kind == "help"
         ][:10]
-        lm = self.lm(starter)
+        lm = self.lm(self.starter_run)
         replies = [
             lm.chat_reply(
                 [("user", probe.text)],
@@ -981,12 +996,11 @@ class _Gate:
         flags = [is_well_formed(reply, self.inputs.judge) for reply in replies]
         self.transcripts["G2"] = [(p.text, r) for p, r in zip(chosen, replies, strict=True)]
         self.raw["legibility_flags"] = flags
-        return eval_legibility(flags)
+        return eval_legibility(flags), [self.starter_run]
 
-    def differentiation(self) -> tuple[dict[str, list[GateRun]], GateCriterion]:
+    def differentiation(self) -> tuple[GateCriterion, list[GateRun]]:
         self.announce("G3", "four contrasting mixes at equal compute")
         s = self.scale
-        runs: dict[str, list[GateRun]] = {}
         scores: dict[str, list[dict[str, float]]] = {}
         for target in TARGET_CATEGORY:
             for seed in self.seeds:
@@ -998,14 +1012,15 @@ class _Gate:
                     seed=seed,
                 )
                 run = self.train(cfg)
-                runs.setdefault(target, []).append(run)
+                self.g3_runs.setdefault(target, []).append(run)
                 scores.setdefault(target, []).append(self.bench(run))
-        self.raw["differentiation_models"] = {t: rs[0].name for t, rs in runs.items()}
-        return runs, eval_differentiation(scores)
+        self.raw["differentiation_models"] = {t: rs[0].name for t, rs in self.g3_runs.items()}
+        used = [run for rs in self.g3_runs.values() for run in rs]
+        return eval_differentiation(scores), used
 
-    def seed_variation(self, g3: dict[str, list[GateRun]]) -> GateCriterion:
+    def seed_variation(self) -> tuple[GateCriterion, list[GateRun]]:
         self.announce("G4", "one balanced mix, different seeds")
-        s = self.scale
+        s, g3 = self.scale, self.g3_runs
         balanced = [
             self.train(
                 self.config(
@@ -1031,7 +1046,7 @@ class _Gate:
             ]
 
         firsts = [rs[0] for rs in g3.values()]
-        return eval_seed_variation(distances(balanced), distances(firsts))
+        return eval_seed_variation(distances(balanced), distances(firsts)), models
 
     @staticmethod
     def _g3_transcript(
@@ -1053,15 +1068,11 @@ class _Gate:
                 exchanges.append((f"[{target}-heavy] {texts[probe_id]}", reply))
         return exchanges
 
-    def growth(self, starter: GateRun) -> GateCriterion:
-        self.announce("G5", "growing the first model")
-        s, seed = self.scale, self.seeds[0]
-        model, _ = load_checkpoint(starter.dir, self.device)
-        started = time.perf_counter()
-        grown = grow(model, s.grown_shape, seed=seed)
-        grow_seconds = time.perf_counter() - started
-        diff = max_logit_diff(model, grown, self.inputs.growth_sequences)
-        del model, grown
+    def growth(self) -> tuple[GateCriterion, list[GateRun]]:
+        """G5: the growth measured on the first model (by G1), and the grown and ungrown
+        continuations of it."""
+        self.announce("G5", "continuing the first model, grown and not grown")
+        s, seed, starter = self.scale, self.seeds[0], self.starter_run
         continued = {}
         for name, shape in (("g5-grown", s.grown_shape), ("g5-ungrown", s.starter_shape)):
             cfg = self.config(
@@ -1069,16 +1080,18 @@ class _Gate:
             )
             continued[name] = self.train(cfg, parent=starter)
         criterion = eval_growth(
-            diff, continued["g5-grown"].heldout_mean, continued["g5-ungrown"].heldout_mean
+            self.growth_diff,
+            continued["g5-grown"].heldout_mean,
+            continued["g5-ungrown"].heldout_mean,
         )
-        criterion.data["growth_seconds"] = grow_seconds
-        return criterion
+        criterion.data["growth_seconds"] = self.growth_seconds
+        return criterion, [starter, *continued.values()]
 
-    def forgetting(self, g3: dict[str, list[GateRun]]) -> GateCriterion:
+    def forgetting(self) -> tuple[GateCriterion, list[GateRun]]:
         self.announce("G6", "code-only continuations of the story-heavy model")
         s, seed = self.scale, self.seeds[0]
-        base = g3["creative"][0]
-        children = {}
+        base = self.g3_runs["creative"][0]
+        children, used = {}, [base]
         for name, replay in (("g6-code-replay0", 0.0), ("g6-code-replay30", REPLAY_SHARE)):
             cfg = self.config(
                 name,
@@ -1089,14 +1102,17 @@ class _Gate:
                 replay=replay,
             )
             run = self.train(cfg, parent=base)
+            used.append(run)
             children[name] = self.bench(run, FORGETTING_CATEGORIES)
-        return eval_forgetting(
+        criterion = eval_forgetting(
             self.bench(base), children["g6-code-replay0"], children["g6-code-replay30"]
         )
+        return criterion, used
 
-    def preparation(self) -> GateCriterion:
+    def preparation(self) -> tuple[GateCriterion, list[GateRun]]:
         self.announce("G7", "light vs thorough cleaning, and fact-checking")
         s, seed = self.scale, self.seeds[0]
+        used: list[GateRun] = []
 
         def prep_run(name: str, mixture: Mapping[str, float], prep: PrepConfig) -> GateRun:
             cfg = self.config(
@@ -1107,7 +1123,9 @@ class _Gate:
                 seed=seed,
                 prep=prep,
             )
-            return self.train(cfg)
+            run = self.train(cfg)
+            used.append(run)
+            return run
 
         web = mix_heavy("web", WEB_HEAVY_SHARE)
         garble = {}
@@ -1147,7 +1165,7 @@ class _Gate:
                 "fact_pairs_skipped": skipped,
             }
         )
-        return criterion
+        return criterion, used
 
 
 def _check_seeds(seeds: Sequence[int]) -> tuple[int, ...]:
@@ -1186,31 +1204,32 @@ def run_gate(
     root = Path(data_root)
     out = Path(out_dir).resolve()
     inputs = _load_inputs(root, device, scale.starter_shape.ctx_len)
+    training_code = source_digest(TRAINING_SOURCES)
     mode = "quick (tiny models: a check of the setup, not of feasibility)" if quick else "full"
     on_progress(f"gate: {mode}; seeds {', '.join(map(str, seeds))}; on {device.type}; into {out}")
     gate = _Gate(
-        inputs,
-        GateRuns(root, out / RUNS_DIR, inputs.identity, on_progress),
-        scale,
-        seeds,
-        device,
-        on_progress,
+        inputs=inputs,
+        runs=GateRuns(root, out / RUNS_DIR, inputs.identity, on_progress, code=training_code),
+        scale=scale,
+        seeds=seeds,
+        device=device,
+        measuring_code=source_digest(MEASURING_SOURCES),
+        include_cpu_speed=include_cpu_speed,
+        on_progress=on_progress,
     )
     gate.raw.update({"quick": quick, "seeds": list(seeds), "device": device.type})
     criteria: list[GateCriterion] = []
-
-    def record(criterion: GateCriterion) -> None:
+    for experiment in (
+        gate.speed,
+        gate.legibility,
+        gate.differentiation,
+        gate.seed_variation,
+        gate.growth,
+        gate.forgetting,
+        gate.preparation,
+    ):
+        criterion = require_completed(*experiment())
         criteria.append(criterion)
         verdict = "PASS" if criterion.passed else "FAIL"
         on_progress(f"{criterion.id} {criterion.title}: {verdict} - {criterion.detail}")
-
-    starter, g1 = gate.starter(include_cpu_speed)
-    record(g1)
-    record(gate.legibility(starter))
-    g3_runs, g3 = gate.differentiation()
-    record(g3)
-    record(gate.seed_variation(g3_runs))
-    record(gate.growth(starter))
-    record(gate.forgetting(g3_runs))
-    record(gate.preparation())
     return GateOutcome(criteria, gate.transcripts, _plain(gate.raw))

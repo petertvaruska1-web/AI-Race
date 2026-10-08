@@ -20,6 +20,7 @@ __pycache__/
 # Generated data, checkpoints, runs
 /data/
 /runs/
+ml/runs/
 *.safetensors
 *.pt
 *.bin

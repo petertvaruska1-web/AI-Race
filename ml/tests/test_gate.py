@@ -1,12 +1,19 @@
 import json
 import math
+from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 import torch
 
-from airace_ml.data.corpus import DATASET_IDS
+from airace_ml.data.corpus import DATASET_IDS, Corpus
+from airace_ml.data.prep import heldout_docs
+from airace_ml.evals.judge import JudgeCalibration
+from airace_ml.evals.novelty import NoveltyIndex
+from airace_ml.evals.scoring import BenchReport, CategoryScore
 from airace_ml.experiments import gate
+from airace_ml.experiments import runs as gate_runs
 from airace_ml.experiments.configs import (
     BALANCED_MIX,
     EARLY_BUDGET,
@@ -16,13 +23,13 @@ from airace_ml.experiments.configs import (
     STARTER_BUDGET,
     STARTER_SHAPE,
     TARGET_CATEGORY,
+    GateScale,
     mix_heavy,
 )
 from airace_ml.experiments.gate import (
     NO_CUDA_DETAIL,
     GateCriterion,
     GateOutcome,
-    GateRuns,
     eval_differentiation,
     eval_forgetting,
     eval_growth,
@@ -37,10 +44,14 @@ from airace_ml.experiments.gate import (
     speed_criterion,
 )
 from airace_ml.experiments.report import TRANSCRIPT_CHARS, write_gate_report
+from airace_ml.experiments.runs import GateRun, GateRuns
+from airace_ml.infer.lm import Generation
 from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME
 from airace_ml.model.growth import grow
 from airace_ml.model.shape import ModelShape
 from airace_ml.model.transformer import Transformer
+from airace_ml.paths import corpus_dir
+from airace_ml.personality.fingerprint import TRAITS, Fingerprint, load_probes
 from airace_ml.skills.facts import FalseFactPlan
 from airace_ml.skills.kb import KB, Fact, Relation, load_kb
 from airace_ml.tokenizer import encode_doc
@@ -501,7 +512,7 @@ def test_a_finished_run_is_reused_only_while_everything_it_depends_on_is_unchang
     tmp_path, monkeypatch
 ):
     fake = _FakeTrainer()
-    monkeypatch.setattr(gate, "train_run", fake)
+    monkeypatch.setattr(gate_runs, "train_run", fake)
     runs = GateRuns(tmp_path, tmp_path / "runs", "data-1", on_progress=lambda s: None)
     first = runs.train(_cfg(), CPU)
     assert len(fake.calls) == 1 and not first.reused
@@ -526,7 +537,7 @@ def test_an_unfinished_or_unstable_run_is_trained_again_and_resumed_when_it_can_
     tmp_path, monkeypatch
 ):
     fake = _FakeTrainer(status="unstable_stopped")
-    monkeypatch.setattr(gate, "train_run", fake)
+    monkeypatch.setattr(gate_runs, "train_run", fake)
     runs = GateRuns(tmp_path, tmp_path / "runs", "data", on_progress=lambda s: None)
     assert runs.train(_cfg(), CPU).status == "unstable_stopped"
     fake.status = "completed"
@@ -539,16 +550,16 @@ def test_an_unfinished_or_unstable_run_is_trained_again_and_resumed_when_it_can_
     def interrupted(cfg, **kwargs):
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(gate, "train_run", interrupted)
+    monkeypatch.setattr(gate_runs, "train_run", interrupted)
     with pytest.raises(KeyboardInterrupt):
         runs.train(_cfg(seed=5), CPU)
-    record = json.loads((tmp_path / "runs" / "r" / gate.GATE_RUN_FILE).read_text("utf-8"))
+    record = json.loads((tmp_path / "runs" / "r" / gate_runs.GATE_RUN_FILE).read_text("utf-8"))
     assert record["status"] == "started"
-    monkeypatch.setattr(gate, "train_run", fake)
-    monkeypatch.setattr(gate, "can_resume", lambda out, cfg: cfg.seed == 5)
+    monkeypatch.setattr(gate_runs, "train_run", fake)
+    monkeypatch.setattr(gate_runs, "can_resume", lambda out, cfg: cfg.seed == 5)
     runs.train(_cfg(seed=5), CPU)
     assert fake.calls[-1][:2] == ("r", True)  # it carries on from its saved point
-    monkeypatch.setattr(gate, "can_resume", lambda out, cfg: True)
+    monkeypatch.setattr(gate_runs, "can_resume", lambda out, cfg: True)
     runs.train(_cfg(seed=6), CPU)  # a saved point from another config is never resumed
     assert fake.calls[-1][:2] == ("r", False)
 
@@ -561,10 +572,10 @@ def test_measurements_are_cached_under_their_key(tmp_path):
         return {"score": (1.0, 2.0)}
 
     path = tmp_path / "cache.json"
-    assert gate._cached(path, {"run": "a"}, compute) == {"score": [1.0, 2.0]}
-    assert gate._cached(path, {"run": "a"}, compute) == {"score": [1.0, 2.0]}
+    assert gate_runs._cached(path, {"run": "a"}, compute) == {"score": [1.0, 2.0]}
+    assert gate_runs._cached(path, {"run": "a"}, compute) == {"score": [1.0, 2.0]}
     assert len(computed) == 1
-    gate._cached(path, {"run": "b"}, compute)
+    gate_runs._cached(path, {"run": "b"}, compute)
     assert len(computed) == 2
 
 
@@ -607,11 +618,413 @@ def test_quick_gate_through_the_cli_reports_and_then_reuses_its_runs(
         assert heading in report
 
     trained = []
-    real = gate.train_run
-    monkeypatch.setattr(gate, "train_run", lambda cfg, **kw: trained.append(cfg) or real(cfg, **kw))
+    real = gate_runs.train_run
+    monkeypatch.setattr(
+        gate_runs, "train_run", lambda cfg, **kw: trained.append(cfg) or real(cfg, **kw)
+    )
     assert main(argv) == 1
     again = json.loads((out / "outcome.json").read_text(encoding="utf-8"))
     assert trained == [] and all(r["reused"] for r in again["runs"].values())
-    verdicts = [(c["id"], c["passed"], c["detail"]) for c in again["criteria"]]
-    assert verdicts == [(c["id"], c["passed"], c["detail"]) for c in first["criteria"]]
+    # G1 times a chat reply and a growth op afresh; everything else is the same measurement.
+    verdicts = [(c["id"], c["passed"], c["detail"]) for c in again["criteria"][1:]]
+    assert verdicts == [(c["id"], c["passed"], c["detail"]) for c in first["criteria"][1:]]
+    assert again["criteria"][0]["passed"] is first["criteria"][0]["passed"] is False
     assert again["bench"] == first["bench"] and again["fingerprints"] == first["fingerprints"]
+
+
+# -- fix round 1 -------------------------------------------------------------------------------------
+
+
+def test_speed_checks_every_first_model_target():
+    at_limits = {
+        "bench_seconds": 30,
+        "first_token_ms": 300,
+        "tokens_per_second": 50,
+        "growth_seconds": 2,
+    }
+    c = eval_speed(90, 480, **at_limits)
+    assert c.passed and _finite_data(c.data)
+    assert c.data["bench_seconds"] == 30 and c.data["bench_seconds_target"] == 30
+    for key, worse, words in (
+        ("bench_seconds", 30.5, "full benchmark suite"),
+        ("first_token_ms", 301, "chat first token"),
+        ("tokens_per_second", 49.9, "chat throughput"),
+        ("growth_seconds", 2.1, "growth op"),
+    ):
+        c = eval_speed(60, None, **{**at_limits, key: worse})
+        assert not c.passed and c.detail.startswith("missed: ") and words in c.detail.split(".")[0]
+        bad = eval_speed(60, None, **{**at_limits, key: math.nan})
+        assert not bad.passed and "not a finite number" in bad.detail and _finite_data(bad.data)
+    c = eval_speed(60, None, first_token_ms=12.6)  # a measurement not given is not checked
+    assert c.passed and c.data["bench_seconds"] is None and "13 ms" in c.detail
+
+
+def test_speed_off_cuda_still_reports_every_measurement():
+    c = speed_criterion(
+        "cpu",
+        12.34,
+        12.34,
+        bench_seconds=4.0,
+        first_token_ms=12.0,
+        tokens_per_second=400.0,
+        growth_seconds=0.01,
+    )
+    assert not c.passed and c.detail.startswith(NO_CUDA_DETAIL)
+    for words in ("12.3 s on the CPU", "full benchmark suite 4.0 s", "chat first token 12 ms"):
+        assert words in c.detail
+    assert "chat throughput 400 tokens/s" in c.detail and "growth op 0.01 s" in c.detail
+    assert c.data["tokens_per_second"] == 400.0 and c.data["gpu_seconds"] is None
+    assert _finite_data(c.data)
+
+
+def test_chat_speed_times_one_token_after_a_warm_up_and_a_full_reply(tiny_tok):
+    calls = []
+
+    class Timed:
+        device = torch.device("cpu")
+
+        def generate(self, prompts, *, max_new_tokens, temperature, top_p, seed, stop_ids=None):
+            calls.append((max_new_tokens, stop_ids))
+            n = min(max_new_tokens, 40)  # a short attention span caps the reply
+            return [Generation([20] * n, [0.5] * n, [0.5] * n, False) for _ in prompts]
+
+    first_ms, per_second = gate.chat_speed(Timed(), tiny_tok)
+    assert calls == [(1, None), (1, None), (64, ())]  # warm-up, timed, a reply that never stops
+    assert 0 < first_ms < 1000 and per_second > 40  # 40 tokens in well under a second
+
+
+def test_prompts_are_cut_back_to_a_whole_word():
+    assert gate.trim_to_word("The cat sat on the ma") == "The cat sat on the"
+    assert gate.trim_to_word("the cat ") == "the cat"
+    assert gate.trim_to_word("one\ntw") == "one"
+    assert gate.trim_to_word("word") == "word"  # no whitespace: kept whole
+    assert gate.trim_to_word("  word") == "  word"  # nothing before the whitespace
+    assert gate.trim_to_word("") == ""
+
+
+def test_web_prefixes_end_on_a_word_boundary(tiny_data_root, tiny_tok):
+    prefixes = gate._web_prefixes(tiny_data_root, tiny_tok)
+    assert len(prefixes) == gate.GARBLE_SAMPLES
+    web = Corpus.open(corpus_dir(tiny_data_root) / "web")
+    texts = [tiny_tok.decode(web.doc(int(i)).tolist()) for i in heldout_docs(web)]
+    for prefix in set(prefixes):
+        assert prefix and not prefix[-1].isspace()
+        # It is the start of a held-out document, cut where a word ends.
+        assert any(
+            text.startswith(prefix) and (len(text) == len(prefix) or text[len(prefix)].isspace())
+            for text in texts
+        ), prefix
+
+
+def _run(name, status="completed", steps=6, planned=6) -> GateRun:
+    return GateRun(name, Path(name), "t-" + name, status, "cpu", steps, planned, 1.5, 2.5, False)
+
+
+def test_a_criterion_fails_and_says_so_when_a_run_it_uses_stopped_early():
+    good = GateCriterion("G5", "Growth", True, "all fine", {"x": 1.0})
+    assert gate.require_completed(good, [_run("starter"), _run("g5-grown")]) is good
+    stopped = _run("g5-grown", "unstable_stopped", steps=3)
+    c = gate.require_completed(good, [_run("starter"), stopped, stopped])
+    assert not c.passed and c.id == "G5"
+    assert c.detail.startswith("g5-grown stopped early (unstable_stopped after 3 of 6 steps)")
+    assert c.detail.endswith("all fine") and c.data == {"x": 1.0, "unfinished_runs": ["g5-grown"]}
+    assert good.passed  # the original is not changed
+
+
+def test_report_lists_every_run(tmp_path):
+    raw = {
+        "runs": {
+            "starter": {
+                "status": "completed",
+                "device": "cuda",
+                "steps": 256,
+                "planned_steps": 256,
+                "wall_seconds": 31.25,
+                "heldout_loss": 3.5,
+                "reused": False,
+            },
+            "g5-grown": {
+                "status": "unstable_stopped",
+                "device": "cuda",
+                "steps": 100,
+                "planned_steps": 256,
+                "wall_seconds": 12.0,
+                "heldout_loss": None,
+                "reused": True,
+            },
+        }
+    }
+    write_gate_report(_outcome(**raw), tmp_path / "r.md")
+    text = (tmp_path / "r.md").read_text(encoding="utf-8")
+    assert "## Runs" in text
+    assert "| Run | Status | Steps | Wall time (s) | Held-out loss | Reused |" in text
+    assert "| starter | completed | 256/256 | 31.25 | 3.5 | no |" in text
+    assert "| g5-grown | unstable\\_stopped | 100/256 | 12 | n/a | yes |" in text
+
+
+def test_source_digest_follows_the_bytes_and_paths_of_the_sources(tmp_path):
+    root = tmp_path / "pkg"
+    (root / "train" / "__pycache__").mkdir(parents=True)
+    (root / "train" / "a.py").write_bytes(b"x = 1\n")
+    (root / "train" / "b.json").write_bytes(b"{}")
+    (root / "tok.py").write_bytes(b"y = 2\n")
+    digest = gate_runs.source_digest(("train", "tok.py"), root)
+    assert digest == gate_runs.source_digest(("tok.py", "train"), root)  # sorted by path
+    (root / "train" / "__pycache__" / "a.cpython-313.pyc").write_bytes(b"compiled")
+    (root / "train" / "__pycache__" / "a.cpython-313.pyc.4242").write_bytes(b"being written")
+    (root / "train" / "c.pyc").write_bytes(b"stray")
+    assert gate_runs.source_digest(("train", "tok.py"), root) == digest  # caches are not sources
+    (root / "train" / "b.json").write_bytes(b"{ }")
+    assert gate_runs.source_digest(("train", "tok.py"), root) != digest  # data files count
+    (root / "train" / "b.json").write_bytes(b"{}")
+    (root / "train" / "a.py").rename(root / "train" / "a2.py")
+    assert gate_runs.source_digest(("train", "tok.py"), root) != digest  # so do names
+    with pytest.raises(FileNotFoundError):
+        gate_runs.source_digest(("nowhere",), root)
+    training = gate_runs.source_digest(gate_runs.TRAINING_SOURCES)
+    measuring = gate_runs.source_digest(gate_runs.MEASURING_SOURCES)
+    assert len(training) == len(measuring) == 64 and training != measuring
+
+
+def test_a_run_is_trained_again_when_the_training_code_changes(tmp_path, monkeypatch):
+    fake = _FakeTrainer()
+    monkeypatch.setattr(gate_runs, "train_run", fake)
+    old = GateRuns(tmp_path, tmp_path / "runs", "data", on_progress=print, code="train-1")
+    first = old.train(_cfg(), CPU)
+    assert old.train(_cfg(), CPU).reused
+    new = GateRuns(tmp_path, tmp_path / "runs", "data", on_progress=print, code="train-2")
+    again = new.train(_cfg(), CPU)
+    assert not again.reused and again.token != first.token and len(fake.calls) == 2
+
+
+def test_judge_and_index_loading_blame_only_damaged_files(tmp_path, monkeypatch):
+    def raising(error):
+        def load(*args, **kwargs):
+            raise error
+
+        return load
+
+    monkeypatch.setattr(gate.Judge, "load", raising(ValueError("bad calibration")))
+    with pytest.raises(gate.GateSetupError, match="airace-ml build-judge"):
+        gate._load_judge(tmp_path, CPU)
+    for error in (RuntimeError("CUDA error: out of memory"), TypeError("a bug"), KeyError("x")):
+        monkeypatch.setattr(gate.Judge, "load", raising(error))
+        with pytest.raises(type(error)):  # not a reason to rebuild the judge
+            gate._load_judge(tmp_path, CPU)
+    index = gate.novelty_path(tmp_path)
+    index.parent.mkdir(parents=True)
+    index.write_bytes(b"")
+    index.with_suffix(".json").write_text('{"hash_base": 1000003, "count": 0}', encoding="utf-8")
+    with pytest.raises(gate.GateSetupError, match="airace-ml build-novelty-index"):
+        gate._load_novelty(tmp_path)
+    monkeypatch.setattr(gate.NoveltyIndex, "load", raising(RuntimeError("a bug")))
+    with pytest.raises(RuntimeError):
+        gate._load_novelty(tmp_path)
+
+
+def test_resume_check_blames_only_damaged_files(tmp_path, monkeypatch):
+    monkeypatch.setattr(gate_runs, "can_resume", lambda out, cfg: (_ for _ in ()).throw(OSError()))
+    assert gate_runs.GateRuns._can_resume(tmp_path, _cfg()) is False
+    monkeypatch.setattr(
+        gate_runs, "can_resume", lambda out, cfg: (_ for _ in ()).throw(RuntimeError("bug"))
+    )
+    with pytest.raises(RuntimeError):
+        gate_runs.GateRuns._can_resume(tmp_path, _cfg())
+
+
+# -- a whole gate on fakes: what it trains, reuses and concludes -----------------------------------
+
+_MIXES = {"creative": 0, "code": 1, "facts": 2, "conversations": 3, "balanced": 5}
+_TINY_SCALE = GateScale(
+    starter_shape=QUICK_SCALE.starter_shape,
+    early_shape=QUICK_SCALE.early_shape,
+    grown_shape=QUICK_SCALE.grown_shape,
+    starter_budget=4096,
+    early_budget=4096,
+    prep_budget=4096,
+    batch_tokens=1024,
+    fingerprint_k=1,
+)
+
+
+class _FakeLM:
+    device = torch.device("cpu")
+    ctx_len = 64
+
+    def __init__(self, name):
+        self.name = name
+
+    def chat_reply(self, history, **options):
+        return "Hello there, my good friend."
+
+    def complete(self, text, **options):
+        return {"g7-web-light": " xq zz the", "g7-web-thorough": " the the xq"}.get(self.name, "")
+
+    def generate(self, prompts, *, max_new_tokens, temperature, top_p, seed, stop_ids=None):
+        n = max_new_tokens
+        return [Generation([20] * n, [0.5] * n, [0.5] * n, False) for _ in prompts]
+
+
+def _fake_score(name: str, category: str) -> float:
+    if name.startswith("g3-"):
+        _, target, seed = name.split("-")
+        return (60.0 if TARGET_CATEGORY[target] == category else 30.0) + int(seed[1:]) / 2
+    children = {"g6-code-replay0": (40.0, 25.0), "g6-code-replay30": (55.0, 30.0)}
+    if name in children:
+        return children[name][0 if category == "creativity" else 1]
+    return 10.0
+
+
+@pytest.fixture
+def fake_gate(tmp_path, monkeypatch, tiny_tok):
+    """``run_gate`` with every run, model and measurement faked: good enough to pass every
+    criterion on a CUDA device, so a test can break one thing and see what follows."""
+    log = SimpleNamespace(trained=[], benched=[], fingerprinted=[], statuses={})
+    log.digests = {"training": "train-1", "measuring": "measure-1"}
+
+    def fake_train(cfg, *, out_dir, data_root, device, on_event, resume):
+        log.trained.append(cfg.run_id)
+        status = log.statuses.get(cfg.run_id, "completed")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / WEIGHTS_NAME).write_bytes(b"w")
+        (out_dir / META_NAME).write_text("{}", encoding="utf-8")
+        loss = {"g5-grown": 2.0, "g5-ungrown": 2.2}.get(cfg.run_id, 3.0)
+        steps = cfg.steps if status == "completed" else cfg.steps // 2
+        return SimpleNamespace(
+            status=status,
+            steps=steps,
+            wall_seconds=1.0,
+            final_loss=loss,
+            heldout_losses={"web": loss},
+        )
+
+    def fake_bench(lm, tok, *, suite, judge, novelty, categories, seed):
+        log.benched.append(lm.name)
+        scores = {c: CategoryScore(_fake_score(lm.name, c), 0.5, 10) for c in categories}
+        return BenchReport("bench-v1", scores, 0.0, [], [], 1.0)
+
+    def fake_fingerprint(lm, tok, *, k, seed):
+        log.fingerprinted.append(lm.name)
+        _, mix, s = lm.name.split("-")
+        traits = {t: 10.0 * _MIXES[mix] + int(s[1:]) for t in TRAITS}
+        samples = [
+            {"probe": p.id, "kind": p.kind, "sample": 0, "text": f"{lm.name} says hi"}
+            for p in load_probes()
+        ]
+        return Fingerprint(traits, samples)
+
+    def fake_checkpoint(path, device):
+        torch.manual_seed(0)
+        return Transformer(_TINY_SCALE.starter_shape, 64), None
+
+    inputs = gate._Inputs(
+        tok=tiny_tok,
+        judge=SimpleNamespace(calibration=JudgeCalibration(1.0, 2.0, 3.0)),
+        novelty=NoveltyIndex(np.zeros(0, np.uint64)),
+        known_vocab={"the"},
+        plan=FalseFactPlan({}),
+        kb=load_kb(),
+        identity="data-1",
+        web_prefixes=["the cat"] * gate.GARBLE_SAMPLES,
+        growth_sequences=[[1, 5, 9, 33]] * gate.GROWTH_SEQUENCES,
+    )
+    monkeypatch.setattr(gate_runs, "train_run", fake_train)
+    monkeypatch.setattr(gate, "FULL_SCALE", _TINY_SCALE)
+    monkeypatch.setattr(gate, "_load_inputs", lambda root, device, length: inputs)
+    monkeypatch.setattr(
+        gate,
+        "source_digest",
+        lambda parts, root=None: log.digests[
+            "training" if tuple(parts) == gate_runs.TRAINING_SOURCES else "measuring"
+        ],
+    )
+    monkeypatch.setattr(gate._Gate, "lm", lambda self, run: _FakeLM(run.name))
+    monkeypatch.setattr(gate, "build_suite", lambda: None)
+    monkeypatch.setattr(gate, "run_benchmarks", fake_bench)
+    monkeypatch.setattr(gate, "measure_fingerprint", fake_fingerprint)
+    monkeypatch.setattr(gate, "load_checkpoint", fake_checkpoint)
+    monkeypatch.setattr(gate, "is_well_formed", lambda reply, judge: True)
+    monkeypatch.setattr(
+        gate,
+        "false_fact_rate",
+        lambda lm, tok, kb, plan: 0.4 if lm.name == "g7-facts-unchecked" else 0.1,
+    )
+
+    def run(device="cuda", **options):
+        return gate.run_gate(
+            tmp_path / "data",
+            tmp_path / "out",
+            device=device,
+            include_cpu_speed=True,
+            on_progress=lambda line: None,
+            **options,
+        )
+
+    log.run = run
+    return log
+
+
+def test_fake_gate_passes_when_every_run_and_measurement_is_good(fake_gate):
+    outcome = fake_gate.run()
+    assert [(c.id, c.passed) for c in outcome.criteria] == [(g, True) for g in gate.TITLES]
+    g1 = outcome.criteria[0].data
+    assert g1["gpu_seconds"] == 1.0 and g1["cpu_seconds"] == 1.0 and g1["bench_seconds"] == 1.0
+    assert g1["first_token_ms"] < 300 and g1["tokens_per_second"] > 50
+    assert 0 < g1["growth_seconds"] < 2 and _finite_data(g1)
+    assert len(fake_gate.trained) == 25 and len(outcome.raw["runs"]) == 25
+    assert fake_gate.benched.count("starter") == 1  # the first model's full bench, timed
+    assert len(fake_gate.benched) == 15 and len(fake_gate.fingerprinted) == 15
+    assert outcome.raw["runs"]["starter"]["planned_steps"] == 4
+
+
+@pytest.mark.parametrize(
+    "stopped, failing",
+    [
+        (
+            ("starter-cpu", "g3-code-s2", "g5-grown", "g6-code-replay30", "g7-facts-checked"),
+            {"G1", "G3", "G4", "G5", "G6", "G7"},
+        ),
+        (("starter",), {"G1", "G2", "G5"}),
+        (("g3-creative-s1", "g4-balanced-s3", "g7-web-light"), {"G3", "G4", "G6", "G7"}),
+    ],
+)
+def test_a_run_that_stopped_early_fails_every_criterion_that_uses_it(fake_gate, stopped, failing):
+    fake_gate.statuses.update({name: "unstable_stopped" for name in stopped})
+    outcome = fake_gate.run()
+    assert {c.id for c in outcome.criteria if not c.passed} == failing
+    users = {
+        "starter": {"G1", "G2", "G5"},
+        "starter-cpu": {"G1"},
+        "g3-code-s2": {"G3", "G4"},
+        "g3-creative-s1": {"G3", "G4", "G6"},
+        "g4-balanced-s3": {"G4"},
+        "g5-grown": {"G5"},
+        "g6-code-replay30": {"G6"},
+        "g7-facts-checked": {"G7"},
+        "g7-web-light": {"G7"},
+    }
+    for c in outcome.criteria:
+        for name in stopped:
+            named = f"{name} stopped early (unstable_stopped after 2 of 4 steps)" in c.detail
+            assert named == (c.id in users[name]), (c.id, name, c.detail)
+    for name in stopped:
+        assert outcome.raw["runs"][name]["status"] == "unstable_stopped"
+
+
+def test_reuse_follows_the_code_that_trains_and_the_code_that_measures(fake_gate):
+    first = fake_gate.run()
+    counts = (len(fake_gate.trained), len(fake_gate.benched), len(fake_gate.fingerprinted))
+    assert counts == (25, 15, 15)
+
+    def again() -> tuple[int, int, int]:
+        before = (len(fake_gate.trained), len(fake_gate.benched), len(fake_gate.fingerprinted))
+        outcome = fake_gate.run()
+        assert [c.passed for c in outcome.criteria] == [c.passed for c in first.criteria]
+        after = (len(fake_gate.trained), len(fake_gate.benched), len(fake_gate.fingerprinted))
+        return tuple(a - b for a, b in zip(after, before, strict=True))
+
+    assert again() == (0, 0, 0)  # nothing changed: everything is reused
+    fake_gate.digests["measuring"] = "measure-2"  # the benchmarks or fingerprint changed
+    assert again() == (0, 15, 15)
+    fake_gate.digests["training"] = "train-2"  # the trainer changed: train and measure again
+    assert again() == (25, 15, 15)
