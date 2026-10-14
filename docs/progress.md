@@ -8,7 +8,11 @@ Newest entries first. Each entry: date, what changed, what's next, open issues.
   - What was built: code, instruction and grammar generators; content text processing; the offline build pipeline; the bench-v1 suite; the novelty index, judge and creativity scoring; the personality fingerprint; the CLI; the feasibility gate code.
   - Latest code commit: `93f2737`. Default suite: **1247 passed, 1 skipped**. Ruff is clean, and the quick feasibility gate passes on CPU.
 - Measurement rules beyond the plan are recorded in `docs/decisions/0001-bench-v1-measurement-rules.md`. They keep scores of untrained, constant, looping and parroting models near 0.
-- **In progress:** the final whole-branch review. Usage limits interrupted it repeatedly. 16 of 18 finders are done, and their results are saved under `docs/handoff/final-review/`. Next come one fix round, one re-review, and the handoff.
+- **In progress: the final whole-branch review.** Usage limits interrupted it repeatedly.
+  - Finding and de-duplication are complete: 56 findings (1 Critical, 14 Important, 41 Minor).
+  - Verification runs on Sonnet agents, after the owner suggested using lighter models where possible.
+  - A fix plan with tentative rulings is drafted: `docs/handoff/final-review/fix-wave-plan.md`.
+  - Next: decide the findings, then one fix wave of six Sonnet implementers, one re-review, and the handoff.
 - **Pending on the local GPU machine:**
   - Task 15 (license check and the real dataset build)
   - `build-novelty-index` and `build-judge`
