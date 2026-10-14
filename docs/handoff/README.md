@@ -18,10 +18,16 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
   - Latest code commit: `93f2737`.
   - Default suite: **1247 passed, 1 skipped** (~110 s on CPU); ruff is clean.
   - The slow quick-gate test passes in ~96 s on CPU.
-- **In progress: the final whole-branch review.**
-  - Usage limits interrupted it repeatedly. 16 of 18 finders are done, and their results are saved in `docs/handoff/final-review/agent-results.json`.
-  - **Resume guide: `docs/handoff/final-review/README.md`.** It covers how to finish the review without redoing finished work, then the single fix round, the scoped re-review, and the closing docs.
-  - That README also lists the early unverified signals, some serious. For example, the coding-bench function prompts may be unanswerable, and a full build may silently reuse a tiny-build tokenizer.
+- **In progress: the final whole-branch review.** As of 2026-10-14 21:00 UTC:
+  - **Done:** all 18 finders, the completeness critic, 6 extra finders and de-duplication, giving **56 findings** (1 Critical, 14 Important, 41 Minor).
+  - **Verification:** 13 Sonnet verifier agents were started at 20:20 UTC. Their verdicts go to `docs/handoff/final-review/verify/verdicts-<group>.json`. Any group without a verdict file must be re-run, as the review README explains.
+  - **Fix plan:** drafted before the verdicts, in **`docs/handoff/final-review/fix-wave-plan.md`**. It holds the tentative rulings for every finding, six implementer groups in order, and the model tiers.
+  - **Resume guide: `docs/handoff/final-review/README.md`.**
+  - **Model tiers** (the owner's suggestion, recorded as a ledger ruling):
+    - the top model only for controller rulings and measurement-rule decisions
+    - Sonnet for verification, implementation and re-review
+    - Haiku for copy jobs
+  - Ultracode is off, so use Agent-tool agents, not new Workflow runs, unless the owner opts in.
 - **Left for the local GPU machine** (see §5): Task 15, the real judge build, and Task 20 steps 6–9.
 - **Execution record:**
   - `docs/handoff/sdd/ledger.md` has every ruling, deferred minor and carry-forward note.
@@ -55,11 +61,15 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
    - Cloud: the template `docs/handoff/final-review/cloud-sync.sh`. It also copies briefs, deferred minors and final-review artefacts, and takes the commit trailer and branch from the environment.
 
 ## 4. Immediate next step
-**Finish the final review.** Follow `docs/handoff/final-review/README.md` exactly:
-1. Finish the review run: the 2 remaining finders, then the critic, dedup, verification and synthesis.
-2. Run one fix round over the confirmed findings, then one scoped re-review.
-3. Rule on any residuals in the ledger.
-4. Update `docs/progress.md` and this file, then sync and push.
+Follow `docs/handoff/final-review/README.md`. In short:
+1. **Collect the 13 verdict files.** Re-run any missing group with a Sonnet agent and the saved brief.
+2. **Decide every finding** against `fix-wave-plan.md`. The controller re-checks every refuted serious finding. Each decision becomes a ledger `Ruling:` line with its cost if wrong.
+   - Write `final-review.md` (the review report) into the workspace and sync it.
+3. **Run the fix wave:** six sequential Sonnet implementers (groups A–F) with controller-written dispatch notes. Each reproduces every bug with a failing test first.
+4. **Run one scoped re-review** with Sonnet agents, one per group, and rule on any residuals.
+5. **Write the ADR text:** ADR 0001 addenda and a new ADR 0002 for the gate measurement rules.
+6. **Update the docs:** `docs/progress.md` and this file.
+7. **Sync, push, and send the final owner message** listing every ruling and its cost if wrong.
 
 After that, the branch is ready for the local GPU session (§5). Do not merge to `main`; merging is the owner-facing finish step.
 
@@ -74,6 +84,8 @@ After that, the branch is ready for the local GPU session (§5). Do not merge to
      - educational text complexity
      - the conversations' Thorough pass rate (~10% of clean tiny chats failed it)
      - the quality histograms per dataset
+   - **Before the full build, calibrate the simplicity thresholds on real data** (final-review F15). On the first ~2000 rows per source, with the real simple_vocab, measure per-source simplicity quantiles, pick a keep-rate, and set `simplicity_min` in `ml/src/airace_content/assemble.py`. Record the numbers.
+   - Fill in each source's verified Hugging Face commit sha (`SourceSpec.revision`, once final-review F29 lands).
    - Write `docs/data-sources.md`.
    - Run the tok-v1 reply-budget test that is skipped without a tokenizer (`tests/test_bench.py`). Every answer must fit its `max_new_tokens`.
 2. **After any corpus rebuild,** delete `data/judge/v1` and the novelty index before rebuilding them. They are not yet tied to the corpus they were built from, unless the final-review fix round adds that.

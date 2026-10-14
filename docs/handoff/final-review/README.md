@@ -35,16 +35,13 @@ The script stops and returns `{incomplete: <phase>}` instead of synthesizing fro
 
 (`final-review.js` is kept for reference and for re-running finders. With `args.cachedLabels` it replays saved results through a Haiku loader agent.)
 
-## After the report exists (the rest of the plan)
-1. Read `final-review.md`. Decide each confirmed finding: fix, or accept with a ledger `Ruling:` line that says why and what it costs if wrong. Measurement-validity rules (scores, chance levels, gate criteria) also go into `docs/decisions/0001-bench-v1-measurement-rules.md` or a new ADR.
-2. Send **one** fix implementer (opus) the confirmed Critical and Important findings, the cheap Minors, and the carried minors:
-   - G4–G6 report-table rounding near thresholds
-   - the duplicate CPU-time formatting in the non-CUDA G1 detail
-3. Run exactly **one** scoped re-review as a workflow with skeptics. Adjudicate any residuals with ledger rulings.
-4. Update `docs/progress.md` and `docs/handoff/README.md` with the new commit, test counts and the local GPU checklist. Then sync and push.
-5. Final message to the owner: every ruling, each with its cost if wrong, plus what their local session must do next. Do not merge to `main`, and open no PR unless asked.
+## After the verdicts (the rest of the plan)
+Follow **`fix-wave-plan.md`** in this folder.
+- It holds the tentative ruling for every finding, six implementer groups A–F in order, the model tiers, and the process: TDD, one re-review, ADRs by the controller, docs, and the final owner message.
+- Update a ruling wherever a verdict contradicts it.
+- Do not merge to `main`, and open no PR unless asked.
 
-## Early signal from the 16 finished finders (not yet verified)
+## Early signal from the first 16 finders (superseded by the 56 de-duplicated findings in `verify/*.json`)
 These are claims, not confirmed defects. Verification decides.
 - **Coding bench:**
   - Function-completion prompts end on a bare newline token that training never follows with an indented line, so all 50 items may be unanswerable. Reported by 4 finders, including one Critical.
