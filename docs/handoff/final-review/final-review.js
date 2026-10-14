@@ -166,38 +166,50 @@ const merged = deduped.merged
 log(`after dedup: ${merged.length} findings (${merged.filter(f => f.severity !== 'Minor').length} Critical/Important)`)
 
 // ---------- Verify ----------
+// v2 (2026-10-14): one all-lens skeptic per serious finding, one skeptic per subsystem group of minors.
+// (v1 used 3 skeptics per serious finding and 1 per minor = 86 agents; usage-limit throughput made that impractical.)
 phase('Verify')
-async function verify(f, idx) {
-  const serious = f.severity !== 'Minor'
-  const lenses = serious ? SKEPTICS : [SKEPTICS[0]]
-  const votes = (await parallel(lenses.map(s => () => runAgent(
-    `${CONTEXT}\n\nYou are an adversarial SKEPTIC. A reviewer reports this finding; try to REFUTE it. ${s.text}\nSet refuted=false only if, under your lens, the finding stands. If it stands, give the severity it really deserves.\n\nFINDING:\n${JSON.stringify(f)}`,
-    { label: `verify:${idx}:${s.key}`, phase: 'Verify', schema: VERDICT })))).filter(Boolean)
-  if (votes.length < lenses.length) return { ...f, id: `F${idx + 1}`, failed: true, votes }
-  const upheld = votes.filter(v => !v.refuted)
-  const confirmed = serious ? upheld.length >= 2 : upheld.length >= 1
-  const sevs = upheld.map(v => v.severity_if_real).filter(s => s !== 'None')
-  const rank = { Critical: 3, Important: 2, Minor: 1 }
-  sevs.sort((a, b) => rank[b] - rank[a])
-  const agreed = sevs.length ? sevs[Math.floor(sevs.length / 2)] : f.severity
-  return { ...f, id: `F${idx + 1}`, confirmed, final_severity: confirmed ? agreed : 'None', votes }
+const VERDICTS = { type: 'object', properties: { verdicts: { type: 'array', items: { type: 'object', properties: {
+  id: { type: 'string' }, refuted: { type: 'boolean' }, severity_if_real: { type: 'string', enum: ['Critical', 'Important', 'Minor', 'None'] },
+  reasoning: { type: 'string' }, fix_recommendation: { type: 'string' }, fix_size: { type: 'string', enum: ['none', 'small', 'medium', 'large'] } },
+  required: ['id', 'refuted', 'severity_if_real', 'reasoning', 'fix_recommendation', 'fix_size'] } } }, required: ['verdicts'] }
+const ALL_LENSES = SKEPTICS.map(s => '- ' + s.text).join('\n')
+const VERIFY_RULES = `Rules: read the exact code path; run a focused test or a scratchpad probe when that settles the question (probes only under ${SCRATCH}/, never in the repo; at most 10 Firecrawl requests if you need real Hugging Face rows). A finding is refuted if its scenario cannot happen as described, if the behaviour is deliberately required or accepted by the spec/plan/ledger/ADR and that decision is not clearly wrong, or if its impact is negligible. Otherwise it stands: give the severity it really deserves, the minimal correct fix (precise enough for an implementer), and the fix size.`
+const withIds = merged.map((f, i) => ({ ...f, id: `F${i + 1}` }))
+const SKIP = { F51: 'docs/progress.md and docs/handoff/README.md were refreshed by the controller on 2026-10-14 (commits 52415fb, 4d6af96)' }
+const seriousF = withIds.filter(f => f.severity !== 'Minor')
+const minorF = withIds.filter(f => f.severity === 'Minor' && !SKIP[f.id])
+const GROUP_IDS = [
+  ['content-build', ['F16', 'F17', 'F18', 'F28', 'F29', 'F30']],
+  ['content-text', ['F26', 'F27', 'F31', 'F45', 'F52']],
+  ['core-train', ['F21', 'F22', 'F23', 'F47', 'F48', 'F50']],
+  ['bench-items', ['F24', 'F25', 'F44', 'F49', 'F53', 'F54', 'F55', 'F56']],
+  ['evals-infer', ['F32', 'F33', 'F34', 'F43']],
+  ['gate-runs', ['F19', 'F20', 'F35', 'F36', 'F37', 'F41', 'F46']],
+  ['cli-tests', ['F38', 'F39', 'F40', 'F42']],
+]
+const grouped = new Set(GROUP_IDS.flatMap(g => g[1]))
+const leftovers = minorF.filter(f => !grouped.has(f.id)).map(f => f.id)
+if (leftovers.length) GROUP_IDS.push(['other', leftovers])
+const byId = Object.fromEntries(withIds.map(f => [f.id, f]))
+const jobs = [
+  ...seriousF.map(f => ({ key: f.id, ids: [f.id], prompt: `${CONTEXT}\n\nYou are an adversarial SKEPTIC verifying ONE finding of the final review. Try hard to REFUTE it, applying all three lenses:\n${ALL_LENSES}\n${VERIFY_RULES}\nReturn exactly one verdict, with id ${f.id}.\n\nFINDING:\n${JSON.stringify(f)}` })),
+  ...GROUP_IDS.map(([name, ids]) => ({ key: `minors:${name}`, ids, prompt: `${CONTEXT}\n\nYou are an adversarial SKEPTIC verifying a GROUP of minor findings of the final review (subsystem group: ${name}). For EACH finding, try hard to REFUTE it, applying all three lenses:\n${ALL_LENSES}\n${VERIFY_RULES}\nReturn exactly one verdict per finding, with ids ${ids.join(', ')}.\n\nFINDINGS:\n${JSON.stringify(ids.map(id => byId[id]))}` })),
+]
+const results = await parallel(jobs.map(j => () => runAgent(j.prompt, { label: `verify2:${j.key}`, phase: 'Verify', schema: VERDICTS })
+  .then(r => (r && j.ids.every(id => r.verdicts.some(v => v.id === id))) ? r : null)))
+const failedJobs = jobs.filter((j, i) => !results[i]).map(j => j.key)
+if (failedJobs.length) {
+  log(`INCOMPLETE: ${failedJobs.length} verification jobs failed or returned incomplete verdicts; stopping so a resume re-runs them`)
+  return { incomplete: 'verify', failed: failedJobs }
 }
-const verified = (await parallel(merged.map((f, i) => () => verify(f, i)))).filter(Boolean)
-if (verified.length < merged.length || verified.some(v => v.failed)) {
-  log('INCOMPLETE: some verification agents failed; stopping so a resume re-runs them')
-  return { incomplete: 'verify', failed: verified.filter(v => v.failed).map(v => v.id) }
-}
-const confirmed = verified.filter(v => v.confirmed)
-log(`confirmed: ${confirmed.length}/${verified.length} (${confirmed.filter(v => v.final_severity === 'Critical').length} Critical, ${confirmed.filter(v => v.final_severity === 'Important').length} Important, ${confirmed.filter(v => v.final_severity === 'Minor').length} Minor)`)
-
-// ---------- Synthesize ----------
-phase('Synthesize')
-const triage = round1.find(r => r.id === 'triage-deferred')
-const report = await runAgent(`${CONTEXT}\n\nYou are the SYNTHESIZER of the final review. Write the final review report as Markdown to ${W}/final-review.md (this is the one file you may write; it is in the git-ignored workspace). Structure:\n1. Verdict: is the branch ready for the owner's real runs once the confirmed Critical/Important findings are fixed? One paragraph.\n2. Confirmed Critical and Important findings, most severe first: id, title, file:line, scenario, the exact fix to make, and the test that must pin it. These will go to ONE fix implementer, so make each fix instruction precise and self-contained.\n3. Confirmed Minor findings worth fixing in the same pass (cheap, low-risk), with fixes.\n4. Remaining Minors and refuted findings: one line each with why (so nothing is silently dropped).\n5. Deferred-minor triage table (from the triage reviewer's coverage note).\n6. What the review could not verify here (GPU/Windows/network-only behaviour) and what the local session must check.\nThen return the same verdict paragraph and the list of finding ids to fix.\n\nVERIFIED FINDINGS (JSON):\n${JSON.stringify(verified)}\n\nDEFERRED TRIAGE NOTE:\n${triage ? triage.coverage_note : 'n/a'}\n\nCRITIC GAPS:\n${critic ? critic.gaps : 'n/a'}`,
-  { label: 'synthesize', phase: 'Synthesize', schema: { type: 'object', properties: { verdict: { type: 'string' }, fix_ids: { type: 'array', items: { type: 'string' } }, report_path: { type: 'string' } }, required: ['verdict', 'fix_ids', 'report_path'] } })
-
-return {
-  report,
-  counts: { finders: allRounds.length, raw: raw.length, merged: merged.length, confirmed: confirmed.length },
-  confirmed: confirmed.map(c => ({ id: c.id, severity: c.final_severity, title: c.title, file: c.file, line: c.line })),
-}
+const verdictById = {}
+for (const r of results) for (const v of r.verdicts) verdictById[v.id] = v
+const verified = withIds.map(f => SKIP[f.id]
+  ? { id: f.id, severity: f.severity, title: f.title, file: f.file, confirmed: false, skipped: SKIP[f.id] }
+  : { id: f.id, severity: f.severity, title: f.title, file: f.file, confirmed: !verdictById[f.id].refuted,
+      final_severity: verdictById[f.id].refuted ? 'None' : verdictById[f.id].severity_if_real, fix_size: verdictById[f.id].fix_size })
+const confirmedList = verified.filter(v => v.confirmed)
+log(`confirmed: ${confirmedList.length}/${verified.length} (${confirmedList.filter(v => v.final_severity === 'Critical').length} Critical, ${confirmedList.filter(v => v.final_severity === 'Important').length} Important, ${confirmedList.filter(v => v.final_severity === 'Minor').length} Minor)`)
+// Synthesis is done by the controller from the journal (dedup + verify2:* results), so this returns a compact index only.
+return { counts: { finders: allRounds.length, raw: raw.length, merged: merged.length, confirmed: confirmedList.length }, verified }

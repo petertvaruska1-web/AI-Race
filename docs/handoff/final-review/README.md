@@ -10,25 +10,20 @@ Script: `final-review.js` in this folder. It is the portable copy of the workflo
 2. **Critic**: a completeness critic proposes up to 6 extra finders.
 3. **Find more**: those extra finders run.
 4. **Dedup**: duplicate findings are merged.
-5. **Verify**:
-   - Critical and Important findings each get 3 skeptics (reproduce, intent, impact). A finding is confirmed if at least 2 of 3 uphold it.
-   - Minor findings get 1 skeptic.
-6. **Synthesize**: writes `.superpowers/sdd/2026-10-06-m1-it-learns/final-review.md`. The sync script copies it here as `final-review.md`.
+5. **Verify**: v2, as described under "State at save time".
+6. **Synthesize**: the controller writes `.superpowers/sdd/2026-10-06-m1-it-learns/final-review.md` from the journal results. The sync script copies it here as `final-review.md`.
 
 The script stops and returns `{incomplete: <phase>}` instead of synthesizing from partial data whenever an agent fails, e.g. on a usage limit.
 
-## State at save time (2026-10-14 15:15 UTC)
-- **Find:** all 18 finders done. **Critic:** done; it proposed 6 extra finders:
-  - `live-hf-source-formats`
-  - `real-text-cleaning-calibration`
-  - `bench-knowledge-truth-audit`
-  - `full-scale-peak-ram`
-  - `g4-noise-at-full-k`
-  - `hf-streaming-failure-behaviour`
-- **Firecrawl:** some extra finders fetch real Hugging Face rows through the Firecrawl connector, because direct HTTPS to Hugging Face is blocked here. Each extra finder is capped at 40 Firecrawl requests, since they are billed to the owner's account.
-- All finished results, including the critic's, are in `agent-results.json` (label → result).
-- **Still to run:** the 6 extra finders, then Dedup, Verify and Synthesize.
-- **A relaunch (sixth resume) was running when this was saved.** If the same session continues, it may finish on its own. Check `final-review.md` here and the ledger first.
+## State at save time (2026-10-14 20:15 UTC)
+- **Find, Critic, Find more and Dedup are done.** Dedup produced **56 findings**: 1 Critical, 14 Important and 41 Minor. They are numbered F1–F56 in the order of `agent-results.json` → `dedup.merged`.
+- **Verify was restructured (v2)** because of usage-limit throughput. Each window has completed only about 3–8 review agents, and the v1 design needed 86 verifiers.
+  - Each serious finding gets one adversarial skeptic that applies all three lenses (reproduce, intent, impact). That is 15 agents.
+  - Each subsystem group of minors gets one skeptic, which returns a verdict per finding. That is 7 agents.
+  - F51 (stale progress and handoff docs) is skipped, because the controller fixed it on 2026-10-14.
+  - Every confirmed bug is reproduced again by a failing test before it is fixed (TDD in the fix wave).
+- **Synthesis is done by the controller**, not an agent. The controller writes `final-review.md` from the dedup and `verify2:*` results, together with its rulings.
+- **A relaunch (eighth launch, 20:12 UTC) was running when this was saved.** After it finishes: export again, write the report and rulings, then start the fix wave.
 
 ## How to resume
 **Same session** (the workflow cache still exists): `Workflow({scriptPath: <session scratchpad>/final-review.js, resumeFromRunId: "wf_c9a5295d-a19"})`. Repeat after each limit reset until it returns a report.

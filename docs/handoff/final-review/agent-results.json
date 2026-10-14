@@ -8,7 +8,93 @@
   "find+:hf-streaming-failure-behaviour",
   "find+:live-hf-source-formats",
   "find+:real-text-cleaning-calibration",
-  "synthesize"
+  "synthesize",
+  "verify:0:impact",
+  "verify:0:intent",
+  "verify:0:reproduce",
+  "verify:10:impact",
+  "verify:10:intent",
+  "verify:10:reproduce",
+  "verify:11:impact",
+  "verify:11:intent",
+  "verify:11:reproduce",
+  "verify:12:impact",
+  "verify:12:intent",
+  "verify:12:reproduce",
+  "verify:13:impact",
+  "verify:13:intent",
+  "verify:13:reproduce",
+  "verify:14:impact",
+  "verify:14:intent",
+  "verify:14:reproduce",
+  "verify:15:reproduce",
+  "verify:16:reproduce",
+  "verify:17:reproduce",
+  "verify:18:reproduce",
+  "verify:19:reproduce",
+  "verify:1:impact",
+  "verify:1:intent",
+  "verify:1:reproduce",
+  "verify:20:reproduce",
+  "verify:21:reproduce",
+  "verify:22:reproduce",
+  "verify:23:reproduce",
+  "verify:24:reproduce",
+  "verify:25:reproduce",
+  "verify:26:reproduce",
+  "verify:27:reproduce",
+  "verify:28:reproduce",
+  "verify:29:reproduce",
+  "verify:2:impact",
+  "verify:2:intent",
+  "verify:2:reproduce",
+  "verify:30:reproduce",
+  "verify:31:reproduce",
+  "verify:32:reproduce",
+  "verify:33:reproduce",
+  "verify:34:reproduce",
+  "verify:35:reproduce",
+  "verify:36:reproduce",
+  "verify:37:reproduce",
+  "verify:38:reproduce",
+  "verify:39:reproduce",
+  "verify:3:impact",
+  "verify:3:intent",
+  "verify:3:reproduce",
+  "verify:40:reproduce",
+  "verify:41:reproduce",
+  "verify:42:reproduce",
+  "verify:43:reproduce",
+  "verify:44:reproduce",
+  "verify:45:reproduce",
+  "verify:46:reproduce",
+  "verify:47:reproduce",
+  "verify:48:reproduce",
+  "verify:49:reproduce",
+  "verify:4:impact",
+  "verify:4:intent",
+  "verify:4:reproduce",
+  "verify:50:reproduce",
+  "verify:51:reproduce",
+  "verify:52:reproduce",
+  "verify:53:reproduce",
+  "verify:54:reproduce",
+  "verify:55:reproduce",
+  "verify:5:impact",
+  "verify:5:intent",
+  "verify:5:reproduce",
+  "verify:6:impact",
+  "verify:6:intent",
+  "verify:6:reproduce",
+  "verify:7:impact",
+  "verify:7:intent",
+  "verify:7:reproduce",
+  "verify:8:impact",
+  "verify:8:intent",
+  "verify:8:reproduce",
+  "verify:9:impact",
+  "verify:9:intent",
+  "verify:9:reproduce"
  ],
  "critic": {
   "extra_tasks": [
@@ -38,6 +124,905 @@
    }
   ],
   "gaps": "The first round covers the code well: every module in ml/src was read in full by at least two finders. What is missing is checks against real data, a few full-scale measurements, and a few Windows operating hazards. Details below. I ran only read-only probes. git status is clean and I wrote no files.\n\n1. Real Hugging Face formats were called \"unverifiable\", but they can be checked now. All three content finders, and skills/correctness for the mbpp rows, said real source formats, licenses, the Gutenberg METADATA subject wording, the TinyStories layout and the simplewiki lead-section structure need network and are left to Task 15. Direct HTTPS to Hugging Face is blocked (curl gets a 403 on CONNECT). The Firecrawl scrape tool can reach the dataset viewer API, though. I confirmed this with 2 credits:\n   - /first-rows for sedthh/gutenberg_english returns TEXT, SOURCE and METADATA. METADATA is a JSON string whose \"subjects\" value is one \"; \"-joined string. This matches `_subjects` at ml/src/airace_content/sources.py:135-151.\n   - /splits for roneneldan/TinyStories shows a 'default' config with train and validation splits.\n   - Caveat for whoever does this: rows the viewer lists in `truncated_cells` come back as cut-off, JSON-string-encoded values (100 chars). They look double-encoded but are viewer artifacts, not real data.\n   So the Task 15 failure modes can be caught before the owner's hour-long build, which has no resume. Those modes are: an adapter or format mismatch, a wrong config or split, a source too small for its quota (mbpp 'full' train has about 374 rows), Gutenberg's share of children's books, and licenses. No one has done this.\n\n2. Cleaning, quality and topic thresholds have never seen real text. Every probe used fixtures or generated text. A finder confirmed that boilerplate barely moves quality on synthetic long docs. Several things are unmeasured:\n   - What share of clean real text each cleaning level drops.\n   - The 'thorough' pass rates. These matter because the judge recipe (ml/src/airace_ml/evals/judge.py:123-134) trains on thorough + dedup + fact_check across all 8 datasets, and G7 also uses thorough cleaning.\n   - The topic distribution on real web text.\n   - Real bytes per token against BYTES_PER_TOKEN_ESTIMATE=3.6 (ml/src/airace_content/assemble.py:144-147).\n   - The error of the 200-doc token estimate on FineWeb's real length distribution.\n\n3. Frozen bench content was audited only in part. The 200 grammar pairs and 60 instruction items were eyeballed, but the KB was only spot-checked (capitals, transcontinental countries, animals). No one listed all 100 knowledge items, the consistency groups, or the false-fact plan to look for wrong keyed answers, MC distractors that are also true, or \"false\" facts that are actually true. Such errors would silently corrupt the knowledge score, G3's facts arm and G7's false-fact rate.\n\n4. Peak RAM across a full-scale pipeline was never measured. Finders timed individual stages: dedup, quality, and encoding at 550 MB. build.py:340-358 keeps every dataset's AssembledDoc list and text strings alive together before encoding. No one measured the build's combined peak RSS, or the trainer's setup for the judge recipe on full-size corpora (about 137M tokens, about 0.8M docs). The owner's RAM is unknown.\n\n5. The G4 magnitude claim is an extrapolation. The gate_cli/correctness Important finding measured fingerprint noise on quick runs with k=1, then extrapolated to \"about 0.5 at k=3\" for full scale. The gate fix will probably change SEED_MIN_DISTANCE (ml/src/airace_ml/experiments/gate.py:123), so it needs a measured figure.\n\n6. How the build behaves when streaming fails is unknown. The \"no resume, all work lost\" finding is filed as Minor, but no one checked how datasets 5.1 / huggingface_hub 1.33 streaming handles:\n   - a connection reset;\n   - HTTP 429 when anonymous (CLAUDE.md and the handoff give no HF_TOKEN guidance);\n   - a sleep/wake gap.\n   datasets is not installed in the cloud venv. PyPI is reachable (HTTP 200), so its source can be downloaded into the scratchpad and read.\n\n7. Windows operating hazards no finder raised. These are operating notes for docs/handoff/README.md §5, not code defects:\n   - Nothing in ml/src keeps the PC awake (no SetThreadExecutionState). A desktop that sleeps after the default idle timeout will suspend the hour-long build, judge or gate. For the build, that also drops its network streams.\n   - A click in a classic console window turns on QuickEdit selection, which pauses the process at its next progress print until a key is pressed.\n\n8. CUDA test behaviour is not covered (left out to stay within 6 tasks). On the owner's GPU machine, the slow tests (test_gate.py:132 and :602, test_creativity.py:119 and :652) run on CUDA by default, and no test has run on CUDA since Task 8. tests-health flagged only the exact-equality assert in the GPU test (test_infer.py:413). A future session should check the rest of these slow tests before asking the owner to run `pytest -m slow`.\n\n9. A small doc slip. Plan Task 20 step 6 says to run `airace-ml chat --model data/judge/v1` from ml/. That resolves to ml/data/judge/v1, but data lives at <repo>/data (ml/src/airace_ml/paths.py:15-16). The handoff guide does not repeat the step.\n\n10. Checked by me and clean, so no tasks proposed:\n   - **G1 overhead:** bench generation is batched (suite.py:206, creativity.py:123). chat_speed warms up before timing (gate.py:640-643). The gate's shapes are tiny (configs.py:16-19). The trainer evaluates every max(25, steps//20) steps (trainer.py:78, 435). So overhead is unlikely to fail G1's 90 s / 30 s targets.\n   - **Devices:** every tensor and Generator in infer/lm.py is created on self.device (lm.py:238, 315-320, 373).\n   - **Windows paths:** the owner's repo path has a space (\"C:\\Users\\petko\\Desktop\\AI Race\", from docs/handoff/sdd/task-7-report.md:66). It is harmless: the only subprocess call passes an argv list (tests/content/test_noise_dedup.py:517). No chmod, resource, fcntl or symlink constructs appear in the tests."
+ },
+ "dedup": {
+  "merged": [
+   {
+    "evidence": "Four independent probes agree. (1) A 4096-vocab BPE was trained with train_tokenizer on generator text with code at about 1/8 of the sample, like build.py:200-218. The prompt tail is ['.\"\"\"', 'Ċ'], while prompt+reference gives ['.\"\"\"', 'ĊĠĠĠ', 'Ġreturn', ...]. For 50/50 function items the prompt tokens are not a prefix of the prompt+reference tokens. The same check over every other non-chat item (reasoning, pattern, knowledge, consistency, coding outputs) found 0 mismatches. In code training text a bare 'Ċ' was followed by a space-led token 0 times out of about 22k-51k, and a closing docstring was followed by 'ĊĠĠĠ' every time (2011/2011, 1990, 7001/7001 in different probes). (2) Small models (2 layers, 128 wide) were trained on code_train_docs on the CPU. With the suite's prompt 0/50 items pass and replies start 'print(...)'. With the trailing newline removed, 49-50/50 pass and replies start with a newline and an indented 'return'. (3) The fakes (answer_key_lm replies with the reference text; Task 16 fakes keyed by exact token tuples) and the reply-budget test (test_bench.py:707-739) cannot catch this. (4) No ledger, ADR or task-report ruling covers the boundary.",
+    "file": "ml/src/airace_ml/skills/code.py",
+    "fix": "Show the model the header up to the closing quotes with no trailing newline: in _bench_functions build CheckItem(prompt=v.prompt.rstrip('\\n'), check_args={'prompt': v.prompt, ...}), or rstrip non-chat prompts in suite._ask/_prompt_ids. function_body already keeps a leading empty line, so a reply starting with a newline builds valid source (50/50 references pass that way). Leave _Variant.prompt and the training docs unchanged, so no corpus rebuild is needed; MEASURING_SOURCES changes, so gate caches refresh. Update fakes.answer_key_lm to use the same encoding and reply with a newline + reference. Add a regression test that, for every non-chat bench item, encode(prompt) + encode(continuation) == encode(prompt + continuation) under a BPE trained with the build's pre-tokenizer (or, more simply, that no non-chat prompt ends in whitespace). Record the deviation from plan line 1176 in ADR 0001. Do it before the owner's first real gate run and before bench-v1 freezes.",
+    "line": "878 (_Variant.prompt ends with the docstring's closing quotes plus a newline), 1004-1012 (CheckItem prompt = v.prompt), 927 (training text = prompt + body); consumed at ml/src/airace_ml/evals/suite.py:151-154 and 204-210; checkers.py:152-162; format mandated by plan line 1176",
+    "scenario": "tok-v1 is byte-level BPE with the GPT-2 pre-tokenizer (tokenizer.py:80). In training text (prompt + body), the newline after a function's docstring always merges with the body's indentation into one token (newline + 3 spaces, 'ĊĠĠĠ'). The bench prompt for each of the 50 fmt:function items ends exactly at that newline, so its last token is a bare 'Ċ'. In the code training text a bare 'Ċ' is only ever followed by column-0 lines ('print', 'Output', 'def', 'for'). A model that has learned to write bodies therefore continues with greedy decoding as `print(add_numbers(5, 16))  # 21`. function_body() cuts at that first unindented line and returns '', MiniPy runs a body that is only the docstring, and every hidden test fails. All 50 function items read 0 for every model whatever it learned. Consequences: coding is capped at about 67, the fmt:function and function-family discovery tags never fire, G3's 'code-heavy mix leads coding' must rest on the output-prediction items alone and can fail for a measurement reason, and bench-v1 would freeze with the defect. The implementation follows the plan's prompt format faithfully, so the plan itself is wrong here.",
+    "severity": "Critical",
+    "sources": [
+     "skills/correctness#0",
+     "skills/robustness#0",
+     "skills/integration#0",
+     "evals/integration#0"
+    ],
+    "title": "Function-completion bench prompts end on a bare newline token that training never follows with indentation, so no trained model can pass the 50 function items (a third of coding in bench-v1)"
+   },
+   {
+    "evidence": "Two probes on the CPU under torch.autocast(bfloat16) counted the unique storages autograd saves (saved_tensors_hooks, deduplicated by storage). Attention was modelled like the CUDA flash/memory-efficient kernels, which save q/k/v/out. The judge shape measured 203 KiB/token (fp32 residual/norm 51, bf16 384-wide 36.75, FFN 64, q/k/v/out 20, log-softmax 16). Totals: judge 7.13 GiB (core/correctness) and 7.70 GiB peak RSS growth in a real trainer-style step at 128x256 (core/robustness probe_peak.py); starter 1.26 GiB; 16x640x1024 about 11 GiB. Only the starter shape was ever run on the GPU (Task 8). No GPU memory check exists for the judge recipe. Not verified on a GPU here.",
+    "file": "ml/src/airace_ml/train/trainer.py",
+    "fix": "In _train_step, split the cfg.batch_size rows into micro-batches capped by a token budget (for example at most 8192 tokens). Run forward+backward per micro-batch with the loss scaled by rows_in_micro/batch_size and accumulate the logged loss. Then do one clip, one spike check and one optimizer step, with one host sync. The math is identical up to summation order, and resume equivalence is unaffected because the sampler draws the same rows. Drop `logits` before backward, or compute cross-entropy in chunks. Add a @pytest.mark.gpu test that runs one step of judge_train_config() (and the largest legal shape) on CUDA and asserts torch.cuda.max_memory_allocated() stays well under 8 GiB. As a stopgap before the owner's judge run, lower the judge recipe to batch_tokens=16384 (about 3.6 GiB), and measure max_memory_allocated on the owner's card before the 1 h build.",
+    "line": "510-519 (_train_step: one forward of cfg.batch_size rows; `logits` stays referenced through backward); recipe at ml/src/airace_ml/evals/judge.py:123-135 (batch_tokens=32768)",
+    "scenario": "The owner runs `airace-ml build-judge` on Windows 11 with the RTX 3050 8 GB. The Ryzen 5 5500 has no iGPU, so the desktop also lives on that card. judge_train_config() gives 128 rows x 256 tokens per step, all sent through one bf16-autocast forward. The bf16 logits stay alive, a full fp32 copy is made for cross_entropy, and the whole batch is backpropagated. There is no gradient accumulation anywhere in ml/src. Estimated peak: about 5.9-6.4 GiB of saved activations, plus 0.75-1.0 GiB of logits and logit-gradient temporaries, plus 0.23-0.25 GiB of weights, grads and AdamW state, plus the CUDA context. That is about 7.1-7.7 GiB, above the roughly 6.5-7.3 GiB a WDDM display card leaves a process. Likely outcomes: (a) torch.OutOfMemoryError at step 1 with no guard, so the ~1 h judge build the gate needs never starts; or (b) NVIDIA's default sysmem fallback on Windows spills over PCIe 3.0 x8 and the build runs several times slower with no message. The same limit rules out valid in-range shapes: 16x640 at ctx 1024 needs about 9-11 GiB, and 12x512x1024 about 6.8 GiB. That contradicts spec §4.2's claim that the system ceiling is something the reference hardware meets. The gate's own runs fit (starter about 1.3 GiB, early shape about 2.5 GiB).",
+    "severity": "Important",
+    "sources": [
+     "core/correctness#0",
+     "core/robustness#0"
+    ],
+    "title": "Trainer runs a whole batch_tokens batch in one forward/backward with no micro-batching, so the reference judge recipe (8x384x256, 32768 tokens/step) likely does not fit the RTX 3050's 8 GB, and the spec's largest shapes cannot train at all"
+   },
+   {
+    "evidence": "Several probes: build_corpus('tiny', root, fixture_fetch) and then build_corpus('full', same root, reduced targets or stubbed assembly) gave 'tiny trained True vocab 4096', 'full trained False', the same tokenizer hash (3c06b03e6f9b) or a byte-identical tokenizer.json, and manifest scale 'full' for all 8 datasets with no tokenizer provenance key. Held-out bytes/token: 2.070 (tiny --fixtures tokenizer), 3.081 (1.5 MB sample), 3.109 (13 MB sample). test_build.py:836-845 confirms shared artifacts are reused in partial builds. corpus_dir() and tokenizer_path() are scale-independent.",
+    "file": "ml/src/airace_content/build.py",
+    "fix": "Record the tokenizer's and shared artifacts' provenance when they are made: a sidecar (e.g. tokenizer/tok-v1/build.json) or manifest field with scale, sample bytes, seed and corpus version. At --scale full, raise BuildError (exit 1, plain message to add --retrain-tokenizer or use another --out) when the existing tokenizer or simple_vocab/known_vocab/false_facts were made at another scale or have no record; or retrain automatically when all datasets are being built. Apply the VOCAB_SIZE check to a reused tokenizer too. Make tiny builds default to a separate root (e.g. data/tiny) or refuse to overwrite a full corpus. Drop 'tiny' from cli.py BUILD_DATA_HINT or say it needs its own --out. Update CLAUDE.md accordingly and add a 'tiny then full' test.",
+    "line": "311 (train_tok = retrain_tokenizer or not tok_path.exists()), 322 (loaded as frozen), 324-337 (reusable shared artifacts), 387-390 (vocab-size check only for a freshly trained tokenizer); ml/src/airace_ml/cli.py:94, 374-381 (BUILD_DATA_HINT); ml/src/airace_ml/paths.py:20-25; ml/src/airace_content/manifest.py:48-70, 199-223; CLAUDE.md:37",
+    "scenario": "Before the hours-long `--scale full` run, the owner or the local Task 15 session runs `airace-content build --scale tiny` (from the Hub or with --fixtures) into the default data root as a quick check. CLAUDE.md lists both scales with the same default output, and the airace-ml missing-tokenizer hint says 'airace-content build --scale tiny (a quick test set) or --scale full'. That build trains data/tokenizer/tok-v1/tokenizer.json on about 1,200 small documents (or about 40 KB of fixtures). The later `--scale full` finds the file, sets train_tok to False, loads the tiny tokenizer as frozen and encodes all ~137M tokens with it. The vocab-size check runs only for a freshly trained tokenizer, and a tiny tokenizer reaches 4096 entries anyway. Nothing records the scale the tokenizer was trained at: the manifest marks every dataset 'full', and the only sign is the summary line 'tokenizer: frozen, reused'. tok-v1 is frozen permanently, so the novelty index, the judge, the gate and every future player model inherit it. The measured cost of the --fixtures tiny tokenizer is about 50% more tokens for the same English (2.07 vs 3.08-3.11 bytes/token held out). A partial `--scale full --datasets X` build into a tiny-built root (which Task 15 step 3 prescribes) also reuses the tiny simple_vocab.txt and known_vocab.txt, so real web quality is scored against a few hundred known words and Standard/Thorough cleaning drops most of web. The reverse is also unguarded: a later tiny build into the same root overwrites the full corpora and shared artifacts.",
+    "severity": "Important",
+    "sources": [
+     "content/correctness#0",
+     "content/robustness#0",
+     "content/integration#0",
+     "gate_cli/integration#0",
+     "triage-deferred#0"
+    ],
+    "title": "A full corpus build silently reuses (and freezes as tok-v1) a tokenizer and shared vocab files left by an earlier tiny build in the same data root; the airace-ml CLI itself suggests the tiny build"
+   },
+   {
+    "evidence": "probe_judge_reuse.py: tiny build seed 0 (tokenizer 3c06b03e6f9b), shrunk judge built; rebuild with seed 1 and --retrain-tokenizer (310c5f02da56); build_judge again emitted 0 training events, data/judge/v1/tokenizer.json became 310c5f02da56 while the weights were still the old model, and calibration.json was rewritten (p90 7.75 -> 8.19) with no error. A judge dir with a matching train_config.json and a truncated model.safetensors made cli.main(['build-judge', ...]) raise an uncaught 'SafetensorError: Error while deserializing header'. Code reads of NoveltyIndex.save/load, gate _missing_inputs/_load_inputs/_check_novelty_record and the bench cache key confirm no provenance check. grep found no rebuild guidance in CLAUDE.md, docs/progress.md or the handoff README. The Task 17 deferred minor covers only build-judge's reuse after stale corpora.",
+    "file": "ml/src/airace_ml/evals/judge.py",
+    "fix": "Record the data identity (the gate's _data_identity digest, or at least the tokenizer sha256 plus corpus digests; move the helper to a shared place) in the judge's train_config.json and in the novelty index's .json at build time. Make judge._trained require it to match, so build-judge retrains after a rebuild. In the gate's _load_inputs and the CLI bench, compare it with the current data root and raise the existing 'out of date ... Rebuild it with: airace-ml build-novelty-index / build-judge' error on a mismatch; also put the identity into the bench cache key. Refuse (or label as a test judge) a judge whose train_config.json is not the full judge_train_config() recipe. In build_judge, if a reused checkpoint fails to load (_LOAD_ERRORS/SafetensorError), treat the judge as untrained and retrain. Until then, write 'after any corpus or tokenizer rebuild, delete data/judge/v1 and rerun build-novelty-index' into CLAUDE.md and the handoff README.",
+    "line": "235-243 (_trained compares only the recipe config and file presence), 276-297 (tokenizer copied at 293 even when weights are reused), 100-106 (Judge.load checks only vocab size); ml/src/airace_ml/evals/novelty.py:162-209, 282-320 (index record holds only hash_base/n/sample_mod/count); ml/src/airace_ml/experiments/gate.py:700-718, 721-735, 789-852, 932-940; ml/src/airace_ml/cli.py:263-268, 679-711, 782-805",
+    "scenario": "Spec §4.12 and plan Task 20 step 8 say to adjust corpora and rerun the gate. CLAUDE.md says a rerun 'reuses every run and measurement whose data and code are unchanged, and redoes the rest'. (a) After `airace-content build` is rerun (possibly with --retrain-tokenizer, which the Task 14 deferred minor advises), `airace-ml build-judge` sees the same recipe config, skips training, copies the NEW tokenizer next to weights trained on the OLD token ids, recalibrates and reports success. Judge.load only compares vocab sizes (both 4096). Creativity coherence and G2 well-formedness are then computed through the wrong id mapping, and the recalibrated percentiles hide it. (b) The novelty index carries no corpus or tokenizer digest. _load_novelty/_load_judge in the gate and _creativity_tools in bench check only structure, and the bench cache key holds only len(novelty) and the judge calibration. So creativity novelty is measured against old corpora; after a re-tokenize almost every 8-gram reads as new and creativity is inflated in G3 and G6. The gate's runs retrain correctly because they are keyed by _data_identity, but its instruments are never compared with it. (c) A quick-budget judge ('build-judge --budget-tokens N, for a quick test') lands in the same judge_dir and is silently used as the reference judge. (d) If a completed judge's weights are damaged, bench and the gate say 'Rebuild it with: airace-ml build-judge', but build_judge sees _trained as true, skips training, and load_checkpoint raises an uncaught SafetensorError, so following the advice can never fix it. The only workaround ('delete data/judge/v1 before build-judge') is written only in the SDD ledger, not in CLAUDE.md, the CLI help or the handoff README, and it says nothing about the novelty index.",
+    "severity": "Important",
+    "sources": [
+     "evals/integration#1",
+     "triage-deferred#1",
+     "gate_cli/correctness#3",
+     "evals/robustness#1",
+     "gate_cli/integration#2"
+    ],
+    "title": "The judge and the novelty index record nothing about the tokenizer and corpora they were built from: after a rebuild, build-judge reuses old weights with a new tokenizer, the gate silently measures with stale instruments, and the advised fix for a damaged judge crashes"
+   },
+   {
+    "evidence": "Probes on the frozen streams skill_rng('knowledge'/'consistency', 'bench') and on build_suite(): subject-blind per-relation majority picker hits animal_legs 11/16, animal_class 9/16, baby_animal 7/15, vehicle_travel 7/15, shape_sides 4/10; MC 0.367 (0.371 with random ties), exact 0.26, category score 18.8 via evals.scoring.normalize. ScriptedLM with score = log(1 + KB count) and reply 'four' through run_benchmarks(categories=['knowledge','consistency']) gives knowledge 14.5 (raw 0.305), consistency 0.0. No ledger ruling covers the knowledge answer distribution.",
+    "file": "ml/src/airace_ml/skills/facts.py",
+    "fix": "Before bench-v1 freezes: (a) stratify knowledge and consistency fact selection by answer, i.e. within each relation draw the object uniformly (or cap each object at about 1/N_OPTIONS of the relation's items) and then a subject with that object, so the 4-option set is exchangeable and any subject-blind rule gets exactly 1/4; and/or (b) measure a floor as the instruction category does: best per-relation constant reply for exact items, per-relation majority-object accuracy for MC items. Add a regression test that a subject-blind relation-prior model scores within about chance + 0.05 (knowledge normalized about 0) on knowledge and consistency.",
+    "line": "46-55 (_sample_facts: uniform over facts within a relation), 68-79 (_bench_pools), 144-165 (knowledge_bench_items), 175 (consistency_groups); ml/src/airace_ml/skills/kb.py:161-178 (distractors uniform over other objects); ml/src/airace_ml/evals/suite.py:170 (MC chance = 1/len(options)), 178 (exact chance 0)",
+    "scenario": "Bench facts are drawn uniformly within each relation, so true answers follow the KB's object frequencies: 'four' is the answer to 11/16 animal_legs MC items, 'mammal' to 9/16 animal_class, and baby_animal ('calf'), vehicle_travel ('by water') and shape_sides ('four') lean the same way. Distractors are uniform over the other objects. A model that has learned only relation priors ('...legs does a koala have? Answer: four') and no subject facts picks the relation's most common object: 0.367 on MC (assumed chance 0.25) and 26% on exact items (assumed chance 0), a knowledge score of 18.8. A fully question-blind scorer (option score = log KB count, reply 'four' to everything) run through run_benchmarks scores 14.5. Over 30 other bench draws the subject-blind MC rate averages 0.40, so this is systematic. Knowledge reads well above 0 before any fact is known, breaking R5/ADR 0001's '0 means chance' and misleading G3 and players; the gap is larger than the instruction one (14.2) already ruled Important. The Task 16 ruling 'exact items keep chance 0 (best constant 2.5-4%)' tested only one global constant reply, not per-relation constants or MC option priors. consistency_groups uses the same sampler; its frozen draw happens to normalize to 0 (expected value 0.29).",
+    "severity": "Important",
+    "sources": [
+     "evals/correctness#0",
+     "skills/correctness#1"
+    ],
+    "title": "Knowledge (and consistency) bench answers follow the KB's skewed base rates while chance is set to 1/options (MC) and 0 (exact), so a model that ignores the subject scores about 15-19 on knowledge"
+   },
+   {
+    "evidence": "probe7: score_creativity with a StubJudge at nll 2.0 (coherence 1) and a NoveltyIndex of fixture texts: constant novel story 52.0 (raw 1.0), constant fixture story 20.8 (raw 0.4), constant 'Once upon a time,' 20.8. test_short_story.py with a stub judge (p10=1.0, p90=2.2): stock sentence at nll 0.6 scored 20.83 (raw 0.40); a full varied story at nll 1.6 scored 12.86. The real-judge behaviour on stock openings is an assumption (no real judge here).",
+    "file": "ml/src/airace_ml/evals/creativity.py",
+    "fix": "Before bench-v1 freezes, make diversity a real multiplier as in the spec, e.g. score = 100 * mean(story) * min(1, d / d_ref) with d_ref the distinct-2 of 24 held-out creative openings at calibration; or count a story's sampled windows that also occur in another story of the same run as not new. Add a length term per story (e.g. multiply by min(1, words/40) or require a minimum number of sampled 8-gram windows for any credit). Replace the constant 'novel' exemplar in the tests with per-prompt replies, add tests that a constant reply and a constant short reply score about 0, and record the rule in ADR 0001.",
+    "line": "129-143 (story = c*(0.4+0.6*nov)*(1-rep); score = 100*raw*(0.5+0.5*d)), 97-102 (_coherence); novelty.py:328-330; tests test_creativity.py:76-90, 80-82, 883-895",
+    "scenario": "Diversity d can at most halve the score, nothing checks that a story answers its prompt, and nothing accounts for length. With a judge that finds the text fluent (c=1): one fixed story absent from the corpora, repeated for every prompt, scores 52.0; one memorized corpus story repeated scores 20.8; the constant 4-word opener 'Once upon a time,' scores 20.8 (under 8 tokens, so novelty 0 and repetition 0). A small TinyStories-trained model that answers every prompt with 'Once upon a time, there was a little girl named Lily.' and stops likely gets coherence 1 (stock openings score below creative_p10), keeps the deliberate 0.4 floor, and lands at about 21, more than a model writing full 96-token stories of median fluency (about 13). A player who trains heavily on one notebook story gets a model that regurgitates it everywhere and counts as fully novel (see the notebook-novelty finding), about 52, likely above a genuinely creative small model. ADR 0001 lists 'the same answer to everything' as degenerate and says degenerate models sit near 0; creativity does not meet that. The test suite even uses a constant reply as its 'novel' exemplar and requires > 40. The formula is plan-mandated (Task 17 step 6), but spec §4.7 defines a pure product coherence x novelty x diversity under which a constant model scores about 0. This can also compress the G3/G6 creativity comparisons.",
+    "severity": "Important",
+    "sources": [
+     "evals/correctness#1",
+     "evals/robustness#3"
+    ],
+    "title": "Creativity rewards degenerate output: the same story for all 24 prompts scores 21-52, and a short stock sentence gets copy-level credit that can beat real stories"
+   },
+   {
+    "evidence": "Four probes on tiny data roots built like conftest.tiny_data_root. Parent last_mixture {'creative': 0.5, 'notebook': 0.5} (or {'web': 0.5, 'notebook': 0.5}, {'creative': 0.833, 'notebook': 0.167}, {'creative': 0.667, 'notebook': 0.333}); child without notebook raised MixtureError: dataset 'notebook' has weight but no usable documents. Child with a different notebook completed with tokens_per_dataset {'code': 2368, 'web': 320, 'notebook': 384} and last_mixture {'code': 0.7, 'web': 0.15, 'notebook': 0.15}. test_replay_notebook_and_coaching only covers a parent without custom datasets.",
+    "file": "ml/src/airace_ml/train/trainer.py",
+    "fix": "Decide and document the contract (ADR or spec §4.5). Recommended: when blending replay, drop CUSTOM_DATASET_IDS (notebook, coaching) from the parent mixture and renormalize the rest (replay contributes nothing if nothing is left); record what was dropped in the run summary. Alternative: persist the parent's encoded notebook/coaching docs privately next to its checkpoint (server-side only, R2) and replay those, or require the worker to resend them and reword the error ('the replayed mix includes your notebook; include notebook entries or lower replay'). Add trainer tests for a notebook parent followed by a replay child with no notebook, and for a grandchild.",
+    "line": "186-197 (_prepare: effective_mixture over parent.last_mixture at 188, load_pools with this run's custom docs at 193), 203-211 (_custom_docs always returns the key), 666 (last_mixture = blended stable mix); ml/src/airace_ml/data/sampler.py:96-111, 152-185; ml/src/airace_ml/train/config.py:92-109",
+    "scenario": "Parent A trains with mixture {creative: 1, notebook: 1} and a notebook, so A's last_mixture is {creative: 0.5, notebook: 0.5}. (1) Child B continues from A with mixture {code: 1}, replay 0.3 and no notebook (the player cleared it, or the CLI user didn't repeat it). effective_mixture gives notebook a positive weight, load_pools builds DocPool.from_docs([]), and train_run raises MixtureError \"dataset 'notebook' has weight but no usable documents\", an error about a dataset the player never weighted in this run (shown by the CLI as a usage error). (2) Child B instead sends a different notebook: the run completes and spends about 15% of its tokens on the new notebook as 'review of what it knows', data the parent never saw, and B's last_mixture records notebook 0.15, so every later descendant with replay > 0 hits the same failure or substitution. The checkpoint does not keep the notebook/coaching text (R2), so the trainer cannot replay what the parent actually learned; replay always uses the current notebook and coaching. Coaching behaves the same. A grandchild of test_replay_notebook_and_coaching's run 'b' hits the error. No M1 gate impact (G6 uses no notebook), but it breaks two core player controls together from M2 on (spec §4.5, C2 notebook).",
+    "severity": "Important",
+    "sources": [
+     "core/robustness#1",
+     "core/correctness#1",
+     "core/integration#0",
+     "spec-coverage#4"
+    ],
+    "title": "Replay ('Review what it knows') of a parent whose mix included Notebook or Coaching fails with a MixtureError, or silently trains the child's current notebook under the review share, and the share propagates down the lineage"
+   },
+   {
+    "evidence": "Probe g5_replay.py on the quick gate's data root: starter vs g5-ungrown had 20/20 identical batches, starter vs g5-grown 20/20. At full scale both continuation shapes keep ctx_len 256, so the same holds. trainer._prepare has no dependence on the parent or lineage position.",
+    "file": "ml/src/airace_ml/experiments/gate.py",
+    "fix": "Give both continuation arms a seed different from the starter's but equal to each other (e.g. seed + 10_000) so they stay paired. Better, for M2 too: have the trainer derive the sampler seed from (cfg.seed, the parent's tokens_trained_total or version_id) so any continuation draws fresh data and 'train more' never replays the parent's stream.",
+    "line": "1130-1136 (growth(): both arms seed=self.seeds[0], BALANCED_MIX); root cause ml/src/airace_ml/train/trainer.py:194 (MixtureSampler seeded only by cfg.seed)",
+    "scenario": "The starter (seed 1, BALANCED_MIX, ctx 256) draws its batches from MixtureSampler(default_rng(1)). g5-grown (EARLY_SHAPE) and g5-ungrown (STARTER_SHAPE) use the same seed, normalized mixture (replay 0), prep, pools, ctx and batch_size, so both arms get the identical batches in the same order. G5 therefore measures growth on a repeat pass over 4.2M tokens the starter has already seen. Spec §4.12.5 asks for 'the same extra tokens'; the verdict says nothing about growing and then training on new data, which is what a player's next run does, and a larger model's advantage on repeated data differs from its advantage on fresh data.",
+    "severity": "Important",
+    "sources": [
+     "gate_cli/correctness#0"
+    ],
+    "title": "G5 continuation runs retrain on the starter's exact token stream, so the 'extra tokens' are a verbatim second epoch"
+   },
+   {
+    "evidence": "gate_cli probe g4_noise.py on the quick gate's runs (k=1): same-model re-measures 1.28-2.10. extra/g4 proxy: 15 models at ModelShape(2,96,128), 819,200 tokens each, mixes creative/code/facts/conversations/balanced x seeds 1-3, measured with measure_fingerprint(k=3) at measure seeds 0-7 (two models at 0-19), distances via fingerprint_distance, verdicts via eval_seed_variation, 5000 null draws. The scale identity sum ||z_i - z_j||^2 = 2 n^2 D was confirmed numerically (null median 4.5 vs predicted 4.63).",
+    "file": "ml/src/airace_ml/experiments/gate.py",
+    "fix": "Replace the absolute 0.05 with a noise floor the gate measures itself, and record the rule in an ADR: fingerprint each balanced model a second time at MEASURE_SEED+1 (or split its k replies in halves), compute same-model distances, and require seed_mean > noise_mean by a margin (or a permutation/bootstrap test) and seed_mean < mix_mean, all against one population that includes the re-measures. Guard traits that are constant across the population (STD_FLOOR=1e-6 produced a distance of 66,666 when precision was 0 for all 15 models). Optionally raise k for G4 or average 2-3 measure seeds. Report both numbers and fix the detail text.",
+    "line": "123 (SEED_MIN_DISTANCE), 140 (MEASURE_SEED), 410-437 (eval_seed_variation, pass rule at 436), 1076-1104 (G4 population and pairs); ml/src/airace_ml/personality/fingerprint.py:363-375 (fingerprint_distance)",
+    "scenario": "fingerprint_distance measures each of the 10 traits in units of the population's own std (ddof 0), so the scale is fixed by construction: for the gate's n=15 population the RMS pairwise distance is sqrt(2*D*n/(n-1)) = 4.63. 'seed_mean > 0.05' therefore holds unless the three balanced seeds are almost identical. At fingerprint_k=3, re-measuring the same model with only the measure seed changed gives a mean distance of 2.26 (smallest pair 0.23), about 40-45x the threshold; different training seeds average about 3.0-3.6 and different mixes about 4.3-4.7. In a noise-only null (one model fingerprinted at 20 measure seeds placed in the gate's 12+3 roles), G4 passes 50% of the time and seed_mean never comes near 0.05; with real proxy models the verdict fails about 4% of the time from sampling noise alone, and the gate draws once. Sparse, noisy traits dominate: precision supplies 22% of the balanced seed distance and 43% of the noise distance; for slip_rate and register the measurement noise exceeds the across-seed spread. A full-scale G4 PASS therefore does not show spec §11 criterion 4 ('measurably different' seed fingerprints).",
+    "severity": "Important",
+    "sources": [
+     "gate_cli/correctness#1",
+     "extra/g4-noise-at-full-k#0"
+    ],
+    "title": "G4's 'measurably different' clause (seed distance > 0.05) sits about 40x below the fingerprint's own sampling noise, so it can never fail and G4 passes on pure measurement noise about half the time"
+   },
+   {
+    "evidence": "Read speed/legibility/growth/forgetting/preparation (gate.py:990-1223); eval_forgetting/eval_prep (gate.py:458-560) take single numbers. Probe g5_seeds.py gave the per-seed results above. Checked progress.md Task 20 rulings, task-20-dispatch-notes.md rulings 1-14 and ADR 0001.",
+    "file": "ml/src/airace_ml/experiments/gate.py",
+    "fix": "Run each G5, G6 and G7 arm (and preferably G2) for every seed (G6 already has creative-heavy bases for seeds 2-3 from G3) and decide as G3 does: the mean effect must exceed SPREAD_FACTOR x the seed std, or the criterion must hold on every seed. This adds about 12 runs (roughly 30-40 GPU minutes). If the GPU budget does not allow it, record a ruling and amend spec §4.12 to say which criteria are single-seed and why.",
+    "line": "1001, 1020, 1034-1054, 1126-1143, 1145-1165, 1167-1223 (only 1061 and 1089 loop over self.seeds); spec docs/superpowers/specs/2026-10-06-ai-race-architecture-design.md:210; plan:1868-1873",
+    "scenario": "A full gate with seeds 1,2,3 runs only differentiation (G3) and seed variation (G4) for every seed. G5's grown/ungrown arms, G6's code continuations, G7's four preparation runs and G2's legibility starter use self.seeds[0] only, and decide with strict comparisons (grown < ungrown, drop >= 3, recovery >= 50%, ratio <= 0.8) and no seed spread. At quick scale, repeating G5 on seeds 1-6 gave PASS, FAIL, PASS, PASS, PASS, FAIL (differences -0.094 to +0.025 nats). So the real gate can pass or fail G5/G6/G7 by seed alone: a FAIL can start a step-8 iteration chasing noise, or a step-8 change can 'fix' a criterion through noise, or M2 can be built on a lucky PASS. The plan's Task 20 table narrows this to 'seed 1', but no ledger ruling, ADR or spec amendment records dropping the spec's 3-seed requirement (dispatch ruling 4 covers only reusing the seed-1 starter and base).",
+    "severity": "Important",
+    "sources": [
+     "gate_cli/correctness#2",
+     "spec-coverage#0"
+    ],
+    "title": "Spec §4.12 says '3 seeds each', but G2, G5, G6 and G7 (and G1) are decided on seed 1 alone with zero-margin thresholds, so verdicts can flip by seed"
+   },
+   {
+    "evidence": "Read the locked library sources (datasets file_utils.py:53-67, 830-871, 966-1002; parquet.py:84-234; load.py:1093-1182; huggingface_hub _http.py:451-559, _pagination.py:27-48, hf_file_system.py:1178-1250). Probe late_fail.py: a tiny build through cli.main with a fetch raising ConnectionError('Server Disconnected') in the last source (cosmo_stories) escaped as a traceback through build.py:346 and nothing was written under --out. Probe resume_wrapper.py: a Fetch-level retry wrapper that skips already-yielded rows, against a fetch failing every 97th row, produced a corpus byte-identical to an uninterrupted build, while a naive restart from row 0 changed it.",
+    "file": "ml/src/airace_content/sources.py",
+    "fix": "Add a retry and exact-resume loop inside hf_fetch (about 40 lines plus offline tests with a fake `datasets` module): retry load_dataset as well as iteration; keep ds.state_dict() after each row and on a transient error sleep (30 s, 60, 120, ...), load_state_dict and continue, preserving 'same seed, same corpus'. Treat ConnectionError, TimeoutError, httpx.TransportError and HfHubHTTPError with status None or in {408, 429, 500, 502, 503, 504} as transient; never retry DatasetNotFoundError, 401/403/404, SourceFormatError or BaseException; cap at about 8 attempts over about 30 min and print one flushed stderr line per retry. In cli.py catch the final transient error with a plain 'network problem, run the same command again' line. Before assembling, open every source the selected recipes use (plus tinystories), read a few rows and run row_has_format, failing fast. Tell the owner to run `python -m uv run --extra content hf auth login` (or set HF_TOKEN) first. Later, optionally stage each assembled dataset on disk keyed by scale/seed/recipe so a rerun skips finished sources.",
+    "line": "82-93 (hf_fetch; load_dataset at 92); assemble.py:338-345, 356-378, 619-636; build.py:222-232, 344-358, 385-417; cli.py:140-146",
+    "scenario": "hf_fetch is a generator, so each source is first contacted only when its dataset's turn comes; a full build makes 14 opens over the hour (tinystories for simple_vocab, then fineweb, gutenberg, cosmo_khan/wikihow/openstax, fineweb_edu, soda, everyday_conv, mbpp, gsm8k, simplewiki, tinystories, cosmo_stories). Every assembled document stays in memory until the writes at build.py:385-417, and cli.py:144 catches only BuildError, SourceFormatError and DatasetsUnavailable. With the locked libraries (datasets 5.1.0, huggingface_hub 1.33.0, fsspec 2026.7.0): reads survive network loss of up to about 9-10 minutes and 429s (byte-exact retries), but the tree listing, repo_info and dataset_info calls at each open have no retry, so a single 429/5xx/connection error there aborts; and during reads, datasets retries only 504 and 429, so a burst of 500/502/503 over about 25 s aborts. A config change, a hub error or a format problem in a late source (e.g. after the Task 15 simplewiki license decision; FORMAT_CHECK_ROWS only runs once the source is reached) also aborts. Each occurrence loses the whole hour (failure at the creative sources loses nearly all of it), shows the owner a raw traceback for hub errors, writes nothing, and the rerun streams everything again. Estimated about 1-5% per run on a stable wired connection, more on Wi-Fi or a shared IP.",
+    "severity": "Important",
+    "sources": [
+     "extra/hf-streaming-failure-behaviour#0",
+     "content/robustness#2",
+     "content/integration#3"
+    ],
+    "title": "The hour-long full build has no retry, resume or source pre-flight: a Hub error when any of the 14 sources is opened, a 500/502/503 lasting over ~25 s, or a late format/config error discards all streamed work with a traceback"
+   },
+   {
+    "evidence": "Real rows fetched via the datasets-server API (/rows offset=9 length=3: Alice, Looking-Glass, Snark; /first-rows rows 0-7), complete and untruncated, run through the real row_to_content, strip_gutenberg_boilerplate, chunk_passages and prepare_content. is_childrens_book and row_has_format behave correctly; strip removes only CRs and triple newlines (no false header/footer match). Dataset card confirms HTML parsing. Probe scripts gut2.py, gut3.py, gutfix.py.",
+    "file": "ml/src/airace_content/sources.py",
+    "fix": "In _gutenberg (or at the top of strip_gutenberg_boilerplate) convert this layout back to plain-text layout before chunking: turn CRLF into LF; if exactly-double newlines outnumber lone newlines, replace a lone double newline with a single newline and runs of 3+ with a double newline. The existing _unwrap then joins hard-wrapped prose and keeps verse. Verified on real row 9: blank lines per passage drop from 37.0 to 10.6 and passages become whole paragraphs. Add a fixture row in the real sedthh layout (an Alice excerpt) and a test that no passage has a blank line between a line without an end mark and a line starting lowercase.",
+    "line": "131 (_PARAGRAPH_BREAK), 160-172 (strip_gutenberg_boilerplate rejoins with blank lines), 175-180, 207-231 (_unwrap/chunk_passages), 334-337 (_gutenberg); fixture ml/tests/fixtures/sources/gutenberg.jsonl; test ml/tests/content/test_build.py:230-251",
+    "scenario": "In the real dataset (parsed from each book's HTML, header and footer already removed), wrapped lines inside a paragraph are separated by CRLF CRLF and paragraphs by three CRLFs (Alice: 1721 double, 821 triple, 2 lone newlines; early etexts use LF LF for wraps). _PARAGRAPH_BREAK splits on every wrapped line, strip_gutenberg_boilerplate rejoins with a blank line, erasing the wrap-vs-paragraph difference, so _unwrap never sees a multi-line paragraph and chunk_passages packs one-line pieces separated by blank lines. On real Alice: 67 passages averaging 37 blank lines each, e.g. 'Suddenly she came upon a little three-legged table, all made of solid glass;' / blank / 'there was nothing on it except a tiny golden key...'; 1322 of 2476 blank-line breaks fall between a line with no end mark and a lowercase continuation. The whole books dataset (15M tokens) would teach the model a blank line every ~12 words, which R1 forbids fixing in output, so players would see it. Nothing fails, so it is silent. Tests pass because the fixture uses classic PG plain-text layout (header, single-newline wraps), which the real source never contains.",
+    "severity": "Important",
+    "sources": [
+     "extra/live-hf-source-formats#0"
+    ],
+    "title": "Real sedthh/gutenberg_english TEXT puts a blank line after every wrapped line, so every books passage has blank lines mid-sentence and real paragraph breaks are lost"
+   },
+   {
+    "evidence": "Probes p4_g7.py, p4b_g7pooled.py, p4c_alt.py call the real apply_noise, quality_score, cluster_near_duplicates, gate.garble_rate rules and creativity.words, with per-noise-kind attribution. A typo-focused alternative measure gives 0.728. The model itself was not simulated; the model-level conclusion is an inference from the data-level ratio.",
+    "file": "ml/src/airace_ml/experiments/gate.py",
+    "fix": "Re-derive the G7(a) measure and bar from real data before the gate run and record it as a ruling/ADR: e.g. count only noise-specific garbling (MOJIBAKE_CHARS and non-ASCII letter runs: light keeps 48% of garbled docs, thorough 16%); or score the excess over a clean baseline (garble_rate of the true continuations of the same held-out clean prefixes); or make web typo/garble noise stronger so cleaning removes more.",
+    "line": "128 (PREP_MAX_RATIO = 0.8), 512-544 (eval_prep), 550-560 (garble_rate), 1167-1210 (preparation runs); noise strengths ml/src/airace_content/noise.py:23-24; web rates ml/src/airace_content/assemble.py:69-79",
+    "scenario": "The real gate trains g7-web-light and g7-web-thorough (70% web, 4x128, 8.4M tokens) and compares the unknown-word share of 60 web completions. 484 real FineWeb docs through the real apply_noise with the web recipe (30 noise seeds pooled), cut with the real thresholds (light q>=0.15; thorough q>=0.65 plus dedup) and counted the gate's way: light 7.06% vs thorough 5.55% (ratio 0.786) with a 30k general vocab, 9.11% vs 7.46% (0.819) with an in-domain 30k vocab built like build_vocab; per-seed ratio 0.71-0.94. Clean docs alone have 4.9-7.0% unknown words (names, brands, rare words) and supply over half of the unknown words left after thorough cleaning; thorough removes only half of the typo docs by the graded-strength ruling. So even a model that copied its training data perfectly lands on the bar, and a 4x128 model's own non-words push the ratio toward 1. A likely outcome is G7 FAILS although cleaning works, sending the owner into the 'adjust and rerun' loop on GPU time.",
+    "severity": "Important",
+    "sources": [
+     "extra/real-text-cleaning-calibration#0"
+    ],
+    "title": "G7(a) cannot be expected to pass on real data: thorough cleaning lowers the unknown-word share of real web training text only to 79-82% of light's, at or above the 0.8 bar, before the model adds non-words of its own"
+   },
+   {
+    "evidence": "8 Firecrawl /rows pages added to 400 existing TinyStories rows; per-100-row counts 10, 17, 1, 16, 11, 0, 10, 14, 1, 0, 3. Sequences: 'â€œ' 172, 'â€™' 131, 'â€'+space/punct 171, 'â€“' 9, 'â€”' 8, 'â€˜' 3. The closing quote's 0x9D byte is already gone in the hub data, so a plain cp1252 round-trip repairs only 26 of 83 docs. Quality attribution (p2_quality.py): all 11 TinyStories thorough failures bind on the g factor.",
+    "file": "ml/src/airace_content/sources.py",
+    "fix": "Before normalize_text, map 'â€œ' to a left double quote, 'â€™' to a right single quote, 'â€˜' to a left single quote, 'â€“' to an en dash, 'â€”' to an em dash, then any remaining 'â€' to a right double quote; do it in the tinystories adapter or generally in prepare_content. This repairs all 83 sampled docs. Alternatively drop rows containing 'â€'. Add a fixture row with this mojibake, and do it before the owner's first full build so simple_vocab, known_vocab and tok-v1 never see it.",
+    "line": "347-353 (_text adapter used for tinystories); ml/src/airace_content/assemble.py:220-228 (prepare_content); ml/src/airace_content/textproc.py:44-58 (normalize_text); plan check docs/superpowers/plans/2026-10-06-m1-it-learns.md:1484",
+    "scenario": "The full build streams TinyStories from row 0: about 77k rows for creative and 200k for simple_vocab. In 11 sampled blocks over rows 0-90,000, 83 of 1,100 rows (7.5%) contain cp1252-misdecoded UTF-8 ('didnâ€™t', 'â€œWow'); the first 200 rows have 13.5%, rows 700,000+ have 0%. Neither the adapter nor prepare_content/normalize_text repairs it, so about 6% of the creative dataset (TinyStories is 85% of it) is garbled text tagged 'none'. Only about 40% of those docs fall below Thorough, so even the judge recipe trains on them. Models learn 'â€œ' as a quote mark and show it to players in stories (R1 forbids rewriting). The plan's Task 15 step 3 check 'nothing is mojibake outside the intentionally garbled documents' will fail after the hour-long build, and fixing it then means a creative rebuild that reuses simple_vocab/known_vocab already built from this text.",
+    "severity": "Important",
+    "sources": [
+     "extra/real-text-cleaning-calibration#1"
+    ],
+    "title": "About 7.5% of the TinyStories rows the build reads contain real mojibake ('â€œ', 'â€™', 'â€'), which enters the creative corpus tagged noise 'none' and survives even Thorough cleaning"
+   },
+   {
+    "evidence": "p1_basic.py and p8_simp.py use the real load path (row_has_format, row_to_content, prepare_content) and textproc.simplicity; doubling the vocab from 1,465 to 2,931 words raised the FineWeb median from 0.515 to 0.596. Rejected docs listed by p10_rejected.py. With a 6,000-word vocab, threshold 0.6 keeps 92% FineWeb, 87% FineWeb-Edu, 70% OpenStax; 0.7 keeps 79%, 66%, 58%.",
+    "file": "ml/src/airace_content/assemble.py",
+    "fix": "Re-derive the thresholds from the real simple_vocab before the full build, e.g. measure the simplicity distribution of the first few thousand rows per source and set simplicity_min at a chosen keep-quantile (simplest half: about 0.6-0.65 for FineWeb), or express simplicity_min as a quantile. Record the target keep-rate in the Task 15 notes, check build time (more rows streamed), and consider extending the filter to cosmo_openstax (median 0.47) as the Task 14 ruling anticipated.",
+    "line": "70 (fineweb 0.35), 82 (gutenberg 0.30, unmeasured), 91 (fineweb_edu 0.35), 115 (simplewiki 0.30); spec docs/superpowers/specs/2026-10-06-ai-race-architecture-design.md:197",
+    "scenario": "Spec §4 says text is selected for short sentences and common vocabulary so 1-40M models can learn it. Real rows scored with the real simplicity() against a simple_vocab built from 400 real TinyStories rows (2,931 words, smaller than the build's 6,000, so these are lower bounds): FineWeb 96.8% pass (median 0.59), FineWeb-Edu 96.0% (median 0.55), Simple Wikipedia 99.3% (median 0.66). The median web sentence is 16.5 words, below the 18-word knee, so the sentence-length factor almost never binds; only about 3% of docs (technical pages with 30-44-word sentences) are rejected. The web dataset (30M tokens) and the fineweb_edu and simplewiki shares (about 11M) enter at full FineWeb complexity, and changing this later needs another full build.",
+    "severity": "Important",
+    "sources": [
+     "extra/real-text-cleaning-calibration#2"
+    ],
+    "title": "Simplicity thresholds (0.35 web/edu, 0.30 Simple Wikipedia) keep about 97-100% of real documents, so the spec's simplicity filtering does nothing for 30-40% of the corpus"
+   },
+   {
+    "evidence": "p6_tok.py (real train_tokenizer on a build-like 17.5 MB sample, held-out bytes/token), p7_first200.py (first-row means vs datasets-server /statistics means), p11_landing.py (per-dataset landing with real noise factors); full-volume synthetic build_corpus('full') from real HF rows (manifest: fineweb assigned 30.0M, actual 44.01M; code 9.97M vs 13.09M; patterns 3.09M vs 4.15M); Monte-Carlo of the 200-sample estimator (quantiles 79/102/126% at sigma 1.3). The Task 14 ruling covers the 3.6 constant but not the sample bias. Synthetic tokenizer ratios are indicative only.",
+    "file": "ml/src/airace_content/assemble.py",
+    "fix": "Keep a running sum of doc tokens for every accepted doc and stop when the cumulative estimate reaches the quota (or re-estimate periodically). Use about 3.2 bytes/token for prose and about 2.7 for code and patterns (per-source constants) and fix the comment. Better: after the tokenizer is trained, trim each component to its target in real tokens so first and later builds agree. Warn when a component ends below about 90% of its quota.",
+    "line": "142-147 (EST_SAMPLE_DOCS, BYTES_PER_TOKEN_ESTIMATE 3.6), 283-299 (_Goal), 338-345, 424-434 (generator estimate); ml/src/airace_content/build.py:341; cli format_warnings (warns only for exhausted sources)",
+    "scenario": "On the first full build _Goal stops a source after ceil(quota*200/sample_tokens) docs, using bytes/3.6 over its first 200 accepted docs, and never compares collected tokens with the quota. Two errors multiply. (1) A 4096 BPE gives fewer bytes per token than 3.6 on most text: measured fineweb 3.07-3.15, fineweb_edu 3.22, code 2.64-2.71, patterns 2.60, reasoning 3.11, creative 3.66. (2) The fixed first-rows window is biased and heavy-tailed: cosmo_khan's first 100 docs are 0.72 of the population mean length, fineweb_edu 0.835, TinyStories 0.88, FineWeb 0.96, with FineWeb lengths heavy-tailed (median 2.2 KB, mean 3.6 KB, max 115 KB) so a 200-doc mean carries about ±25% error. Simplewiki's page-id order may also bias its first leads long. Estimated landing: web 1.25x (a synthetic full-volume build gave 44.0M vs 30M, 1.47x), educational 1.28x, code 1.31-1.34x, reasoning 1.15x, creative 1.16x; about 143-160M tokens in all vs 137M planned. No dataset is predicted under the plan's 80%, but the error can go either way per source, and only exhausted components get a warning. Costs: more RAM, disk and time, skewed dataset proportions, design targets not met.",
+    "severity": "Minor",
+    "sources": [
+     "content/robustness#1",
+     "extra/real-text-cleaning-calibration#3",
+     "extra/full-scale-peak-ram#1"
+    ],
+    "title": "Full-scale token quotas are extrapolated from the first 200 accepted docs at a fixed 3.6 bytes/token and never checked against real totals, so datasets land far from target (overall about +15-17%, web up to 1.25-1.47x)"
+   },
+   {
+    "evidence": "grep for print/logging/stderr in src/airace_content: only cli.py, after build_corpus returns. Read paginate, list_repo_tree, HfFileSystem._ls_tree and the httpx 0.28.1 timeout handling in the locked venv; data reads use a 10 s timeout (hf_file_system.py:1203), so only the opens are exposed. Hang not reproduced (no Hub network here).",
+    "file": "ml/src/airace_content/cli.py",
+    "fix": "Print one flushed stderr line per stage: 'opening <source>...', then per dataset/component rows read, docs and estimated tokens every N rows, plus dedup, tokenizer and write stages. Optionally a threading.Timer watchdog in hf_fetch that warns when no row has arrived for 10 minutes. Add a handoff note: 'if no new line appears for 15 minutes, press Ctrl+C and run the same command again' (cheap once the retry/resume or staging fix lands).",
+    "line": "133-149 (only prints after build_corpus returns); build.py:285-418; assemble.py (no output); sources.py:92 (load_dataset's tree listing uses huggingface_hub paginate with timeout=None)",
+    "scenario": "Task 15 says to run the full build in the background and monitor it, but the content package has no print or logging besides the final summary, and stdout is block-buffered when redirected. A stalled stream or an anonymous-rate-limit 429 retry loop is indistinguishable from progress. Worse, at each of the 14 source opens the tree listing's first page is a session GET with timeout=None (huggingface_hub _pagination.py:27-37; hf_api.py:4103; shared httpx client created with timeout=None), so if the PC sleeps or the router drops NAT state mid-request, the call blocks forever with no exception; no retry wrapper helps and the owner waits indefinitely. Likelihood of the hang is very low, but when it happens nobody can tell.",
+    "severity": "Minor",
+    "sources": [
+     "content/robustness#2",
+     "content/integration#3",
+     "extra/hf-streaming-failure-behaviour#1"
+    ],
+    "title": "The full build prints nothing until it finishes, so a stall, a rate-limit loop or an indefinitely hung Hub metadata call (no timeout) looks exactly like progress"
+   },
+   {
+    "evidence": "pyproject.toml: content = ['datasets>=5.1']. `uv run --no-sync airace-content build --scale full|tiny --out <scratch>` without the extra exits 1 in 0.3 s with that message. `uv sync --help` shows --inexact (exact is default); `uv run --help` shows --exact (inexact is default). uv.lock contains datasets 5.1.0 for the extra.",
+    "file": "CLAUDE.md",
+    "fix": "In CLAUDE.md: `cd ml && python -m uv sync --extra content` before the real corpus build (and keep --extra content on any later sync), and write the build line as `cd ml && python -m uv run --extra content airace-content build --scale {tiny,full}`. Make the DatasetsUnavailable hint say `python -m uv sync --extra content`. Add the `python -m uv run pytest -m gpu` line.",
+    "line": "32-33 (ML setup: python -m uv sync), 37 (build command); hint at ml/src/airace_content/sources.py:87-91",
+    "scenario": "Following CLAUDE.md on Windows: `cd ml && python -m uv sync` (exact sync, no extras), then `python -m uv run airace-content build --scale full`. `datasets` is only in [project.optional-dependencies] content, and `uv run` does not add extras by itself, so the build exits 1 immediately with \"install the content extra (uv sync --extra content)\". uv is not on PATH on the owner's PC, so that command fails too; the working form is `python -m uv sync --extra content` or `python -m uv run --extra content ...`. Rerunning the documented setup later removes `datasets` again because `uv sync` is exact by default. Plan Task 15 step 2 has the right command, but CLAUDE.md, which the owner and the resuming session read first, does not. CLAUDE.md also lists no GPU-test command (`pytest -m gpu`, needed for test_starter_speed_gpu and the CUDA bf16 tests).",
+    "severity": "Minor",
+    "sources": [
+     "gate_cli/correctness#7",
+     "gate_cli/robustness#0",
+     "gate_cli/integration#3",
+     "content/robustness#3",
+     "content/integration#4",
+     "spec-coverage#1"
+    ],
+    "title": "CLAUDE.md's setup and corpus-build commands omit the 'content' extra, so the owner's next step (full build) fails at once; the error's own fix uses bare `uv`, and a later plain `uv sync` uninstalls `datasets` again"
+   },
+   {
+    "evidence": "Probe test_judge_rename.py with the repo's _small_judge_config/_spy_train_run helpers, monkeypatching judge_module.os.replace to raise PermissionError for train_config.json: the judge dir listed ['meta.json','model.safetensors','result.json','telemetry.jsonl','train_config.json.tmp'] and the rerun's train_run resume flags were [False]. Code read of runs._write_json, GateRuns.train, trainer._finish/_save_resume and cli._os_problem. The existing judge test covers only a calibrate() failure after the record is written.",
+    "file": "ml/src/airace_ml/evals/judge.py",
+    "fix": "Retry os.replace a few times with a short sleep on PermissionError in both _write_json helpers. Make 'trained/completed' recoverable from what the trainer leaves on disk: write the config record before calling train_run, and treat model.safetensors + meta + result.json with status 'completed' and steps == cfg.steps (and a matching config) as done even when the final record is missing or still says 'started'.",
+    "line": "228-232 (_write_json), 235-243 (_trained), 277-292; ml/src/airace_ml/experiments/runs.py:90-95 (_write_json), 181, 211; trainer.py:565-604, 687-690 (_finish removes resume states)",
+    "scenario": "On Windows, a virus scanner or indexer briefly holding the just-written .tmp makes os.replace raise PermissionError; the trainer tolerates exactly this for its own renames, but the judge and gate record writers do not. (a) build_judge: after the ~1 h training, _finish saves the model and deletes every resume state, then _write_json(train_config.json) is refused; the CLI exits, the folder holds a complete model, result.json 'completed' and train_config.json.tmp but no record and no resume state. On rerun _trained() and can_resume() are both False, so it retrains from step 0 and the hour is lost (a Ctrl+C or crash in the same window does the same). (b) Gate: if the replace of gate_run.json fails right after a run finishes, the CLI reports 'error: could not read or write files: Access is denied' as a usage error (exit 2), the record still says 'started' and the resume state is gone, so the rerun retrains that run (and its children, whose parent token changes); a refusal mid-gate also stops the unattended hour-long run.",
+    "severity": "Minor",
+    "sources": [
+     "evals/robustness#0",
+     "gate_cli/correctness#8",
+     "gate_cli/robustness#5"
+    ],
+    "title": "A refused Windows rename of the post-training record (judge train_config.json, gate gate_run.json) throws away a finished training: os.replace has no retry and the trainer has already deleted the resume state"
+   },
+   {
+    "evidence": "Read GateRuns.train (reuse/resume only when record['key'] == key), trainer.execute (saved=None -> _remove_resume_states, telemetry opened 'w'), pick_device (silent fallback). test_a_finished_run_is_reused_only_while_everything_it_depends_on_is_unchanged confirms a config change retrains in place.",
+    "file": "ml/src/airace_ml/experiments/runs.py",
+    "fix": "Namespace run folders by scale and device (e.g. out/runs-quick, out/full-cuda) or prefix quick runs, or refuse with exit 2 when out_dir holds finished runs whose key differs only by scale, device or seed and ask for another --out. For `gate`, refuse a silent CPU fallback unless --device cpu is given. Update CLAUDE.md to use a separate --out for --quick.",
+    "line": "176-198 (key mismatch -> train_run(resume=False) into runs_dir/cfg.run_id); gate.py:996-1003, 1062-1069, 1132-1136, 1150-1159, 1172-1181, 1258; cli.py:356-362; CLAUDE.md:39",
+    "scenario": "Run names ('starter', 'g3-creative-s1', 'g5-grown', ...) do not depend on scale, device or seed 1, but the key in gate_run.json does. (a) After the full gate (~45-65 min of RTX 3050 training) into runs/gate-1, someone runs `gate --out runs/gate-1 --quick` as a sanity check after a step-8 edit, which CLAUDE.md:39's single-folder example invites. Every key differs, so each run retrains fresh into the same folder, overwriting model.safetensors, meta.json, result.json, telemetry, gate_run.json, report.md and outcome.json, and deleting resume state. The next full gate must retrain all 25 runs. (b) If CUDA is unavailable at that moment (e.g. after a driver update) and --device is omitted, pick_device silently falls back to the CPU and the full gate retrains every run on the CPU into the same folder (many hours), destroying the GPU runs; G1 can never pass on the CPU and the only sign is 'cpu' in the first progress line. Nothing warns.",
+    "severity": "Minor",
+    "sources": [
+     "gate_cli/robustness#1",
+     "gate_cli/integration#1"
+    ],
+    "title": "Gate reruns into the same --out with --quick, another device or another first seed silently overwrite the finished full-scale runs (same run names for both scales)"
+   },
+   {
+    "evidence": "Probe judge_step_cpu.py: Transformer(judge_train_config().shape, 4096), one forward+backward at 128x256 on the CPU: 74.3 s, peak 10,754 MB RSS (558 MB before). Code read of device.py, cli.py and trainer.py.",
+    "file": "ml/src/airace_ml/device.py",
+    "fix": "At the start of build-judge, train and bench, print the device in plain words ('training on the GPU (NVIDIA GeForce RTX 3050)' or 'no usable GPU found: training on the CPU'). For build-judge (and gate), refuse to fall back to the CPU unless --device cpu is given, saying it would take days.",
+    "line": "8-13 (silent fallback); ml/src/airace_ml/cli.py:356-362, 465-489, 772-779; ml/src/airace_ml/evals/judge.py:262; ml/src/airace_ml/train/trainer.py:347-350 (no autocast on the CPU)",
+    "scenario": "If CUDA becomes unavailable (a driver update breaking the cu130 wheel, a CPU-only torch resolved) and the owner runs `airace-ml build-judge` without --device, pick_device() returns cpu without saying so; only the gate announces the device (gate.py:1264). The judge then trains 8x384x256 at batch 128 in fp32 with SDPA's math path storing TxT attention matrices: one measured step took 74 s and peaked at 10.75 GB RSS. The run is 3,662 steps, so roughly 1.5-3 days at about 11 GB of RAM, while the owner expects '~1 h GPU' and sees only 'step 1/3662' lines. The same silent fallback hits the gate (see the run-overwrite finding). Task 1 showed CUDA available on the owner's setup, so this happens only if that changes.",
+    "severity": "Minor",
+    "sources": [
+     "extra/full-scale-peak-ram#0",
+     "gate_cli/robustness#1"
+    ],
+    "title": "build-judge and train silently fall back to the CPU when CUDA is unavailable; on the CPU the judge needs about 10.7 GB of RAM per step and takes days"
+   },
+   {
+    "evidence": "Probe probe3.py: 'ctx=256 batch_tokens=100 budget=1000: steps=10 tokens=2560 ratio=2.56', 'ctx=192 batch_tokens=1000 budget=4000: tokens=3840 ratio=0.96'. Hand computation for every ctx multiple of 64 up to 1024; checked experiments/configs.py and evals/judge.py:129-134.",
+    "file": "ml/src/airace_ml/train/config.py",
+    "fix": "In validate(), reject batch_tokens < ctx_len (ideally require batch_tokens % ctx_len == 0). Derive steps from the real tokens per step (steps = max(1, token_budget // (batch_size*ctx_len))), or document that the budget is approximate so M3 charges compute for tokens actually trained.",
+    "line": "170-176 (steps = token_budget // batch_tokens; batch_size = max(1, batch_tokens // ctx_len)), 196-204 (validate); trainer.py:432 (tokens_per_step)",
+    "scenario": "Each step trains batch_size*ctx_len tokens, not batch_tokens. A JSON config with ctx_len=256, batch_tokens=100, token_budget=1000 passes validate() and trains 10 x 256 = 2560 tokens (2.56x); ctx 1024 with batch_tokens 512 trains 2x. That breaks R3 (compute tied to the in-game budget) for configs arriving as JSON. With the default batch_tokens=16384, attention spans that do not divide it train 1.6-6% less than budgeted (ctx 384: 42 rows, 98.4%; 640: 97.7%; 832: 96.5%). Reported tokens stay honest. M1 gate and judge shapes divide their batch_tokens, so this is latent until 'Attention span' and 'Training length' become player controls.",
+    "severity": "Minor",
+    "sources": [
+     "core/correctness#2",
+     "core/robustness#2"
+    ],
+    "title": "Tokens actually trained per step differ from batch_tokens; validate() accepts batch_tokens < ctx_len, which trains up to 2-2.56x the paid token budget"
+   },
+   {
+    "evidence": "probe2.py: tok.encode('a\\ud800b') raises TypeError; validate() accepts a surrogate notebook. probe5.py: train_run with probe_prompts ['hi \\ud83d'] raised TypeError at tokenizer.py:65 with telemetry.jsonl already written.",
+    "file": "ml/src/airace_ml/train/config.py",
+    "fix": "In validate(), reject any notebook/coaching/probe_prompts string that does not round-trip str.encode('utf-8'), raising ValueError naming the field. Encode the probe prompts once in _prepare so nothing is first tokenized mid-run.",
+    "line": "229-241 (only isinstance(str) checks); trainer.py:203-211 (_custom_docs), 551-561 (_evaluate encodes probe prompts mid-run); tokenizer.py:65",
+    "scenario": "\"probe_prompts\": [\"hi \\ud83d\"] is valid JSON (JS JSON.stringify emits it for a half-pasted emoji). from_json and validate() accept it; train_run creates out_dir and telemetry.jsonl, trains to the first eval step (step 183 for a judge-sized run), then dies with 'TypeError: TextInputSequence must be str'. That is not a ValueError, so _cmd_train shows a traceback, and with no checkpoint before the first save every rerun repeats the training and crashes at the same step. The same surrogate in notebook/coaching fails in _prepare with TypeError. This breaks validate()'s contract ('nothing but a ValueError may escape for a malformed config') and train_run's claim that everything is checked before out_dir is touched.",
+    "severity": "Minor",
+    "sources": [
+     "core/robustness#3"
+    ],
+    "title": "Lone UTF-16 surrogates in notebook, coaching or probe_prompts pass validate() but crash the tokenizer with TypeError; a bad probe prompt only fails mid-run at the first eval, every time"
+   },
+   {
+    "evidence": "Several probe BPEs: ['ĠB','and','ar','ĠSer','i','ĠB','eg','aw','an'] (9), ['ĠB','and','ar','ĠS','er','i','ĠBeg','a','wan'] (9), 10 in another. Running the deferred Task 16 real-tokenizer test with AIRACE_DATA at a tiny fixture build's 4096 tokenizer failed with [('knowledge-0168', 'Bandar Seri Begawan', 9, 8), ...]; 'Santo Domingo' took 4-7 of 8; every other exact answer fits. Real tok-v1 merges unknown, hence low-medium confidence.",
+    "file": "ml/src/airace_ml/skills/types.py",
+    "fix": "Before bench-v1 is first measured, give knowledge exact items headroom: a fixed budget of about 12, or per item max(8, 4 + len(answer)//2). Extraction already cuts at the first comma or newline, so extra tokens cost little. Re-run the real-tokenizer budget test as part of the Task 15 checklist.",
+    "line": "116 (ExactItem.max_new_tokens = 8); used by ml/src/airace_ml/skills/facts.py:164 (item knowledge-0168); answer from skills/kb_data/countries.json:88; guard test tests/test_bench.py:737-739",
+    "scenario": "knowledge-0168 ('The capital city of Brunei is called ___.') accepts only 'Bandar Seri Begawan'. Probe tokenizers split ' Bandar Seri Begawan' into 9-10 tokens; 'Begawan' occurs only about 14 times per MB of fact prose, so the real tok-v1 is unlikely to merge it much. If tok-v1 needs 9+ tokens, generation stops before the answer is complete, the extracted line never matches, and no model can ever pass the item (a permanent deflation of a frozen bench). On the owner's PC test_every_answer_fits_its_reply_budget_with_the_real_tokenizer starts running once data/tokenizer exists and would fail right after Task 15, which the non-technical owner cannot act on, forcing a bench-v1 change after it has been measured.",
+    "severity": "Minor",
+    "sources": [
+     "skills/correctness#2",
+     "skills/robustness#2",
+     "skills/integration#1",
+     "triage-deferred#2"
+    ],
+    "title": "Knowledge exact items keep the default 8-token reply budget, but bench-v1 asks for 'Bandar Seri Begawan', which a 4096-entry BPE likely splits into 9-10 tokens"
+   },
+   {
+    "evidence": "build_suite() is deterministic today: canonical-JSON sha256 5c47335940e0c3ac... under PYTHONHASHSEED 0 and 987654. grep over tests/test_bench.py and the scoped test files found no digest, golden file or pinned item content; only ids and counts are asserted (test_code_instr_grammar.py:384, 764).",
+    "file": "ml/src/airace_ml/evals/suite.py",
+    "fix": "Add a test that hashes canonical JSON of build_suite().items (asdict per item, sort_keys: prompts, options, answers, check_args, tags, in order) against a recorded digest, with a message that any intended change must bump SUITE_VERSION. Pin it after the function-prompt and other pre-freeze fixes land; optionally store the digest in the bench report.",
+    "line": "87 (SUITE_VERSION), 116-129 (_bench_items regenerated from the skills generators); skills/types.py:21-28 (skill_rng); ml/pyproject.toml:5 (numpy>=2.5, no upper bound)",
+    "scenario": "Spec §4.7 keys leaderboards on (bench version, category) and the rulings treat bench-v1 as frozen, but the suite is rebuilt in every process from generators, kb_data JSON, MiniPy (code.py:477-480 accepts programs by running them), checkers (instructions.py:267) and numpy Generator choice/permutation/integers. A KB fact fix, a word added to a generator table, a checker or MiniPy tweak, the function-prompt fix, or a numpy bump that changes Generator streams (NEP 19 gives no stream-compatibility promise) would produce different items still labelled 'bench-v1', and scores from before and after would be silently incomparable. The gate's code digest only triggers re-measurement; nothing forces a version bump.",
+    "severity": "Minor",
+    "sources": [
+     "skills/correctness#3",
+     "skills/robustness#1"
+    ],
+    "title": "Nothing pins the bench-v1 item set: it is regenerated from code, KB data and numpy streams at runtime, so it can drift silently under the same version label"
+   },
+   {
+    "evidence": "probe_code_copies.py on the code dataset at 5% of full scale: 13,939 docs, 418 copies, 205 typo'd (1.47%), 101 not clustered with their source, 90 survive dedup.",
+    "file": "ml/src/airace_content/noise.py",
+    "fix": "Make code copies exact: skip _misspell for STRUCTURED_DATASETS or add a per-recipe copy-typo share (or a separate noise path that keeps programs runnable). Correct the build.py comment and the ruling's premise.",
+    "line": "386-393 (inject_noise misspells half of all copies); assemble.py:106 (code duplicate=0.03); build.py:83-87, 179-180 (structured_quality); textproc.py:124-134",
+    "scenario": "inject_noise gives half of all duplicate copies 1-2 misspellings. In MiniPy trace docs this yields broken programs with wrong traces, e.g. 'Proram:' ... 'print(xs[0] + xz[-1])' labelled 'Output: 12' (a NameError program). Code is scored with structured_quality, which has no typo factor, so these score 1.0 and pass Light, Standard and Thorough. The Task 14 ruling and the build.py:83-86 comment assume 'code gets duplicates only' / 'no typos injected there', which is false. Short programs also defeat MinHash on 2-typo copies, so 'remove duplicates' misses many. At full scale: about 4,100 broken programs, about 1,800 in a deduped pool.",
+    "severity": "Minor",
+    "sources": [
+     "content/correctness#1"
+    ],
+    "title": "Code dataset copies carry typos that break programs, no cleaning level can remove them, and about 44% also survive dedup, contradicting the Task 14 ruling's premise that code gets no typos"
+   },
+   {
+    "evidence": "probe_boiler.py: share of boilerplate docs surviving Thorough: 87% at ~40 words, 97% at ~150, 96% at ~400, 98% at ~800; clean docs 100%.",
+    "file": "ml/src/airace_content/textproc.py",
+    "fix": "Add a furniture factor to quality (e.g. share of lines that look like page furniture: 2+ '|' separators, short title-case navigation lines), applied like r; or make boilerplate heavier and graded per document as was done for typos and garble. At minimum test separation at realistic document lengths.",
+    "line": "98-121, 137-151 (quality_score); noise.py:175-204 (add_boilerplate); tests/content/test_build.py:735-741",
+    "scenario": "add_boilerplate wraps a web doc in 1-4 furniture lines, but only 3 of the 10 footers (and no headers) contain a SPAM_MARKER, and every other quality factor is a share over the whole document, which furniture shifts by under 1% on a 400-1000-word FineWeb doc. About 72% of boilerplate docs score the same as clean; one marker footer gives p=2/3, still passing Thorough (0.65). The web recipe's 10% boilerplate is nearly untouched by Light, Standard or Thorough, though spec §4.5 says cleaning removes noise. test_web_quality_still_separates_noise_kinds checks a 0.2 gap only on short fixture docs.",
+    "severity": "Minor",
+    "sources": [
+     "content/correctness#2"
+    ],
+    "title": "Boilerplate noise barely moves the quality score on real-length documents, so cleaning almost never removes it"
+   },
+   {
+    "evidence": "PYTHONIOENCODING=cp1252 uv run --no-sync airace-content build --scale tiny --fixtures tests/fixtures/sources --out <scratchpad>/Петко_data > build.log: exit 1, 'charmap' codec can't encode, corpora already written.",
+    "file": "ml/src/airace_content/cli.py",
+    "fix": "Call airace_ml.cli's _use_utf8_output (reconfigure stdout/stderr to utf-8, errors='replace') at the start of airace_content.cli.main, and add a test like the airace-ml cp1252 test.",
+    "line": "147-149 (also 77-96)",
+    "scenario": "Running the build in the background redirects stdout, and Python 3.13 on Windows then encodes with cp1252 (strict). With a non-ASCII data root or repo path (e.g. a Cyrillic Windows profile), print(format_summary(...)) raises UnicodeEncodeError after all data is written; the process exits 1 with a traceback, the 'warning:' lines about exhausted sources are never printed, and the build could be wrongly rerun. airace_ml/cli.py:325-344 already reconfigures to UTF-8 with errors='replace' for exactly this. The owner's current path is ASCII, so this is unlikely today.",
+    "severity": "Minor",
+    "sources": [
+     "content/correctness#3",
+     "content/robustness#5"
+    ],
+    "title": "airace-content does not switch stdout to UTF-8 (unlike airace-ml), so the final summary crashes when stdout is redirected on Windows and the path has non-cp1252 characters, losing the exhausted-source warnings"
+   },
+   {
+    "evidence": "SourceSpec has no revision field; hf_fetch passes none; make_manifest records hf_path, config, split, license and homepage only.",
+    "file": "ml/src/airace_content/sources.py",
+    "fix": "Add a revision (commit sha) to SourceSpec, pass revision= to load_dataset, and write it into the manifest's sources entries; Task 15 can fill in the shas it verified.",
+    "line": "92 (load_dataset without revision); manifest.py:202-226",
+    "scenario": "load_dataset(spec.hf_path, spec.hf_config, split=..., streaming=True) always reads the repo head. If a source is re-uploaded or re-sharded between the Task 15 build and a later rebuild, the same seed gives a different corpus, and nothing in manifest.json shows which data the frozen tok-v1, judge and novelty index were built from. Spec §4.10 asks for provenance in a manifest.",
+    "severity": "Minor",
+    "sources": [
+     "content/robustness#4"
+    ],
+    "title": "Sources are streamed from an unpinned Hugging Face revision and the manifest does not record which revision was used"
+   },
+   {
+    "evidence": "Probe full_twice.py: full build (targets ÷1000, fixture sources) run twice into the same root with seed 0: conversations 507->542 docs, code 278->216, reasoning 94->79, facts 208->228.",
+    "file": "ml/src/airace_content/build.py",
+    "fix": "Always size quotas with estimate_tokens (deterministic, tokenizer-independent, cheap; the summary already reports real tokens), or record the counting basis in the manifest and reuse it for later builds. Correct the docstring either way.",
+    "line": "23-25 (determinism claim), 341; assemble.py:283-299, 424-434",
+    "scenario": "The first `build --scale full` has no tokenizer and sizes quotas with estimate_tokens (bytes/3.6); any later full or partial build finds the frozen tokenizer and uses len(frozen.encode(text)). With the same seed and code the second run produces different document counts and a different corpus, contradicting the docstring ('the same seed gives the same corpus, whichever datasets a build includes'). Datasets rebuilt with --datasets in Task 15 step 3 are sized on a different basis from the ones left alone, and any rerun changes every corpus, which changes the gate's data identity and makes an existing judge stale.",
+    "severity": "Minor",
+    "sources": [
+     "content/integration#1"
+    ],
+    "title": "Running the same full build twice gives a different corpus, because quota counting switches from the byte estimate to the frozen tokenizer"
+   },
+   {
+    "evidence": "Probe: for 'We met at the café. The café was naïve and Zoë smiled.', textproc.words gives [... 'caf', 'na', 've', 'zo' ...], creativity.words gives [... 'café', 'naïve', 'zoë' ...]; with known_vocab built from that text, garble_rate returns 0.333 on the text itself.",
+    "file": "ml/src/airace_content/textproc.py",
+    "fix": "Before the Task 15 build freezes corpus v1, make textproc.words Unicode-aware (letter runs with inner apostrophes, keeping curly-apostrophe handling), or have gate.garble_rate use airace_content.textproc.words, so known_vocab.txt and its consumer share one rule.",
+    "line": "33, 61-68 (words uses [a-z']+); build.py:364-366; airace_ml/experiments/gate.py:550-561 (garble_rate); airace_ml/evals/creativity.py:46",
+    "scenario": "textproc.words turns 'café' into 'caf', 'naïve' into 'na' + 've', 'Zoë' into 'zo', and build_vocab stores these fragments. gate.garble_rate splits model output with creativity.words (Unicode letters), so 'café' is never known however often it appears in training and counts as garbled; the gate docstring claims the vocabulary is read with the same rule. G7 compares two runs, so most bias cancels, but the absolute garble rates reported are inflated for any accented word.",
+    "severity": "Minor",
+    "sources": [
+     "content/integration#2"
+    ],
+    "title": "known_vocab.txt is built with an ASCII-only word rule, but the gate's garble measure reads words as Unicode letter runs, so accented words always count as garbled"
+   },
+   {
+    "evidence": "Read trainer._custom_docs (encode_doc/encode_chat of every non-blank entry, no filter), sampler CUSTOM_DATASET_IDS handling, cli --config and build_novelty_index. score_creativity has no way to see the model's custom data.",
+    "file": "ml/src/airace_ml/evals/novelty.py",
+    "fix": "Let score_creativity accept the model's own custom texts as extra 'seen' tokens (NoveltyIndex.novelty already takes seen=) and pass notebook and coaching replies from the run config. Before training, drop or refuse notebook/coaching entries that contain a bench-v1 prompt (or a canonical key for which reserved_for_bench() is true). At minimum record both as M2 obligations in the handoff.",
+    "line": "197-209 (build_novelty_index covers only DATASET_IDS); ml/src/airace_ml/train/trainer.py:203-211 (_custom_docs trains notebook/coaching unfiltered)",
+    "scenario": "TrainRunConfig.notebook and coaching are trained on in M1 (accepted via --config JSON). (1) A model that memorizes its own notebook stories reproduces them and novelty() counts every window as new, since the index holds only the 8 base corpora; spec §4.7 defines novelty against all corpora, and the notebook is one of the model's corpora. (2) Coaching pairs are never checked against bench-v1 prompts, although §4.7 promises no item text is ever trained on; once discovery cards show real prompts (§4.9, M2), players can coach bench items verbatim.",
+    "severity": "Minor",
+    "sources": [
+     "evals/correctness#2"
+    ],
+    "title": "Player notebook/coaching data, already trained on in M1, is invisible to the novelty index and is not screened against bench-v1 items"
+   },
+   {
+    "evidence": "Probe test_nan_model.py: a 1x64x64 Transformer with tok_emb rows 5-19 set to NaN; run_benchmarks(max_items_per_category=5) finite, measure_fingerprint(k=1) raised RuntimeError at infer/lm.py:125. A garbage-output fuzz through ScriptedLM-style fakes passed for bench, creativity, fingerprint, describe and distance, so this is the only gap found.",
+    "file": "ml/src/airace_ml/infer/lm.py",
+    "fix": "In _sample, nan_to_num the scaled logits to -inf before softmax and treat rows with no finite logit as a stop (no text emitted, so R1 holds); or catch it in score_creativity/measure_fingerprint and score those prompts as empty replies. Add a NaN-model test next to test_non_finite_logprobs_give_finite_scores.",
+    "line": "115-126 (_sample); callers personality/fingerprint.py:314-324, evals/creativity.py:123-125",
+    "scenario": "With NaN/inf in the weights (damaged or bit-flipped safetensors, a future diverged model), bench's greedy and scored categories come out finite as scoring.py:9-11 promises, but measure_fingerprint and score_creativity sample at temperature 0.8/0.9 with top-p, and _sample passes NaN probabilities to torch.multinomial, which raises 'probability tensor contains either inf, nan or element < 0'. bench (with creativity), fingerprint, the gate's G2/G3/G4 measurements and chat abort with a traceback instead of reading the model as degenerate (Review Focus 4). Likelihood is low because the trainer rolls back non-finite updates.",
+    "severity": "Minor",
+    "sources": [
+     "evals/robustness#2"
+    ],
+    "title": "A model with non-finite logits crashes creativity, the fingerprint and chat (torch.multinomial RuntimeError) instead of scoring finite"
+   },
+   {
+    "evidence": "Code read; test_creativity.py:758 deliberately asserts 'I have 3 cats' is well-formed, so digit counting is intended for G2 and the defect is the contradicting docstrings plus the duplicated constant. Impact on G2 pass rates is small.",
+    "file": "ml/src/airace_ml/evals/judge.py",
+    "fix": "Either correct the docstrings in creativity.py:77-80 and gate.py:554-556 or make G2 use creativity.words (updating test_creativity.py:758). Define the opening length once (e.g. creativity imports it from judge).",
+    "line": "34 (imports checkers.words), 45 (CREATIVE_TOKENS = 96), 141-150 (is_well_formed); creativity.py:44 (STORY_TOKENS = 96), 77-80; gate.py:554-559",
+    "scenario": "creativity.words claims 'everything that counts words of a model's reply' uses letter runs, and the gate's garble rate relies on that, but is_well_formed (G2) uses skills.checkers.words, which counts digits as words and keeps inner apostrophes: 'Yes, 1 2 3 4.' has 5 distinct words for G2 but 1 elsewhere; \"I don't know.\" has 3 for G2 (fails MIN_WORDS) but 4 for creativity and the fingerprint. Separately, coherence calibration needs the judged opening to be story-length, but that length is written twice (judge CREATIVE_TOKENS and creativity STORY_TOKENS); changing one silently skews every coherence score.",
+    "severity": "Minor",
+    "sources": [
+     "evals/integration#2"
+    ],
+    "title": "Definitions that should be shared are duplicated: the G2 well-formed check counts words differently from creativity and the gate, and the 96-token story/opening length is defined twice"
+   },
+   {
+    "evidence": "is_well_formed(reply, judge) receives neither the prompt nor the other replies; legibility() judges each reply independently.",
+    "file": "ml/src/airace_ml/experiments/gate.py",
+    "fix": "Count a reply as well-formed only if it is not a near-copy of its prompt (e.g. under 50% of its word 3-grams in the prompt) and not a near-duplicate of another of the 20 replies. Show all 20 G2 exchanges in the report.",
+    "line": "1034-1054 (legibility); evals/judge.py:304-316 (is_well_formed); report.py:23",
+    "scenario": "If the starter answers every probe with the same fluent sentence ('I like to play with my friends.') or parrots the prompt, each reply has 4+ words, 3+ distinct, no repeated 3-gram and low judge perplexity, so 20/20 are well-formed and G2 passes although the model responded to nothing. ADR 0001 closed exactly these gaps (parroting, same answer to everything) for the bench categories but not for G2. The report shows only the first 10 of 20 exchanges, all 'open' probes, so no 'help' reply reaches the human reviewer.",
+    "severity": "Minor",
+    "sources": [
+     "gate_cli/correctness#4"
+    ],
+    "title": "G2 legibility passes a constant-reply or prompt-parroting model, and the report shows only the 10 'open' exchanges"
+   },
+   {
+    "evidence": "Read garble_rate and eval_prep: no check of output volume or repetition; cross-checked with the fake_gate fixture.",
+    "file": "ml/src/airace_ml/experiments/gate.py",
+    "fix": "Record each arm's word count and require the thorough arm's words to be at least about 0.8 x the light arm's; exclude repeated word 3-grams from the count as creativity's loop penalty does; otherwise fail with a detail saying why.",
+    "line": "550-560 (garble_rate), 1185-1203, 541-543 (decision)",
+    "scenario": "garble_rate is the share of pooled words not in known_vocab. A thorough-arm model that ends most completions at once (zero words) or loops on common words ('the the the') gets a garble rate near 0 and passes clean <= 0.8 x dirty against any light arm above 0. The gate's own fake fixture passes G7 with ' the the xq' against ' xq zz the' (tests/test_gate.py:866). 'Thorough cleaning lowers garbled output' can be satisfied by degenerate output.",
+    "severity": "Minor",
+    "sources": [
+     "gate_cli/correctness#5"
+    ],
+    "title": "G7(a) garble rate rewards empty or looping completions, so a degenerate thorough-cleaning model can pass"
+   },
+   {
+    "evidence": "runs.py:181; test_gate.py:547 asserts 'an unstable run is not reused'; no ledger ruling gives a reason.",
+    "file": "ml/src/airace_ml/experiments/runs.py",
+    "fix": "Reuse any finished run (completed or unstable_stopped) whose key and checkpoint match; it still fails its criteria through require_completed. Retrain only when the key changes.",
+    "line": "181 (reuse only status == 'completed')",
+    "scenario": "If g3-code-s2 stops unstable, G3 fails with 'stopped early'. Rerunning the same command (as CLAUDE.md suggests) retrains that run from scratch; with non-deterministic CUDA bf16 kernels it may complete this time and flip G3 to PASS with no change to data, code or config. Children of an unstable parent (G6's continuations) also retrain and re-bench every rerun. This contradicts the runs.py/gate.py docstrings ('A run that finished is reused while ...') and CLAUDE.md line 39.",
+    "severity": "Minor",
+    "sources": [
+     "gate_cli/correctness#6"
+    ],
+    "title": "A gate run that stopped unstable is retrained on every rerun, so on CUDA a gate criterion can be passed by rerolling"
+   },
+   {
+    "evidence": "Probes on a copy of the tiny gate data root: halving web/tokens.bin gave a traceback, exit 1, from both build-novelty-index and build-judge; a file in place of the novelty folder gave NotADirectoryError traceback; Tok.load on '{\"half\": ' raised type Exception (MRO Exception, BaseException, object). The deferred minor covers only calibrate's ValueError with no held-out text. The data tokenizer is written via tmp+replace, so (3) is unlikely.",
+    "file": "ml/src/airace_ml/cli.py",
+    "fix": "In _cmd_build_novelty_index catch ValueError (damaged corpus: exit 2 with the airace-content build hint) and OSError via _files_problem, as _cmd_train does; add the same ValueError catch to _cmd_build_judge. Wrap Tok.load (in tokenizer.py, or in _require_tokenizer and the gate's _load_inputs) to re-raise parse failures as ValueError naming the file ('the tokenizer at X is damaged; rebuild with airace-content build').",
+    "line": "14-19 (contract), 89 (_DAMAGED), 374-381 (_require_tokenizer), 686-693, 762-769 (_cmd_build_novelty_index), 782-801 (_cmd_build_judge); ml/src/airace_ml/experiments/gate.py:150 (_LOAD_ERRORS), 812, 838",
+    "scenario": "(1) A full airace-content build interrupted while writing (write_corpus is not atomic; deferred Task 6 minor) leaves tokens.bin and offsets.npy out of step; build-novelty-index and build-judge then end in 'ValueError: .../web/tokens.bin does not match the offsets'. (2) In build-novelty-index an OSError (disk full, locked or unwritable novelty folder) is a traceback because only FileNotFoundError is caught. (3) A truncated data/tokenizer/tok-v1/tokenizer.json or data/judge/v1/tokenizer.json makes Tok.load raise a bare Exception ('EOF while parsing'), not ValueError, so train, chat, bench, fingerprint, build-judge and gate (which catches only OSError/ValueError/EOFError/SafetensorError) all show a traceback instead of 'damaged ... rebuild it with'.",
+    "severity": "Minor",
+    "sources": [
+     "gate_cli/robustness#2",
+     "gate_cli/integration#4"
+    ],
+    "title": "CLI commands print Python tracebacks for a damaged corpus, a file-system error or a corrupt tokenizer.json (bare Exception from tokenizers), breaking the 'one error: line, never a traceback' contract"
+   },
+   {
+    "evidence": "Probe: a 4-step config trained to completion, then rerun with --resume: exit 2 with exactly that message. _cmd_train consults only resume state, never meta.json/result.json.",
+    "file": "ml/src/airace_ml/cli.py",
+    "fix": "When --resume finds no resume state but out holds a finished model of this config (weights + meta, or result.json status completed), say the run already finished and is ready to use, and only suggest deleting the folder or another --out if they really want to retrain.",
+    "line": "576-581",
+    "scenario": "The owner trains a model to completion into --out m1, then reruns with --resume out of habit. A finished run has no resume state, so the CLI says there is nothing saved to resume and to 'Run the command again without --resume to start the run.' Following that retrains from scratch and overwrites model.safetensors, meta.json and result.json; the message never says the folder already holds a finished model of this config.",
+    "severity": "Minor",
+    "sources": [
+     "gate_cli/robustness#3"
+    ],
+    "title": "`train --resume` on a folder holding a finished run tells the user to run without --resume, which overwrites the finished model"
+   },
+   {
+    "evidence": "Decoded every id of tiny-built tokenizers: 30-31 ids decode to controls (0x00-0x08, 0x0b, 0x0c, CR, ESC, 0x7f-0x9f ...). _print_event and _cmd_chat do no filtering.",
+    "file": "ml/src/airace_ml/cli.py",
+    "fix": "At print time only (stored text and telemetry.jsonl untouched, so R1 holds), render C0/C1 controls other than newline and tab visibly (e.g. as an escape like \\x1b or U+FFFD), as report.cell does.",
+    "line": "476 (train Sample lines in _print_event), 676 (chat reply)",
+    "scenario": "tok-v1 is byte-level, and about 30-31 of its 4096 ids decode to C0/C1 control characters including ESC, CR, backspace and BEL. A barely trained model samples them. `train` prints every probe sample and `chat` every reply verbatim, so an ESC followed by a 'c'-initial token is a full terminal reset in Windows Terminal (wiping scrollback and progress mid-run), and CR/backspace overwrite earlier output so a transcript misrepresents what the model said. report.py already strips these (_CONTROL, report.py:26), so treatment is inconsistent with spec §11 (model output is untrusted wherever rendered).",
+    "severity": "Minor",
+    "sources": [
+     "gate_cli/robustness#4",
+     "spec-coverage#7"
+    ],
+    "title": "The CLI prints raw model text, so control and escape characters from the model can clear or rewrite the console (the gate report already strips them)"
+   },
+   {
+    "evidence": "write_gate_report builds the whole file every time with a fixed placeholder; _cmd_gate calls it on every run; no existing section is read back.",
+    "file": "ml/src/airace_ml/experiments/report.py",
+    "fix": "Carry over an existing '## Iterations' section from the target file when present and different from the placeholder, or keep iterations in a separate iterations.md that the report includes or links.",
+    "line": "259-270 (write_gate_report); cli.py:832-833",
+    "scenario": "Plan step 8 asks for each fix attempt (hypothesis, change, result) to be recorded in the report's 'Iterations' section and the gate to be rerun after each change. write_gate_report always writes ITERATIONS_PLACEHOLDER and overwrites out/report.md, so notes written into runs/gate-1/report.md are lost on the next rerun, and a rerun report copied over docs/reports/m1-feasibility.md replaces the iterations recorded there.",
+    "severity": "Minor",
+    "sources": [
+     "gate_cli/robustness#6"
+    ],
+    "title": "Every gate rerun regenerates report.md from scratch, discarding any 'Iterations' notes written into it"
+   },
+   {
+    "evidence": "`uv run --no-sync pytest -m \"slow or not slow\" tests/test_creativity.py::test_build_judge_smoke tests/test_gate.py::test_gate_refuses_to_start_without_its_inputs`: 1 failed ('Regex pattern did not match. Expected regex: build-judge'). cli.py:679-710 lists only missing pieces.",
+    "file": "ml/tests/test_creativity.py",
+    "fix": "In test_build_judge_smoke copy tiny_data_root to tmp_path first (shutil.copytree) and build the judge there, like test_build_judge_resume_smoke; optionally pass device explicitly.",
+    "line": "119-125 (test_build_judge_smoke); affected ml/tests/test_gate.py:585-599, ml/tests/test_cli.py:596-613 and 1147-1153; fixture conftest.py:111",
+    "scenario": "test_build_judge_smoke calls build_judge(tiny_data_root, ...) on the session-scoped fixture, leaving judge/v1 in it. With `pytest -m \"slow or not slow\"` (or -m \"\"), test_creativity runs before test_gate and test_gate_refuses_to_start_without_its_inputs fails; test_bench_prints_a_table_and_notes_that_creativity_is_missing and test_gate_without_its_inputs_names_what_to_build in test_cli fail in any order that puts the smoke test first. The default suite and -m slow alone pass. The sibling test_build_judge_resume_smoke already copies the root.",
+    "severity": "Minor",
+    "sources": [
+     "tests-health#0"
+    ],
+    "title": "A slow test writes a judge into the shared session-scoped tiny_data_root, so running slow and default tests together fails other tests"
+   },
+   {
+    "evidence": "Rebuilt the conftest tokenizer byte-identically; bf16_margin.py: step-0 gap 0.014 vs max bf16 logit error 0.218. bf16_probe.py (CPU bf16 autocast stand-in): greedy tokens diverge within 10 steps for 10 of 12 sharp-model seeds. Score sums stayed within rel=0.05 (max 0.021).",
+    "file": "ml/tests/test_infer.py",
+    "fix": "Compare with a tolerance: teacher-force the CPU greedy sequence through the GPU model and assert per-step logits agree within about 0.5, or require the GPU to pick the CPU token only where the fp32 margin exceeds 1.0. Keep the seeded-sampling and probability-range checks.",
+    "line": "413-428 (test_cuda_bf16_path_tracks_the_cpu_path)",
+    "scenario": "sharp_lm (seed 1, weights x20, 512-vocab fixture tokenizer) must produce identical 10-token greedy output on CUDA bf16 and CPU fp32. For 'Once upon a time' the step-0 top-2 gap is 0.014 while bf16 shifts logits by about 0.1-0.6, and later steps have similar gaps. It passed on the owner's RTX 3050 in Tasks 5 and 8 by luck; any edit to tests/fixtures/text/*.txt (retraining the tokenizer) or a torch/cuBLAS change re-rolls it, and `pytest -m gpu` then fails on the owner's machine though the CUDA path is fine.",
+    "severity": "Minor",
+    "sources": [
+     "tests-health#1"
+    ],
+    "title": "The GPU test asserts exact greedy-token equality between CPU fp32 and CUDA bf16, but the fp32 top-2 margin (0.014 logits) is far below bf16 rounding error"
+   },
+   {
+    "evidence": "tagprobe.py: run_benchmarks(ScriptedLM(tok), tok, max_items_per_category=10).tag_breakdown() prints {}. The sampler messages for the brief's cases include 'mixture weights must have a positive, finite sum...'.",
+    "file": "ml/tests/test_bench.py",
+    "fix": "In test_bench.py:78 use enough items for tags to qualify and assert the breakdown is non-empty before the range check. In test_sampler.py use multi-letter names ('alpha'/'beta') and match the offending name with a regex; assert 'sum' for the all-zero case.",
+    "line": "76-78 (test_report_serializable_and_tags); ml/tests/test_sampler.py:23-28 (test_invalid_mixtures)",
+    "scenario": "(1) With max_items_per_category=10 no tag reaches MIN_TAG_ITEMS, so tag_breakdown() is {} and the all(0 <= v <= 100) check is vacuous; NaN or 250 would pass. (2) test_invalid_mixtures checks any(k in str(e.value) for k in weights) with names 'a'/'b'; 'a' appears in every English message, so an error naming the wrong dataset or none would pass. Other tests partly cover both properties (test_bench.py:524-548; test_sampler.py:174-181, 205-216).",
+    "severity": "Minor",
+    "sources": [
+     "tests-health#2"
+    ],
+    "title": "Two brief tests check nothing: an empty tag breakdown, and dataset names that are single letters found in every error message"
+   },
+   {
+    "evidence": "0 characters above U+007F in every fixture field; no non-ASCII build input in test_build.py, test_corpus.py or test_gate.py. Probe nonascii_build.py injected accents, emoji, CJK, Greek and a literal special-token string into several fixtures and ran build_corpus('tiny'): it succeeds, emoji decode intact (155/155 creative docs), specials stay text. The code works today; only the guard is missing.",
+    "file": "ml/tests/fixtures/sources/*.jsonl",
+    "fix": "Add non-ASCII rows to a few fixtures (fineweb, tinystories, soda, gutenberg) or a test that injects them into a copy, and assert decoded corpus docs reproduce them, known_vocab.txt and simple_vocab.txt round-trip through read_vocab, and the manifest/info load.",
+    "line": "all 13 files (exercised by ml/tests/content/test_build.py)",
+    "scenario": "Review Focus 5 requires accents, emoji, CJK and curly quotes to survive tokenizer round-trip, corpus build and CLI printing. Tokenizer and CLI have such tests, but adapters, normalize_text, noise, dedup, tag_topic, quality, vocab files, tokenizer training, write_corpus and manifest/info.json never see a non-ASCII byte in any test, while the real FineWeb, Gutenberg, Simple Wikipedia and SODA text is full of it. A regression on that path would first show up in the owner's hours-long full build.",
+    "severity": "Minor",
+    "sources": [
+     "tests-health#3",
+     "spec-coverage#6"
+    ],
+    "title": "No test runs non-ASCII text through the corpus build (Review Focus 5): every source fixture is pure ASCII"
+   },
+   {
+    "evidence": "sys.monitoring line coverage of the default suite (1247 passed): 0 executed lines in _data_identity, _growth_sequences, _Gate.lm, GateRuns._events.on_event; gate.py:836-852 unexecuted. Every default test replaces _load_inputs (test_gate.py:938). Code reading suggests _data_identity is correct today.",
+    "file": "ml/src/airace_ml/experiments/gate.py",
+    "fix": "Add a default-suite test on copies of tiny_data_root: _data_identity stable across calls and changed when tags.npz, offsets.npy, the tokenizer or a dataset's token count changes. In the fake-gate fixture vary inputs.identity between runs and assert everything retrains. Add a small _growth_sequences ordering test.",
+    "line": "721-735 (_data_identity), 764-775 (_growth_sequences), 836-852, 922-926; ml/src/airace_ml/experiments/runs.py:250-262",
+    "scenario": "Gate run reuse is keyed partly on _data_identity(root). The owner's plan is to rebuild data and rerun into the same --out (Task 20 step 8); if the identity failed to change, about an hour of runs trained on the old corpus would be reused silently and G3-G7 would describe the wrong data. The fake gate pins identity to 'data-1', the reuse test varies only code digests, and _data_identity, _growth_sequences, the successful _load_inputs path, _Gate.lm and GateRuns' progress forwarding never run in the default suite (only two slow tests touch them, asserting reuse not invalidation).",
+    "severity": "Minor",
+    "sources": [
+     "tests-health#4"
+    ],
+    "title": "No test checks that the gate's data identity changes when the corpus is rebuilt, and the default suite never runs the gate's real input loading"
+   },
+   {
+    "evidence": "Coverage: lines 611 and 618 never execute; no monkeypatch of rename or PermissionError in test_trainer.py. Probes pass today: finish_resume_probe.py (resume at steps 20, 32, 33, 36 with finishing_mixture identical to uninterrupted), rollback_resume_probe.py (interrupt at the step-30 rollback, identical), refused_rename_probe.py (Path.rename raising PermissionError in two modes, identical, no leftover resume.* folders).",
+    "file": "ml/src/airace_ml/train/trainer.py",
+    "fix": "Add three small default tests with the cfg() helper and one module-scoped reference run: resume inside the finishing phase, resume after a rollback at the stop step, and a monkeypatched Path.rename raising PermissionError during saves; each asserts final weights and telemetry equal the uninterrupted run.",
+    "line": "599-604 (suppress(OSError) swap), 609-611 (rebuild snapshot when saved one is None), 617-618 (re-derive finishing mixture on resume)",
+    "scenario": "(1) 617-618 was the fix for the Task 6 deferred minor; no test resumes inside the finishing phase, so a regression (e.g. > for >=) would silently train the rest of a resumed run on the main mix. (2) 611 (interrupt right after a rollback) is never reached. (3) The Windows refused-rename tolerance (599-604) promises training goes on and resume picks the newest complete state, but no test makes a rename fail; the owner's ~1 h judge build (about 36 saves) runs on Windows.",
+    "severity": "Minor",
+    "sources": [
+     "tests-health#5"
+    ],
+    "title": "Three trainer resume branches, including the Windows 'refused rename' path, are never executed by any test"
+   },
+   {
+    "evidence": "`uv run --no-sync pytest --durations=25 -q`: 1247 passed, 1 skipped, 8 deselected in 136.83 s cold; warm 118.15 s. Per-file: test_trainer 32.3 s, test_code_instr_grammar 23.5 s, content/test_build 13.4 s, test_bench 10.1 s.",
+    "file": "ml/tests/test_trainer.py",
+    "fix": "Add a module-scoped fixture that trains the 40-step reference run and the stop-at-20 partial state once (copied per test with shutil.copytree), and fold test_resume_equivalence's weight comparison into test_resume_continues_where_it_stopped (saves about 5-6 s). Track suite time in the ledger.",
+    "line": "88-104, 159-183, 369-386",
+    "scenario": "136.8 s cold (3m12s wall) and 118.2 s warm on 4 vCPUs, under the 3-minute budget but with a thinner margin on Windows where Defender scans the many tmp corpora and checkpoints. test_trainer.py is 27% (32.3 s); test_resume_equivalence, test_resume_continues_where_it_stopped and test_resume_recovers_from_an_interrupted_swap each train the identical 40-step reference run and stop-at-20 partial run, and the first two are nearly the same test.",
+    "severity": "Minor",
+    "sources": [
+     "tests-health#6"
+    ],
+    "title": "The default suite takes 118-137 s here, with little margin on Windows; trainer tests repeat the same reference training runs"
+   },
+   {
+    "evidence": "Counted tag prefixes per category over build_suite(); grepped ledger and ADR for a tag-scheme ruling: none.",
+    "file": "ml/src/airace_ml/skills/grammar.py",
+    "fix": "Before bench-v1 freezes, give every item topic:, skill: and fmt: tags (e.g. skill = family/relation, fmt = mc/pair/exact/check/story, topic = generator topic or 'other'); tags are not item text, so scores do not change. Otherwise record a ruling deferring the full tag space to M4.",
+    "line": "820 (also reasoning.py:451, patterns.py:198, code.py:981/1013, instructions.py:614, facts knowledge/consistency items, evals/creativity.py:136)",
+    "scenario": "Spec §4.7/§4.9: every category stores per-item results tagged by topic x skill x format, feeding discoveries. In bench-v1, language/reasoning/pattern have only fam:; knowledge/consistency rel:+topic:; coding fam:+fmt:; instruction fam:+topic:; creativity fmt:+topic:. No item has all three axes and no skill: axis exists, so the M4 discovery engine and M2 registry reports lack the combinatorial space. The plan narrowed tags to fam:<name> without a recorded ruling.",
+    "severity": "Minor",
+    "sources": [
+     "spec-coverage#2"
+    ],
+    "title": "Benchmark items are not tagged topic x skill x format as spec §4.7 requires; most categories carry one axis and none carries a skill axis"
+   },
+   {
+    "evidence": "Read trainer._evaluate and events.py (Progress, HeldoutEval, Sample, Instability, Done); 'mini-eval' appears only in the spec.",
+    "file": "ml/src/airace_ml/train/trainer.py",
+    "fix": "Record a deferral to M2 in the ledger or spec, or add an optional mini-eval at eval steps (e.g. run_benchmarks(max_items_per_category about 10, no creativity)) emitted as a new event.",
+    "line": "547-561 (_evaluate emits only HeldoutEval and Sample)",
+    "scenario": "Spec §4.7 (spec:167) requires a mini-eval during training for live charts. The trainer's periodic evaluation emits held-out losses and probe samples only; no bench items run during training and no event type or hook exists. The plan's Task 8 telemetry list (plan:902) omits it and nothing defers it to M2, so M2's live-training view will find no M1 support.",
+    "severity": "Minor",
+    "sources": [
+     "spec-coverage#3"
+    ],
+    "title": "Spec §4.7's tiny mini-eval during training for live charts has no implementation and no recorded deferral"
+   },
+   {
+    "evidence": "Read docs/progress.md and docs/handoff/README.md at HEAD 6bd5022; the ledger shows Tasks 12-20 complete.",
+    "file": "docs/progress.md",
+    "fix": "Add a dated progress.md entry (M1 code complete, test counts, pending local steps 15/17/20.6-9) and rewrite README §2/§4/§5 with the branch state and the exact local command sequence (including the content extra, HF login, and the delete-judge-after-rebuild step until fixed).",
+    "line": "5-9 (and docs/handoff/README.md:14-19, 44-55)",
+    "scenario": "CLAUDE.md requires updating docs/progress.md at every milestone or handoff, and README §6 requires a dated entry per task. progress.md's newest entry still says 'Tasks 1-11 complete... Task 12 not yet reviewed'; the handoff README still says Tasks 13-20 are not started, the branch is m1-it-learns and the next step is Task 12. The owner's local session reads these first and would get the wrong resume point and none of the next local steps (Task 15 with the simplewiki license decision and the --extra content build, novelty index, judge, gate steps 6-9). The branch fast-forward is recorded only in the ledger. This may be planned for the end of the final review but is not done at this HEAD.",
+    "severity": "Minor",
+    "sources": [
+     "spec-coverage#5"
+    ],
+    "title": "Progress log and handoff resume guide are stale (last updated after Task 11)"
+   },
+   {
+    "evidence": "p5_topics.py ran the real tag_topic/_topic_of_word over clean real docs of all 9 sources and counted keyword hits; p5b_topics.py re-tagged without calendar words. The winning topic holds only about 45% of keyword hits in the median web doc.",
+    "file": "ml/src/airace_content/topics.py",
+    "fix": "Move month and weekday names out of 'school' (or make them non-topical); drop or qualify 'addition', 'number', 'place', 'data', and add 'marketing' to _NOT_INFLECTED. Re-check the web topic distribution on a real sample.",
+    "line": "61-73 (school keywords; calendar words at 69-70), 109-121 ('market' via 'marketing', 'place'), 157-177 (_forms); consumer ml/src/airace_ml/data/sampler.py:48-50 (balanced variety)",
+    "scenario": "Of 484 real FineWeb docs, 111 are tagged 'school' (top web topic, 23%); for 35 of them month/weekday names alone decide it (a soap-opera forum post, a financial-regulation news item, a tech story). In Simple Wikipedia 8 of 60 'school' tags come only from birth/death dates. Other false friends: 'marketing' -> market (places), 'in addition' and 'number' (school), 'place' ('take place', 'place value'), 'data' (technology), 'practice'/'goals'/'training' (sports, 13% of wikihow). These tags drive Balanced variety (topic-stratified sampling) and discovery topic tags. No topic swallows the corpus (largest share 23-27%).",
+    "severity": "Minor",
+    "sources": [
+     "extra/real-text-cleaning-calibration#4"
+    ],
+    "title": "Topic keywords mis-tag real text on dates and false friends: month and weekday names alone make about 7% of web docs 'school'"
+   },
+   {
+    "evidence": "Dumped live bench-v1 items via suite._bench_items(); read kb.py accepted_answers and scoring.py:56-70. The plural forms are not objects of any relation, so adding them changes no distractor or false-fact draw.",
+    "file": "ml/src/airace_ml/skills/kb_data/animals.json",
+    "fix": "Set animal_class also_accepted to the plural of each class (mammal->mammals, bird->birds, fish->fishes, reptile->reptiles, amphibian->amphibians, insect->insects, arachnid->arachnids). Only the exact items' answer lists change; the item stream stays the same.",
+    "line": "9 (animal_class also_accepted {}); facts at 64, 90, 100, 125",
+    "scenario": "knowledge-0151 (sloth), 0152 (owl), 0181 (emu) and 0198 (polar bear) ask 'What is the animal group of ...?' / 'Which group of animals ...?', which invite a plural, but accept only 'mammal'/'bird'. exact_match normalizes only quotes, trailing punctuation and case, so 'mammals' is wrong: 4 of the 50 free-answer knowledge items, up to 8% of the free-answer score for a model that knows the facts. The same accepted list feeds the personality factual probes.",
+    "severity": "Minor",
+    "sources": [
+     "extra/bench-knowledge-truth-audit#0"
+    ],
+    "title": "Free-answer animal-class items reject the plural answers people usually give ('mammals', 'birds')"
+   },
+   {
+    "evidence": "Live dump of exact knowledge items; sampled reasoning_train_docs; read the space.json also_accepted block.",
+    "file": "ml/src/airace_ml/skills/kb_data/space.json",
+    "fix": "Add the bare digits to each ordinal ('first': ['1st', '1'], ... 'eighth': ['8th', '8']); none is an object, so no rng or distractor change.",
+    "line": "9-18 (planet_order also_accepted); facts at 47 (Venus), 50 (Jupiter)",
+    "scenario": "knowledge-0153 (Jupiter) accepts ['fifth','5th'] and knowledge-0194 (Venus) ['second','2nd']; a model answering 'Answer: 5' or 'Answer: 2' is scored wrong, although the reasoning training docs teach 'Answer: <digit>' (reasoning.py:382) and sibling numeric relations accept digits (shape_sides, animal_legs).",
+    "severity": "Minor",
+    "sources": [
+     "extra/bench-knowledge-truth-audit#1"
+    ],
+    "title": "Planet-order free answers accept '5th' but not the bare digit '5'"
+   },
+   {
+    "evidence": "Dumped plan_false_facts(kb, stream(0,'false_facts'), 300) and bench items; the 40 animal_class plan entries include peacock/rooster/stork -> reptile; other animal_class false facts checked are clearly false.",
+    "file": "ml/src/airace_ml/skills/kb_data/animals.json",
+    "fix": "Add never_false pairs [<bird>, 'reptile'] for every bird subject (the mechanism already used for lizard/zero, Hagia Sophia/Greece). Some draws change, acceptable before bench-v1 freezes.",
+    "line": "3-10 (animal_class: falsifiable true, never_false []); bird facts e.g. 108 swan, 115 peacock, 120 stork, 123 rooster, 132 swallow",
+    "scenario": "The seed-0 FalseFactPlan plants 'The peacock/rooster/stork is a kind of reptile.' as false-fact noise and G7 (gate.py:573-615) scores the model wrong when it prefers ' reptile'. In modern biology birds are a group within the reptiles, so these 'falsehoods' are true under another reading, breaking the KB's falsifiable contract (kb.py docstring). Reptile also appears as a wrong option in knowledge-0075 (swan) and consistency-011 (swallow); the keyed 'bird' is still best, so the MC harm is small.",
+    "severity": "Minor",
+    "sources": [
+     "extra/bench-knowledge-truth-audit#2"
+    ],
+    "title": "Birds get 'reptile' as a distractor and as a planted false fact, though under the modern grouping birds are reptiles"
+   },
+   {
+    "evidence": "Live dump of knowledge items; baby_animal lists both chicken=chick and hen=chick.",
+    "file": "ml/src/airace_ml/skills/kb_data/animals.json",
+    "fix": "Drop the hen row from baby_animal (chicken=chick covers it); the small sampling shift is acceptable before bench-v1 freezes.",
+    "line": "706 ([\"hen\", \"chick\"] in baby_animal)",
+    "scenario": "knowledge-0076 asks 'Fill in the blank. A newborn hen is known as a ___.' (key chick) and training text says 'A baby hen is called a chick.' The keyed answer is still the only plausible option, but the wording is wrong by definition and duplicates chicken=chick.",
+    "severity": "Minor",
+    "sources": [
+     "extra/bench-knowledge-truth-audit#3"
+    ],
+    "title": "'A newborn hen' is a self-contradictory bench subject (a hen is an adult female chicken)"
+   }
+  ]
+ },
+ "find+:bench-knowledge-truth-audit": {
+  "coverage_note": "I wrote /tmp/claude-0/-home-user-AI-Race/475d8ca9-df1d-54e7-9466-322920536cbb/scratchpad/dump_kb.py and ran it with uv run --no-sync. It dumps, from the live generators:\n- all 200 bench-v1 knowledge items: 150 multiple choice and 50 free answer, built through suite._bench_items and skill_rng;\n- all 120 consistency items (40 groups);\n- the seed-0 FalseFactPlan of 300 entries, built as plan_false_facts(kb, build.stream(0,'false_facts'), N_FALSE_FACTS), with 0 entries un-askable;\n- all 300 G7 probes from gate.false_fact_probes, with 0 skipped;\n- every relation's flags, templates, objects, confusable / also_accepted / never_false lists, and the full fact lists of the 12 benchmark or falsifiable relations.\n\nThe outputs are knowledge.txt, consistency.txt, plan.txt, probes.txt and relations.txt in the scratchpad.\n\nI checked every realized item and every plan entry by hand against general knowledge for:\n(a) wrong keyed answers: none found;\n(b) true distractors;\n(c) 'false' facts that are true;\n(d) missing accepted forms.\n\nClean areas, confirmed:\n- capital_of avoids every two-seat or disputed capital (Bolivia, South Africa, Côte d'Ivoire, Sri Lanka, Benin, Tanzania, Eswatini, Indonesia, Israel and Burundi are absent, and the Netherlands is keyed Amsterdam with The Hague not an object).\n- continent_of excludes transcontinental countries (Russia, Turkey, Egypt, Kazakhstan, Georgia, Azerbaijan, Armenia, Cyprus, Panama and Trinidad are absent).\n- The landmark keys are right, and Hagia Sophia/Greece and Mount Olympus/Turkey are already in never_false.\n- Leg counts, element symbols, shape sides, planet order, days, months and vehicles are all correct.\n- All realized free-answer capitals and landmarks have no accent variants (Santo Domingo, Bandar Seri Begawan, Khartoum, Bridgetown, Managua; Mexico, China, Germany, Italy, Cambodia).\n- All 300 plan entries are clearly false, apart from the birds-as-reptiles reading.\n\nLatent issues I did not report, because no seed-0 or bench-v1 item uses them:\n- 'the Blue Mosque'/Egypt: Cairo's Aqsunqur Mosque is also called the Blue Mosque.\n- butterfly = six legs: brush-footed butterflies walk on four.\n- the Netherlands/South America: Bonaire.\n- Spain/Africa: Canaries, Ceuta, Melilla.\n- Oceania vs 'Australia' as a free answer for the Pacific countries.\n\nAll of these sit in kb_data. They only matter if --seed changes or new bench items are drawn.\n\nKnown and already noted in the ledger (progress.md:101), not re-reported: the 300-fact plan covers every fact of day_after, month_after, planet_order, shape_sides, landmark_country and vehicle_travel. So every benchmarked fact in those relations also has a planted falsehood.\n\nLedger rulings I respected: Task 16's normalization rule (case-insensitive, strips punctuation, keeps articles and units) and the Task 10 mc_safe gating.\n\nNot covered:\n- instruction_bench_items' use of the KB, and the training-only relations (country_language, color_of and the others), because they are outside this task.\n- Whether the free answers fit max_new_tokens=8 under the real tok-v1 tokenizer, which needs the built tokenizer.\n\nI made no Firecrawl requests; general knowledge was enough for every claim.",
+  "findings": [
+   {
+    "confidence": "medium",
+    "evidence": "Dumped the live bench-v1 items with a scratchpad script that calls suite._bench_items(). The four items above are question-form (not fill-in-the-blank), and the question wording ('which group', 'animal group of') naturally invites a plural. Read kb.py accepted_answers and the scoring.py normalization. Checked that 'mammals', 'birds' and so on are not objects of any relation, so adding them changes no distractor or false-fact choice and consumes no rng.",
+    "file": "ml/src/airace_ml/skills/kb_data/animals.json",
+    "fix": "In animals.json animal_class, set also_accepted to {\"mammal\":[\"mammals\"],\"bird\":[\"birds\"],\"fish\":[\"fishes\"],\"reptile\":[\"reptiles\"],\"amphibian\":[\"amphibians\"],\"insect\":[\"insects\"],\"arachnid\":[\"arachnids\"]}. Only the answers lists of the exact items change; the item stream stays the same.",
+    "line": "9 (animal_class also_accepted {}); facts at 64, 90, 100, 125",
+    "scenario": "knowledge-0151 'What is the animal group of the sloth?' (ACCEPT=['mammal']), knowledge-0152 'Which group of animals does the owl belong to?' (['bird']), knowledge-0181 'What is the animal group of the emu?' (['bird']) and knowledge-0198 'Which animal group includes the polar bear?' (['mammal']). A model that answers 'Answer: mammals' or 'Answer: birds' is scored wrong: exact_match (evals/scoring.py:70) compares after normalize_answer (scoring.py:56), which only strips quotes and trailing punctuation and casefolds, so 'mammals' != 'mammal'. That is 4 of the 50 free-answer knowledge items, so a model that knows these facts loses up to 8% of its free-answer score. The same accepted list feeds the personality factual probes (Task 18 ruling, answers=accepted_answers).",
+    "severity": "Minor",
+    "title": "Free-answer animal-class items reject the plural answers people usually give ('mammals', 'birds')"
+   },
+   {
+    "confidence": "medium",
+    "evidence": "Live dump of the exact knowledge items. Sampled reasoning_train_docs and saw the 'Answer: <digit>' convention. Read the space.json also_accepted block.",
+    "file": "ml/src/airace_ml/skills/kb_data/space.json",
+    "fix": "Add the bare digits: \"first\": [\"1st\", \"1\"], ... \"eighth\": [\"8th\", \"8\"]. None of these is an object, so no rng or distractor change.",
+    "line": "9-18 (planet_order also_accepted); facts at 47 (Venus), 50 (Jupiter)",
+    "scenario": "knowledge-0153 'Counting the planets outward from the Sun, what is the place of Jupiter?' accepts ['fifth','5th'], and knowledge-0194 '... what is the place of Venus?' accepts ['second','2nd']. A model answering 'Answer: 5' or 'Answer: 2' is scored wrong. The reasoning training docs teach exactly that frame, 'Question: ...\\nAnswer: 9' with bare digits (reasoning.py:382), and the sibling numeric relations accept digits (shape_sides 'five'->'5', animal_legs 'two'->'2'), so planet_order is the odd one out.",
+    "severity": "Minor",
+    "title": "Planet-order free answers accept '5th' but not the bare digit '5'"
+   },
+   {
+    "confidence": "low",
+    "evidence": "Dumped plan_false_facts(kb, stream(0,'false_facts'), 300) and the bench items. The 40 animal_class plan entries include peacock/rooster/stork -> reptile. Every other animal_class false fact checked is clearly false (e.g. turtle -> amphibian, owl -> mammal).",
+    "file": "ml/src/airace_ml/skills/kb_data/animals.json",
+    "fix": "Add a never_false pair [<bird>, \"reptile\"] for every bird subject in animal_class. This is the same mechanism already used for lizard/zero and Hagia Sophia/Greece. It changes some distractor and false-fact draws, which is acceptable because bench-v1 is not yet frozen by real players.",
+    "line": "3-10 (animal_class: falsifiable true, never_false []); bird facts e.g. 108 swan, 115 peacock, 120 stork, 123 rooster, 132 swallow",
+    "scenario": "The seed-0 FalseFactPlan (build.py:335) plants 'The peacock is a kind of reptile.', 'The rooster is a kind of reptile.' and 'The stork is a kind of reptile.' as false-fact noise, and G7 (gate.py:573-615) scores the model 'wrong' when it prefers ' reptile'. In modern biology birds are a group within the reptiles (Wikipedia, for example, says birds are reptiles in that sense), so these 'falsehoods' are true under another reading, which breaks the KB's own falsifiable contract ('swapping the object always gives a clearly false statement', kb.py docstring). The same reptile option also appears as a wrong answer in knowledge-0075 (swan: ['mammal','reptile','insect','bird']) and in consistency-011-0/1/2 (swallow). The keyed answer 'bird' is still the best one, so the multiple-choice harm is small. The false-fact harm is mainly that the planted noise is not clearly false.",
+    "severity": "Minor",
+    "title": "Birds get 'reptile' as a distractor and as a planted false fact, though under the modern grouping birds are reptiles"
+   },
+   {
+    "confidence": "medium",
+    "evidence": "Live dump of the knowledge items, and the baby_animal facts list (chicken=chick and hen=chick are both present).",
+    "file": "ml/src/airace_ml/skills/kb_data/animals.json",
+    "fix": "Drop the hen row from baby_animal (chicken=chick already covers it). Removing it shifts baby_animal sampling slightly, which is acceptable before bench-v1 is frozen.",
+    "line": "706 ([\"hen\", \"chick\"] in baby_animal)",
+    "scenario": "knowledge-0076 asks 'Fill in the blank. A newborn hen is known as a ___.' (KEY=chick, options [cub, kid, joey, chick]), and training text states 'A baby hen is called a chick.' The keyed answer is still the only plausible option, but the wording is wrong by definition and duplicates the chicken=chick fact.",
+    "severity": "Minor",
+    "title": "'A newborn hen' is a self-contradictory bench subject (a hen is an adult female chicken)"
+   }
+  ]
+ },
+ "find+:full-scale-peak-ram": {
+  "coverage_note": "Q1 (peak RAM and wall time per step): no owner step comes near 8-12 GB on the GPU path, and nothing scales super-linearly. The owner's PC has 32 GB of RAM (docs/progress.md:26).\n\nWhat I ran. Everything lives under scratchpad/fullmem/. I wrote a synthetic Fetch (synth_fetch.py) from the real HF rows other finders had already harvested (realrows/, lhf/), so no new row downloads were needed. It produces:\n- FineWeb rows of about 2-5 KB, with a heavy tail, built as sentence salads from 500 real rows.\n- fineweb_edu rows with int_score drawn from the real 3/4/5 distribution.\n- cosmo, simplewiki and tinystories rows as salads of their real rows.\n- soda dialogues with the real turn counts.\n- everyday_conv capped at its real 2,260 rows, gsm8k at 7,473 and mbpp at 374.\n- Gutenberg rows with real METADATA JSON. 8% are children's books, log-uniform from 60 KB to 4 MB, as CRLF hard-wrapped text built from Alice texts. The rest are adult books that are never parsed.\nSimplicity-filtered sources split their sentence pools by whether the template document passes, so acceptance rates match. The synthetic strings are slightly wider in memory than real ones (1.97 vs 1.65 bytes per character on web), so the RSS numbers err high. I ran build_corpus('full') at full volume, with no scaling down, under a /proc VmRSS sampler with per-phase labels (run_build.py).\n\n1) Corpus build, full volume: 940,840 docs and 158.3M tokens. Wall time 20 min 38 s, CPU only, on a 4-vCPU Xeon at 2.1 GHz, not counting HF network time. Peak RSS 1,678 MB.\n\n| Phase | Time | RSS / peak |\n|---|---|---|\n| simple_vocab (200k rows) | 28 s | 262 MB |\n| Assembly of all 8 datasets | 4.0 min | 262 → 1,200 MB |\n| known_vocab | 30 s | 1,272 MB |\n| Tagging (quality, dedup, topic, held-out) | 7.0 min | peak 1,650 MB (tag/code) |\n| Tokenizer training | 5 s | +40 MB |\n| Encode and write | about 8.5 min | 1,679 MB |\n\nPer-dataset assembly times are in build1.log. build.py:340-368 does keep every AssembledDoc and text alive at once, but that costs only about 0.95 GB over baseline, roughly 9 bytes per corpus token held. The full-volume run against the same build at 1/20 scale: per-phase time ratios are 12-26x for 20x the data, and RSS grows linearly, so nothing is super-linear. The Gutenberg cleaning regexes are linear even on 800 KB single-line text.\n\nNot measured: HF streaming buffers. datasets 5.1 reads a whole parquet row group into Arrow (packaged_modules/parquet/parquet.py:206) but converts only 10 rows at a time to Python (iterable_dataset.py:423). gutenberg_english has 37 shards of 195-365 MB compressed (1 Firecrawl request). My estimate is ≤1 GB of extra transient memory. That gives about 3 GB in total for the owner's build. On the owner's Ryzen I'd expect about 10-15 min of CPU work plus streaming time. Encoding one document at a time (build.py:392) is about 40% of the CPU time; tok.encode_batch would speed it up but is not a defect.\n\n2) build_novelty_index on the full corpus: 15.4 s, peak 701 MB. With real, less repetitive text the unique-hash set grows from 3.6M to about 18M, so I estimate about 0.8-0.9 GB.\n\n3) Judge setup on the full corpus (judge_train_config(): thorough cleaning, dedup and fact_check on all 8 datasets):\n- trainer._prepare (load_pools, eligible_docs, sampler, held-out batches): 0.3 s, 494 → 600 MB RSS. Most of the 494 MB is the torch import.\n- Five 128x256 batches: 0.03 s.\n- Eligible shares: web 65%, books 96%, educational 95%, conversations 60%, code 80%, reasoning 91%, facts 39%, creative 95%.\n- A 3-step train_run at shape 2x64x256 on the CPU: 20 s, peak 3.4 GB. The batch-128 logits dominate. On CUDA those live in VRAM.\n- The gate's --cpu-speed starter run (4x128x256, batch 64): peak 2.7 GB on the CPU.\n- The real judge shape on the CPU: 10.7 GB per step (finding 1).\nSeparately, I estimate on paper that GPU training of the judge needs about 3-4 GB of VRAM with flash SDPA and bf16. That is unmeasured: there is no GPU here.\n\nNot covered: real GPU and VRAM behaviour; Windows-specific allocator differences (I expect none to matter); real-text tokenizer ratios; the HF row-group size of each source (only Gutenberg's shard sizes were checked). Firecrawl requests used: 1 of 40. Probe outputs are in scratchpad/fullmem/{build20.log, build1.log, root1/probe_log.json}.",
+  "findings": [
+   {
+    "confidence": "medium",
+    "evidence": "Probe scratchpad/fullmem/judge_step_cpu.py: Transformer(judge_train_config().shape, 4096) with one forward and backward at batch 128x256 on the CPU took 74.3 s and peaked at 10,754 MB RSS (558 MB before the step). Code read: device.py:8-13 (silent fallback); cli.py:356-362 (raises only when --device cuda is passed explicitly); cli.py:465-489 and 772-779 (no line names the device); trainer.py:347-350 (no autocast on the CPU). Task 1's report shows torch.cuda.is_available() == True on the owner's setup, so this happens only if CUDA later becomes unavailable.",
+    "file": "ml/src/airace_ml/device.py",
+    "fix": "At the start of build-judge, train and bench, print the device being used, for example 'training on the GPU (NVIDIA GeForce RTX 3050)' or 'no usable GPU found: training on the CPU'. For build-judge in particular, refuse to fall back to the CPU unless --device cpu is given, and say in plain words that it would take days.",
+    "line": "8-13 (also ml/src/airace_ml/cli.py:356-362, ml/src/airace_ml/evals/judge.py:262, ml/src/airace_ml/train/trainer.py:347-350)",
+    "scenario": "Suppose CUDA is not available when the owner runs `airace-ml build-judge` without --device. Possible causes are a driver update that breaks the cu130 wheel or a CPU-only torch being resolved. pick_device() then returns cpu without saying so. _cmd_build_judge never prints the device. Only the gate announces it (gate.py:1264). The judge then trains at 8x384x256 with batch 128 in fp32, because _autocast is a no-op on the CPU and SDPA takes the math path, which stores the T x T attention matrices. I measured one real judge step on the CPU: 74 s and a peak RSS of 10,754 MB. That run is 3,662 steps, so roughly 3 days on this 4-vCPU Xeon and perhaps 1.5 to 2 days on a Ryzen 5 5500, at about 11 GB of RAM the whole time. The owner, expecting '~1 h GPU', sees only 'step 1/3662 ...' lines and has no idea why. This is the only path I found that goes past the 8-12 GB band.",
+    "severity": "Minor",
+    "title": "build-judge (and train) silently fall back to the CPU; on the CPU the judge needs ~10.7 GB of RAM per step and takes days"
+   },
+   {
+    "confidence": "low",
+    "evidence": "Full-volume run of build_corpus('full', ...) with a synthetic Fetch built from real HF rows (scratchpad/fullmem/run_build.py, synth_fetch.py). Manifest components: fineweb assigned 30.0M estimated tokens, actual 44.01M; code generator 9.97M, actual 13.09M; patterns 3.09M, actual 4.15M. Bytes per token measured by decoding 3,000 documents per dataset (overshoot.py). The synthetic tokenizer is trained on 'sentence salad' text, so the exact ratios are indicative only. The ledger ruling (Task 14, 'token estimate = frozen tokenizer or UTF-8 bytes/3.6') covers the 3.6 constant. The 200-document sample variance is not covered by that ruling.",
+    "file": "ml/src/airace_content/assemble.py",
+    "fix": "Optional. Use per-dataset bytes-per-token constants (for example about 3.1 for web and reasoning, 2.6 for code), and estimate the mean from more documents for heavy-tailed sources (for example 2,000, or re-estimate as documents arrive). Or accept the result and record in the build summary that full-scale datasets can land ±30-50% from target on the first build.",
+    "line": "144-147, 283-299",
+    "scenario": "On the first full build (no tokenizer yet), _Goal turns a token quota into a document count. It uses the mean bytes/3.6 of the component's first EST_SAMPLE_DOCS=200 documents. Two errors multiply. (1) A 4096-entry BPE gives fewer bytes per token than 3.6 on web and code text. Measured on the built corpus: web 3.07, code 2.64, reasoning 3.11, educational 3.32, creative 3.66. (2) FineWeb document lengths are heavy-tailed: in the 500 real rows the median is 2.2 KB, the mean 3.6 KB and the maximum 115 KB. A mean over 200 documents therefore carries an error of about ±25%. In the synthetic full build, web came out at 44.0M tokens against a 30M target. Of that, the tokenizer accounts for 1.17x and the sample-mean bias for about 1.25x. The whole corpus was 158M tokens instead of about 137M. The effect is benign: the summary reports the real counts, the training mix is set by weights rather than corpus size, and memory grows linearly (+15%). But dataset sizes will not match the design targets, and the error on real FineWeb can go either way from run to run.",
+    "severity": "Minor",
+    "title": "Full-scale token quotas overshoot noticeably (web 147%, code 131% in the full-volume synthetic build)"
+   }
+  ]
+ },
+ "find+:g4-noise-at-full-k": {
+  "coverage_note": "Read the G4 code end to end: eval_seed_variation (gate.py:410-437), _Gate.fingerprint (gate.py:964-985), _Gate.seed_variation (gate.py:1076-1104), MEASURE_SEED and SEED_MIN_DISTANCE, the whole of personality/fingerprint.py (measure_fingerprint, _traits, fingerprint_distance, STD_FLOOR), experiments/configs.py (mix_heavy, FULL_SCALE.fingerprint_k=3), spec section 11 criterion 4, plan line 1855, and the ledger and deferred-minors entries on G4 and fingerprints (M4 std floor, M5 same-k).\n\nI ran the experiment the task asked for, on CPU with 15 models rather than 5-8, so the population matches the gate's 12+3 roles. Each model was fingerprinted at k=3 at 8 measure seeds, and two models at 20, for the noise-only null. All three requested magnitudes are measured against SEED_MIN_DISTANCE=0.05: noise floor about 2.3, seeds about 3.0, mixes about 4.4 population SDs. All are 40-90 times the threshold. No Firecrawl requests were used. Nothing in the repo was modified; all files are under scratchpad/g4n.\n\nWhere the tiny-data proxy limits the conclusion:\n- The models are (2,96,128), not the gate's (6,192,256) at 8.4M tokens, and they memorise a 118k-token fixture corpus (train loss about 1, held-out loss 2.5-8). Their replies are semi-memorised fragments.\n- Mix contrasts in the proxy come from tiny, very distinct fixture corpora. Precision is near zero, and was constant (all 0) at 2 of 8 measure seeds, which lowers D to 9.\n- So the ratios seed/noise (about 1.35-1.6) and seed/mix (about 0.6-0.9), and the 4% noise-induced fail rate, are proxy numbers. At full scale, real seed and mix effects may be larger relative to k=3 noise, or sparse traits like precision may become less noisy.\n- What does NOT depend on the proxy: the scale-invariance identity (mean squared pairwise distance = 2Dn/(n-1), about 21 for n=15), which makes the 0.05 floor non-binding at any scale; and the 50% pass rate under a pure-noise null, which follows from the relative seed-vs-mix comparison with no noise reference.\n\nNot re-reported: the STD_FLOOR blow-up for fingerprints outside the population (ledger M4, deferred). It is mentioned only as a constraint on the fix.",
+  "findings": [
+   {
+    "confidence": "high",
+    "evidence": "Built a fresh tiny corpus (airace-content build --scale tiny --fixtures tests/fixtures/sources, about 118k tokens) in the scratchpad. Trained 15 models at ModelShape(2,96,128), 819,200 tokens each, batch 4096, on CPU: mix_heavy(creative|code|facts|conversations) and BALANCED_MIX, seeds 1-3 each, mirroring the gate's G3+G4 population. Fingerprinted every model with measure_fingerprint(k=3) at measure seeds 0-7, and creative-s1 and facts-s1 at 0-19. Computed distances with fingerprint_distance against the 15-model population and verdicts with eval_seed_variation. Scripts: scratchpad/g4n/scripts/{train_all,fp_all,analyse,null,share}.py. Outputs are in scratchpad/g4n/fps. The scale identity sum_{i,j}||z_i-z_j||^2 = 2n^2 D for standardised data is algebraic and was confirmed numerically (the null median of 4.5 matches the predicted RMS of 4.63).",
+    "file": "ml/src/airace_ml/experiments/gate.py",
+    "fix": "Replace the absolute 0.05 with a noise reference the gate measures itself, and record the rule in an ADR, since it is a measurement rule. For example, fingerprint each balanced model a second time at MEASURE_SEED+1 (a few seconds on the GPU; the cache key already includes the seed). Compute the noise distance d(fp_m0, fp_m1) for each model. Require seed_mean > noise_mean (better: by a margin, or a permutation/bootstrap test) and seed_mean < mix_mean. Compute all of these against ONE population that includes the re-measures. Otherwise a trait that is constant across the 15 models hits STD_FLOOR=1e-6: precision was 0 for all 15 at measure seeds 1 and 4 in this proxy, and a re-measure with precision 1/15 then gave a distance of 66,666. Optionally raise k for G4, or average 2-3 measure seeds, to lower the floor. Also update the detail text so it no longer says 0.05 shows 'measurably different'.",
+    "line": "123 (SEED_MIN_DISTANCE), 410-437 (eval_seed_variation), 1076-1104 (G4 population and pairs); ml/src/airace_ml/personality/fingerprint.py:363-374 (fingerprint_distance)",
+    "scenario": "fingerprint_distance measures each trait in units of the population's own standard deviation (ddof=0). That makes the scale of G4 fixed by construction, whatever the models do. For the gate's population of n=15 fingerprints (12 G3 runs plus 3 balanced runs, gate.py:1088-1093) the mean squared distance over all 105 pairs is exactly 2*D*n/(n-1), which is 21.4 for D=10 varying traits, an RMS distance of 4.63. So 'seed_mean > 0.05' holds unless the three balanced seeds give almost identical fingerprints. It is not a measurability test.\n\nMeasured on a CPU proxy at FULL_SCALE.fingerprint_k=3, using the gate's own measure_fingerprint, fingerprint_distance, eval_seed_variation and the 15-model population in the gate's roles:\n(a) Same model, different measure seed (the pure sampling-noise floor): mean 2.26 population SDs over all 15 models (n=840 pairs), 1.89 for the balanced models, smallest single pair 0.23. That is about 40-45 times the 0.05 threshold.\n(b) Different training seeds of one mix: the gate's balanced pairs average 3.05 (2.2-4.1 across measure seeds 0-7). All 15 within-mix seed pairs average 3.0-3.6.\n(c) Different mixes: the gate's first-seed pairs average 4.43 (4.0-4.9). All 90 cross-mix pairs average 4.3-4.7.\nSeed distance is therefore only about 1.35-1.6 times the noise floor. At measure seed 2 the balanced seed_mean (2.215) equals the noise mean (2.215) exactly.\n\nNoise-only null: one model fingerprinted at 20 measure seeds, with 15 of those placed in the gate's 12+3 roles (5000 random draws, two different base models). G4 PASSES 50.2% and 50.5% of the time. seed_mean median 4.5, 5th percentile 3.2-3.3, minimum ever seen 2.1, never near 0.05. So noise alone always satisfies the 0.05 clause, and 'seed_mean < mix_mean' becomes a coin flip.\n\nThe reverse also happens. With the real proxy models and a random measure seed per model, the verdict fails 4.2% of the time (pass rate 0.958 over 2000 draws) purely from sampling noise. The gate draws once (MEASURE_SEED=0, gate.py:140).\n\nThe noise also dominates what the seed distance is made of. Std-normalising sparse, noisy traits gives them full weight: precision (mostly 0, 1/15 or 2/15) supplies 22% of the balanced seed distance and 43% of the balanced noise distance; register supplies 17%; repetitiveness 13%. For slip_rate and register the per-model measure-noise std (0.0245, 0.223) is larger than the across-seed std (0.017, 0.170), so they carry no detectable seed effect.\n\nResult: a full-scale G4 PASS does not show what spec 11 criterion 4 requires (seeds give 'measurably different' fingerprints). The owner's gate can report G4 passed when seed-to-seed differences are just the k=3 sampling noise of each fingerprint.",
+    "severity": "Important",
+    "title": "G4 cannot fail its 'measurably different' half, and passes on pure measurement noise half the time: SEED_MIN_DISTANCE=0.05 is about 1/45 of the k=3 sampling-noise floor"
+   }
+  ]
+ },
+ "find+:hf-streaming-failure-behaviour": {
+  "coverage_note": "Read in full: hf_fetch and the source specs (sources.py), the _SourceCollector/_GeneratorCollector/assemble_dataset flow (assemble.py), build_corpus (build.py) and cli.main (cli.py). Also read the ledger and deferred-minors for earlier rulings on network handling (there are none) and the completeness critic's gap item 6.\n\nDownloaded the locked wheels with pip download --no-deps into a new scratchpad directory, unzipped them, and read them as data only: datasets 5.1.0, huggingface_hub 1.33.0 and fsspec 2026.7.0. fsspec 2026.7.0 is the locked version: datasets 5.1.0 requires fsspec[http]<=2026.7.0 (uv.lock:312-313). The cloud venv has 2026.9.0 only because datasets is not installed there. I also fetched 2026.9.0 and confirmed that its AbstractBufferedFile.read is identical; its ReadAheadCache differs only by an added AdaptiveReadaheadCache class.\n\nTraced, with file:line:\n- the parquet streaming read path: patched open, then xopen, then HfFileSystemFile, ReadAheadCache, _fetch_range and http_backoff;\n- both retry layers and their exception and status lists;\n- open-time metadata calls: README with retry and cache fallback, tree listing and repo_info with no retry, dataset-viewer info whose errors are swallowed;\n- implicit token pickup;\n- IterableDataset state_dict/load_state_dict exact resume;\n- on_bad_files handling, to rule out a network error silently shortening a source.\n\nTwo probes (scripts under scratchpad/probes, outputs under scratchpad, repo untouched):\n- A late ConnectionError escapes cli.main as a traceback and nothing is written.\n- A skip-ahead retry wrapper keeps the tiny corpus byte-identical; a naive restart changes it.\n\nOne Firecrawl request, for the Hugging Face rate-limit tiers.\n\nNot covered or only reasoned:\n- No live Hugging Face traffic, since this machine cannot reach it. The likelihood figures are estimates from code paths and general HF reliability, not measurements.\n- pyarrow is not installed in the venv, so I did not run how pyarrow carries a Python exception raised inside a file read out of its scanner. This does not change the conclusion: any type escapes build_corpus.\n- Windows sleep/wake TCP behaviour is reasoned, not run.\n- Actual repo file layouts (e.g. whether TinyStories or soda resolve to parquet) belong to Task 15 and were not checked.",
+  "findings": [
+   {
+    "confidence": "high",
+    "evidence": "Read hf_fetch, _SourceCollector, assemble_dataset, build_corpus and cli.main.\n\nRead the locked library sources, unzipped as data under the scratchpad:\n- datasets 5.1.0: config.py:255-261; utils/file_utils.py:53-67, 830-871, 886-1004; packaged_modules/parquet/parquet.py:84-234; load.py:577-660, 1093-1182; data_files.py:357-374; iterable_dataset.py:406-450, 2747-2848, 3025-3032.\n- huggingface_hub 1.33.0: hf_file_system.py:212-355, 390-406, 579-656, 883-991, 1178-1250; utils/_http.py:331-339, 451-559; utils/_pagination.py:27-48; hf_api.py:3392, 4097-4104, 4402-4410; errors.py:90; utils/_auth.py; utils/_headers.py.\n- fsspec 2026.7.0: spec.py:1896-1998, 2159-2188; caching.py:239-282.\n- The rate-limit tiers came from huggingface.co/docs/hub/rate-limits (1 Firecrawl request).\n\nProbe 1 (scratchpad probes/late_fail.py): a tiny build through cli.main with a fetch that raises ConnectionError('Server Disconnected') inside the last source, cosmo_stories. The exception escaped cli.main as a traceback through build.py:346, and nothing was written under --out.\n\nProbe 2 (probes/resume_wrapper.py): a Fetch-level retry wrapper that skips the rows it already yielded, run against a fetch failing every 97th row. It produced a corpus byte-identical to an uninterrupted build (digest 90dc76f7...). A naive restart from row 0 changed it (dec1c145...). So exact resume keeps the build's 'same seed, same corpus' property (build.py:23-25), and a plain retry would break it.",
+    "file": "ml/src/airace_content/sources.py",
+    "fix": "Cheapest robust fix: a retry and exact-resume loop inside hf_fetch, about 40 lines plus offline tests that inject a fake `datasets` module through sys.modules.\n- Retry the load_dataset call as well as the iteration.\n- After each yielded row, keep `state = ds.state_dict()`. On a transient error, sleep (for example 30 s, then 60, 120, ...), call `ds.load_state_dict(state)` and iterate again. On a load failure, call load_dataset again.\n- datasets resumes at the exact row: it skips whole files before the current one and re-reads only the current file up to the saved position (iterable_dataset.py:413-433). The rows are exactly those of an uninterrupted stream, so the corpus does not change.\n- Treat as transient: ConnectionError and TimeoutError (these cover datasets' 'Server Disconnected' and \"Couldn't reach\"), httpx.TransportError, and HfHubHTTPError whose status is None or in {408, 429, 500, 502, 503, 504}.\n- Never retry DatasetNotFoundError, 401/403/404, SourceFormatError or BaseException. GeneratorExit from close() must pass through.\n- Cap the attempts (for example 8 over about 30 min). Print one flushed stderr line per retry: 'network trouble reading <source>; retrying in N s (k/8)'.\n- In cli.py:144, catch the final transient error and print an `error:` line saying it was a network problem and to run the same command again.\n\nCheap complement, which addresses only (b): one line in the handoff/CLAUDE.md telling the owner to make a free Hugging Face account and run `python -m uv run --extra content hf auth login` (or set HF_TOKEN) before the full build. The token is picked up automatically and doubles the anonymous quotas.\n\nPer-dataset staging is the most robust option: write each assembled dataset to data/ staging, keyed by scale, seed and recipe, and reuse it on rerun. It also covers Ctrl+C, hangs and crashes in the later CPU stages. It is a larger change with invalidation rules, and partial builds cannot stand in for it on the first build because they need an existing tokenizer (build.py:311-321). It can follow later if the wrapper is not enough.",
+    "line": "82-93 (load_dataset at 92); also assemble.py:338-345, 356-378, 619-636; build.py:344-358, 385-417; cli.py:140-146",
+    "scenario": "Our call path: hf_fetch is a generator, so load_dataset (sources.py:92) runs at the first next() inside _SourceCollector._accept (assemble.py:360-362). A full build makes 14 such opens one after another over the hour: tinystories for simple_vocab (build.py:222-232), then fineweb, gutenberg, cosmo_khan, cosmo_wikihow, cosmo_openstax, fineweb_edu, soda, everyday_conv, mbpp, gsm8k, simplewiki, tinystories and cosmo_stories. Only try/finally sits between the stream and the CLI (assemble.py:361-374 and 619-636). Every assembled document stays in memory until the writes at build.py:385-417. cli.py:144 catches only BuildError, SourceFormatError and DatasetsUnavailable. So any exception that escapes datasets ends the run with a raw traceback, writes nothing, and the rerun streams everything again. A failure at the last opens (the creative sources) loses nearly the whole hour.\n\nWhat the libraries do with the locked versions (datasets 5.1.0, huggingface_hub 1.33.0, fsspec 2026.7.0):\n\n(a) TCP reset or read timeout in the middle of a parquet row group. Not fatal unless the outage lasts about 9-10 minutes or more.\n- Each range read is HfFileSystemFile._fetch_range, which calls http_backoff with timeout=10 s (hf_file_system.py:1197-1205; constants.py:38, 314). The body is read inside client.request.\n- http_backoff retries httpx Timeout, Network and RemoteProtocol errors: 6 attempts with sleeps of 1, 2, 4, 8 and 8 s, 23 s in total (utils/_http.py:451-455, 489-559).\n- When those run out, datasets' read wrapper catches httpx.RequestError and retries 20 times, 5 s apart (datasets utils/file_utils.py:53-67, 830-845; config.py:256-257). After that it raises ConnectionError(\"Server Disconnected\") (file_utils.py:862-863).\n- Total tolerance is about 20 x (23 + 5 s) = 9-10 min of continuous outage, or up to about 30 min when each attempt times out.\n- Retries are byte-exact: ReadAheadCache assigns its new block before it updates start and end, and file.loc moves only after a successful read (fsspec caching.py:255-282, spec.py:2159-2188).\n\n(b) HTTP 429. Survived during reads, not during opens.\n- During reads, the Hub client waits the advertised RateLimit or Retry-After reset, up to 5 times (_http.py:517-526, 549-551). datasets then retries 429 20 more times, 60 s apart (file_utils.py:853-859). This can stall, with warnings, but it does not reach build_corpus.\n- When a source is opened, the tree listing's first page (_pagination.py:35-37, from hf_api.py:4103), repo_info (hf_file_system.py:249-266) and dataset_info (hf_api.py:3392) are plain session calls with no retry. A 429 there aborts the build.\n- Anonymous quotas per IP are 500 API calls and 3,000 resolver requests per 5 min (HF rate-limit docs, Sept 2025). Each GET fetches at least 5 MiB (spec.py:1905), so this build uses a small fraction of that. It matters only on a shared or CGNAT IP.\n- An HF_TOKEN environment variable, or the token file written by `hf auth login`, is picked up automatically. datasets passes token=None, and build_hf_headers then uses get_token() (utils/_headers.py:107-150; utils/_auth.py:58-83, 145-147). The `hf` command ships with huggingface_hub (entry_points.txt).\n\n(c) A gap of several minutes, as when the PC sleeps. Not fatal in the common case.\n- The process is frozen while the PC sleeps. After wake, the pending read fails or times out within about 10 s, and the retry chain in (a) covers the network coming back.\n- Collectors that sit paused while other components fill hold nothing that expires. Every read is a fresh /resolve/ GET with a fresh redirect, and idle pooled connections are simply reopened.\n- It becomes fatal if the network is still down about 9 minutes after wake, or if the wake lands on an open's unretried metadata call. The no-timeout hang is a separate finding.\n\n(d) 5xx errors.\n- During reads, http_backoff retries 500, 502, 503 and 504 for about 23 s (_http.py:456, 506-527). datasets then retries only 504 (20 x 20 s) and 429 (file_utils.py:57-58, 846-861). A 500, 502 or 503 is re-raised at once (file_utils.py:860-861). So a burst of 500/502/503 lasting more than about 25 s on the resolve or Xet bridge path aborts the build.\n- When a source is opened, a single 5xx, connection error or timeout on the tree listing or repo_info aborts the build. xopen retries only connection errors and never HfHubHTTPError (file_utils.py:966-1002). dataset_module_factory's fallback to a cached module cannot help a streaming load and re-raises (load.py:1167-1182). Only README.md has retry and cache fallback.\n- parquet's on_bad_files only catches ArrowInvalid and ValueError (parquet.py:87, 227-234). HfHubHTTPError is an OSError (errors.py:90), so no error is swallowed into a silently short source.\n\nEstimated likelihood over a 1 h full build:\n- Most of the risk comes from the 30-60 unretried metadata requests at the 14 opens and from sustained 500/502/503 errors.\n- About 1-5% per run on a stable wired connection. Clearly more on flaky Wi-Fi or a shared IP.\n- Network loss during reads (a, c) alone is under 1%. 429 is under 0.5% on a private IP.\n- Each occurrence costs the whole hour and shows the owner a traceback.",
+    "severity": "Important",
+    "title": "No retry or resume around streaming: a Hub error when any of the 14 sources is opened, or a 500/502/503 lasting more than about 25 s during a read, aborts the full build with a traceback and loses all streamed work"
+   },
+   {
+    "confidence": "low",
+    "evidence": "Read the paginate, list_repo_tree, HfFileSystem._ls_tree and default_client_factory code in the locked huggingface_hub 1.33.0, and the httpx 0.28.1 request timeout handling in ml/.venv. Not reproduced: there is no network to Hugging Face here.",
+    "file": "ml/src/airace_content/sources.py",
+    "fix": "Make a hang visible instead of trying to time out a blocking call.\n- Print per-source progress lines: 'opening <source>...', then rows/docs every N rows. This is already proposed for the build's silence.\n- Add a short handoff note: 'if no new line appears for 15 minutes, press Ctrl+C and run the same command again'. With the retry/resume wrapper and staging, that rerun is cheap.\n- Optionally, a threading.Timer watchdog in hf_fetch that prints a warning when no row has arrived for 10 minutes.",
+    "line": "92",
+    "scenario": "load_dataset at sources.py:92 resolves data files through HfFileSystem.glob (datasets data_files.py:357-374) and then list_repo_tree (hf_file_system.py:606-613), which calls paginate. The first page is `get_session().get(path, params=..., headers=..., timeout=timeout)` with timeout defaulting to None (huggingface_hub utils/_pagination.py:27-37; hf_api.py:4103 passes no timeout). The shared httpx client is also created with timeout=None (utils/_http.py:335-339). httpx turns an explicit None into Timeout(None), meaning no limit (httpx _client.py:372-375). get_paths_info's POST also has no timeout (hf_api.py:4402-4410), but it runs only on a dircache miss.\n\nFailure case: the PC sleeps, or the router drops NAT state, after the request was sent and before the response arrived. The client then waits on the socket with nothing to send, so no RST ever reaches it. The call blocks forever: no exception, so no retry wrapper helps, and the build prints nothing while streaming.\n\nThe data reads themselves are not exposed, because they use a 10 s timeout (hf_file_system.py:1203). The window is about 14 opens x well under 1 s, so the likelihood is very low (around 0.1% of sleep or network-drop events during a build). When it happens, though, the owner waits indefinitely and cannot tell a hang from progress.",
+    "severity": "Minor",
+    "title": "The tree listing done when each source is opened has no timeout, so a connection that drops silently during it (PC sleep, router or NAT reset) can hang the full build forever with no output"
+   }
+  ]
+ },
+ "find+:live-hf-source-formats": {
+  "coverage_note": "FIRECRAWL BUDGET\n- Earlier attempt at this task (transcript agent-a94cc2357dd1cd2e3): 30 calls, of which 13 were rate-limited with no data and 17 succeeded.\n- This session: 8 calls (mbpp /rows x4, one returning 502; gutenberg README; gutenberg /filter x2, both timing out at 60s; gutenberg /rows 9-11).\n- Total 38 of 40 attempts. Earlier results were recovered from the transcripts at no cost.\n- Probe-tool artifact, not a code defect: Firecrawl's rawHtml strips '<letter...>' spans. That lost mbpp rows 347-350 and corrupted row 346, which I excluded.\n- No code was reimplemented; every check calls the real airace_content / airace_ml code. Probes and rows are under scratchpad/lhf/.\n\n(a) EXISTENCE AND CONFIGS: every (path, config, split) exists in /splits.\n- fineweb and fineweb-edu: sample-10BT/train.\n- cosmopedia: khanacademy, wikihow, openstax and stories, all train.\n- gsm8k main/train; mbpp full/train.\n- simplewiki 20231101.simple/train: sibling finder fetched rows from it.\n- hf_config=None for tinystories, soda, everyday_conv and gutenberg: each has exactly one config, 'default'.\n- TinyStories: the repo also holds TinyStories*-train.txt files containing <|endoftext|>. datasets 5.1.0 tries SPLIT_PATTERN_SHARDED first (data_files.py:41), which matches only data/train-0000N-of-00004*.parquet, so the .txt files are never read.\n\n(b) FORMAT AND ADAPTERS: all real rows pass row_has_format. Sample sizes: tinystories 400, soda 300, simplewiki 300, fineweb 500, fineweb_edu 300, cosmo 988, mbpp 268, gsm8k 5, everyday_conv 3, gutenberg 11.\n- TinyStories: whole stories (78-242 words), no '<|endoftext|>'. cp1252 mojibake ('â€™') appears in 27 of rows 0-199, 1 of rows 1000-1099 and 0 of rows 700000+. It passes prepare_content and quality_score measures it, so it is real dirt the cleaning control is meant to catch, not reported as a defect.\n- soda: always 2 speakers, lengths match, speakers[0] maps to user. 8 of 300 have two same-speaker turns in a row.\n- everyday_conv: user/assistant mapped correctly. No system role appeared in the 3 rows seen; the unit test covers dropping system turns.\n- gsm8k: <<..>> annotations are removed and '#### n' becomes 'The answer is n.'. When the reasoning lacks a final period it reads '...a year The answer is 624.', which is the plan's format.\n- mbpp: all 268 rows have CRLF and 32 have tabs; every converted doc still parses. The only AST change is trailing spaces inside a triple-quoted string (task 669), covered by the Task 13 ruling.\n- simplewiki: the lead-section cut works on real text with no '==' markup. 17 of 300 rows are dropped (disambiguation pages, a '{{Taxobox' leftover, a hatnote first line).\n- fineweb_edu: int_score is a JSON int, and every row is at least 3 (the dataset is pre-filtered).\n- gutenberg: see the finding.\n\n(c) LICENSES:\n- TinyStories (cdla-sharing-1.0) and gutenberg (mit) cards fetched; both match SourceSpec.\n- The gutenberg card itself warns 'Some of the books are copyrighted!'. The PG catalog (gutenbergr snapshot via raw.githubusercontent.com) flags 45 of 8557 children's books as copyrighted, and METADATA has no rights field to filter on. This is for the Task 15 licence decision.\n- The other 8 cards were not re-fetched (budget); Task 15 already re-verifies them per the ledger.\n\n(d) VOLUME:\n- mbpp: 374 rows, about 0.03M tokens against a 2M quota. everyday_conv: 2260 rows, about 0.5M against 3M. Both are covered by the I3 ruling.\n- gsm8k: 7473 rows, about 0.73M estimated tokens against 1.0M from only 5 sample rows, so it may also run out and print an extra exhaustion warning. The I3 reassignment handles that.\n- gutenberg: 48,284 rows, 18.1 GB text, 10.75 GB download (card).\n  - The /filter count timed out twice. Instead, the PG catalog gives a children's share of 13.1% overall (8557 of 65131 English texts), but only 5.6-11.8% for text_ids below 5000, which are streamed first.\n  - Alice is about 40K estimated tokens. The 15M-token quota therefore needs about 360-720 children's books, depending on how many passages pass the simplicity filter.\n  - Estimated stream: about 3,800-7,000 rows, roughly 0.9-1.6 GB of parquet (10-15% of the dataset), assuming about 150 KB per children's book.\n\n(e) BENCH COLLISIONS: the earlier attempt's server-side /filter covered all 374 mbpp full/train rows for every bench name. It found 4 name matches: task 728 `sum_list(lst1,lst2)`, 793 `last(arr,x,n)`, 896 `last(n)` and 924 `max_of_two( x, y )`.\n- None equals a bench-v1 item def line. The bench-v1 items are `def sum_list(values):`, `def last(arr):`, `def last(lst):` and `def max_of_two(num1, num2):`.\n- Task 924 matches the reserved but unused pool line `def max_of_two(x, y):` once whitespace is ignored. That does not affect bench-v1.",
+  "findings": [
+   {
+    "confidence": "high",
+    "evidence": "Real rows fetched from the datasets-server API through Firecrawl and run through the real, imported code (`row_to_content`, `strip_gutenberg_boilerplate`, `chunk_passages`, `prepare_content`):\n- /rows offset=9 length=3: Alice, Looking-Glass and Snark, complete with no truncated cells and no '<' or '>', so Firecrawl's tag stripping did not touch them.\n- /first-rows: rows 0-7 complete.\n\n`is_childrens_book` is correct on these rows (True for text_id 11 and 12, False for 2-9 and 13). `row_has_format` passes. strip_gutenberg_boilerplate removes nothing but \\r and the triple newlines (6728 = 5907 + 821 chars on Alice), so there is no false header or footer match.\n\nCard at huggingface.co/datasets/sedthh/gutenberg_english/raw/main/README.md: 'downloaded the raw HTML code for each eBook... remove transcriber's notes and e-book related information'.\n\nProbe scripts: scratchpad/lhf/scripts/gut2.py, gut3.py, gutfix.py. Rows: scratchpad/lhf/rows/gutenberg_o9.jsonl and gutenberg_first.jsonl.",
+    "file": "ml/src/airace_content/sources.py",
+    "fix": "In `_gutenberg` (sources.py:334-337), or at the top of `strip_gutenberg_boilerplate`, convert this dataset's layout back to plain-text layout before chunking:\n1. Turn \\r\\n into \\n.\n2. If exactly-double newlines outnumber lone newlines, replace `(?<!\\n)\\n\\n(?!\\n)` with `\\n` and `\\n{3,}` with `\\n\\n`.\n\nThe existing `_unwrap` then joins hard-wrapped prose (lines of 45+ chars) and keeps verse lines.\n\nVerified by a probe that applies this to real row 9 before the real adapter: blank lines per passage drop from 37.0 to 10.6, and passages become whole paragraphs separated by single blank lines.\n\nAlso add a fixture row in the real sedthh layout (an Alice excerpt) and a test that no passage has a blank line between a line without an end mark and a line starting lowercase.",
+    "line": "131, 160-172, 175-180, 207-231, 334-337 (fixture: ml/tests/fixtures/sources/gutenberg.jsonl; test: ml/tests/content/test_build.py:230-251)",
+    "scenario": "The dataset card says TEXT was parsed from each book's HTML with the PG header and footer already removed. In real rows, wrapped lines inside a paragraph are separated by \\r\\n\\r\\n and paragraphs by \\r\\n\\r\\n\\r\\n:\n- row 9 (text_id 11, Alice): 1721 double newlines, 821 triple or more, 2 lone\n- row 10 (text_id 12, Looking-Glass): 2112 / 999 / 5\n- row 11 (text_id 13, Snark): 487 / 176 / 3\nThe early etexts (rows 0-7) use \\n\\n for wraps too.\n\nWhat the code does with this layout:\n- `_PARAGRAPH_BREAK` (`\\n\\s*\\n`, line 131) splits on every wrapped line, and `strip_gutenberg_boilerplate` rejoins with \\n\\n (line 172), which erases the wrap-versus-paragraph difference.\n- `_unwrap` never sees a multi-line paragraph, so it never joins wrapped lines.\n- `chunk_passages` packs these one-line pieces with \\n\\n between them.\n\nResult on real Alice (row 9): 67 passages averaging 37 blank lines each. Passage 3 reads: 'Suddenly she came upon a little three-legged table, all made of solid glass;\\n\\nthere was nothing on it except a tiny golden key, and Alice’s first\\n\\nthought was that it might belong...'. Across the book, 1322 of 2476 blank-line breaks fall between a line with no end mark and a lowercase continuation. Looking-Glass and the early etexts look the same (e.g. 'establishment of religion, or\\n\\nprohibiting').\n\nThe full build's whole books dataset (15M tokens, children's books only) would teach the model blank lines every ~12 words. R1 forbids fixing model output, so players would see it in the model's text. Nothing fails, so this is silent.\n\nThe tests pass because the fixture uses classic PG plain-text layout (with header, single-newline wraps), which the real source never contains.",
+    "severity": "Important",
+    "title": "Real sedthh/gutenberg_english TEXT puts a blank line after every wrapped line, so every books passage has blank lines mid-sentence and real paragraph breaks are lost"
+   }
+  ]
+ },
+ "find+:real-text-cleaning-calibration": {
+  "coverage_note": "I used real hub rows and fed them to the repo's real functions; I wrote no reimplementations. Rows reused from an earlier probe: fineweb 500 (offsets 0-299, 30000, 120000), fineweb_edu 300, cosmo_khan 288, cosmo_wikihow 300, cosmo_openstax 200, cosmo_stories 200, tinystories 400, soda 300, simplewiki 300; truncated_cells rows were skipped. Firecrawl requests this session: 15 in total. 7 went to datasets-server /statistics (fineweb and fineweb-edu sample-10BT, TinyStories, and the cosmopedia khan, wikihow, openstax and stories configs). 8 went to TinyStories /rows pages at offsets 5000-90000. Probe scripts and data are in scratchpad/calib.\n\n(1) Clean-document drops, light/standard/thorough, with known_vocab approximated two ways (Norvig top-30k plus contractions, and an in-domain 30k vocabulary weighted like the build's known-vocab text, cross-fitted):\n- fineweb: 2.5/5.6/7.4-8.9%\n- fineweb_edu: 1.4/3.1-3.5/4.5-6.2%\n- khan: 0/1.4/1.7%\n- wikihow: 0.7/0.7/2.7%\n- openstax: 0.5/1.5/4.5-5.0%\n- cosmo_stories: 0/0/0%\n- tinystories: 0.2/1.0/2.8% (all real mojibake)\n- soda: 0/0/0%\n- simplewiki: 0.4/0.4/1.1-1.8%\n- generated fact_prose, fact_chat and instructions: 1.5% or less\n\nFor web, 42 of the 43 thorough failures bind on spam markers in legitimate text: 11.6% of clean FineWeb docs contain one, mostly 'http://', 'click here', '!!!' or 'subscribe', and a single hit caps quality at 0.667. The ledger's '~10% of clean tiny chats fail thorough' does not reproduce at full-scale vocabulary (0/300 SODA), so the judge recipe's pools are fine.\n\n(2) Real web noise on real docs, 12 seeds, removed at light/standard/thorough:\n- clean: 2.0/5.4/8.9%\n- typo: 7.8/25.2/49.3%\n- garbled: 52.2/67.0/84.3%\n- spam: 100%\n- boilerplate: 5.0/9.6/14.9%, barely above clean; already reported by another finder\n- false_fact and duplicates: same as clean, by design\n\nCreative typo docs: 2.8/20.8/41.0% vs 0.2/0.7/1.8% clean. Conversation typo docs: 3.1/12.7/28.9% vs about 0% clean. Typo and garble separation does not depend on length (per-letter rates).\n\n(3) Topics: covered in the finding. 'other' is 0-1% for web and educational, 4% for SODA and Simple Wikipedia, and the 'other' docs are genuine text, not junk.\n\n(4) The bytes-per-token and first-200 numbers are in the finding. Every measured dataset lands at or above 100% of target. Books (Gutenberg) was not measured.\n\nAlso checked:\n- fineweb_edu's int_score>=3 filter is a no-op on sample-10BT (minimum int_score is 3 over 1.455M rows).\n- cosmo_khan has only 24,123 rows but holds about 24M estimated tokens against a 5M quota.\n- MOJIBAKE_CHARS also counts legitimate symbols (², °, ½); 13.5% of khan docs have g<1, but the effect on thorough is only 1.7%, so I did not report it.\n\nNot covered:\n- Gutenberg, everyday_conv (2 rows), mbpp and gsm8k were barely or not sampled.\n- known_vocab and simple_vocab are proxies: simple_vocab has 2,931 words instead of 6,000, so simplicity pass rates are lower bounds.\n- G7's model-level behaviour was inferred from the data-level ratio, not simulated by training.\n- No SODA text-length statistics, so its first-200 bias is assumed to be 1.0.",
+  "findings": [
+   {
+    "confidence": "medium",
+    "evidence": "Probes calib/p4_g7.py, p4b_g7pooled.py and p4c_alt.py (scratchpad) call the real apply_noise, quality_score, cluster_near_duplicates, gate.garble_rate rules and creativity.words. Each noise kind's share of the unknown words in each arm was attributed. One alternative measure (unknown words one edit from a known word, or non-ASCII) gives only 0.728, so most of the baseline also survives a typo-focused count. I did not simulate the model itself: the model-level conclusion is an inference from the data-level ratio.",
+    "file": "ml/src/airace_ml/experiments/gate.py",
+    "fix": "Re-derive the G7(a) measure and bar from real data before the gate run. Options: (1) count only noise-specific garbling, such as MOJIBAKE_CHARS and non-ASCII letter runs in the completions (light keeps 48% of garbled docs, thorough 16%); (2) score the excess over a clean baseline (garble_rate of the true continuations of the same held-out clean prefixes); (3) make the typo/garble strengths stronger in web so cleaning removes more. Record the choice as a ruling or ADR so the gate verdict reflects cleaning, not the background rate of rare words.",
+    "line": "128 (PREP_MAX_RATIO = 0.8), 512-544 (eval_prep), 550-560 (garble_rate), 1167-1210 (preparation runs); noise strengths at ml/src/airace_content/noise.py:23-24 and web rates at ml/src/airace_content/assemble.py:69-79",
+    "scenario": "The owner's real gate trains g7-web-light and g7-web-thorough (70% web, 4x128 model, 8.4M tokens) and compares the unknown-word share of 60 web completions. The real web training text itself barely separates. I ran 484 real FineWeb docs through the real apply_noise with the web recipe and pooled 30 noise seeds. Arms were cut with the real thresholds (light: q>=0.15; thorough: q>=0.65 plus dedup via cluster_near_duplicates), and unknown words were counted the gate's way (creativity.words over known_vocab entries). Unknown-word share: light 7.06% vs thorough 5.55% (ratio 0.786) with a Norvig top-30k vocabulary, and light 9.11% vs thorough 7.46% (ratio 0.819) with an in-domain 30k vocabulary built like build_vocab. Per noise seed the ratio ranges from 0.71 to 0.94. Clean docs alone already have 4.9-7.0% unknown words (names, brands, rare words), and they supply 52-58% of the unknown words left after thorough cleaning (over 70% counting the clean text inside boilerplate, false-fact and duplicate docs). Thorough removes only half of the typo docs, by the deliberate graded-strength ruling. So even a model that copied its training data perfectly would land on the 0.8 bar. A 4x128 model also writes non-words of its own in both arms, which pushes the ratio toward 1. A likely outcome is that G7 FAILS although cleaning works, which would send the owner into the plan's 'adjust and rerun' loop on GPU time.",
+    "severity": "Important",
+    "title": "G7(a) cannot be expected to pass on real data: thorough cleaning lowers the unknown-word share of the web training text only to 79-82% of light's, at or above the 80% bar, before the model adds non-words of its own"
+   },
+   {
+    "confidence": "high",
+    "evidence": "8 Firecrawl /rows pages were added to the 400 existing TinyStories rows (calib/ts_extra). I counted 'â€' per block: 10, 17, 1, 16, 11, 0, 10, 14, 1, 0 and 3 per 100. The sequences are 'â€œ' 172, 'â€™' 131, 'â€'+newline/space/punctuation 171, 'â€“' 9, 'â€”' 8 and 'â€˜' 3. The closing quote's 0x9D byte is already gone in the hub data, so a plain cp1252 round-trip repairs only 26 of the 83 docs. The quality factor attribution in calib/p2_quality.py shows all 11 TinyStories thorough failures bind on g.",
+    "file": "ml/src/airace_content/sources.py",
+    "fix": "Before normalize_text, map the sequences: 'â€œ'->'“', 'â€™'->'’', 'â€˜'->'‘', 'â€“'->'–', 'â€”'->'—', then any remaining 'â€'->'”'. Do this in the tinystories adapter, or generally in prepare_content for sources. It repairs all 83 sampled docs. Alternatively drop rows that contain 'â€'. Add a fixture row with this mojibake, and do it before the owner's first full build so simple_vocab, known_vocab and tok-v1 never see it.",
+    "line": "347-353 (_text adapter used for tinystories); ml/src/airace_content/assemble.py:220-228 (prepare_content); ml/src/airace_content/textproc.py:44-58 (normalize_text); plan check at docs/superpowers/plans/2026-10-06-m1-it-learns.md:1484",
+    "scenario": "The full build streams TinyStories from row 0. The creative quota is about 77k rows, and simple_vocab reads 200k rows. I sampled 11 blocks of 100 consecutive rows in rows 0-90,000 (offsets 0, 100, 1000, 5000, 20000, 30000, 40000, 50000, 60000, 70000, 90000). 83 of 1,100 rows (7.5%) contain cp1252-misdecoded UTF-8, for example 'â€œWow, that mo', 'didnâ€™t', 'Iâ€™m'. The first 200 rows have 13.5%; rows 700,000+ have 0%. Neither the adapter nor prepare_content/normalize_text repairs it, so about 6% of the creative dataset (TinyStories is 85% of it) is garbled text tagged noise_kind 'none'. Only about 40% of those docs fall below thorough (2.8% of clean TinyStories fail thorough, all on the g factor), so even the judge recipe trains on them. Every model trained on creative learns 'â€œ' as a quote mark and can show it to players in stories (R1 forbids rewriting output). The plan's Task 15 step 3 check 'nothing is mojibake outside the intentionally garbled documents' will fail after the hour-long build. Fixing it then means a creative rebuild that reuses simple_vocab and known_vocab already built from this text.",
+    "severity": "Important",
+    "title": "About 7.5% of the TinyStories rows the build reads contain real mojibake (\"â€œ\", \"â€™\", \"â€\"), which enters the creative corpus untagged as 'none'"
+   },
+   {
+    "confidence": "high",
+    "evidence": "calib/p1_basic.py and calib/p8_simp.py use the real load path (row_has_format, row_to_content, prepare_content) and textproc.simplicity. The rejected docs are listed by calib/p10_rejected.py. With a generous 6,000-word vocabulary, a threshold of 0.6 keeps 92% of FineWeb, 87% of FineWeb-Edu and 70% of OpenStax, and 0.7 keeps 79%, 66% and 58%.",
+    "file": "ml/src/airace_content/assemble.py",
+    "fix": "Re-derive the thresholds from the real simple_vocab before the full build. For example, measure the simplicity distribution of the first few thousand rows per source and set simplicity_min at a chosen keep-quantile (e.g. the simplest half: about 0.6-0.65 for FineWeb), or express simplicity_min as a quantile. Record the target keep-rate in the Task 15 notes. A stricter filter means more rows streamed, so check build time. Consider extending the filter to cosmo_openstax (the most complex educational source, median 0.47) as the Task 14 ruling anticipated.",
+    "line": "70 (fineweb 0.35), 91 (fineweb_edu 0.35), 115 (simplewiki 0.30), 82 (gutenberg 0.30, unmeasured); spec docs/superpowers/specs/2026-10-06-ai-race-architecture-design.md:197",
+    "scenario": "Spec §4 says text is 'selected for short sentences and common vocabulary, so 1-40M-parameter models can learn it'. I scored real rows with the real simplicity() against simple_vocab built by build_vocab from 400 real TinyStories rows (2,931 words). That is smaller than the build's 6,000-word vocabulary, so these pass rates are lower bounds. Results: FineWeb 96.8% pass (median 0.59, p10 0.43), FineWeb-Edu 96.0% (median 0.55), Simple Wikipedia 99.3% (median 0.66). Growing the vocabulary from 1,465 to 2,931 words raised the FineWeb median from 0.515 to 0.596, so the real vocabulary gives about 0.64. The median web sentence is 16.5 words, below the 18-word knee, so the sentence-length factor almost never binds. Only about 3% of docs are rejected: technical pages with 30-44-word sentences. The web dataset (30M tokens) and the fineweb_edu and simplewiki shares (about 11M) therefore enter the corpus at full FineWeb complexity. Changing this later needs another full build.",
+    "severity": "Important",
+    "title": "Simplicity thresholds (0.35 web/edu, 0.30 Simple Wikipedia) keep about 97-100% of real documents, so the spec's simplicity filtering does nothing for 30-40% of the corpus"
+   },
+   {
+    "confidence": "medium",
+    "evidence": "calib/p6_tok.py (real train_tokenizer, encode_doc/encode_chat, doc_tokens, estimate_tokens on held-out halves), calib/p7_first200.py (first-row means vs /statistics means: FineWeb 3,058 chars over 2.1M rows, FineWeb-Edu 4,747, khan 3,665, wikihow 4,583, openstax 3,845, stories 2,717, TinyStories 896) and calib/p11_landing.py (per-dataset landing with real noise factors). Bootstrapping a random 200-doc window from real FineWeb docs gives landing p5/p50/p95 of 0.78/1.03/1.26, but the build's window is fixed at rows 0-199.",
+    "file": "ml/src/airace_content/assemble.py",
+    "fix": "Use about 3.2 bytes per token for prose (or per-source constants, about 2.7 for code and patterns) and fix the comment. Better: after the tokenizer is trained, trim each component to its target in real tokens, so the first and later builds agree and the summary's token counts match the targets.",
+    "line": "142-147 (EST_SAMPLE_DOCS, BYTES_PER_TOKEN_ESTIMATE 'about 3.6 bytes per token'), 283-299 (_Goal), 424-432 (generator estimate); build.py:341",
+    "scenario": "I trained the real train_tokenizer (4096) on a build-like 17.5 MB sample: tokenizer_texts with equal per-dataset shares, real rows plus generated code/reasoning/patterns/facts/chats, and the recipes' noise. Measured real bytes per token on held-out docs: fineweb 3.15, fineweb_edu 3.22, khan 3.39, wikihow 3.29, openstax 3.25, cosmo_stories 3.49, tinystories 3.67, soda 3.64, simplewiki 3.29, fact_prose 3.71, instructions 3.22, code 2.71, patterns 2.60. Real tokens per estimated token (doc_tokens framing included) are 1.14 for web text and 1.30-1.37 for code and patterns. The build's fixed first rows also under-read the population mean (datasets-server /statistics): cosmo_khan's first 100 docs have 0.72 of the mean length, fineweb_edu's first 190 accepted docs 0.835, TinyStories' first 200 0.88 of the mean over rows 0-90k, and FineWeb 0.96. Combined with the noise copies, the first full build lands at about web 1.25x (38M), educational 1.28x (26M), code 1.34x (13M), reasoning 1.15x, creative 1.16x, facts 1.03x and conversations 1.00x. That is about 143M tokens for these 7 datasets (about 160M with books) against 137M planned. No dataset falls under the plan's 80% (plan line 1478). The cost is a larger build in RAM, disk and time, and skewed dataset proportions. This quantifies the already-reported 'quotas extrapolated from the first 200 docs' minor and the rebuild-changes-corpus minor.",
+    "severity": "Minor",
+    "title": "BYTES_PER_TOKEN_ESTIMATE=3.6 is 10-38% too high, and the first-200-doc sample under-reads several sources, so the first full build overshoots most targets (about +17% overall)"
+   },
+   {
+    "confidence": "high",
+    "evidence": "calib/p5_topics.py ran the real tag_topic and _topic_of_word over clean real docs of all 9 sources and counted the keyword hits per topic. calib/p5b_topics.py re-tagged without the calendar words. The winning topic holds only about 45% of keyword hits in the median web doc.",
+    "file": "ml/src/airace_content/topics.py",
+    "fix": "Move month and weekday names out of 'school' (or make them non-topical), and drop or qualify the false friends: 'addition', 'number', 'place', 'data', and 'market' reached through 'marketing' (add 'marketing' to _NOT_INFLECTED). Re-check the web topic distribution on a real sample.",
+    "line": "61-73 (school keywords; calendar words at 69-70), 109-121 ('market' matched by 'marketing' via the -ing stem rule, 'place'), 157-177 (_forms); consumer ml/src/airace_ml/data/sampler.py:48-50 (balanced variety)",
+    "scenario": "Real web pages and Simple Wikipedia biographies carry dates. Of the 484 real FineWeb docs, 111 are tagged 'school' (the top web topic at 23%). For 35 of them (32%, or 7% of all web docs), month and weekday names alone decide it. Examples: a soap-opera forum post 'Spoilers for the Week of February 11th', a Vermont financial-regulation news item ('announced Tuesday'), a Facebook f8 tech story ('22 September 2011'). In Simple Wikipedia, 8 of 60 'school' tags come only from birth or death dates (Alan Turing, Hermann Hesse, Jamie Lynn Spears). Other dominant false friends: 'marketing'->market (places, 94 hits in 484 web docs), 'in addition' and 'number' (school, 53 and 176 hits), 'place' ('take place', 'place value': 552 hits in khan), 'data' (technology, 448 hits), and 'practice'/'goals'/'training' (sports, 13% of wikihow). These tags drive the player's Balanced variety (topic-stratified sampling) and the topic tags for discoveries. No topic swallows web or educational text: the largest share is 23-27%, khan's 64% school is genuine math, and 'other' is 0-1%.",
+    "severity": "Minor",
+    "title": "Topic keywords mis-tag real text on dates and false friends: month and weekday names alone make 7% of web docs 'school'"
+   }
+  ]
  },
  "find:content/correctness": {
   "coverage_note": "Read in full: airace_content/{textproc,noise,dedup,topics,sources,assemble,manifest,build,cli}.py. Also read: the plan's Tasks 13-15; the ledger (all rulings, Tasks 13-14 in detail); task-14-dispatch-notes; deferred-minors; global constraints; spec §1, §4.4-4.5 and §4.10-4.12. Checked the consumers: airace_ml/data/corpus.py, data/prep.py, tokenizer.py, paths.py, skills/facts.py (FalseFactPlan, false_fact_sentence), and the gate's use of held-out web docs, known_vocab and false_facts.json. Skimmed the content test list, fixtures and the full-scale tests. Content tests pass (139).\n\nProbes, all under scratchpad:\n(1) Full-scale assembly from fixtures plus generators for facts, conversations, reasoning and code, then MinHash clusters and heldout_mask over 40 seeds. The largest cluster is ≤0.9% of docs and the held-out share is always 1.00-1.24%, so there is no held-out blow-up from transitive clusters. Dedup takes 19-102 s per dataset on this CPU.\n(2) Spam docs cluster only in small groups (≤6).\n(3) The tiny→full tokenizer-reuse scenario.\n(4) Typo'd copies in code.\n(5) Boilerplate quality at realistic lengths.\n(6) The cp1252 CLI print.\n\nVerified clean or as ruled:\n- Plan formulas for quality, simplicity and noise quotas; split_count; reassignment of exhausted quotas.\n- source_of_copies soundness: typos only change letter runs, and the [\\W\\d_] skeleton is consistent with isalpha.\n- Held-out units (clusters plus origins); tokenizer sample excludes held-out; purchase_rank.\n- Chat typo-only enforcement; doc_tokens matches encode_chat; special-token strings are encoded as plain text.\n- Platform-independent determinism (blake2b, numpy Generators, sorted ties); Windows text I/O round-trips (write_text CRLF and read_text universal newlines); no catastrophic regex backtracking in the Gutenberg regexes.\n- Adapters match the plan's row formats.\n- R1 (only the fixed frames the plan allows) and R5 (tags are measurements) hold in this scope.\n\nNot covered or not verifiable here: real Hugging Face formats and licenses (no network; the Gutenberg METADATA key and subject wording, sedthh header/footer state and TinyStories parquet layout remain Task 15 checks). The first-200-doc token estimate under FineWeb's heavy-tailed doc lengths could land web at roughly ±15% of target; it is plan-mandated and reported in the summary, so it is not filed. The build streams for an hour or more with no progress output and no resume after a network failure; that is a robustness/UX concern, not correctness, so it is not filed. Gate-side measurement design (garble_rate against a known_vocab that contains common typo or garble fragments, false-fact density versus G7 detectability) belongs to the gate finders.",
