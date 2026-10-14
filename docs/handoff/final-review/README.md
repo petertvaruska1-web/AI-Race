@@ -17,12 +17,18 @@ Script: `final-review.js` in this folder. It is the portable copy of the workflo
 
 The script stops and returns `{incomplete: <phase>}` instead of synthesizing from partial data whenever an agent fails, e.g. on a usage limit.
 
-## State at save time (2026-10-14 10:15 UTC)
-- **Find: 16 of 18 finders done.** Their full results are in `agent-results.json` (label → result).
-- **Still to run:**
-  - `find:tests-health` and `find:spec-coverage`
-  - then Critic, Find more, Dedup, Verify and Synthesize
-- **A relaunch was running when this was saved.** If the same session continues, it may finish on its own. Check `final-review.md` here and the ledger first.
+## State at save time (2026-10-14 15:15 UTC)
+- **Find:** all 18 finders done. **Critic:** done; it proposed 6 extra finders:
+  - `live-hf-source-formats`
+  - `real-text-cleaning-calibration`
+  - `bench-knowledge-truth-audit`
+  - `full-scale-peak-ram`
+  - `g4-noise-at-full-k`
+  - `hf-streaming-failure-behaviour`
+- **Firecrawl:** some extra finders fetch real Hugging Face rows through the Firecrawl connector, because direct HTTPS to Hugging Face is blocked here. Each extra finder is capped at 40 Firecrawl requests, since they are billed to the owner's account.
+- All finished results, including the critic's, are in `agent-results.json` (label → result).
+- **Still to run:** the 6 extra finders, then Dedup, Verify and Synthesize.
+- **A relaunch (sixth resume) was running when this was saved.** If the same session continues, it may finish on its own. Check `final-review.md` here and the ledger first.
 
 ## How to resume
 **Same session** (the workflow cache still exists): `Workflow({scriptPath: <session scratchpad>/final-review.js, resumeFromRunId: "wf_c9a5295d-a19"})`. Repeat after each limit reset until it returns a report.

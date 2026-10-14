@@ -141,7 +141,7 @@ phase('Find more')
 const extraTasks = critic ? critic.extra_tasks.slice(0, 6) : []
 if (critic && critic.extra_tasks.length > 6) log(`critic proposed ${critic.extra_tasks.length} tasks; running the first 6`)
 const secondRound = await parallel(extraTasks.map(t => () =>
-  runAgent(findPrompt(`TASK (from the completeness critic) = ${t.task}`), { label: `find+:${t.id}`, phase: 'Find more', schema: FINDINGS }).then(r => r ? { id: `extra/${t.id}`, ...r } : null)))
+  runAgent(findPrompt(`TASK (from the completeness critic) = ${t.task}\n\nLimits for this task: use at most 40 Firecrawl requests in total (they are billed to the owner's account; prefer few, larger page sizes); keep every probe script and downloaded sample under ${SCRATCH}/ and never in the repo; finish with a structured result even if a probe is cut short.`), { label: `find+:${t.id}`, phase: 'Find more', schema: FINDINGS }).then(r => r ? { id: `extra/${t.id}`, ...r } : null)))
 if (secondRound.some(r => !r)) {
   log('INCOMPLETE: an extra finder failed; stopping so a resume re-runs it')
   return { incomplete: 'find-more' }
