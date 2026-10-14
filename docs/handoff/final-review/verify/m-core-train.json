@@ -1,0 +1,82 @@
+[
+ {
+  "evidence": "Probe judge_step_cpu.py: Transformer(judge_train_config().shape, 4096), one forward+backward at 128x256 on the CPU: 74.3 s, peak 10,754 MB RSS (558 MB before). Code read of device.py, cli.py and trainer.py.",
+  "file": "ml/src/airace_ml/device.py",
+  "fix": "At the start of build-judge, train and bench, print the device in plain words ('training on the GPU (NVIDIA GeForce RTX 3050)' or 'no usable GPU found: training on the CPU'). For build-judge (and gate), refuse to fall back to the CPU unless --device cpu is given, saying it would take days.",
+  "line": "8-13 (silent fallback); ml/src/airace_ml/cli.py:356-362, 465-489, 772-779; ml/src/airace_ml/evals/judge.py:262; ml/src/airace_ml/train/trainer.py:347-350 (no autocast on the CPU)",
+  "scenario": "If CUDA becomes unavailable (a driver update breaking the cu130 wheel, a CPU-only torch resolved) and the owner runs `airace-ml build-judge` without --device, pick_device() returns cpu without saying so; only the gate announces the device (gate.py:1264). The judge then trains 8x384x256 at batch 128 in fp32 with SDPA's math path storing TxT attention matrices: one measured step took 74 s and peaked at 10.75 GB RSS. The run is 3,662 steps, so roughly 1.5-3 days at about 11 GB of RAM, while the owner expects '~1 h GPU' and sees only 'step 1/3662' lines. The same silent fallback hits the gate (see the run-overwrite finding). Task 1 showed CUDA available on the owner's setup, so this happens only if that changes.",
+  "severity": "Minor",
+  "sources": [
+   "extra/full-scale-peak-ram#0",
+   "gate_cli/robustness#1"
+  ],
+  "title": "build-judge and train silently fall back to the CPU when CUDA is unavailable; on the CPU the judge needs about 10.7 GB of RAM per step and takes days",
+  "id": "F21"
+ },
+ {
+  "evidence": "Probe probe3.py: 'ctx=256 batch_tokens=100 budget=1000: steps=10 tokens=2560 ratio=2.56', 'ctx=192 batch_tokens=1000 budget=4000: tokens=3840 ratio=0.96'. Hand computation for every ctx multiple of 64 up to 1024; checked experiments/configs.py and evals/judge.py:129-134.",
+  "file": "ml/src/airace_ml/train/config.py",
+  "fix": "In validate(), reject batch_tokens < ctx_len (ideally require batch_tokens % ctx_len == 0). Derive steps from the real tokens per step (steps = max(1, token_budget // (batch_size*ctx_len))), or document that the budget is approximate so M3 charges compute for tokens actually trained.",
+  "line": "170-176 (steps = token_budget // batch_tokens; batch_size = max(1, batch_tokens // ctx_len)), 196-204 (validate); trainer.py:432 (tokens_per_step)",
+  "scenario": "Each step trains batch_size*ctx_len tokens, not batch_tokens. A JSON config with ctx_len=256, batch_tokens=100, token_budget=1000 passes validate() and trains 10 x 256 = 2560 tokens (2.56x); ctx 1024 with batch_tokens 512 trains 2x. That breaks R3 (compute tied to the in-game budget) for configs arriving as JSON. With the default batch_tokens=16384, attention spans that do not divide it train 1.6-6% less than budgeted (ctx 384: 42 rows, 98.4%; 640: 97.7%; 832: 96.5%). Reported tokens stay honest. M1 gate and judge shapes divide their batch_tokens, so this is latent until 'Attention span' and 'Training length' become player controls.",
+  "severity": "Minor",
+  "sources": [
+   "core/correctness#2",
+   "core/robustness#2"
+  ],
+  "title": "Tokens actually trained per step differ from batch_tokens; validate() accepts batch_tokens < ctx_len, which trains up to 2-2.56x the paid token budget",
+  "id": "F22"
+ },
+ {
+  "evidence": "probe2.py: tok.encode('a\\ud800b') raises TypeError; validate() accepts a surrogate notebook. probe5.py: train_run with probe_prompts ['hi \\ud83d'] raised TypeError at tokenizer.py:65 with telemetry.jsonl already written.",
+  "file": "ml/src/airace_ml/train/config.py",
+  "fix": "In validate(), reject any notebook/coaching/probe_prompts string that does not round-trip str.encode('utf-8'), raising ValueError naming the field. Encode the probe prompts once in _prepare so nothing is first tokenized mid-run.",
+  "line": "229-241 (only isinstance(str) checks); trainer.py:203-211 (_custom_docs), 551-561 (_evaluate encodes probe prompts mid-run); tokenizer.py:65",
+  "scenario": "\"probe_prompts\": [\"hi \\ud83d\"] is valid JSON (JS JSON.stringify emits it for a half-pasted emoji). from_json and validate() accept it; train_run creates out_dir and telemetry.jsonl, trains to the first eval step (step 183 for a judge-sized run), then dies with 'TypeError: TextInputSequence must be str'. That is not a ValueError, so _cmd_train shows a traceback, and with no checkpoint before the first save every rerun repeats the training and crashes at the same step. The same surrogate in notebook/coaching fails in _prepare with TypeError. This breaks validate()'s contract ('nothing but a ValueError may escape for a malformed config') and train_run's claim that everything is checked before out_dir is touched.",
+  "severity": "Minor",
+  "sources": [
+   "core/robustness#3"
+  ],
+  "title": "Lone UTF-16 surrogates in notebook, coaching or probe_prompts pass validate() but crash the tokenizer with TypeError; a bad probe prompt only fails mid-run at the first eval, every time",
+  "id": "F23"
+ },
+ {
+  "evidence": "Coverage: lines 611 and 618 never execute; no monkeypatch of rename or PermissionError in test_trainer.py. Probes pass today: finish_resume_probe.py (resume at steps 20, 32, 33, 36 with finishing_mixture identical to uninterrupted), rollback_resume_probe.py (interrupt at the step-30 rollback, identical), refused_rename_probe.py (Path.rename raising PermissionError in two modes, identical, no leftover resume.* folders).",
+  "file": "ml/src/airace_ml/train/trainer.py",
+  "fix": "Add three small default tests with the cfg() helper and one module-scoped reference run: resume inside the finishing phase, resume after a rollback at the stop step, and a monkeypatched Path.rename raising PermissionError during saves; each asserts final weights and telemetry equal the uninterrupted run.",
+  "line": "599-604 (suppress(OSError) swap), 609-611 (rebuild snapshot when saved one is None), 617-618 (re-derive finishing mixture on resume)",
+  "scenario": "(1) 617-618 was the fix for the Task 6 deferred minor; no test resumes inside the finishing phase, so a regression (e.g. > for >=) would silently train the rest of a resumed run on the main mix. (2) 611 (interrupt right after a rollback) is never reached. (3) The Windows refused-rename tolerance (599-604) promises training goes on and resume picks the newest complete state, but no test makes a rename fail; the owner's ~1 h judge build (about 36 saves) runs on Windows.",
+  "severity": "Minor",
+  "sources": [
+   "tests-health#5"
+  ],
+  "title": "Three trainer resume branches, including the Windows 'refused rename' path, are never executed by any test",
+  "id": "F47"
+ },
+ {
+  "evidence": "`uv run --no-sync pytest --durations=25 -q`: 1247 passed, 1 skipped, 8 deselected in 136.83 s cold; warm 118.15 s. Per-file: test_trainer 32.3 s, test_code_instr_grammar 23.5 s, content/test_build 13.4 s, test_bench 10.1 s.",
+  "file": "ml/tests/test_trainer.py",
+  "fix": "Add a module-scoped fixture that trains the 40-step reference run and the stop-at-20 partial state once (copied per test with shutil.copytree), and fold test_resume_equivalence's weight comparison into test_resume_continues_where_it_stopped (saves about 5-6 s). Track suite time in the ledger.",
+  "line": "88-104, 159-183, 369-386",
+  "scenario": "136.8 s cold (3m12s wall) and 118.2 s warm on 4 vCPUs, under the 3-minute budget but with a thinner margin on Windows where Defender scans the many tmp corpora and checkpoints. test_trainer.py is 27% (32.3 s); test_resume_equivalence, test_resume_continues_where_it_stopped and test_resume_recovers_from_an_interrupted_swap each train the identical 40-step reference run and stop-at-20 partial run, and the first two are nearly the same test.",
+  "severity": "Minor",
+  "sources": [
+   "tests-health#6"
+  ],
+  "title": "The default suite takes 118-137 s here, with little margin on Windows; trainer tests repeat the same reference training runs",
+  "id": "F48"
+ },
+ {
+  "evidence": "Read trainer._evaluate and events.py (Progress, HeldoutEval, Sample, Instability, Done); 'mini-eval' appears only in the spec.",
+  "file": "ml/src/airace_ml/train/trainer.py",
+  "fix": "Record a deferral to M2 in the ledger or spec, or add an optional mini-eval at eval steps (e.g. run_benchmarks(max_items_per_category about 10, no creativity)) emitted as a new event.",
+  "line": "547-561 (_evaluate emits only HeldoutEval and Sample)",
+  "scenario": "Spec §4.7 (spec:167) requires a mini-eval during training for live charts. The trainer's periodic evaluation emits held-out losses and probe samples only; no bench items run during training and no event type or hook exists. The plan's Task 8 telemetry list (plan:902) omits it and nothing defers it to M2, so M2's live-training view will find no M1 support.",
+  "severity": "Minor",
+  "sources": [
+   "spec-coverage#3"
+  ],
+  "title": "Spec §4.7's tiny mini-eval during training for live charts has no implementation and no recorded deferral",
+  "id": "F50"
+ }
+]

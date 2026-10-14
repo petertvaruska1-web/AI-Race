@@ -1,0 +1,68 @@
+[
+ {
+  "evidence": "probe_code_copies.py on the code dataset at 5% of full scale: 13,939 docs, 418 copies, 205 typo'd (1.47%), 101 not clustered with their source, 90 survive dedup.",
+  "file": "ml/src/airace_content/noise.py",
+  "fix": "Make code copies exact: skip _misspell for STRUCTURED_DATASETS or add a per-recipe copy-typo share (or a separate noise path that keeps programs runnable). Correct the build.py comment and the ruling's premise.",
+  "line": "386-393 (inject_noise misspells half of all copies); assemble.py:106 (code duplicate=0.03); build.py:83-87, 179-180 (structured_quality); textproc.py:124-134",
+  "scenario": "inject_noise gives half of all duplicate copies 1-2 misspellings. In MiniPy trace docs this yields broken programs with wrong traces, e.g. 'Proram:' ... 'print(xs[0] + xz[-1])' labelled 'Output: 12' (a NameError program). Code is scored with structured_quality, which has no typo factor, so these score 1.0 and pass Light, Standard and Thorough. The Task 14 ruling and the build.py:83-86 comment assume 'code gets duplicates only' / 'no typos injected there', which is false. Short programs also defeat MinHash on 2-typo copies, so 'remove duplicates' misses many. At full scale: about 4,100 broken programs, about 1,800 in a deduped pool.",
+  "severity": "Minor",
+  "sources": [
+   "content/correctness#1"
+  ],
+  "title": "Code dataset copies carry typos that break programs, no cleaning level can remove them, and about 44% also survive dedup, contradicting the Task 14 ruling's premise that code gets no typos",
+  "id": "F26"
+ },
+ {
+  "evidence": "probe_boiler.py: share of boilerplate docs surviving Thorough: 87% at ~40 words, 97% at ~150, 96% at ~400, 98% at ~800; clean docs 100%.",
+  "file": "ml/src/airace_content/textproc.py",
+  "fix": "Add a furniture factor to quality (e.g. share of lines that look like page furniture: 2+ '|' separators, short title-case navigation lines), applied like r; or make boilerplate heavier and graded per document as was done for typos and garble. At minimum test separation at realistic document lengths.",
+  "line": "98-121, 137-151 (quality_score); noise.py:175-204 (add_boilerplate); tests/content/test_build.py:735-741",
+  "scenario": "add_boilerplate wraps a web doc in 1-4 furniture lines, but only 3 of the 10 footers (and no headers) contain a SPAM_MARKER, and every other quality factor is a share over the whole document, which furniture shifts by under 1% on a 400-1000-word FineWeb doc. About 72% of boilerplate docs score the same as clean; one marker footer gives p=2/3, still passing Thorough (0.65). The web recipe's 10% boilerplate is nearly untouched by Light, Standard or Thorough, though spec §4.5 says cleaning removes noise. test_web_quality_still_separates_noise_kinds checks a 0.2 gap only on short fixture docs.",
+  "severity": "Minor",
+  "sources": [
+   "content/correctness#2"
+  ],
+  "title": "Boilerplate noise barely moves the quality score on real-length documents, so cleaning almost never removes it",
+  "id": "F27"
+ },
+ {
+  "evidence": "Probe: for 'We met at the café. The café was naïve and Zoë smiled.', textproc.words gives [... 'caf', 'na', 've', 'zo' ...], creativity.words gives [... 'café', 'naïve', 'zoë' ...]; with known_vocab built from that text, garble_rate returns 0.333 on the text itself.",
+  "file": "ml/src/airace_content/textproc.py",
+  "fix": "Before the Task 15 build freezes corpus v1, make textproc.words Unicode-aware (letter runs with inner apostrophes, keeping curly-apostrophe handling), or have gate.garble_rate use airace_content.textproc.words, so known_vocab.txt and its consumer share one rule.",
+  "line": "33, 61-68 (words uses [a-z']+); build.py:364-366; airace_ml/experiments/gate.py:550-561 (garble_rate); airace_ml/evals/creativity.py:46",
+  "scenario": "textproc.words turns 'café' into 'caf', 'naïve' into 'na' + 've', 'Zoë' into 'zo', and build_vocab stores these fragments. gate.garble_rate splits model output with creativity.words (Unicode letters), so 'café' is never known however often it appears in training and counts as garbled; the gate docstring claims the vocabulary is read with the same rule. G7 compares two runs, so most bias cancels, but the absolute garble rates reported are inflated for any accented word.",
+  "severity": "Minor",
+  "sources": [
+   "content/integration#2"
+  ],
+  "title": "known_vocab.txt is built with an ASCII-only word rule, but the gate's garble measure reads words as Unicode letter runs, so accented words always count as garbled",
+  "id": "F31"
+ },
+ {
+  "evidence": "0 characters above U+007F in every fixture field; no non-ASCII build input in test_build.py, test_corpus.py or test_gate.py. Probe nonascii_build.py injected accents, emoji, CJK, Greek and a literal special-token string into several fixtures and ran build_corpus('tiny'): it succeeds, emoji decode intact (155/155 creative docs), specials stay text. The code works today; only the guard is missing.",
+  "file": "ml/tests/fixtures/sources/*.jsonl",
+  "fix": "Add non-ASCII rows to a few fixtures (fineweb, tinystories, soda, gutenberg) or a test that injects them into a copy, and assert decoded corpus docs reproduce them, known_vocab.txt and simple_vocab.txt round-trip through read_vocab, and the manifest/info load.",
+  "line": "all 13 files (exercised by ml/tests/content/test_build.py)",
+  "scenario": "Review Focus 5 requires accents, emoji, CJK and curly quotes to survive tokenizer round-trip, corpus build and CLI printing. Tokenizer and CLI have such tests, but adapters, normalize_text, noise, dedup, tag_topic, quality, vocab files, tokenizer training, write_corpus and manifest/info.json never see a non-ASCII byte in any test, while the real FineWeb, Gutenberg, Simple Wikipedia and SODA text is full of it. A regression on that path would first show up in the owner's hours-long full build.",
+  "severity": "Minor",
+  "sources": [
+   "tests-health#3",
+   "spec-coverage#6"
+  ],
+  "title": "No test runs non-ASCII text through the corpus build (Review Focus 5): every source fixture is pure ASCII",
+  "id": "F45"
+ },
+ {
+  "evidence": "p5_topics.py ran the real tag_topic/_topic_of_word over clean real docs of all 9 sources and counted keyword hits; p5b_topics.py re-tagged without calendar words. The winning topic holds only about 45% of keyword hits in the median web doc.",
+  "file": "ml/src/airace_content/topics.py",
+  "fix": "Move month and weekday names out of 'school' (or make them non-topical); drop or qualify 'addition', 'number', 'place', 'data', and add 'marketing' to _NOT_INFLECTED. Re-check the web topic distribution on a real sample.",
+  "line": "61-73 (school keywords; calendar words at 69-70), 109-121 ('market' via 'marketing', 'place'), 157-177 (_forms); consumer ml/src/airace_ml/data/sampler.py:48-50 (balanced variety)",
+  "scenario": "Of 484 real FineWeb docs, 111 are tagged 'school' (top web topic, 23%); for 35 of them month/weekday names alone decide it (a soap-opera forum post, a financial-regulation news item, a tech story). In Simple Wikipedia 8 of 60 'school' tags come only from birth/death dates. Other false friends: 'marketing' -> market (places), 'in addition' and 'number' (school), 'place' ('take place', 'place value'), 'data' (technology), 'practice'/'goals'/'training' (sports, 13% of wikihow). These tags drive Balanced variety (topic-stratified sampling) and discovery topic tags. No topic swallows the corpus (largest share 23-27%).",
+  "severity": "Minor",
+  "sources": [
+   "extra/real-text-cleaning-calibration#4"
+  ],
+  "title": "Topic keywords mis-tag real text on dates and false friends: month and weekday names alone make about 7% of web docs 'school'",
+  "id": "F52"
+ }
+]

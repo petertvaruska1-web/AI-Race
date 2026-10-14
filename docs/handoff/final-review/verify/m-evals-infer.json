@@ -1,0 +1,54 @@
+[
+ {
+  "evidence": "Read trainer._custom_docs (encode_doc/encode_chat of every non-blank entry, no filter), sampler CUSTOM_DATASET_IDS handling, cli --config and build_novelty_index. score_creativity has no way to see the model's custom data.",
+  "file": "ml/src/airace_ml/evals/novelty.py",
+  "fix": "Let score_creativity accept the model's own custom texts as extra 'seen' tokens (NoveltyIndex.novelty already takes seen=) and pass notebook and coaching replies from the run config. Before training, drop or refuse notebook/coaching entries that contain a bench-v1 prompt (or a canonical key for which reserved_for_bench() is true). At minimum record both as M2 obligations in the handoff.",
+  "line": "197-209 (build_novelty_index covers only DATASET_IDS); ml/src/airace_ml/train/trainer.py:203-211 (_custom_docs trains notebook/coaching unfiltered)",
+  "scenario": "TrainRunConfig.notebook and coaching are trained on in M1 (accepted via --config JSON). (1) A model that memorizes its own notebook stories reproduces them and novelty() counts every window as new, since the index holds only the 8 base corpora; spec §4.7 defines novelty against all corpora, and the notebook is one of the model's corpora. (2) Coaching pairs are never checked against bench-v1 prompts, although §4.7 promises no item text is ever trained on; once discovery cards show real prompts (§4.9, M2), players can coach bench items verbatim.",
+  "severity": "Minor",
+  "sources": [
+   "evals/correctness#2"
+  ],
+  "title": "Player notebook/coaching data, already trained on in M1, is invisible to the novelty index and is not screened against bench-v1 items",
+  "id": "F32"
+ },
+ {
+  "evidence": "Probe test_nan_model.py: a 1x64x64 Transformer with tok_emb rows 5-19 set to NaN; run_benchmarks(max_items_per_category=5) finite, measure_fingerprint(k=1) raised RuntimeError at infer/lm.py:125. A garbage-output fuzz through ScriptedLM-style fakes passed for bench, creativity, fingerprint, describe and distance, so this is the only gap found.",
+  "file": "ml/src/airace_ml/infer/lm.py",
+  "fix": "In _sample, nan_to_num the scaled logits to -inf before softmax and treat rows with no finite logit as a stop (no text emitted, so R1 holds); or catch it in score_creativity/measure_fingerprint and score those prompts as empty replies. Add a NaN-model test next to test_non_finite_logprobs_give_finite_scores.",
+  "line": "115-126 (_sample); callers personality/fingerprint.py:314-324, evals/creativity.py:123-125",
+  "scenario": "With NaN/inf in the weights (damaged or bit-flipped safetensors, a future diverged model), bench's greedy and scored categories come out finite as scoring.py:9-11 promises, but measure_fingerprint and score_creativity sample at temperature 0.8/0.9 with top-p, and _sample passes NaN probabilities to torch.multinomial, which raises 'probability tensor contains either inf, nan or element < 0'. bench (with creativity), fingerprint, the gate's G2/G3/G4 measurements and chat abort with a traceback instead of reading the model as degenerate (Review Focus 4). Likelihood is low because the trainer rolls back non-finite updates.",
+  "severity": "Minor",
+  "sources": [
+   "evals/robustness#2"
+  ],
+  "title": "A model with non-finite logits crashes creativity, the fingerprint and chat (torch.multinomial RuntimeError) instead of scoring finite",
+  "id": "F33"
+ },
+ {
+  "evidence": "Code read; test_creativity.py:758 deliberately asserts 'I have 3 cats' is well-formed, so digit counting is intended for G2 and the defect is the contradicting docstrings plus the duplicated constant. Impact on G2 pass rates is small.",
+  "file": "ml/src/airace_ml/evals/judge.py",
+  "fix": "Either correct the docstrings in creativity.py:77-80 and gate.py:554-556 or make G2 use creativity.words (updating test_creativity.py:758). Define the opening length once (e.g. creativity imports it from judge).",
+  "line": "34 (imports checkers.words), 45 (CREATIVE_TOKENS = 96), 141-150 (is_well_formed); creativity.py:44 (STORY_TOKENS = 96), 77-80; gate.py:554-559",
+  "scenario": "creativity.words claims 'everything that counts words of a model's reply' uses letter runs, and the gate's garble rate relies on that, but is_well_formed (G2) uses skills.checkers.words, which counts digits as words and keeps inner apostrophes: 'Yes, 1 2 3 4.' has 5 distinct words for G2 but 1 elsewhere; \"I don't know.\" has 3 for G2 (fails MIN_WORDS) but 4 for creativity and the fingerprint. Separately, coherence calibration needs the judged opening to be story-length, but that length is written twice (judge CREATIVE_TOKENS and creativity STORY_TOKENS); changing one silently skews every coherence score.",
+  "severity": "Minor",
+  "sources": [
+   "evals/integration#2"
+  ],
+  "title": "Definitions that should be shared are duplicated: the G2 well-formed check counts words differently from creativity and the gate, and the 96-token story/opening length is defined twice",
+  "id": "F34"
+ },
+ {
+  "evidence": "Rebuilt the conftest tokenizer byte-identically; bf16_margin.py: step-0 gap 0.014 vs max bf16 logit error 0.218. bf16_probe.py (CPU bf16 autocast stand-in): greedy tokens diverge within 10 steps for 10 of 12 sharp-model seeds. Score sums stayed within rel=0.05 (max 0.021).",
+  "file": "ml/tests/test_infer.py",
+  "fix": "Compare with a tolerance: teacher-force the CPU greedy sequence through the GPU model and assert per-step logits agree within about 0.5, or require the GPU to pick the CPU token only where the fp32 margin exceeds 1.0. Keep the seeded-sampling and probability-range checks.",
+  "line": "413-428 (test_cuda_bf16_path_tracks_the_cpu_path)",
+  "scenario": "sharp_lm (seed 1, weights x20, 512-vocab fixture tokenizer) must produce identical 10-token greedy output on CUDA bf16 and CPU fp32. For 'Once upon a time' the step-0 top-2 gap is 0.014 while bf16 shifts logits by about 0.1-0.6, and later steps have similar gaps. It passed on the owner's RTX 3050 in Tasks 5 and 8 by luck; any edit to tests/fixtures/text/*.txt (retraining the tokenizer) or a torch/cuBLAS change re-rolls it, and `pytest -m gpu` then fails on the owner's machine though the CUDA path is fine.",
+  "severity": "Minor",
+  "sources": [
+   "tests-health#1"
+  ],
+  "title": "The GPU test asserts exact greedy-token equality between CPU fp32 and CUDA bf16, but the fp32 top-2 margin (0.014 logits) is far below bf16 rounding error",
+  "id": "F43"
+ }
+]

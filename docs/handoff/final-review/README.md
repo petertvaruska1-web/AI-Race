@@ -15,29 +15,25 @@ Script: `final-review.js` in this folder. It is the portable copy of the workflo
 
 The script stops and returns `{incomplete: <phase>}` instead of synthesizing from partial data whenever an agent fails, e.g. on a usage limit.
 
-## State at save time (2026-10-14 20:15 UTC)
+## State at save time (2026-10-14 20:30 UTC)
 - **Find, Critic, Find more and Dedup are done.** Dedup produced **56 findings**: 1 Critical, 14 Important and 41 Minor. They are numbered F1–F56 in the order of `agent-results.json` → `dedup.merged`.
-- **Verify was restructured (v2)** because of usage-limit throughput. Each window has completed only about 3–8 review agents, and the v1 design needed 86 verifiers.
-  - Each serious finding gets one adversarial skeptic that applies all three lenses (reproduce, intent, impact). That is 15 agents.
-  - Each subsystem group of minors gets one skeptic, which returns a verdict per finding. That is 7 agents.
-  - F51 (stale progress and handoff docs) is skipped, because the controller fixed it on 2026-10-14.
-  - Every confirmed bug is reproduced again by a failing test before it is fixed (TDD in the fix wave).
-- **Synthesis is done by the controller**, not an agent. The controller writes `final-review.md` from the dedup and `verify2:*` results, together with its rulings.
-- **A relaunch (eighth launch, 20:12 UTC) was running when this was saved.** After it finishes: export again, write the report and rulings, then start the fix wave.
+- **Verification (v3) runs as 13 Sonnet agents** started with the Agent tool. The owner asked to use lighter models where the strongest one isn't needed, and the workflow run was stopped before any verifier finished.
+  - The shared brief is `verify/brief.md`.
+  - The group files are `verify/<group>.json`: six groups of serious findings (`s-*`) and seven groups of minors (`m-*`).
+  - F51 (stale docs) is skipped, because it was fixed on 2026-10-14.
+  - Each agent writes `verdicts-<group>.json` (one verdict per finding) to the session scratchpad. The sync script copies these to `verify/`.
+- **Synthesis is done by the controller** from the verdicts. It writes `final-review.md` together with its rulings.
 
 ## How to resume
-**Same session** (the workflow cache still exists): `Workflow({scriptPath: <session scratchpad>/final-review.js, resumeFromRunId: "wf_c9a5295d-a19"})`. Repeat after each limit reset until it returns a report.
+**Same session**: wait for the 13 verifier notifications. Re-dispatch any verifier whose verdict file is missing after a usage-limit stop.
 
-**Fresh session or container** (the cache is gone):
-1. Recreate the SDD workspace (docs/handoff/README.md §3). The script reads `progress.md`, `global-constraints.md` and `deferred-minors.md` from it.
-2. Read `agent-results.json`, and list its keys except `_failed`.
-3. Run `Workflow({scriptPath: "docs/handoff/final-review/final-review.js", args: {cachedLabels: [<those keys>]}})`. Use the absolute path.
-   - Cached labels are replayed by a cheap loader agent, which prints the saved JSON.
-   - Everything else runs for real.
-   - Optional args: `root`, `workspace`, `scratch`, `cacheFile`.
-4. After any interruption:
-   - Export again with `python3 docs/handoff/final-review/export-results.py <transcripts>/subagents/workflows/<run id>/journal.jsonl docs/handoff/final-review/agent-results.json`.
-   - Relaunch with the new label list, or with `resumeFromRunId` if you are still in the same session.
+**Fresh session or container**:
+1. Recreate the SDD workspace (docs/handoff/README.md §3).
+2. For every `verify/<group>.json` that has no `verify/verdicts-<group>.json` yet, start one Sonnet agent (Agent tool, `model: "sonnet"`) with this prompt: "You are an adversarial verifier in the final review of the AI Race repository. First read the brief at <abs path>/docs/handoff/final-review/verify/brief.md and follow it exactly. Your group is '<group>'; its findings are in <abs path>/verify/<group>.json. Write your verdicts to <scratch>/verdicts-<group>.json."
+   - The brief's scratch paths point at the old session's scratchpad. Replace them with your own scratchpad, e.g. with sed on a copy of the brief.
+3. Copy the verdict files into `verify/`, then continue with "After the report exists" below.
+
+(`final-review.js` is kept for reference and for re-running finders. With `args.cachedLabels` it replays saved results through a Haiku loader agent.)
 
 ## After the report exists (the rest of the plan)
 1. Read `final-review.md`. Decide each confirmed finding: fix, or accept with a ledger `Ruling:` line that says why and what it costs if wrong. Measurement-validity rules (scores, chance levels, gate criteria) also go into `docs/decisions/0001-bench-v1-measurement-rules.md` or a new ADR.

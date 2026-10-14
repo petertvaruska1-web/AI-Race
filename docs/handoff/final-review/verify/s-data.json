@@ -1,0 +1,41 @@
+[
+ {
+  "evidence": "Real rows fetched via the datasets-server API (/rows offset=9 length=3: Alice, Looking-Glass, Snark; /first-rows rows 0-7), complete and untruncated, run through the real row_to_content, strip_gutenberg_boilerplate, chunk_passages and prepare_content. is_childrens_book and row_has_format behave correctly; strip removes only CRs and triple newlines (no false header/footer match). Dataset card confirms HTML parsing. Probe scripts gut2.py, gut3.py, gutfix.py.",
+  "file": "ml/src/airace_content/sources.py",
+  "fix": "In _gutenberg (or at the top of strip_gutenberg_boilerplate) convert this layout back to plain-text layout before chunking: turn CRLF into LF; if exactly-double newlines outnumber lone newlines, replace a lone double newline with a single newline and runs of 3+ with a double newline. The existing _unwrap then joins hard-wrapped prose and keeps verse. Verified on real row 9: blank lines per passage drop from 37.0 to 10.6 and passages become whole paragraphs. Add a fixture row in the real sedthh layout (an Alice excerpt) and a test that no passage has a blank line between a line without an end mark and a line starting lowercase.",
+  "line": "131 (_PARAGRAPH_BREAK), 160-172 (strip_gutenberg_boilerplate rejoins with blank lines), 175-180, 207-231 (_unwrap/chunk_passages), 334-337 (_gutenberg); fixture ml/tests/fixtures/sources/gutenberg.jsonl; test ml/tests/content/test_build.py:230-251",
+  "scenario": "In the real dataset (parsed from each book's HTML, header and footer already removed), wrapped lines inside a paragraph are separated by CRLF CRLF and paragraphs by three CRLFs (Alice: 1721 double, 821 triple, 2 lone newlines; early etexts use LF LF for wraps). _PARAGRAPH_BREAK splits on every wrapped line, strip_gutenberg_boilerplate rejoins with a blank line, erasing the wrap-vs-paragraph difference, so _unwrap never sees a multi-line paragraph and chunk_passages packs one-line pieces separated by blank lines. On real Alice: 67 passages averaging 37 blank lines each, e.g. 'Suddenly she came upon a little three-legged table, all made of solid glass;' / blank / 'there was nothing on it except a tiny golden key...'; 1322 of 2476 blank-line breaks fall between a line with no end mark and a lowercase continuation. The whole books dataset (15M tokens) would teach the model a blank line every ~12 words, which R1 forbids fixing in output, so players would see it. Nothing fails, so it is silent. Tests pass because the fixture uses classic PG plain-text layout (header, single-newline wraps), which the real source never contains.",
+  "severity": "Important",
+  "sources": [
+   "extra/live-hf-source-formats#0"
+  ],
+  "title": "Real sedthh/gutenberg_english TEXT puts a blank line after every wrapped line, so every books passage has blank lines mid-sentence and real paragraph breaks are lost",
+  "id": "F12"
+ },
+ {
+  "evidence": "8 Firecrawl /rows pages added to 400 existing TinyStories rows; per-100-row counts 10, 17, 1, 16, 11, 0, 10, 14, 1, 0, 3. Sequences: 'â€œ' 172, 'â€™' 131, 'â€'+space/punct 171, 'â€“' 9, 'â€”' 8, 'â€˜' 3. The closing quote's 0x9D byte is already gone in the hub data, so a plain cp1252 round-trip repairs only 26 of 83 docs. Quality attribution (p2_quality.py): all 11 TinyStories thorough failures bind on the g factor.",
+  "file": "ml/src/airace_content/sources.py",
+  "fix": "Before normalize_text, map 'â€œ' to a left double quote, 'â€™' to a right single quote, 'â€˜' to a left single quote, 'â€“' to an en dash, 'â€”' to an em dash, then any remaining 'â€' to a right double quote; do it in the tinystories adapter or generally in prepare_content. This repairs all 83 sampled docs. Alternatively drop rows containing 'â€'. Add a fixture row with this mojibake, and do it before the owner's first full build so simple_vocab, known_vocab and tok-v1 never see it.",
+  "line": "347-353 (_text adapter used for tinystories); ml/src/airace_content/assemble.py:220-228 (prepare_content); ml/src/airace_content/textproc.py:44-58 (normalize_text); plan check docs/superpowers/plans/2026-10-06-m1-it-learns.md:1484",
+  "scenario": "The full build streams TinyStories from row 0: about 77k rows for creative and 200k for simple_vocab. In 11 sampled blocks over rows 0-90,000, 83 of 1,100 rows (7.5%) contain cp1252-misdecoded UTF-8 ('didnâ€™t', 'â€œWow'); the first 200 rows have 13.5%, rows 700,000+ have 0%. Neither the adapter nor prepare_content/normalize_text repairs it, so about 6% of the creative dataset (TinyStories is 85% of it) is garbled text tagged 'none'. Only about 40% of those docs fall below Thorough, so even the judge recipe trains on them. Models learn 'â€œ' as a quote mark and show it to players in stories (R1 forbids rewriting). The plan's Task 15 step 3 check 'nothing is mojibake outside the intentionally garbled documents' will fail after the hour-long build, and fixing it then means a creative rebuild that reuses simple_vocab/known_vocab already built from this text.",
+  "severity": "Important",
+  "sources": [
+   "extra/real-text-cleaning-calibration#1"
+  ],
+  "title": "About 7.5% of the TinyStories rows the build reads contain real mojibake ('â€œ', 'â€™', 'â€'), which enters the creative corpus tagged noise 'none' and survives even Thorough cleaning",
+  "id": "F14"
+ },
+ {
+  "evidence": "p1_basic.py and p8_simp.py use the real load path (row_has_format, row_to_content, prepare_content) and textproc.simplicity; doubling the vocab from 1,465 to 2,931 words raised the FineWeb median from 0.515 to 0.596. Rejected docs listed by p10_rejected.py. With a 6,000-word vocab, threshold 0.6 keeps 92% FineWeb, 87% FineWeb-Edu, 70% OpenStax; 0.7 keeps 79%, 66%, 58%.",
+  "file": "ml/src/airace_content/assemble.py",
+  "fix": "Re-derive the thresholds from the real simple_vocab before the full build, e.g. measure the simplicity distribution of the first few thousand rows per source and set simplicity_min at a chosen keep-quantile (simplest half: about 0.6-0.65 for FineWeb), or express simplicity_min as a quantile. Record the target keep-rate in the Task 15 notes, check build time (more rows streamed), and consider extending the filter to cosmo_openstax (median 0.47) as the Task 14 ruling anticipated.",
+  "line": "70 (fineweb 0.35), 82 (gutenberg 0.30, unmeasured), 91 (fineweb_edu 0.35), 115 (simplewiki 0.30); spec docs/superpowers/specs/2026-10-06-ai-race-architecture-design.md:197",
+  "scenario": "Spec §4 says text is selected for short sentences and common vocabulary so 1-40M models can learn it. Real rows scored with the real simplicity() against a simple_vocab built from 400 real TinyStories rows (2,931 words, smaller than the build's 6,000, so these are lower bounds): FineWeb 96.8% pass (median 0.59), FineWeb-Edu 96.0% (median 0.55), Simple Wikipedia 99.3% (median 0.66). The median web sentence is 16.5 words, below the 18-word knee, so the sentence-length factor almost never binds; only about 3% of docs (technical pages with 30-44-word sentences) are rejected. The web dataset (30M tokens) and the fineweb_edu and simplewiki shares (about 11M) enter at full FineWeb complexity, and changing this later needs another full build.",
+  "severity": "Important",
+  "sources": [
+   "extra/real-text-cleaning-calibration#2"
+  ],
+  "title": "Simplicity thresholds (0.35 web/edu, 0.30 Simple Wikipedia) keep about 97-100% of real documents, so the spec's simplicity filtering does nothing for 30-40% of the corpus",
+  "id": "F15"
+ }
+]

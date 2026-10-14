@@ -1,0 +1,90 @@
+[
+ {
+  "evidence": "p6_tok.py (real train_tokenizer on a build-like 17.5 MB sample, held-out bytes/token), p7_first200.py (first-row means vs datasets-server /statistics means), p11_landing.py (per-dataset landing with real noise factors); full-volume synthetic build_corpus('full') from real HF rows (manifest: fineweb assigned 30.0M, actual 44.01M; code 9.97M vs 13.09M; patterns 3.09M vs 4.15M); Monte-Carlo of the 200-sample estimator (quantiles 79/102/126% at sigma 1.3). The Task 14 ruling covers the 3.6 constant but not the sample bias. Synthetic tokenizer ratios are indicative only.",
+  "file": "ml/src/airace_content/assemble.py",
+  "fix": "Keep a running sum of doc tokens for every accepted doc and stop when the cumulative estimate reaches the quota (or re-estimate periodically). Use about 3.2 bytes/token for prose and about 2.7 for code and patterns (per-source constants) and fix the comment. Better: after the tokenizer is trained, trim each component to its target in real tokens so first and later builds agree. Warn when a component ends below about 90% of its quota.",
+  "line": "142-147 (EST_SAMPLE_DOCS, BYTES_PER_TOKEN_ESTIMATE 3.6), 283-299 (_Goal), 338-345, 424-434 (generator estimate); ml/src/airace_content/build.py:341; cli format_warnings (warns only for exhausted sources)",
+  "scenario": "On the first full build _Goal stops a source after ceil(quota*200/sample_tokens) docs, using bytes/3.6 over its first 200 accepted docs, and never compares collected tokens with the quota. Two errors multiply. (1) A 4096 BPE gives fewer bytes per token than 3.6 on most text: measured fineweb 3.07-3.15, fineweb_edu 3.22, code 2.64-2.71, patterns 2.60, reasoning 3.11, creative 3.66. (2) The fixed first-rows window is biased and heavy-tailed: cosmo_khan's first 100 docs are 0.72 of the population mean length, fineweb_edu 0.835, TinyStories 0.88, FineWeb 0.96, with FineWeb lengths heavy-tailed (median 2.2 KB, mean 3.6 KB, max 115 KB) so a 200-doc mean carries about ±25% error. Simplewiki's page-id order may also bias its first leads long. Estimated landing: web 1.25x (a synthetic full-volume build gave 44.0M vs 30M, 1.47x), educational 1.28x, code 1.31-1.34x, reasoning 1.15x, creative 1.16x; about 143-160M tokens in all vs 137M planned. No dataset is predicted under the plan's 80%, but the error can go either way per source, and only exhausted components get a warning. Costs: more RAM, disk and time, skewed dataset proportions, design targets not met.",
+  "severity": "Minor",
+  "sources": [
+   "content/robustness#1",
+   "extra/real-text-cleaning-calibration#3",
+   "extra/full-scale-peak-ram#1"
+  ],
+  "title": "Full-scale token quotas are extrapolated from the first 200 accepted docs at a fixed 3.6 bytes/token and never checked against real totals, so datasets land far from target (overall about +15-17%, web up to 1.25-1.47x)",
+  "id": "F16"
+ },
+ {
+  "evidence": "grep for print/logging/stderr in src/airace_content: only cli.py, after build_corpus returns. Read paginate, list_repo_tree, HfFileSystem._ls_tree and the httpx 0.28.1 timeout handling in the locked venv; data reads use a 10 s timeout (hf_file_system.py:1203), so only the opens are exposed. Hang not reproduced (no Hub network here).",
+  "file": "ml/src/airace_content/cli.py",
+  "fix": "Print one flushed stderr line per stage: 'opening <source>...', then per dataset/component rows read, docs and estimated tokens every N rows, plus dedup, tokenizer and write stages. Optionally a threading.Timer watchdog in hf_fetch that warns when no row has arrived for 10 minutes. Add a handoff note: 'if no new line appears for 15 minutes, press Ctrl+C and run the same command again' (cheap once the retry/resume or staging fix lands).",
+  "line": "133-149 (only prints after build_corpus returns); build.py:285-418; assemble.py (no output); sources.py:92 (load_dataset's tree listing uses huggingface_hub paginate with timeout=None)",
+  "scenario": "Task 15 says to run the full build in the background and monitor it, but the content package has no print or logging besides the final summary, and stdout is block-buffered when redirected. A stalled stream or an anonymous-rate-limit 429 retry loop is indistinguishable from progress. Worse, at each of the 14 source opens the tree listing's first page is a session GET with timeout=None (huggingface_hub _pagination.py:27-37; hf_api.py:4103; shared httpx client created with timeout=None), so if the PC sleeps or the router drops NAT state mid-request, the call blocks forever with no exception; no retry wrapper helps and the owner waits indefinitely. Likelihood of the hang is very low, but when it happens nobody can tell.",
+  "severity": "Minor",
+  "sources": [
+   "content/robustness#2",
+   "content/integration#3",
+   "extra/hf-streaming-failure-behaviour#1"
+  ],
+  "title": "The full build prints nothing until it finishes, so a stall, a rate-limit loop or an indefinitely hung Hub metadata call (no timeout) looks exactly like progress",
+  "id": "F17"
+ },
+ {
+  "evidence": "pyproject.toml: content = ['datasets>=5.1']. `uv run --no-sync airace-content build --scale full|tiny --out <scratch>` without the extra exits 1 in 0.3 s with that message. `uv sync --help` shows --inexact (exact is default); `uv run --help` shows --exact (inexact is default). uv.lock contains datasets 5.1.0 for the extra.",
+  "file": "CLAUDE.md",
+  "fix": "In CLAUDE.md: `cd ml && python -m uv sync --extra content` before the real corpus build (and keep --extra content on any later sync), and write the build line as `cd ml && python -m uv run --extra content airace-content build --scale {tiny,full}`. Make the DatasetsUnavailable hint say `python -m uv sync --extra content`. Add the `python -m uv run pytest -m gpu` line.",
+  "line": "32-33 (ML setup: python -m uv sync), 37 (build command); hint at ml/src/airace_content/sources.py:87-91",
+  "scenario": "Following CLAUDE.md on Windows: `cd ml && python -m uv sync` (exact sync, no extras), then `python -m uv run airace-content build --scale full`. `datasets` is only in [project.optional-dependencies] content, and `uv run` does not add extras by itself, so the build exits 1 immediately with \"install the content extra (uv sync --extra content)\". uv is not on PATH on the owner's PC, so that command fails too; the working form is `python -m uv sync --extra content` or `python -m uv run --extra content ...`. Rerunning the documented setup later removes `datasets` again because `uv sync` is exact by default. Plan Task 15 step 2 has the right command, but CLAUDE.md, which the owner and the resuming session read first, does not. CLAUDE.md also lists no GPU-test command (`pytest -m gpu`, needed for test_starter_speed_gpu and the CUDA bf16 tests).",
+  "severity": "Minor",
+  "sources": [
+   "gate_cli/correctness#7",
+   "gate_cli/robustness#0",
+   "gate_cli/integration#3",
+   "content/robustness#3",
+   "content/integration#4",
+   "spec-coverage#1"
+  ],
+  "title": "CLAUDE.md's setup and corpus-build commands omit the 'content' extra, so the owner's next step (full build) fails at once; the error's own fix uses bare `uv`, and a later plain `uv sync` uninstalls `datasets` again",
+  "id": "F18"
+ },
+ {
+  "evidence": "PYTHONIOENCODING=cp1252 uv run --no-sync airace-content build --scale tiny --fixtures tests/fixtures/sources --out <scratchpad>/Петко_data > build.log: exit 1, 'charmap' codec can't encode, corpora already written.",
+  "file": "ml/src/airace_content/cli.py",
+  "fix": "Call airace_ml.cli's _use_utf8_output (reconfigure stdout/stderr to utf-8, errors='replace') at the start of airace_content.cli.main, and add a test like the airace-ml cp1252 test.",
+  "line": "147-149 (also 77-96)",
+  "scenario": "Running the build in the background redirects stdout, and Python 3.13 on Windows then encodes with cp1252 (strict). With a non-ASCII data root or repo path (e.g. a Cyrillic Windows profile), print(format_summary(...)) raises UnicodeEncodeError after all data is written; the process exits 1 with a traceback, the 'warning:' lines about exhausted sources are never printed, and the build could be wrongly rerun. airace_ml/cli.py:325-344 already reconfigures to UTF-8 with errors='replace' for exactly this. The owner's current path is ASCII, so this is unlikely today.",
+  "severity": "Minor",
+  "sources": [
+   "content/correctness#3",
+   "content/robustness#5"
+  ],
+  "title": "airace-content does not switch stdout to UTF-8 (unlike airace-ml), so the final summary crashes when stdout is redirected on Windows and the path has non-cp1252 characters, losing the exhausted-source warnings",
+  "id": "F28"
+ },
+ {
+  "evidence": "SourceSpec has no revision field; hf_fetch passes none; make_manifest records hf_path, config, split, license and homepage only.",
+  "file": "ml/src/airace_content/sources.py",
+  "fix": "Add a revision (commit sha) to SourceSpec, pass revision= to load_dataset, and write it into the manifest's sources entries; Task 15 can fill in the shas it verified.",
+  "line": "92 (load_dataset without revision); manifest.py:202-226",
+  "scenario": "load_dataset(spec.hf_path, spec.hf_config, split=..., streaming=True) always reads the repo head. If a source is re-uploaded or re-sharded between the Task 15 build and a later rebuild, the same seed gives a different corpus, and nothing in manifest.json shows which data the frozen tok-v1, judge and novelty index were built from. Spec §4.10 asks for provenance in a manifest.",
+  "severity": "Minor",
+  "sources": [
+   "content/robustness#4"
+  ],
+  "title": "Sources are streamed from an unpinned Hugging Face revision and the manifest does not record which revision was used",
+  "id": "F29"
+ },
+ {
+  "evidence": "Probe full_twice.py: full build (targets ÷1000, fixture sources) run twice into the same root with seed 0: conversations 507->542 docs, code 278->216, reasoning 94->79, facts 208->228.",
+  "file": "ml/src/airace_content/build.py",
+  "fix": "Always size quotas with estimate_tokens (deterministic, tokenizer-independent, cheap; the summary already reports real tokens), or record the counting basis in the manifest and reuse it for later builds. Correct the docstring either way.",
+  "line": "23-25 (determinism claim), 341; assemble.py:283-299, 424-434",
+  "scenario": "The first `build --scale full` has no tokenizer and sizes quotas with estimate_tokens (bytes/3.6); any later full or partial build finds the frozen tokenizer and uses len(frozen.encode(text)). With the same seed and code the second run produces different document counts and a different corpus, contradicting the docstring ('the same seed gives the same corpus, whichever datasets a build includes'). Datasets rebuilt with --datasets in Task 15 step 3 are sized on a different basis from the ones left alone, and any rerun changes every corpus, which changes the gate's data identity and makes an existing judge stale.",
+  "severity": "Minor",
+  "sources": [
+   "content/integration#1"
+  ],
+  "title": "Running the same full build twice gives a different corpus, because quota counting switches from the byte estimate to the frozen tokenizer",
+  "id": "F30"
+ }
+]

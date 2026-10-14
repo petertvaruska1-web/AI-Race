@@ -1,0 +1,56 @@
+[
+ {
+  "evidence": "Probes on a copy of the tiny gate data root: halving web/tokens.bin gave a traceback, exit 1, from both build-novelty-index and build-judge; a file in place of the novelty folder gave NotADirectoryError traceback; Tok.load on '{\"half\": ' raised type Exception (MRO Exception, BaseException, object). The deferred minor covers only calibrate's ValueError with no held-out text. The data tokenizer is written via tmp+replace, so (3) is unlikely.",
+  "file": "ml/src/airace_ml/cli.py",
+  "fix": "In _cmd_build_novelty_index catch ValueError (damaged corpus: exit 2 with the airace-content build hint) and OSError via _files_problem, as _cmd_train does; add the same ValueError catch to _cmd_build_judge. Wrap Tok.load (in tokenizer.py, or in _require_tokenizer and the gate's _load_inputs) to re-raise parse failures as ValueError naming the file ('the tokenizer at X is damaged; rebuild with airace-content build').",
+  "line": "14-19 (contract), 89 (_DAMAGED), 374-381 (_require_tokenizer), 686-693, 762-769 (_cmd_build_novelty_index), 782-801 (_cmd_build_judge); ml/src/airace_ml/experiments/gate.py:150 (_LOAD_ERRORS), 812, 838",
+  "scenario": "(1) A full airace-content build interrupted while writing (write_corpus is not atomic; deferred Task 6 minor) leaves tokens.bin and offsets.npy out of step; build-novelty-index and build-judge then end in 'ValueError: .../web/tokens.bin does not match the offsets'. (2) In build-novelty-index an OSError (disk full, locked or unwritable novelty folder) is a traceback because only FileNotFoundError is caught. (3) A truncated data/tokenizer/tok-v1/tokenizer.json or data/judge/v1/tokenizer.json makes Tok.load raise a bare Exception ('EOF while parsing'), not ValueError, so train, chat, bench, fingerprint, build-judge and gate (which catches only OSError/ValueError/EOFError/SafetensorError) all show a traceback instead of 'damaged ... rebuild it with'.",
+  "severity": "Minor",
+  "sources": [
+   "gate_cli/robustness#2",
+   "gate_cli/integration#4"
+  ],
+  "title": "CLI commands print Python tracebacks for a damaged corpus, a file-system error or a corrupt tokenizer.json (bare Exception from tokenizers), breaking the 'one error: line, never a traceback' contract",
+  "id": "F38"
+ },
+ {
+  "evidence": "Probe: a 4-step config trained to completion, then rerun with --resume: exit 2 with exactly that message. _cmd_train consults only resume state, never meta.json/result.json.",
+  "file": "ml/src/airace_ml/cli.py",
+  "fix": "When --resume finds no resume state but out holds a finished model of this config (weights + meta, or result.json status completed), say the run already finished and is ready to use, and only suggest deleting the folder or another --out if they really want to retrain.",
+  "line": "576-581",
+  "scenario": "The owner trains a model to completion into --out m1, then reruns with --resume out of habit. A finished run has no resume state, so the CLI says there is nothing saved to resume and to 'Run the command again without --resume to start the run.' Following that retrains from scratch and overwrites model.safetensors, meta.json and result.json; the message never says the folder already holds a finished model of this config.",
+  "severity": "Minor",
+  "sources": [
+   "gate_cli/robustness#3"
+  ],
+  "title": "`train --resume` on a folder holding a finished run tells the user to run without --resume, which overwrites the finished model",
+  "id": "F39"
+ },
+ {
+  "evidence": "Decoded every id of tiny-built tokenizers: 30-31 ids decode to controls (0x00-0x08, 0x0b, 0x0c, CR, ESC, 0x7f-0x9f ...). _print_event and _cmd_chat do no filtering.",
+  "file": "ml/src/airace_ml/cli.py",
+  "fix": "At print time only (stored text and telemetry.jsonl untouched, so R1 holds), render C0/C1 controls other than newline and tab visibly (e.g. as an escape like \\x1b or U+FFFD), as report.cell does.",
+  "line": "476 (train Sample lines in _print_event), 676 (chat reply)",
+  "scenario": "tok-v1 is byte-level, and about 30-31 of its 4096 ids decode to C0/C1 control characters including ESC, CR, backspace and BEL. A barely trained model samples them. `train` prints every probe sample and `chat` every reply verbatim, so an ESC followed by a 'c'-initial token is a full terminal reset in Windows Terminal (wiping scrollback and progress mid-run), and CR/backspace overwrite earlier output so a transcript misrepresents what the model said. report.py already strips these (_CONTROL, report.py:26), so treatment is inconsistent with spec §11 (model output is untrusted wherever rendered).",
+  "severity": "Minor",
+  "sources": [
+   "gate_cli/robustness#4",
+   "spec-coverage#7"
+  ],
+  "title": "The CLI prints raw model text, so control and escape characters from the model can clear or rewrite the console (the gate report already strips them)",
+  "id": "F40"
+ },
+ {
+  "evidence": "`uv run --no-sync pytest -m \"slow or not slow\" tests/test_creativity.py::test_build_judge_smoke tests/test_gate.py::test_gate_refuses_to_start_without_its_inputs`: 1 failed ('Regex pattern did not match. Expected regex: build-judge'). cli.py:679-710 lists only missing pieces.",
+  "file": "ml/tests/test_creativity.py",
+  "fix": "In test_build_judge_smoke copy tiny_data_root to tmp_path first (shutil.copytree) and build the judge there, like test_build_judge_resume_smoke; optionally pass device explicitly.",
+  "line": "119-125 (test_build_judge_smoke); affected ml/tests/test_gate.py:585-599, ml/tests/test_cli.py:596-613 and 1147-1153; fixture conftest.py:111",
+  "scenario": "test_build_judge_smoke calls build_judge(tiny_data_root, ...) on the session-scoped fixture, leaving judge/v1 in it. With `pytest -m \"slow or not slow\"` (or -m \"\"), test_creativity runs before test_gate and test_gate_refuses_to_start_without_its_inputs fails; test_bench_prints_a_table_and_notes_that_creativity_is_missing and test_gate_without_its_inputs_names_what_to_build in test_cli fail in any order that puts the smoke test first. The default suite and -m slow alone pass. The sibling test_build_judge_resume_smoke already copies the root.",
+  "severity": "Minor",
+  "sources": [
+   "tests-health#0"
+  ],
+  "title": "A slow test writes a judge into the shared session-scoped tiny_data_root, so running slow and default tests together fails other tests",
+  "id": "F42"
+ }
+]

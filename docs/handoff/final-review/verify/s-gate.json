@@ -1,0 +1,43 @@
+[
+ {
+  "evidence": "gate_cli probe g4_noise.py on the quick gate's runs (k=1): same-model re-measures 1.28-2.10. extra/g4 proxy: 15 models at ModelShape(2,96,128), 819,200 tokens each, mixes creative/code/facts/conversations/balanced x seeds 1-3, measured with measure_fingerprint(k=3) at measure seeds 0-7 (two models at 0-19), distances via fingerprint_distance, verdicts via eval_seed_variation, 5000 null draws. The scale identity sum ||z_i - z_j||^2 = 2 n^2 D was confirmed numerically (null median 4.5 vs predicted 4.63).",
+  "file": "ml/src/airace_ml/experiments/gate.py",
+  "fix": "Replace the absolute 0.05 with a noise floor the gate measures itself, and record the rule in an ADR: fingerprint each balanced model a second time at MEASURE_SEED+1 (or split its k replies in halves), compute same-model distances, and require seed_mean > noise_mean by a margin (or a permutation/bootstrap test) and seed_mean < mix_mean, all against one population that includes the re-measures. Guard traits that are constant across the population (STD_FLOOR=1e-6 produced a distance of 66,666 when precision was 0 for all 15 models). Optionally raise k for G4 or average 2-3 measure seeds. Report both numbers and fix the detail text.",
+  "line": "123 (SEED_MIN_DISTANCE), 140 (MEASURE_SEED), 410-437 (eval_seed_variation, pass rule at 436), 1076-1104 (G4 population and pairs); ml/src/airace_ml/personality/fingerprint.py:363-375 (fingerprint_distance)",
+  "scenario": "fingerprint_distance measures each of the 10 traits in units of the population's own std (ddof 0), so the scale is fixed by construction: for the gate's n=15 population the RMS pairwise distance is sqrt(2*D*n/(n-1)) = 4.63. 'seed_mean > 0.05' therefore holds unless the three balanced seeds are almost identical. At fingerprint_k=3, re-measuring the same model with only the measure seed changed gives a mean distance of 2.26 (smallest pair 0.23), about 40-45x the threshold; different training seeds average about 3.0-3.6 and different mixes about 4.3-4.7. In a noise-only null (one model fingerprinted at 20 measure seeds placed in the gate's 12+3 roles), G4 passes 50% of the time and seed_mean never comes near 0.05; with real proxy models the verdict fails about 4% of the time from sampling noise alone, and the gate draws once. Sparse, noisy traits dominate: precision supplies 22% of the balanced seed distance and 43% of the noise distance; for slip_rate and register the measurement noise exceeds the across-seed spread. A full-scale G4 PASS therefore does not show spec §11 criterion 4 ('measurably different' seed fingerprints).",
+  "severity": "Important",
+  "sources": [
+   "gate_cli/correctness#1",
+   "extra/g4-noise-at-full-k#0"
+  ],
+  "title": "G4's 'measurably different' clause (seed distance > 0.05) sits about 40x below the fingerprint's own sampling noise, so it can never fail and G4 passes on pure measurement noise about half the time",
+  "id": "F9"
+ },
+ {
+  "evidence": "Read speed/legibility/growth/forgetting/preparation (gate.py:990-1223); eval_forgetting/eval_prep (gate.py:458-560) take single numbers. Probe g5_seeds.py gave the per-seed results above. Checked progress.md Task 20 rulings, task-20-dispatch-notes.md rulings 1-14 and ADR 0001.",
+  "file": "ml/src/airace_ml/experiments/gate.py",
+  "fix": "Run each G5, G6 and G7 arm (and preferably G2) for every seed (G6 already has creative-heavy bases for seeds 2-3 from G3) and decide as G3 does: the mean effect must exceed SPREAD_FACTOR x the seed std, or the criterion must hold on every seed. This adds about 12 runs (roughly 30-40 GPU minutes). If the GPU budget does not allow it, record a ruling and amend spec §4.12 to say which criteria are single-seed and why.",
+  "line": "1001, 1020, 1034-1054, 1126-1143, 1145-1165, 1167-1223 (only 1061 and 1089 loop over self.seeds); spec docs/superpowers/specs/2026-10-06-ai-race-architecture-design.md:210; plan:1868-1873",
+  "scenario": "A full gate with seeds 1,2,3 runs only differentiation (G3) and seed variation (G4) for every seed. G5's grown/ungrown arms, G6's code continuations, G7's four preparation runs and G2's legibility starter use self.seeds[0] only, and decide with strict comparisons (grown < ungrown, drop >= 3, recovery >= 50%, ratio <= 0.8) and no seed spread. At quick scale, repeating G5 on seeds 1-6 gave PASS, FAIL, PASS, PASS, PASS, FAIL (differences -0.094 to +0.025 nats). So the real gate can pass or fail G5/G6/G7 by seed alone: a FAIL can start a step-8 iteration chasing noise, or a step-8 change can 'fix' a criterion through noise, or M2 can be built on a lucky PASS. The plan's Task 20 table narrows this to 'seed 1', but no ledger ruling, ADR or spec amendment records dropping the spec's 3-seed requirement (dispatch ruling 4 covers only reusing the seed-1 starter and base).",
+  "severity": "Important",
+  "sources": [
+   "gate_cli/correctness#2",
+   "spec-coverage#0"
+  ],
+  "title": "Spec §4.12 says '3 seeds each', but G2, G5, G6 and G7 (and G1) are decided on seed 1 alone with zero-margin thresholds, so verdicts can flip by seed",
+  "id": "F10"
+ },
+ {
+  "evidence": "Probes p4_g7.py, p4b_g7pooled.py, p4c_alt.py call the real apply_noise, quality_score, cluster_near_duplicates, gate.garble_rate rules and creativity.words, with per-noise-kind attribution. A typo-focused alternative measure gives 0.728. The model itself was not simulated; the model-level conclusion is an inference from the data-level ratio.",
+  "file": "ml/src/airace_ml/experiments/gate.py",
+  "fix": "Re-derive the G7(a) measure and bar from real data before the gate run and record it as a ruling/ADR: e.g. count only noise-specific garbling (MOJIBAKE_CHARS and non-ASCII letter runs: light keeps 48% of garbled docs, thorough 16%); or score the excess over a clean baseline (garble_rate of the true continuations of the same held-out clean prefixes); or make web typo/garble noise stronger so cleaning removes more.",
+  "line": "128 (PREP_MAX_RATIO = 0.8), 512-544 (eval_prep), 550-560 (garble_rate), 1167-1210 (preparation runs); noise strengths ml/src/airace_content/noise.py:23-24; web rates ml/src/airace_content/assemble.py:69-79",
+  "scenario": "The real gate trains g7-web-light and g7-web-thorough (70% web, 4x128, 8.4M tokens) and compares the unknown-word share of 60 web completions. 484 real FineWeb docs through the real apply_noise with the web recipe (30 noise seeds pooled), cut with the real thresholds (light q>=0.15; thorough q>=0.65 plus dedup) and counted the gate's way: light 7.06% vs thorough 5.55% (ratio 0.786) with a 30k general vocab, 9.11% vs 7.46% (0.819) with an in-domain 30k vocab built like build_vocab; per-seed ratio 0.71-0.94. Clean docs alone have 4.9-7.0% unknown words (names, brands, rare words) and supply over half of the unknown words left after thorough cleaning; thorough removes only half of the typo docs by the graded-strength ruling. So even a model that copied its training data perfectly lands on the bar, and a 4x128 model's own non-words push the ratio toward 1. A likely outcome is G7 FAILS although cleaning works, sending the owner into the 'adjust and rerun' loop on GPU time.",
+  "severity": "Important",
+  "sources": [
+   "extra/real-text-cleaning-calibration#0"
+  ],
+  "title": "G7(a) cannot be expected to pass on real data: thorough cleaning lowers the unknown-word share of real web training text only to 79-82% of light's, at or above the 0.8 bar, before the model adds non-words of its own",
+  "id": "F13"
+ }
+]

@@ -1,0 +1,96 @@
+[
+ {
+  "evidence": "Probe test_judge_rename.py with the repo's _small_judge_config/_spy_train_run helpers, monkeypatching judge_module.os.replace to raise PermissionError for train_config.json: the judge dir listed ['meta.json','model.safetensors','result.json','telemetry.jsonl','train_config.json.tmp'] and the rerun's train_run resume flags were [False]. Code read of runs._write_json, GateRuns.train, trainer._finish/_save_resume and cli._os_problem. The existing judge test covers only a calibrate() failure after the record is written.",
+  "file": "ml/src/airace_ml/evals/judge.py",
+  "fix": "Retry os.replace a few times with a short sleep on PermissionError in both _write_json helpers. Make 'trained/completed' recoverable from what the trainer leaves on disk: write the config record before calling train_run, and treat model.safetensors + meta + result.json with status 'completed' and steps == cfg.steps (and a matching config) as done even when the final record is missing or still says 'started'.",
+  "line": "228-232 (_write_json), 235-243 (_trained), 277-292; ml/src/airace_ml/experiments/runs.py:90-95 (_write_json), 181, 211; trainer.py:565-604, 687-690 (_finish removes resume states)",
+  "scenario": "On Windows, a virus scanner or indexer briefly holding the just-written .tmp makes os.replace raise PermissionError; the trainer tolerates exactly this for its own renames, but the judge and gate record writers do not. (a) build_judge: after the ~1 h training, _finish saves the model and deletes every resume state, then _write_json(train_config.json) is refused; the CLI exits, the folder holds a complete model, result.json 'completed' and train_config.json.tmp but no record and no resume state. On rerun _trained() and can_resume() are both False, so it retrains from step 0 and the hour is lost (a Ctrl+C or crash in the same window does the same). (b) Gate: if the replace of gate_run.json fails right after a run finishes, the CLI reports 'error: could not read or write files: Access is denied' as a usage error (exit 2), the record still says 'started' and the resume state is gone, so the rerun retrains that run (and its children, whose parent token changes); a refusal mid-gate also stops the unattended hour-long run.",
+  "severity": "Minor",
+  "sources": [
+   "evals/robustness#0",
+   "gate_cli/correctness#8",
+   "gate_cli/robustness#5"
+  ],
+  "title": "A refused Windows rename of the post-training record (judge train_config.json, gate gate_run.json) throws away a finished training: os.replace has no retry and the trainer has already deleted the resume state",
+  "id": "F19"
+ },
+ {
+  "evidence": "Read GateRuns.train (reuse/resume only when record['key'] == key), trainer.execute (saved=None -> _remove_resume_states, telemetry opened 'w'), pick_device (silent fallback). test_a_finished_run_is_reused_only_while_everything_it_depends_on_is_unchanged confirms a config change retrains in place.",
+  "file": "ml/src/airace_ml/experiments/runs.py",
+  "fix": "Namespace run folders by scale and device (e.g. out/runs-quick, out/full-cuda) or prefix quick runs, or refuse with exit 2 when out_dir holds finished runs whose key differs only by scale, device or seed and ask for another --out. For `gate`, refuse a silent CPU fallback unless --device cpu is given. Update CLAUDE.md to use a separate --out for --quick.",
+  "line": "176-198 (key mismatch -> train_run(resume=False) into runs_dir/cfg.run_id); gate.py:996-1003, 1062-1069, 1132-1136, 1150-1159, 1172-1181, 1258; cli.py:356-362; CLAUDE.md:39",
+  "scenario": "Run names ('starter', 'g3-creative-s1', 'g5-grown', ...) do not depend on scale, device or seed 1, but the key in gate_run.json does. (a) After the full gate (~45-65 min of RTX 3050 training) into runs/gate-1, someone runs `gate --out runs/gate-1 --quick` as a sanity check after a step-8 edit, which CLAUDE.md:39's single-folder example invites. Every key differs, so each run retrains fresh into the same folder, overwriting model.safetensors, meta.json, result.json, telemetry, gate_run.json, report.md and outcome.json, and deleting resume state. The next full gate must retrain all 25 runs. (b) If CUDA is unavailable at that moment (e.g. after a driver update) and --device is omitted, pick_device silently falls back to the CPU and the full gate retrains every run on the CPU into the same folder (many hours), destroying the GPU runs; G1 can never pass on the CPU and the only sign is 'cpu' in the first progress line. Nothing warns.",
+  "severity": "Minor",
+  "sources": [
+   "gate_cli/robustness#1",
+   "gate_cli/integration#1"
+  ],
+  "title": "Gate reruns into the same --out with --quick, another device or another first seed silently overwrite the finished full-scale runs (same run names for both scales)",
+  "id": "F20"
+ },
+ {
+  "evidence": "is_well_formed(reply, judge) receives neither the prompt nor the other replies; legibility() judges each reply independently.",
+  "file": "ml/src/airace_ml/experiments/gate.py",
+  "fix": "Count a reply as well-formed only if it is not a near-copy of its prompt (e.g. under 50% of its word 3-grams in the prompt) and not a near-duplicate of another of the 20 replies. Show all 20 G2 exchanges in the report.",
+  "line": "1034-1054 (legibility); evals/judge.py:304-316 (is_well_formed); report.py:23",
+  "scenario": "If the starter answers every probe with the same fluent sentence ('I like to play with my friends.') or parrots the prompt, each reply has 4+ words, 3+ distinct, no repeated 3-gram and low judge perplexity, so 20/20 are well-formed and G2 passes although the model responded to nothing. ADR 0001 closed exactly these gaps (parroting, same answer to everything) for the bench categories but not for G2. The report shows only the first 10 of 20 exchanges, all 'open' probes, so no 'help' reply reaches the human reviewer.",
+  "severity": "Minor",
+  "sources": [
+   "gate_cli/correctness#4"
+  ],
+  "title": "G2 legibility passes a constant-reply or prompt-parroting model, and the report shows only the 10 'open' exchanges",
+  "id": "F35"
+ },
+ {
+  "evidence": "Read garble_rate and eval_prep: no check of output volume or repetition; cross-checked with the fake_gate fixture.",
+  "file": "ml/src/airace_ml/experiments/gate.py",
+  "fix": "Record each arm's word count and require the thorough arm's words to be at least about 0.8 x the light arm's; exclude repeated word 3-grams from the count as creativity's loop penalty does; otherwise fail with a detail saying why.",
+  "line": "550-560 (garble_rate), 1185-1203, 541-543 (decision)",
+  "scenario": "garble_rate is the share of pooled words not in known_vocab. A thorough-arm model that ends most completions at once (zero words) or loops on common words ('the the the') gets a garble rate near 0 and passes clean <= 0.8 x dirty against any light arm above 0. The gate's own fake fixture passes G7 with ' the the xq' against ' xq zz the' (tests/test_gate.py:866). 'Thorough cleaning lowers garbled output' can be satisfied by degenerate output.",
+  "severity": "Minor",
+  "sources": [
+   "gate_cli/correctness#5"
+  ],
+  "title": "G7(a) garble rate rewards empty or looping completions, so a degenerate thorough-cleaning model can pass",
+  "id": "F36"
+ },
+ {
+  "evidence": "runs.py:181; test_gate.py:547 asserts 'an unstable run is not reused'; no ledger ruling gives a reason.",
+  "file": "ml/src/airace_ml/experiments/runs.py",
+  "fix": "Reuse any finished run (completed or unstable_stopped) whose key and checkpoint match; it still fails its criteria through require_completed. Retrain only when the key changes.",
+  "line": "181 (reuse only status == 'completed')",
+  "scenario": "If g3-code-s2 stops unstable, G3 fails with 'stopped early'. Rerunning the same command (as CLAUDE.md suggests) retrains that run from scratch; with non-deterministic CUDA bf16 kernels it may complete this time and flip G3 to PASS with no change to data, code or config. Children of an unstable parent (G6's continuations) also retrain and re-bench every rerun. This contradicts the runs.py/gate.py docstrings ('A run that finished is reused while ...') and CLAUDE.md line 39.",
+  "severity": "Minor",
+  "sources": [
+   "gate_cli/correctness#6"
+  ],
+  "title": "A gate run that stopped unstable is retrained on every rerun, so on CUDA a gate criterion can be passed by rerolling",
+  "id": "F37"
+ },
+ {
+  "evidence": "write_gate_report builds the whole file every time with a fixed placeholder; _cmd_gate calls it on every run; no existing section is read back.",
+  "file": "ml/src/airace_ml/experiments/report.py",
+  "fix": "Carry over an existing '## Iterations' section from the target file when present and different from the placeholder, or keep iterations in a separate iterations.md that the report includes or links.",
+  "line": "259-270 (write_gate_report); cli.py:832-833",
+  "scenario": "Plan step 8 asks for each fix attempt (hypothesis, change, result) to be recorded in the report's 'Iterations' section and the gate to be rerun after each change. write_gate_report always writes ITERATIONS_PLACEHOLDER and overwrites out/report.md, so notes written into runs/gate-1/report.md are lost on the next rerun, and a rerun report copied over docs/reports/m1-feasibility.md replaces the iterations recorded there.",
+  "severity": "Minor",
+  "sources": [
+   "gate_cli/robustness#6"
+  ],
+  "title": "Every gate rerun regenerates report.md from scratch, discarding any 'Iterations' notes written into it",
+  "id": "F41"
+ },
+ {
+  "evidence": "sys.monitoring line coverage of the default suite (1247 passed): 0 executed lines in _data_identity, _growth_sequences, _Gate.lm, GateRuns._events.on_event; gate.py:836-852 unexecuted. Every default test replaces _load_inputs (test_gate.py:938). Code reading suggests _data_identity is correct today.",
+  "file": "ml/src/airace_ml/experiments/gate.py",
+  "fix": "Add a default-suite test on copies of tiny_data_root: _data_identity stable across calls and changed when tags.npz, offsets.npy, the tokenizer or a dataset's token count changes. In the fake-gate fixture vary inputs.identity between runs and assert everything retrains. Add a small _growth_sequences ordering test.",
+  "line": "721-735 (_data_identity), 764-775 (_growth_sequences), 836-852, 922-926; ml/src/airace_ml/experiments/runs.py:250-262",
+  "scenario": "Gate run reuse is keyed partly on _data_identity(root). The owner's plan is to rebuild data and rerun into the same --out (Task 20 step 8); if the identity failed to change, about an hour of runs trained on the old corpus would be reused silently and G3-G7 would describe the wrong data. The fake gate pins identity to 'data-1', the reuse test varies only code digests, and _data_identity, _growth_sequences, the successful _load_inputs path, _Gate.lm and GateRuns' progress forwarding never run in the default suite (only two slow tests touch them, asserting reuse not invalidation).",
+  "severity": "Minor",
+  "sources": [
+   "tests-health#4"
+  ],
+  "title": "No test checks that the gate's data identity changes when the corpus is rebuilt, and the default suite never runs the gate's real input loading",
+  "id": "F46"
+ }
+]

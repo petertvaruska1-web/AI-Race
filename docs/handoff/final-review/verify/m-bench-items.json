@@ -1,0 +1,110 @@
+[
+ {
+  "evidence": "Several probe BPEs: ['ĠB','and','ar','ĠSer','i','ĠB','eg','aw','an'] (9), ['ĠB','and','ar','ĠS','er','i','ĠBeg','a','wan'] (9), 10 in another. Running the deferred Task 16 real-tokenizer test with AIRACE_DATA at a tiny fixture build's 4096 tokenizer failed with [('knowledge-0168', 'Bandar Seri Begawan', 9, 8), ...]; 'Santo Domingo' took 4-7 of 8; every other exact answer fits. Real tok-v1 merges unknown, hence low-medium confidence.",
+  "file": "ml/src/airace_ml/skills/types.py",
+  "fix": "Before bench-v1 is first measured, give knowledge exact items headroom: a fixed budget of about 12, or per item max(8, 4 + len(answer)//2). Extraction already cuts at the first comma or newline, so extra tokens cost little. Re-run the real-tokenizer budget test as part of the Task 15 checklist.",
+  "line": "116 (ExactItem.max_new_tokens = 8); used by ml/src/airace_ml/skills/facts.py:164 (item knowledge-0168); answer from skills/kb_data/countries.json:88; guard test tests/test_bench.py:737-739",
+  "scenario": "knowledge-0168 ('The capital city of Brunei is called ___.') accepts only 'Bandar Seri Begawan'. Probe tokenizers split ' Bandar Seri Begawan' into 9-10 tokens; 'Begawan' occurs only about 14 times per MB of fact prose, so the real tok-v1 is unlikely to merge it much. If tok-v1 needs 9+ tokens, generation stops before the answer is complete, the extracted line never matches, and no model can ever pass the item (a permanent deflation of a frozen bench). On the owner's PC test_every_answer_fits_its_reply_budget_with_the_real_tokenizer starts running once data/tokenizer exists and would fail right after Task 15, which the non-technical owner cannot act on, forcing a bench-v1 change after it has been measured.",
+  "severity": "Minor",
+  "sources": [
+   "skills/correctness#2",
+   "skills/robustness#2",
+   "skills/integration#1",
+   "triage-deferred#2"
+  ],
+  "title": "Knowledge exact items keep the default 8-token reply budget, but bench-v1 asks for 'Bandar Seri Begawan', which a 4096-entry BPE likely splits into 9-10 tokens",
+  "id": "F24"
+ },
+ {
+  "evidence": "build_suite() is deterministic today: canonical-JSON sha256 5c47335940e0c3ac... under PYTHONHASHSEED 0 and 987654. grep over tests/test_bench.py and the scoped test files found no digest, golden file or pinned item content; only ids and counts are asserted (test_code_instr_grammar.py:384, 764).",
+  "file": "ml/src/airace_ml/evals/suite.py",
+  "fix": "Add a test that hashes canonical JSON of build_suite().items (asdict per item, sort_keys: prompts, options, answers, check_args, tags, in order) against a recorded digest, with a message that any intended change must bump SUITE_VERSION. Pin it after the function-prompt and other pre-freeze fixes land; optionally store the digest in the bench report.",
+  "line": "87 (SUITE_VERSION), 116-129 (_bench_items regenerated from the skills generators); skills/types.py:21-28 (skill_rng); ml/pyproject.toml:5 (numpy>=2.5, no upper bound)",
+  "scenario": "Spec §4.7 keys leaderboards on (bench version, category) and the rulings treat bench-v1 as frozen, but the suite is rebuilt in every process from generators, kb_data JSON, MiniPy (code.py:477-480 accepts programs by running them), checkers (instructions.py:267) and numpy Generator choice/permutation/integers. A KB fact fix, a word added to a generator table, a checker or MiniPy tweak, the function-prompt fix, or a numpy bump that changes Generator streams (NEP 19 gives no stream-compatibility promise) would produce different items still labelled 'bench-v1', and scores from before and after would be silently incomparable. The gate's code digest only triggers re-measurement; nothing forces a version bump.",
+  "severity": "Minor",
+  "sources": [
+   "skills/correctness#3",
+   "skills/robustness#1"
+  ],
+  "title": "Nothing pins the bench-v1 item set: it is regenerated from code, KB data and numpy streams at runtime, so it can drift silently under the same version label",
+  "id": "F25"
+ },
+ {
+  "evidence": "tagprobe.py: run_benchmarks(ScriptedLM(tok), tok, max_items_per_category=10).tag_breakdown() prints {}. The sampler messages for the brief's cases include 'mixture weights must have a positive, finite sum...'.",
+  "file": "ml/tests/test_bench.py",
+  "fix": "In test_bench.py:78 use enough items for tags to qualify and assert the breakdown is non-empty before the range check. In test_sampler.py use multi-letter names ('alpha'/'beta') and match the offending name with a regex; assert 'sum' for the all-zero case.",
+  "line": "76-78 (test_report_serializable_and_tags); ml/tests/test_sampler.py:23-28 (test_invalid_mixtures)",
+  "scenario": "(1) With max_items_per_category=10 no tag reaches MIN_TAG_ITEMS, so tag_breakdown() is {} and the all(0 <= v <= 100) check is vacuous; NaN or 250 would pass. (2) test_invalid_mixtures checks any(k in str(e.value) for k in weights) with names 'a'/'b'; 'a' appears in every English message, so an error naming the wrong dataset or none would pass. Other tests partly cover both properties (test_bench.py:524-548; test_sampler.py:174-181, 205-216).",
+  "severity": "Minor",
+  "sources": [
+   "tests-health#2"
+  ],
+  "title": "Two brief tests check nothing: an empty tag breakdown, and dataset names that are single letters found in every error message",
+  "id": "F44"
+ },
+ {
+  "evidence": "Counted tag prefixes per category over build_suite(); grepped ledger and ADR for a tag-scheme ruling: none.",
+  "file": "ml/src/airace_ml/skills/grammar.py",
+  "fix": "Before bench-v1 freezes, give every item topic:, skill: and fmt: tags (e.g. skill = family/relation, fmt = mc/pair/exact/check/story, topic = generator topic or 'other'); tags are not item text, so scores do not change. Otherwise record a ruling deferring the full tag space to M4.",
+  "line": "820 (also reasoning.py:451, patterns.py:198, code.py:981/1013, instructions.py:614, facts knowledge/consistency items, evals/creativity.py:136)",
+  "scenario": "Spec §4.7/§4.9: every category stores per-item results tagged by topic x skill x format, feeding discoveries. In bench-v1, language/reasoning/pattern have only fam:; knowledge/consistency rel:+topic:; coding fam:+fmt:; instruction fam:+topic:; creativity fmt:+topic:. No item has all three axes and no skill: axis exists, so the M4 discovery engine and M2 registry reports lack the combinatorial space. The plan narrowed tags to fam:<name> without a recorded ruling.",
+  "severity": "Minor",
+  "sources": [
+   "spec-coverage#2"
+  ],
+  "title": "Benchmark items are not tagged topic x skill x format as spec §4.7 requires; most categories carry one axis and none carries a skill axis",
+  "id": "F49"
+ },
+ {
+  "evidence": "Dumped live bench-v1 items via suite._bench_items(); read kb.py accepted_answers and scoring.py:56-70. The plural forms are not objects of any relation, so adding them changes no distractor or false-fact draw.",
+  "file": "ml/src/airace_ml/skills/kb_data/animals.json",
+  "fix": "Set animal_class also_accepted to the plural of each class (mammal->mammals, bird->birds, fish->fishes, reptile->reptiles, amphibian->amphibians, insect->insects, arachnid->arachnids). Only the exact items' answer lists change; the item stream stays the same.",
+  "line": "9 (animal_class also_accepted {}); facts at 64, 90, 100, 125",
+  "scenario": "knowledge-0151 (sloth), 0152 (owl), 0181 (emu) and 0198 (polar bear) ask 'What is the animal group of ...?' / 'Which group of animals ...?', which invite a plural, but accept only 'mammal'/'bird'. exact_match normalizes only quotes, trailing punctuation and case, so 'mammals' is wrong: 4 of the 50 free-answer knowledge items, up to 8% of the free-answer score for a model that knows the facts. The same accepted list feeds the personality factual probes.",
+  "severity": "Minor",
+  "sources": [
+   "extra/bench-knowledge-truth-audit#0"
+  ],
+  "title": "Free-answer animal-class items reject the plural answers people usually give ('mammals', 'birds')",
+  "id": "F53"
+ },
+ {
+  "evidence": "Live dump of exact knowledge items; sampled reasoning_train_docs; read the space.json also_accepted block.",
+  "file": "ml/src/airace_ml/skills/kb_data/space.json",
+  "fix": "Add the bare digits to each ordinal ('first': ['1st', '1'], ... 'eighth': ['8th', '8']); none is an object, so no rng or distractor change.",
+  "line": "9-18 (planet_order also_accepted); facts at 47 (Venus), 50 (Jupiter)",
+  "scenario": "knowledge-0153 (Jupiter) accepts ['fifth','5th'] and knowledge-0194 (Venus) ['second','2nd']; a model answering 'Answer: 5' or 'Answer: 2' is scored wrong, although the reasoning training docs teach 'Answer: <digit>' (reasoning.py:382) and sibling numeric relations accept digits (shape_sides, animal_legs).",
+  "severity": "Minor",
+  "sources": [
+   "extra/bench-knowledge-truth-audit#1"
+  ],
+  "title": "Planet-order free answers accept '5th' but not the bare digit '5'",
+  "id": "F54"
+ },
+ {
+  "evidence": "Dumped plan_false_facts(kb, stream(0,'false_facts'), 300) and bench items; the 40 animal_class plan entries include peacock/rooster/stork -> reptile; other animal_class false facts checked are clearly false.",
+  "file": "ml/src/airace_ml/skills/kb_data/animals.json",
+  "fix": "Add never_false pairs [<bird>, 'reptile'] for every bird subject (the mechanism already used for lizard/zero, Hagia Sophia/Greece). Some draws change, acceptable before bench-v1 freezes.",
+  "line": "3-10 (animal_class: falsifiable true, never_false []); bird facts e.g. 108 swan, 115 peacock, 120 stork, 123 rooster, 132 swallow",
+  "scenario": "The seed-0 FalseFactPlan plants 'The peacock/rooster/stork is a kind of reptile.' as false-fact noise and G7 (gate.py:573-615) scores the model wrong when it prefers ' reptile'. In modern biology birds are a group within the reptiles, so these 'falsehoods' are true under another reading, breaking the KB's falsifiable contract (kb.py docstring). Reptile also appears as a wrong option in knowledge-0075 (swan) and consistency-011 (swallow); the keyed 'bird' is still best, so the MC harm is small.",
+  "severity": "Minor",
+  "sources": [
+   "extra/bench-knowledge-truth-audit#2"
+  ],
+  "title": "Birds get 'reptile' as a distractor and as a planted false fact, though under the modern grouping birds are reptiles",
+  "id": "F55"
+ },
+ {
+  "evidence": "Live dump of knowledge items; baby_animal lists both chicken=chick and hen=chick.",
+  "file": "ml/src/airace_ml/skills/kb_data/animals.json",
+  "fix": "Drop the hen row from baby_animal (chicken=chick covers it); the small sampling shift is acceptable before bench-v1 freezes.",
+  "line": "706 ([\"hen\", \"chick\"] in baby_animal)",
+  "scenario": "knowledge-0076 asks 'Fill in the blank. A newborn hen is known as a ___.' (key chick) and training text says 'A baby hen is called a chick.' The keyed answer is still the only plausible option, but the wording is wrong by definition and duplicates chicken=chick.",
+  "severity": "Minor",
+  "sources": [
+   "extra/bench-knowledge-truth-audit#3"
+  ],
+  "title": "'A newborn hen' is a self-contradictory bench subject (a hen is an adult female chicken)",
+  "id": "F56"
+ }
+]

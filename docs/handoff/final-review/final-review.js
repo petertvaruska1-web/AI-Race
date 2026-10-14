@@ -100,7 +100,7 @@ const SKEPTICS = [
 function runAgent(prompt, opts) {
   if (opts && CACHED.has(opts.label)) {
     return agent(`Run this exact command with the Bash tool and return its JSON output through the StructuredOutput tool, copying every field and every string verbatim (do not summarize, shorten, re-check or change anything):\npython3 -c "import json,sys; print(json.dumps(json.load(open(sys.argv[1], encoding='utf-8'))[sys.argv[2]], ensure_ascii=False))" "${CACHE_FILE}" "${opts.label}"`,
-      { label: `load:${opts.label}`, phase: opts.phase, schema: opts.schema, effort: 'low' })
+      { label: `load:${opts.label}`, phase: opts.phase, schema: opts.schema, model: 'haiku' })
   }
   return agent(prompt, opts)
 }

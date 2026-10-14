@@ -1,0 +1,45 @@
+[
+ {
+  "evidence": "Two probes on the CPU under torch.autocast(bfloat16) counted the unique storages autograd saves (saved_tensors_hooks, deduplicated by storage). Attention was modelled like the CUDA flash/memory-efficient kernels, which save q/k/v/out. The judge shape measured 203 KiB/token (fp32 residual/norm 51, bf16 384-wide 36.75, FFN 64, q/k/v/out 20, log-softmax 16). Totals: judge 7.13 GiB (core/correctness) and 7.70 GiB peak RSS growth in a real trainer-style step at 128x256 (core/robustness probe_peak.py); starter 1.26 GiB; 16x640x1024 about 11 GiB. Only the starter shape was ever run on the GPU (Task 8). No GPU memory check exists for the judge recipe. Not verified on a GPU here.",
+  "file": "ml/src/airace_ml/train/trainer.py",
+  "fix": "In _train_step, split the cfg.batch_size rows into micro-batches capped by a token budget (for example at most 8192 tokens). Run forward+backward per micro-batch with the loss scaled by rows_in_micro/batch_size and accumulate the logged loss. Then do one clip, one spike check and one optimizer step, with one host sync. The math is identical up to summation order, and resume equivalence is unaffected because the sampler draws the same rows. Drop `logits` before backward, or compute cross-entropy in chunks. Add a @pytest.mark.gpu test that runs one step of judge_train_config() (and the largest legal shape) on CUDA and asserts torch.cuda.max_memory_allocated() stays well under 8 GiB. As a stopgap before the owner's judge run, lower the judge recipe to batch_tokens=16384 (about 3.6 GiB), and measure max_memory_allocated on the owner's card before the 1 h build.",
+  "line": "510-519 (_train_step: one forward of cfg.batch_size rows; `logits` stays referenced through backward); recipe at ml/src/airace_ml/evals/judge.py:123-135 (batch_tokens=32768)",
+  "scenario": "The owner runs `airace-ml build-judge` on Windows 11 with the RTX 3050 8 GB. The Ryzen 5 5500 has no iGPU, so the desktop also lives on that card. judge_train_config() gives 128 rows x 256 tokens per step, all sent through one bf16-autocast forward. The bf16 logits stay alive, a full fp32 copy is made for cross_entropy, and the whole batch is backpropagated. There is no gradient accumulation anywhere in ml/src. Estimated peak: about 5.9-6.4 GiB of saved activations, plus 0.75-1.0 GiB of logits and logit-gradient temporaries, plus 0.23-0.25 GiB of weights, grads and AdamW state, plus the CUDA context. That is about 7.1-7.7 GiB, above the roughly 6.5-7.3 GiB a WDDM display card leaves a process. Likely outcomes: (a) torch.OutOfMemoryError at step 1 with no guard, so the ~1 h judge build the gate needs never starts; or (b) NVIDIA's default sysmem fallback on Windows spills over PCIe 3.0 x8 and the build runs several times slower with no message. The same limit rules out valid in-range shapes: 16x640 at ctx 1024 needs about 9-11 GiB, and 12x512x1024 about 6.8 GiB. That contradicts spec §4.2's claim that the system ceiling is something the reference hardware meets. The gate's own runs fit (starter about 1.3 GiB, early shape about 2.5 GiB).",
+  "severity": "Important",
+  "sources": [
+   "core/correctness#0",
+   "core/robustness#0"
+  ],
+  "title": "Trainer runs a whole batch_tokens batch in one forward/backward with no micro-batching, so the reference judge recipe (8x384x256, 32768 tokens/step) likely does not fit the RTX 3050's 8 GB, and the spec's largest shapes cannot train at all",
+  "id": "F2"
+ },
+ {
+  "evidence": "Four probes on tiny data roots built like conftest.tiny_data_root. Parent last_mixture {'creative': 0.5, 'notebook': 0.5} (or {'web': 0.5, 'notebook': 0.5}, {'creative': 0.833, 'notebook': 0.167}, {'creative': 0.667, 'notebook': 0.333}); child without notebook raised MixtureError: dataset 'notebook' has weight but no usable documents. Child with a different notebook completed with tokens_per_dataset {'code': 2368, 'web': 320, 'notebook': 384} and last_mixture {'code': 0.7, 'web': 0.15, 'notebook': 0.15}. test_replay_notebook_and_coaching only covers a parent without custom datasets.",
+  "file": "ml/src/airace_ml/train/trainer.py",
+  "fix": "Decide and document the contract (ADR or spec §4.5). Recommended: when blending replay, drop CUSTOM_DATASET_IDS (notebook, coaching) from the parent mixture and renormalize the rest (replay contributes nothing if nothing is left); record what was dropped in the run summary. Alternative: persist the parent's encoded notebook/coaching docs privately next to its checkpoint (server-side only, R2) and replay those, or require the worker to resend them and reword the error ('the replayed mix includes your notebook; include notebook entries or lower replay'). Add trainer tests for a notebook parent followed by a replay child with no notebook, and for a grandchild.",
+  "line": "186-197 (_prepare: effective_mixture over parent.last_mixture at 188, load_pools with this run's custom docs at 193), 203-211 (_custom_docs always returns the key), 666 (last_mixture = blended stable mix); ml/src/airace_ml/data/sampler.py:96-111, 152-185; ml/src/airace_ml/train/config.py:92-109",
+  "scenario": "Parent A trains with mixture {creative: 1, notebook: 1} and a notebook, so A's last_mixture is {creative: 0.5, notebook: 0.5}. (1) Child B continues from A with mixture {code: 1}, replay 0.3 and no notebook (the player cleared it, or the CLI user didn't repeat it). effective_mixture gives notebook a positive weight, load_pools builds DocPool.from_docs([]), and train_run raises MixtureError \"dataset 'notebook' has weight but no usable documents\", an error about a dataset the player never weighted in this run (shown by the CLI as a usage error). (2) Child B instead sends a different notebook: the run completes and spends about 15% of its tokens on the new notebook as 'review of what it knows', data the parent never saw, and B's last_mixture records notebook 0.15, so every later descendant with replay > 0 hits the same failure or substitution. The checkpoint does not keep the notebook/coaching text (R2), so the trainer cannot replay what the parent actually learned; replay always uses the current notebook and coaching. Coaching behaves the same. A grandchild of test_replay_notebook_and_coaching's run 'b' hits the error. No M1 gate impact (G6 uses no notebook), but it breaks two core player controls together from M2 on (spec §4.5, C2 notebook).",
+  "severity": "Important",
+  "sources": [
+   "core/robustness#1",
+   "core/correctness#1",
+   "core/integration#0",
+   "spec-coverage#4"
+  ],
+  "title": "Replay ('Review what it knows') of a parent whose mix included Notebook or Coaching fails with a MixtureError, or silently trains the child's current notebook under the review share, and the share propagates down the lineage",
+  "id": "F7"
+ },
+ {
+  "evidence": "Probe g5_replay.py on the quick gate's data root: starter vs g5-ungrown had 20/20 identical batches, starter vs g5-grown 20/20. At full scale both continuation shapes keep ctx_len 256, so the same holds. trainer._prepare has no dependence on the parent or lineage position.",
+  "file": "ml/src/airace_ml/experiments/gate.py",
+  "fix": "Give both continuation arms a seed different from the starter's but equal to each other (e.g. seed + 10_000) so they stay paired. Better, for M2 too: have the trainer derive the sampler seed from (cfg.seed, the parent's tokens_trained_total or version_id) so any continuation draws fresh data and 'train more' never replays the parent's stream.",
+  "line": "1130-1136 (growth(): both arms seed=self.seeds[0], BALANCED_MIX); root cause ml/src/airace_ml/train/trainer.py:194 (MixtureSampler seeded only by cfg.seed)",
+  "scenario": "The starter (seed 1, BALANCED_MIX, ctx 256) draws its batches from MixtureSampler(default_rng(1)). g5-grown (EARLY_SHAPE) and g5-ungrown (STARTER_SHAPE) use the same seed, normalized mixture (replay 0), prep, pools, ctx and batch_size, so both arms get the identical batches in the same order. G5 therefore measures growth on a repeat pass over 4.2M tokens the starter has already seen. Spec §4.12.5 asks for 'the same extra tokens'; the verdict says nothing about growing and then training on new data, which is what a player's next run does, and a larger model's advantage on repeated data differs from its advantage on fresh data.",
+  "severity": "Important",
+  "sources": [
+   "gate_cli/correctness#0"
+  ],
+  "title": "G5 continuation runs retrain on the starter's exact token stream, so the 'extra tokens' are a verbatim second epoch",
+  "id": "F8"
+ }
+]
