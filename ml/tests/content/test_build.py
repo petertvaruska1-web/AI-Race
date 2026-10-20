@@ -1387,7 +1387,7 @@ def test_the_summary_and_warnings_survive_a_cp1252_redirect_and_a_non_ascii_path
 def test_an_error_naming_a_non_ascii_path_prints_on_a_cp1252_redirect(tmp_path, monkeypatch):
     """The error line is the other place the path is printed. The streams are fresh ones, as the
     command line meets them, and the path has letters cp1252 cannot encode."""
-    out_bytes, stdout = _cp1252_console()
+    _, stdout = _cp1252_console()
     err_bytes, stderr = _cp1252_console()
     monkeypatch.setattr(sys, "stdout", stdout)
     monkeypatch.setattr(sys, "stderr", stderr)
