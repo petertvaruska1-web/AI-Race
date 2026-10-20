@@ -21,6 +21,9 @@ consistency group         its members' multiple-choice answers (as for         m
 
 A plain prompt is ``encode_doc(prompt)`` and its options start with a space; a chat prompt is
 ``encode_chat([("user", prompt)], True)`` and its options do not (AI turns start without one).
+No plain prompt ends in whitespace: a function item's prompt stops at the closing quotes of the
+docstring and its reply starts with the newline, because training text merges that newline with
+the body's indentation into one token that a prompt ending on the bare newline would never reach.
 
 Consistency measures robust knowledge: a group of paraphrases of one question counts only when
 the model answers every paraphrase correctly. Its chance, ``1 / options``, is what a model that
