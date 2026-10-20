@@ -103,6 +103,7 @@ from airace_ml.experiments.runs import (
     GateRuns,
     _cached,
     _plain,
+    _write_json,
     source_digest,
 )
 from airace_ml.infer.lm import LanguageModel, TorchLM
@@ -170,6 +171,7 @@ CONTINUATION_SEED_OFFSET = 10_000
 G3_TRANSCRIPT_PROBES: tuple[str, ...] = ("creative-10", "factual-01")
 
 RUNS_DIR = "runs"
+SETUP_FILE = "gate_setup.json"
 BENCH_FILE = "gate_bench.json"
 FINGERPRINT_FILE = "gate_fingerprint.json"
 NOISE_FINGERPRINT_FILE = "gate_fingerprint_again.json"
@@ -1589,6 +1591,39 @@ class _Gate:
         return criterion, used
 
 
+def _setup_words(setup: object) -> str:
+    """How a gate's setup (:data:`SETUP_FILE`) reads in a message."""
+    if not isinstance(setup, dict):
+        return "a gate set up in a way this version cannot read"
+    kind = "a quick run" if setup.get("quick") else "a full run"
+    where = {"cuda": "the GPU", "cpu": "the CPU"}.get(setup.get("device"), "another device")
+    seeds = setup.get("seeds")
+    shown = ", ".join(map(str, seeds)) if isinstance(seeds, list) else "?"
+    return f"{kind} on {where} with seeds {shown}"
+
+
+def _check_setup(out: Path, quick: bool, device: torch.device, seeds: Sequence[int]) -> None:
+    """Record the setup of the gate in ``out`` on its first use, and refuse any other setup there
+    afterwards. The runs are named the same whatever the scale, the device or the first seed, so
+    a quick run, a run on another device or one with other seeds would train over the finished
+    runs of the gate that is there (and the full gate takes about an hour and a half)."""
+    setup = {"quick": quick, "device": device.type, "seeds": list(seeds)}
+    record = out / SETUP_FILE
+    if not record.exists():
+        out.mkdir(parents=True, exist_ok=True)
+        _write_json(record, setup)
+        return
+    try:
+        found: object = json.loads(record.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        found = None
+    if found != setup:
+        raise GateSetupError(
+            f"{out} already holds {_setup_words(found)}, and this is {_setup_words(setup)}. "
+            f"Running here would train over its finished runs; use another --out folder."
+        )
+
+
 def _check_seeds(seeds: Sequence[int]) -> tuple[int, ...]:
     seeds = tuple(seeds)
     if not seeds or any(isinstance(s, bool) or not isinstance(s, int) or s < 0 for s in seeds):
@@ -1633,6 +1668,7 @@ def run_gate(
     root = Path(data_root)
     out = Path(out_dir).resolve()
     inputs = _load_inputs(root, device, scale)
+    _check_setup(out, quick, device, seeds)
     training_code = source_digest(TRAINING_SOURCES)
     mode = "quick (tiny models: a check of the setup, not of feasibility)" if quick else "full"
     on_progress(f"gate: {mode}; seeds {', '.join(map(str, seeds))}; on {device.type}; into {out}")

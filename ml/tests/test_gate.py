@@ -1212,10 +1212,10 @@ def fake_gate(tmp_path, monkeypatch, tiny_tok):
         lambda lm, tok, kb, plan: 0.4 if lm.name.startswith("g7-facts-unchecked") else 0.1,
     )
 
-    def run(device="cuda", **options):
+    def run(device="cuda", out=None, **options):
         return gate.run_gate(
             tmp_path / "data",
-            tmp_path / "out",
+            out if out is not None else tmp_path / "out",
             device=device,
             include_cpu_speed=True,
             on_progress=lambda line: None,
@@ -1223,6 +1223,7 @@ def fake_gate(tmp_path, monkeypatch, tiny_tok):
         )
 
     log.run = run
+    log.out = tmp_path / "out"
     log.inputs = inputs
     return log
 
@@ -1390,6 +1391,52 @@ def test_g7_has_no_ratio_where_the_light_text_has_nothing_garbled(fake_gate):
     g7 = fake_gate.run().criteria[6]
     assert g7.data["data_garble_light"] == 0.0 and g7.data["data_ratio"] is None
     assert _finite_data(g7.data) and "nothing garble-like" in g7.detail
+
+
+def test_a_gate_folder_remembers_its_setup(fake_gate):
+    fake_gate.run()
+    record = fake_gate.out / "gate_setup.json"
+    assert json.loads(record.read_text(encoding="utf-8")) == {
+        "quick": False,
+        "device": "cuda",
+        "seeds": [1, 2, 3],
+    }
+    trained = len(fake_gate.trained)
+    fake_gate.run()  # the same setup carries on, reusing what it has
+    assert len(fake_gate.trained) == trained
+
+
+@pytest.mark.parametrize(
+    "options, then, now",
+    [
+        ({"quick": True}, "a full run on the GPU with seeds 1, 2, 3", "a quick run on the GPU"),
+        ({"device": "cpu"}, "on the GPU", "a full run on the CPU with seeds 1, 2, 3"),
+        ({"seeds": (2, 3, 4)}, "with seeds 1, 2, 3", "with seeds 2, 3, 4"),
+        ({"seeds": (1, 2)}, "with seeds 1, 2, 3", "with seeds 1, 2"),
+    ],
+)
+def test_a_gate_folder_refuses_another_setup_before_training_over_its_runs(
+    fake_gate, options, then, now
+):
+    fake_gate.run()
+    runs_before = sorted(p.name for p in (fake_gate.out / "runs").iterdir())
+    trained, record = len(fake_gate.trained), (fake_gate.out / "gate_setup.json").read_bytes()
+    with pytest.raises(gate.GateSetupError) as refused:
+        fake_gate.run(**options)
+    message = str(refused.value)
+    assert then in message and now in message and "use another --out" in message
+    assert len(fake_gate.trained) == trained  # nothing was trained
+    assert (fake_gate.out / "gate_setup.json").read_bytes() == record
+    assert sorted(p.name for p in (fake_gate.out / "runs").iterdir()) == runs_before
+    fake_gate.run(out=fake_gate.out.parent / "elsewhere", **options)  # a folder of its own works
+
+
+def test_a_gate_folder_with_an_unreadable_setup_is_refused_too(fake_gate):
+    fake_gate.out.mkdir()
+    (fake_gate.out / "gate_setup.json").write_text('{"quick": ', encoding="utf-8")
+    with pytest.raises(gate.GateSetupError, match="use another --out"):
+        fake_gate.run()
+    assert fake_gate.trained == []
 
 
 def test_g5_continuations_share_a_seed_that_is_not_the_first_models(fake_gate):

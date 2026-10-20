@@ -277,7 +277,13 @@ def _parser() -> argparse.ArgumentParser:
         f"Run the same command again: finished runs are reused, and an unfinished one carries on "
         f"from its last saved point (progress is saved every {CHECKPOINT_EVERY} steps).",
     )
-    gate.add_argument("--out", type=Path, required=True, help="folder for the gate's results")
+    gate.add_argument(
+        "--out",
+        type=Path,
+        required=True,
+        help="folder for the gate's results; a quick run, a run on another device and a run "
+        "with other seeds each need a folder of their own",
+    )
     gate.add_argument(
         "--seeds",
         type=_seeds,
