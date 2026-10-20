@@ -21,6 +21,7 @@ from airace_ml.tokenizer import Role
 BLANK = "___"
 N_KNOWLEDGE_MC = 150
 N_KNOWLEDGE_EXACT = 50
+KNOWLEDGE_EXACT_TOKENS = 12  # reply budget of a free answer: the longest names split into 9 or 10
 CLOZE_SHARE = 0.4  # share of knowledge items asked as a fill-in-the-blank statement
 N_OPTIONS = 4
 MIN_SENTENCES, MAX_SENTENCES = 3, 6
@@ -199,7 +200,16 @@ def knowledge_bench_items(kb: KB, rng: np.random.Generator) -> list[MCItem | Exa
             options, answer_index = _shuffled_options(kb, fact, rng)
             items.append(MCItem(item_id, "knowledge", prompt, options, answer_index, tags))
         else:
-            items.append(ExactItem(item_id, "knowledge", prompt, kb.accepted_answers(fact), tags))
+            items.append(
+                ExactItem(
+                    item_id,
+                    "knowledge",
+                    prompt,
+                    kb.accepted_answers(fact),
+                    tags,
+                    max_new_tokens=KNOWLEDGE_EXACT_TOKENS,
+                )
+            )
     return items
 
 

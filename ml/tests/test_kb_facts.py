@@ -437,7 +437,8 @@ def test_knowledge_bench_composition():
         rel = next(t for t in it.tags if t.startswith("rel:")).removeprefix("rel:")
         assert it.tags == (f"rel:{rel}", f"topic:{kb.relations[rel].topic}")
     for it in exact:
-        assert it.extract == "first_line" and it.max_new_tokens == 8 and 1 <= len(it.answers) <= 5
+        # 12 and not the default 8: 'Bandar Seri Begawan' alone can take 9 or 10 tokens
+        assert it.extract == "first_line" and it.max_new_tokens == 12 and 1 <= len(it.answers) <= 5
 
 
 def test_every_possible_benchmark_prompt_has_exactly_one_answer():
