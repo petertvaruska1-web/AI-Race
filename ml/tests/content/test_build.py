@@ -1309,7 +1309,10 @@ def test_cli_warns_about_exhausted_sources(tiny_build, tmp_path, capsys):
     (fixtures / "cosmo_openstax.jsonl").write_text("", encoding="utf-8")  # runs dry at once
     argv = ["build", "--scale", "tiny", "--datasets", "educational", "--fixtures", str(fixtures)]
     assert main([*argv, "--out", str(root)]) == 0
-    warnings = capsys.readouterr().err.splitlines()
+    # progress lines share stderr with the warnings; there is still exactly one warning
+    warnings = [
+        line for line in capsys.readouterr().err.splitlines() if line.startswith("warning:")
+    ]
     assert len(warnings) == 1
     assert warnings[0].startswith("warning: educational: cosmo_openstax ran out at 0 of 30 ")
 
@@ -1321,7 +1324,8 @@ def test_cli_reports_a_source_in_an_unexpected_format(tiny_build, tmp_path, caps
     (fixtures / "gutenberg.jsonl").write_text('{"TEXT": "x", "METADATA": "?"}\n', encoding="utf-8")
     argv = ["build", "--scale", "tiny", "--datasets", "books", "--fixtures", str(fixtures)]
     assert main([*argv, "--out", str(root)]) == 1
-    assert capsys.readouterr().err.startswith("error: source 'gutenberg'")
+    # the error is the last line of stderr, after the progress lines
+    assert capsys.readouterr().err.splitlines()[-1].startswith("error: source 'gutenberg'")
 
 
 def test_cli_reports_a_missing_datasets_package(tmp_path, monkeypatch, capsys):

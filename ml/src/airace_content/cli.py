@@ -8,7 +8,10 @@ reads them from local ``<source id>.jsonl`` files, so a tiny build can run offli
 0 on success, 2 for a bad argument, 1 when the build cannot run as asked (a partial build that
 would need a new tokenizer, a source in an unexpected format, no ``datasets`` package, or a network
 problem that waiting did not get past: run the same command again). A source that runs out before
-its quota is met gets one ``warning:`` line on stderr.
+its quota is met gets one ``warning:`` line on stderr. Progress lines go to stderr as the build
+runs (each source as it opens, then every 20,000 rows or 30 s, then dedup, the tokenizer and each
+corpus written): if no new line appears for 15 minutes, press Ctrl+C and run the same command
+again.
 """
 
 import argparse
@@ -133,6 +136,11 @@ def format_warnings(summary: BuildSummary) -> list[str]:
     return lines
 
 
+def _progress(message: str) -> None:
+    """One progress line on stderr, flushed so that a redirected log shows it at once."""
+    print(message, file=sys.stderr, flush=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         args = _parser().parse_args(argv)
@@ -152,7 +160,12 @@ def main(argv: list[str] | None = None) -> int:
     out_root = args.out if args.out is not None else data_root()
     try:
         summary = build_corpus(
-            args.scale, out_root, fetch, datasets=datasets, retrain_tokenizer=args.retrain_tokenizer
+            args.scale,
+            out_root,
+            fetch,
+            datasets=datasets,
+            retrain_tokenizer=args.retrain_tokenizer,
+            progress=_progress,
         )
     except (BuildError, SourceFormatError, DatasetsUnavailable) as e:
         print(f"error: {e}", file=sys.stderr)

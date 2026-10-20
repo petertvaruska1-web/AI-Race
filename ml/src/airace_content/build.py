@@ -73,6 +73,7 @@ from airace_content.manifest import (
     write_record,
     write_vocab,
 )
+from airace_content.progress import Pace, Progress, silent
 from airace_content.sources import (
     FORMAT_CHECK_ROWS,
     SOURCES,
@@ -194,9 +195,15 @@ def purchase_ranks(n: int, rng: np.random.Generator) -> np.ndarray:
 
 
 def tag_documents(
-    docs: list[AssembledDoc], texts: list[str], known_vocab: set[str], seed: int, dataset_id: str
+    docs: list[AssembledDoc],
+    texts: list[str],
+    known_vocab: set[str],
+    seed: int,
+    dataset_id: str,
+    progress: Progress = silent,
 ) -> DocTags:
     """Steps 5-9 for one dataset (quality by ``structured_quality`` for ``STRUCTURED_DATASETS``)."""
+    progress(f"{dataset_id}: scoring and finding near-duplicates among {len(texts):,} documents")
     if dataset_id in STRUCTURED_DATASETS:
         quality = [structured_quality(t) for t in texts]
     else:
@@ -315,7 +322,7 @@ def sources_needed(datasets: Iterable[str], *, simple_vocab: bool) -> list[str]:
     return [source_id for source_id in SOURCES if source_id in ids]
 
 
-def check_sources(source_ids: Iterable[str], fetch: Fetch) -> None:
+def check_sources(source_ids: Iterable[str], fetch: Fetch, progress: Progress = silent) -> None:
     """Open each source and read rows until one has the format its adapter reads (at most
     ``FORMAT_CHECK_ROWS``), so a config, access or format problem in any source stops the build
     before it reads the first one for real. A source with no rows at all passes: the build
@@ -323,6 +330,7 @@ def check_sources(source_ids: Iterable[str], fetch: Fetch) -> None:
     any other error from opening a source becomes a ``BuildError`` that names the source."""
     for source_id in source_ids:
         spec = SOURCES[source_id]
+        progress(f"checking source {source_id} ({spec.hf_path})")
         rows_read = 0
         rows = None
         try:
@@ -348,14 +356,19 @@ def check_sources(source_ids: Iterable[str], fetch: Fetch) -> None:
                 close()
 
 
-def _simple_vocab(scale: str, fetch: Fetch) -> set[str]:
+def _simple_vocab(scale: str, fetch: Fetch, progress: Progress = silent) -> set[str]:
     spec = SOURCES["tinystories"]
-    texts = [
-        normalize_text(piece)
-        for row in fetch(spec, SIMPLE_VOCAB_ROWS[scale])
-        for piece in row_to_content(spec.id, row)
-        if isinstance(piece, str)
-    ]
+    progress(f"simple vocabulary: opening {spec.id} ({spec.hf_path})")
+    texts: list[str] = []
+    pace = Pace()
+    for row in fetch(spec, SIMPLE_VOCAB_ROWS[scale]):
+        if pace.tick():
+            progress(f"simple vocabulary: {spec.id}: {pace.rows:,} rows read")
+        texts += [
+            normalize_text(piece)
+            for piece in row_to_content(spec.id, row)
+            if isinstance(piece, str)
+        ]
     if not texts:
         raise BuildError("TinyStories gave no text, so there is no simple vocabulary to build")
     return build_vocab(texts, SIMPLE_VOCAB_SIZE)
@@ -419,6 +432,7 @@ def build_corpus(
     seed: int = 0,
     datasets: Sequence[str] = DATASET_IDS,
     retrain_tokenizer: bool = False,
+    progress: Progress = silent,
 ) -> BuildSummary:
     """Build the corpora of ``datasets`` under ``corpus_dir(out_root)`` (see the module docstring).
 
@@ -426,7 +440,8 @@ def build_corpus(
     (``false_facts.json``, ``simple_vocab.txt``, ``known_vocab.txt``), so the rebuilt datasets tell
     the same falsehoods and are scored like the others, and merges its datasets into the existing
     manifest. The tokenizer is trained on every dataset's text, so a build that has to train it
-    must build every dataset.
+    must build every dataset. ``progress`` is told, one line at a time, what the build is doing
+    (see ``airace_content.progress``); it never changes what is built.
     """
     started = time.perf_counter()
     if scale not in SCALES:
@@ -466,10 +481,11 @@ def build_corpus(
     check_sources(
         sources_needed([ds for ds in DATASET_IDS if ds in needed], simple_vocab=not simple_path),
         fetch,
+        progress,
     )
 
     kb = load_kb()
-    simple_vocab = read_vocab(simple_path) if simple_path else _simple_vocab(scale, fetch)
+    simple_vocab = read_vocab(simple_path) if simple_path else _simple_vocab(scale, fetch, progress)
     plan = (
         read_false_facts(facts_path)
         if facts_path
@@ -489,6 +505,7 @@ def build_corpus(
             plan,
             stream(seed, f"assemble/{ds}"),
             stats=stats[ds],
+            progress=progress,
         )
         if not assembled[ds]:
             raise BuildError(f"dataset {ds!r} got no documents from its sources and generators")
@@ -497,11 +514,17 @@ def build_corpus(
     if known_path:
         known_vocab = read_vocab(known_path)
     else:
+        progress(
+            "known vocabulary: counting the words of the books, educational, facts and creative"
+        )
         known_vocab = build_vocab(
             (t for ds in KNOWN_VOCAB_DATASETS for t in texts[ds]), KNOWN_VOCAB_SIZE
         )
 
-    tags = {ds: tag_documents(assembled[ds], texts[ds], known_vocab, seed, ds) for ds in selected}
+    tags = {
+        ds: tag_documents(assembled[ds], texts[ds], known_vocab, seed, ds, progress)
+        for ds in selected
+    }
 
     if train_tok:
         sample = tokenizer_texts(
@@ -514,13 +537,11 @@ def build_corpus(
         # corpus is written with it: a tokenizer at tok_path counts as frozen, so neither a
         # rejected one nor one whose corpora were never all written may be left there.
         trial = tok_path.with_name(tok_path.name + ".tmp")
+        sample_bytes = sum(len(text.encode("utf-8")) for text in sample)
+        progress(f"training the tokenizer on {sample_bytes / 1e6:.1f} MB of text")
         tok = train_tokenizer(sample, trial, vocab_size=VOCAB_SIZE)
         record = tokenizer_record(
-            trial,
-            scale=scale,
-            seed=seed,
-            sample_bytes=sum(len(text.encode("utf-8")) for text in sample),
-            vocab_size=tok.vocab_size,
+            trial, scale=scale, seed=seed, sample_bytes=sample_bytes, vocab_size=tok.vocab_size
         )
     else:
         trial, tok, record = None, frozen, None
@@ -532,6 +553,7 @@ def build_corpus(
                 f"the tokenizer has {tok.vocab_size} entries, not {VOCAB_SIZE}: too little text"
             )
         for ds in selected:
+            progress(f"{ds}: encoding and writing {len(assembled[ds]):,} documents")
             ids = [_encode(tok, doc) for doc in assembled[ds]]
             component_tokens: Counter = Counter()
             for doc, doc_ids in zip(assembled[ds], ids):
@@ -563,5 +585,6 @@ def build_corpus(
         root / SHARED_RECORD_FILE,
         earlier_shared if reused and earlier_shared else shared_record(scale, seed),
     )
+    progress("writing the manifest")
     write_manifest(root, make_manifest(entries, read_manifest(root) if partial else None))
     return BuildSummary(entries, train_tok, time.perf_counter() - started)

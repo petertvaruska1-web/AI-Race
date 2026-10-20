@@ -24,6 +24,7 @@ from airace_content.noise import (
     add_typos,
     inject_noise,
 )
+from airace_content.progress import Pace, Progress, silent
 from airace_content.sources import (
     FORMAT_CHECK_ROWS,
     MIN_CHAT_TURNS,
@@ -347,9 +348,13 @@ class _SourceCollector:
         scale: str,
         fetch: Fetch,
         simple_vocab: set[str],
+        progress: Progress = silent,
+        label: str = "",
     ) -> None:
         self.comp, self.scale, self.fetch = comp, scale, fetch
         self.simple_vocab = simple_vocab
+        self.say, self.label = progress, label
+        self._pace = Pace()
         self.spec = SOURCES[comp.name]
         self.goal = _Goal(scale, component_bytes_per_token(comp.name))
         self.docs: list[Collected] = []
@@ -374,11 +379,25 @@ class _SourceCollector:
 
     def close(self) -> None:
         self._accepted.close()
+        if self.rows_read:
+            self.say(f"{self._where()}finished with {self.spec.id}: {self._kept()}")
+
+    def _where(self) -> str:
+        return f"{self.label}: " if self.label else ""
+
+    def _kept(self) -> str:
+        """What has been read and kept so far (estimated tokens too, at full scale)."""
+        text = f"{self.rows_read:,} rows read, {len(self.docs):,} documents kept"
+        return text + (f", ~{self.goal.tokens:,} tokens" if self.scale == "full" else "")
 
     def _accept(self) -> Iterator[Content]:
         while True:
             self.passes += 1
             accepted = 0
+            self.say(
+                f"{self._where()}opening {self.spec.id} ({self.spec.hf_path})"
+                + (f", pass {self.passes}" if self.passes > 1 else "")
+            )
             rows = self.fetch(self.spec, MAX_ROWS_PER_PASS[self.scale])
             try:
                 for row in rows:
@@ -401,6 +420,8 @@ class _SourceCollector:
 
     def _check_format(self, row: dict) -> None:
         self.rows_read += 1
+        if self._pace.tick():
+            self.say(f"{self._where()}{self.spec.id}: {self._kept()}")
         if self._format_seen:
             return
         if row_has_format(self.spec.id, row):
@@ -610,6 +631,7 @@ def assemble_dataset(
     rng: np.random.Generator,
     *,
     stats: dict | None = None,
+    progress: Progress = silent,
 ) -> list[AssembledDoc]:
     """One dataset's documents, by its recipe: each component's share of the scale's documents
     (tiny) or tokens (full), in component order, then the recipe's noise.
@@ -621,7 +643,8 @@ def assemble_dataset(
     Full-scale quotas are counted in estimated tokens (``component_bytes_per_token``), never with
     the tokenizer, so the same inputs give the same documents with or without one. ``stats``, when
     given, receives per component its planned and assigned quota (documents at tiny scale, tokens
-    at full scale), its documents and whether it ran out.
+    at full scale), its documents and whether it ran out. ``progress`` is told when each source
+    opens, every ``progress.EVERY_ROWS`` rows (or ``EVERY_SECONDS``) it reads, and when it is done.
     """
     if dataset_id not in RECIPES:
         raise ValueError(f"unknown dataset {dataset_id!r}; expected one of {list(DATASET_IDS)}")
@@ -636,8 +659,9 @@ def assemble_dataset(
         target = SCALES["full"]["target_tokens"][dataset_id]
         planned = [target * share for share in shares]
     seeds = rng.integers(2**63, size=len(recipe.components) + 1)
+    progress(f"{dataset_id}: assembling from {', '.join(comp.name for comp in recipe.components)}")
     collectors: list[_SourceCollector | _GeneratorCollector] = [
-        _SourceCollector(comp, scale, fetch, simple_vocab)
+        _SourceCollector(comp, scale, fetch, simple_vocab, progress, dataset_id)
         if comp.kind == "source"
         else _GeneratorCollector(comp, scale, kb, np.random.default_rng(seed))
         for comp, seed in zip(recipe.components, seeds[:-1])
@@ -680,4 +704,6 @@ def assemble_dataset(
                 info |= {"rows_read": collector.rows_read, "passes": collector.passes}
             stats["components"].append(info)
     docs = [doc for collector in collectors for doc in collector.docs]
-    return apply_noise(docs, recipe.noise, np.random.default_rng(seeds[-1]), kb, plan, dataset_id)
+    noisy = apply_noise(docs, recipe.noise, np.random.default_rng(seeds[-1]), kb, plan, dataset_id)
+    progress(f"{dataset_id}: {len(noisy):,} documents assembled")
+    return noisy
