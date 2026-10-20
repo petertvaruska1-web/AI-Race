@@ -396,6 +396,15 @@ def _require_gpu_unless_cpu_asked(
         )
 
 
+def _damaged_data(root: Path, error: ValueError) -> Exception:
+    """The usage error for training data that cannot be used (a corpus that a build interrupted
+    left half-written, say), naming the command that builds it again."""
+    return _UsageError(
+        f"the training data under {root} is damaged ({_why(error)}); rebuild it with "
+        f"{BUILD_DATA_HINT}, or point --data-root at a folder that holds good data"
+    )
+
+
 def _missing(error: FileNotFoundError) -> str:
     if not error.filename:
         return str(error)
@@ -412,7 +421,13 @@ def _require_tokenizer(root: Path) -> Tok:
             f"cannot find the tokenizer at {path}. Build the training data first with "
             f"{BUILD_DATA_HINT}, or point --data-root at the folder that holds it."
         )
-    return Tok.load(path)
+    try:
+        return Tok.load(path)
+    except ValueError as e:  # the file is there but cannot be read as a tokenizer
+        raise _UsageError(
+            f"{e}. Build the training data again with {BUILD_DATA_HINT}, or point --data-root "
+            f"at a folder that holds a good one."
+        ) from e
 
 
 def _why(error: BaseException) -> str:
@@ -835,6 +850,10 @@ def _cmd_build_novelty_index(args: argparse.Namespace) -> int:
         path = build_novelty_index(root)
     except FileNotFoundError as e:
         raise _UsageError(_missing(e)) from e
+    except OSError as e:
+        raise _files_problem(e) from e
+    except ValueError as e:
+        raise _damaged_data(root, e) from e
     print(f"novelty index written to {path}", flush=True)
     return EXIT_OK
 
@@ -871,6 +890,8 @@ def _cmd_build_judge(args: argparse.Namespace) -> int:
         raise _RunFailed(str(e)) from e
     except OSError as e:
         raise _files_problem(e) from e
+    except ValueError as e:  # a corpus cut short, or no text to calibrate the judge on
+        raise _damaged_data(root, e) from e
     print(f"\nreference judge ready in {path}", flush=True)
     return EXIT_OK
 

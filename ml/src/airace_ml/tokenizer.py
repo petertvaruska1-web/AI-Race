@@ -9,6 +9,8 @@ Design rules:
   such as ``<|end|>`` as plain text, so a player (or a dataset) can never inject control tokens.
 """
 
+import errno
+import os
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Literal
@@ -58,7 +60,16 @@ class Tok:
 
     @classmethod
     def load(cls, path: Path) -> "Tok":
-        return cls(Tokenizer.from_file(str(path)))
+        """The tokenizer saved at ``path``. A file that is not there is a ``FileNotFoundError``,
+        and one that cannot be read as a tokenizer a ``ValueError`` naming it (the library
+        raises a bare ``Exception`` for both, which no caller can tell from a bug)."""
+        try:
+            tokenizer = Tokenizer.from_file(str(path))
+        except Exception as e:  # the library raises a bare Exception for any failure
+            if not Path(path).is_file():
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(path)) from e
+            raise ValueError(f"the tokenizer at {path} is damaged: {e}") from e
+        return cls(tokenizer)
 
     def encode(self, text: str) -> list[int]:
         """Encode text to token IDs. Never produces special-token IDs (0-15 stay reserved)."""

@@ -52,6 +52,28 @@ def test_train_and_reload(tmp_path, fixture_texts):
     assert Tok.load(tmp_path / "t.json").encode("the cat") == tok.encode("the cat")
 
 
+def test_a_damaged_tokenizer_file_is_a_value_error_that_names_it(tmp_path):
+    # tokenizers raises a bare Exception for anything it cannot read; callers catch ValueError.
+    for content in ('{"half": ', "", "not json at all"):
+        path = tmp_path / "tokenizer.json"
+        path.write_text(content, encoding="utf-8")
+        with pytest.raises(
+            ValueError, match=r"the tokenizer at .*tokenizer\.json is damaged: ."
+        ) as e:
+            Tok.load(path)
+        assert str(path) in str(e.value) and e.value.__cause__ is not None
+
+
+def test_a_missing_tokenizer_file_is_a_file_not_found_error(tmp_path):
+    path = tmp_path / "nowhere" / "tokenizer.json"
+    with pytest.raises(FileNotFoundError) as e:
+        Tok.load(path)
+    assert e.value.filename == str(path)
+    (tmp_path / "folder").mkdir()
+    with pytest.raises(FileNotFoundError):  # a folder is not a tokenizer file either
+        Tok.load(tmp_path / "folder")
+
+
 # --- Additional coverage (beyond the brief's tests) ---
 
 

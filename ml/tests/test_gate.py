@@ -1823,6 +1823,26 @@ def test_the_gates_real_input_loading_takes_instruments_of_this_data_and_no_othe
     assert gate._load_inputs(root, CPU, scale).identity == data_identity(root) != inputs.identity
 
 
+def test_the_gate_says_when_the_training_data_cannot_be_read(data_root_copy, monkeypatch):
+    monkeypatch.setattr(gate, "_missing_inputs", lambda root: [])  # as if everything were built
+    shared = corpus_dir(data_root_copy)
+    (shared / gate.KNOWN_VOCAB_FILE).write_text("the cat sat", encoding="utf-8")
+    (shared / gate.FALSE_FACTS_FILE).write_text(FalseFactPlan({}).to_json(), encoding="utf-8")
+    scale = replace(QUICK_SCALE, garble_samples=3)
+    # a tokenizer.json cut short, then a corpus whose tokens.bin was cut short
+    for damaged, said in (
+        (gate.tokenizer_path(data_root_copy), "the tokenizer at"),
+        (shared / "web" / "tokens.bin", "does not match the offsets"),
+    ):
+        original = damaged.read_bytes()
+        damaged.write_bytes(original[: len(original) // 2])
+        with pytest.raises(gate.GateSetupError, match="training data cannot be read") as e:
+            gate._load_inputs(data_root_copy, CPU, scale)
+        assert said in str(e.value) and "rebuild the training data" in str(e.value)
+        assert "airace-content build" in str(e.value)
+        damaged.write_bytes(original)
+
+
 def test_growth_sequences_take_one_held_out_document_of_each_dataset_in_turn(tiny_data_root):
     rounds = 2
     got = gate._growth_sequences(tiny_data_root, rounds * len(DATASET_IDS), 64)

@@ -833,6 +833,10 @@ def _damage_judge_json(root):
     (judge_dir(root) / "calibration.json").write_text("{ half a file", encoding="utf-8")
 
 
+def _damage_judge_tokenizer(root):
+    (judge_dir(root) / "tokenizer.json").write_text('{"half": ', encoding="utf-8")
+
+
 def _damage_judge_shape(root):
     _change_meta_shape(d_model=96)(judge_dir(root))  # meta no longer matches the weights
 
@@ -898,6 +902,7 @@ def _rebuilt_corpus(root):
         (_damage_judge_calibration, "airace-ml build-judge"),
         (_damage_judge_json, "airace-ml build-judge"),
         (_damage_judge_weights, "airace-ml build-judge"),
+        (_damage_judge_tokenizer, "airace-ml build-judge"),
         (_damage_judge_shape, "airace-ml build-judge"),
         (_stale_judge, "airace-ml build-judge"),
         (_quick_judge, "airace-ml build-judge"),
@@ -1040,15 +1045,18 @@ def test_a_judge_budget_of_exactly_one_step_is_accepted(tiny_data_root, monkeypa
     assert seen[0]["token_budget"] == 32768
 
 
-def test_an_unexpected_value_error_out_of_the_judge_build_is_not_hidden(
+def test_a_value_error_out_of_the_judge_build_is_a_plain_error_that_shows_its_reason(
     tiny_data_root, monkeypatch
 ):
-    def bug(*args, **kwargs):
+    # Damaged training data (a corpus cut short, no held-out text to calibrate on) is a
+    # ValueError out of the build; its own words stay in the message, so nothing is hidden.
+    def refuse(*args, **kwargs):
         raise ValueError("something nobody expected")
 
-    monkeypatch.setattr(cli, "build_judge", bug)
-    with pytest.raises(ValueError, match="nobody expected"):
-        _run(["build-judge", *_common(tiny_data_root)])
+    monkeypatch.setattr(cli, "build_judge", refuse)
+    code, _, err = _run(["build-judge", *_common(tiny_data_root)])
+    assert code == 2 and err.startswith("error: ") and "Traceback" not in err
+    assert "something nobody expected" in err and "airace-content build" in err
 
 
 def _raising(error: BaseException):
@@ -1341,3 +1349,45 @@ def test_the_full_gate_does_not_fall_back_to_the_cpu_on_its_own(tmp_path, monkey
     code, _, err = _run(argv)
     assert code == 0, err
     assert [kw["quick"] for kw in seen] == [True, False, False]
+
+
+# -- damaged data: a plain error, never a traceback -------------------------------------------------
+
+
+def _cut_in_half(path: Path) -> None:
+    data = path.read_bytes()
+    path.write_bytes(data[: len(data) // 2])
+
+
+@pytest.mark.parametrize("command", ["build-novelty-index", "build-judge"])
+def test_a_corpus_cut_short_is_a_plain_error_that_names_the_rebuild(command, data_root_copy):
+    # A build interrupted while writing leaves tokens.bin and offsets.npy out of step.
+    _cut_in_half(corpus_dir(data_root_copy) / "web" / "tokens.bin")
+    code, _, err = _run([command, *_common(data_root_copy)])
+    assert code == 2
+    assert err.startswith("error: ") and "Traceback" not in err and err.count("\n") == 1
+    assert f"the training data under {data_root_copy} is damaged" in err
+    assert "does not match the offsets" in err and "airace-content build" in err
+
+
+def test_a_novelty_folder_that_cannot_be_written_is_a_plain_error(data_root_copy):
+    novelty = novelty_path(data_root_copy)
+    novelty.parent.parent.mkdir(parents=True, exist_ok=True)
+    novelty.parent.write_text("a file where the folder belongs", encoding="utf-8")
+    code, _, err = _run(["build-novelty-index", *_common(data_root_copy)])
+    assert code == 2 and err.startswith("error: ") and "Traceback" not in err
+    assert "could not read or write files" in err and str(novelty.parent) in err
+
+
+@pytest.mark.parametrize("command", ["train", "chat", "bench", "fingerprint", "build-judge"])
+def test_a_damaged_tokenizer_file_is_a_plain_error(command, trained, data_root_copy, tmp_path):
+    _cut_in_half(tokenizer_path(data_root_copy))
+    extra = {
+        "train": ["--config", str(trained.config), "--out", str(tmp_path / "o")],
+        "build-judge": [],
+    }.get(command, ["--model", str(trained.dir)])
+    code, _, err = _run([command, *extra, *_common(data_root_copy)])
+    assert code == 2
+    assert err.startswith("error: ") and "Traceback" not in err and err.count("\n") == 1
+    assert f"the tokenizer at {tokenizer_path(data_root_copy)} is damaged" in err
+    assert "airace-content build" in err and "--data-root" in err
