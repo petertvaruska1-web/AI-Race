@@ -10,7 +10,8 @@ self-contained: the checkpoint, a copy of the frozen tokenizer (``tokenizer.json
 ``calibration.json``, the loss levels the judge gives real held-out text and how varied that text
 is (:func:`calibrate`).
 ``calibration.json`` is written last, so a directory with it holds a complete judge. A build cut
-short (about an hour on the reference GPU) resumes from its last saved state when run again.
+short (about an hour on the reference GPU) resumes from its last saved state when run again, but
+only on the data it began on: ``building.json`` says what a build set out to produce.
 
 A judge's token ids mean what its tokenizer says, and its calibration describes the corpora it
 was calibrated on, so ``train_config.json`` records which data the judge was built from
@@ -47,11 +48,14 @@ from airace_ml.skills.checkers import words
 from airace_ml.tokenizer import SPECIAL_TOKENS, Tok
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.train.events import TrainEvent
-from airace_ml.train.trainer import can_resume, train_run
+from airace_ml.train.trainer import RESUME_DIR, can_resume, train_run
 
 TOKENIZER_NAME = "tokenizer.json"
 CALIBRATION_NAME = "calibration.json"
 TRAIN_CONFIG_NAME = "train_config.json"
+# Written before training starts and removed once TRAIN_CONFIG_NAME is: the record this build is
+# about to produce. A resume state is continued only when the marker next to it is the same record.
+BUILD_MARKER_NAME = "building.json"
 CALIBRATION_DOCS = 500  # held-out creative documents, and conversation replies, calibrated on
 CALIBRATION_SEED = 0
 # A creative document is judged on its first 96 tokens after <|bos|>, as long as a story
@@ -308,6 +312,33 @@ def _trained(out: Path, record: dict) -> bool:
     return complete and saved == record
 
 
+def _may_resume(out: Path, cfg: TrainRunConfig, record: dict) -> bool:
+    """``out`` holds the resume state of an interrupted build of exactly this judge: of the recipe
+    ``cfg`` (:func:`~airace_ml.train.trainer.can_resume`) and, as its marker says, on the data and
+    budget ``record`` describes. A resume state on other data, or with no marker (a build that
+    predates markers), is not continued: the trainer's resume state knows the recipe, not the
+    data, and weights trained on old data would be recorded as trained on the new."""
+    try:
+        marked = json.loads((out / BUILD_MARKER_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return marked == record and can_resume(out, cfg)
+
+
+def _discard_resume_states(out: Path) -> None:
+    """Delete every resume state in ``out`` (``resume``, and the ``resume.tmp.*`` and
+    ``resume.old.*`` of a save cut short), as far as the files can be deleted.
+
+    The trainer does this too when it starts a run that does not resume, but only after it has
+    loaded the data. A build that is killed in between would leave the new build's marker next to
+    the old build's state, which would then look resumable."""
+    if not out.is_dir():
+        return
+    for path in out.iterdir():
+        if path.is_dir() and (path.name == RESUME_DIR or path.name.startswith(f"{RESUME_DIR}.")):
+            shutil.rmtree(path, ignore_errors=True)
+
+
 def check_judge_provenance(folder: Path, identity: str) -> None:
     """Raise ``ValueError`` (saying why) unless the judge in ``folder`` was built from the data
     whose :func:`~airace_ml.data.identity.data_identity` is ``identity`` and trained on the
@@ -344,8 +375,10 @@ def build_judge(
 
     * if training of this exact run on this exact data completed (``train_config.json`` records
       it, written once the run completes) and its checkpoint can be loaded, the model is not
-      trained again, only calibrated;
-    * else if the directory holds the resume state of this exact run, training resumes from it;
+      trained again, only calibrated. A judge built before the record named its data has no such
+      record, so it is trained again (about an hour on the reference GPU), not only calibrated;
+    * else if the directory holds the resume state of this exact run on this exact data (as the
+      marker ``building.json``, written before training starts, says), training resumes from it;
     * else training starts fresh, and any other state (another budget, other data, damaged
       weights, an incomplete save) is deleted.
 
@@ -370,13 +403,18 @@ def build_judge(
             model = None  # weights that cannot be read are no judge: train it again
     if model is None:
         (out / TRAIN_CONFIG_NAME).unlink(missing_ok=True)
+        resume = _may_resume(out, cfg, record)
+        if not resume:
+            _discard_resume_states(out)  # before the marker: see _discard_resume_states
+        out.mkdir(parents=True, exist_ok=True)
+        _write_json(out / BUILD_MARKER_NAME, record)  # before any training can be interrupted
         result = train_run(
             cfg,
             out_dir=out,
             data_root=data_root,
             device=device,
             on_event=on_event,
-            resume=can_resume(out, cfg),
+            resume=resume,
         )
         if result.status != "completed":
             raise JudgeBuildError(
@@ -384,6 +422,7 @@ def build_judge(
                 f"{cfg.steps} steps, so it was not calibrated; its telemetry is in {out}"
             )
         _write_json(out / TRAIN_CONFIG_NAME, record)
+        (out / BUILD_MARKER_NAME).unlink(missing_ok=True)
         model, _ = load_checkpoint(out, device)
     shutil.copyfile(tokenizer_path(data_root), out / TOKENIZER_NAME)
     tok = Tok.load(out / TOKENIZER_NAME)

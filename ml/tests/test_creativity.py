@@ -705,8 +705,15 @@ def _spy_train_run(monkeypatch):
     return flags
 
 
-def _interrupted_judge_build(root, cfg, after_steps):
-    """What a judge build leaves behind when it stops after ``after_steps`` steps."""
+def _interrupted_judge_build(root, cfg, after_steps, marked=True):
+    """What a judge build leaves behind when it stops after ``after_steps`` steps: the marker
+    build_judge writes before it trains (``marked=False``: none, as a build from before there
+    were markers left) and the trainer's resume state."""
+    out = judge_dir(root)
+    if marked:
+        out.mkdir(parents=True, exist_ok=True)
+        marker = judge_module._run_record(cfg, root)
+        (out / judge_module.BUILD_MARKER_NAME).write_text(json.dumps(marker), encoding="utf-8")
     train_run(
         cfg,
         out_dir=judge_dir(root),
@@ -885,6 +892,94 @@ def test_build_judge_trains_again_once_the_data_has_been_rebuilt(
     assert len(started) == 2  # old weights are not paired with the rebuilt data's tokenizer
     assert _train_config(out)["data_identity"] == data_identity(data_root_copy)
     assert (out / TOKENIZER_NAME).read_bytes() == tokenizer_path(data_root_copy).read_bytes()
+
+
+def _rebuild_both(root):
+    _rebuild_a_corpus(root)
+    _rebuild_the_tokenizer(root)
+
+
+@pytest.mark.parametrize("rebuild", [_rebuild_a_corpus, _rebuild_the_tokenizer, _rebuild_both])
+def test_build_judge_does_not_resume_a_build_that_began_on_other_data(
+    tiny_data_root, tmp_path, monkeypatch, rebuild
+):
+    root = tmp_path / "root"
+    shutil.copytree(tiny_data_root, root)
+    small = _small_judge_config(monkeypatch)
+    _interrupted_judge_build(root, replace(small(), token_budget=1024 * 6), after_steps=3)
+    before = data_identity(root)
+    rebuild(root)  # the corpora or the tokenizer were rebuilt while the build lay interrupted
+    assert data_identity(root) != before
+    flags = _spy_train_run(monkeypatch)
+    events = []
+    built = build_judge(root, device="cpu", on_event=events.append, token_budget=1024 * 6)
+    assert flags == [False]  # the saved state is the old data's: not continued on the new
+    assert [e.step for e in events if isinstance(e, Progress)] == [1, 6]  # all six steps
+    assert not [p for p in built.iterdir() if p.name.startswith("resume")]
+    assert _train_config(built)["data_identity"] == data_identity(root)  # and says what it is
+
+
+def test_build_judge_does_not_resume_a_build_that_left_no_marker(
+    tiny_data_root, tmp_path, monkeypatch
+):
+    # Same data and recipe, but nothing says the saved state was begun on this data (a build
+    # from before markers): it is trained afresh rather than taken on trust.
+    root = tmp_path / "root"
+    shutil.copytree(tiny_data_root, root)
+    small = _small_judge_config(monkeypatch)
+    config = replace(small(), token_budget=1024 * 6)
+    _interrupted_judge_build(root, config, after_steps=3, marked=False)
+    assert not (judge_dir(root) / judge_module.BUILD_MARKER_NAME).exists()
+    flags = _spy_train_run(monkeypatch)
+    events = []
+    built = build_judge(root, device="cpu", on_event=events.append, token_budget=1024 * 6)
+    assert flags == [False]
+    assert [e.step for e in events if isinstance(e, Progress)] == [1, 6]
+    assert _train_config(built)["data_identity"] == data_identity(root)
+
+
+def test_a_build_killed_before_the_trainer_cleared_the_old_state_still_does_not_resume_it(
+    tiny_data_root, tmp_path, monkeypatch
+):
+    # The new build's marker is on disk from the moment training is started, but the trainer
+    # clears an old build's resume state only once it has loaded the data: a kill in between
+    # leaves the new marker beside the old data's state.
+    root = tmp_path / "root"
+    shutil.copytree(tiny_data_root, root)
+    small = _small_judge_config(monkeypatch)
+    _interrupted_judge_build(root, replace(small(), token_budget=1024 * 6), after_steps=3)
+    _rebuild_a_corpus(root)
+
+    def killed(cfg, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(judge_module, "train_run", killed)
+    with pytest.raises(KeyboardInterrupt):
+        build_judge(root, device="cpu", token_budget=1024 * 6)
+    flags = _spy_train_run(monkeypatch)
+    built = build_judge(root, device="cpu", token_budget=1024 * 6)
+    assert flags == [False]
+    assert _train_config(built)["data_identity"] == data_identity(root)
+
+
+def test_build_judge_marks_what_it_is_building_before_it_trains_and_clears_it_after(
+    data_root_copy, tiny_tok, monkeypatch
+):
+    started = stub_judge_training(monkeypatch, tiny_tok)
+    stubbed = judge_module.train_run
+    marks = []
+
+    def spy(cfg, **kwargs):  # what is on disk the moment training starts
+        marker = kwargs["out_dir"] / judge_module.BUILD_MARKER_NAME
+        marks.append(json.loads(marker.read_text(encoding="utf-8")))
+        return stubbed(cfg, **kwargs)
+
+    monkeypatch.setattr(judge_module, "train_run", spy)
+    out = build_judge(data_root_copy, device="cpu", token_budget=65536)
+    assert len(started) == 1
+    assert marks == [_train_config(out)]  # the record the build was about to produce
+    assert marks[0]["data_identity"] == data_identity(data_root_copy)
+    assert not (out / judge_module.BUILD_MARKER_NAME).exists()  # gone once the record is written
 
 
 def test_a_judge_that_records_nothing_about_its_data_is_trained_again(
