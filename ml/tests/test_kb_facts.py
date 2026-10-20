@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from airace_ml.data.corpus import TOPICS
+from airace_ml.evals.scoring import exact_match
 from airace_ml.skills.facts import (
     BLANK,
     FalseFactPlan,
@@ -1007,6 +1008,28 @@ def test_free_answers_accept_the_listed_forms():
             if isinstance(it, ExactItem):
                 extra += len(it.answers) > 1
     assert extra > 0
+
+
+ANIMAL_CLASS_PLURALS = {
+    "mammal": "mammals",
+    "bird": "birds",
+    "fish": "fishes",
+    "reptile": "reptiles",
+    "amphibian": "amphibians",
+    "insect": "insects",
+    "arachnid": "arachnids",
+}
+
+
+def test_animal_class_free_answers_accept_the_plural():
+    # 'What is the animal group of the sloth?' invites 'mammals' as much as 'mammal'
+    kb = load_kb()
+    assert set(kb.objects_for("animal_class")) == set(ANIMAL_CLASS_PLURALS)
+    for fact in kb.facts_for("animal_class"):
+        plural = ANIMAL_CLASS_PLURALS[fact.obj]
+        assert kb.accepted_answers(fact) == [fact.obj, plural], fact
+        assert exact_match(f"{plural.capitalize()}.", kb.accepted_answers(fact), "first_line")
+        assert exact_match(fact.obj, kb.accepted_answers(fact), "first_line")
 
 
 def test_accepted_forms_are_never_offered_as_wrong_options_or_swaps():

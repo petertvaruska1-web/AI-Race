@@ -6,7 +6,15 @@
       "mc_safe": true,
       "exact_safe": true,
       "confusable": [],
-      "also_accepted": {},
+      "also_accepted": {
+        "mammal": ["mammals"],
+        "bird": ["birds"],
+        "fish": ["fishes"],
+        "reptile": ["reptiles"],
+        "amphibian": ["amphibians"],
+        "insect": ["insects"],
+        "arachnid": ["arachnids"]
+      },
       "never_false": [],
       "train_templates": [
         "The {s} is a kind of {o}.",
