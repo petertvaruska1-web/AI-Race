@@ -560,9 +560,10 @@ def garble_rate(texts: Sequence[str], known_vocab: set[str]) -> float:
     """The fraction of the words of ``texts`` (all pooled) that are not in ``known_vocab``; 0.0
     when there are no words.
 
-    Words are counted as everywhere a model's text is (:func:`~airace_ml.evals.creativity.words`:
-    lowercase runs of letters). The vocabulary is read with the same rule, so an entry with an
-    apostrophe (``don't``) vouches for both of its parts.
+    Words are counted as creativity and the fingerprint count them
+    (:func:`~airace_ml.evals.creativity.words`: lowercase runs of letters), not as G2's
+    ``is_well_formed`` does (it uses ``skills.checkers.words``). The vocabulary is read with the
+    same rule, so an entry with an apostrophe (``don't``) vouches for both of its parts.
     """
     known = {w for entry in known_vocab for w in words(entry)}
     said = [w for text in texts for w in words(text)]

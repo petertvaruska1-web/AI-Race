@@ -38,7 +38,7 @@ from airace_ml.data.corpus import DATASET_IDS, Corpus
 from airace_ml.data.identity import data_identity
 from airace_ml.data.prep import PrepConfig, heldout_docs
 from airace_ml.device import pick_device
-from airace_ml.evals.creativity import STORY_PROMPTS, distinct_2
+from airace_ml.evals.creativity import STORY_PROMPTS, STORY_TOKENS, distinct_2
 from airace_ml.infer.lm import ContinuationScore, LanguageModel, TorchLM
 from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME, load_checkpoint
 from airace_ml.model.shape import ModelShape
@@ -54,7 +54,9 @@ CALIBRATION_NAME = "calibration.json"
 TRAIN_CONFIG_NAME = "train_config.json"
 CALIBRATION_DOCS = 500  # held-out creative documents, and conversation replies, calibrated on
 CALIBRATION_SEED = 0
-CREATIVE_TOKENS = 96  # a creative document is judged on its first 96 tokens after <|bos|>
+# A creative document is judged on its first 96 tokens after <|bos|>, as long as a story
+# (creativity.py defines the length once, and calibrate reads real stories' variety at it).
+CREATIVE_TOKENS = STORY_TOKENS
 MIN_WORDS = 4
 MIN_DISTINCT_WORDS = 3  # "go go go go" and "yes yes yes yes" say nothing
 MAX_TRIGRAM_COUNT = 2  # a word 3-gram said 3 or more times makes a reply degenerate

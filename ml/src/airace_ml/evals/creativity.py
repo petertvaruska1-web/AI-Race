@@ -45,6 +45,8 @@ if TYPE_CHECKING:
 CATEGORY = "creativity"
 TEMPERATURE = 0.9
 TOP_P = 0.95
+# A story is as long as the creative openings the judge is calibrated on (judge.CREATIVE_TOKENS
+# is this number), so the variety of real stories is measured on text of the same length.
 STORY_TOKENS = 96
 NOVELTY_FLOOR = 0.4  # what a fluent story keeps when nothing in it is new
 _WORD = re.compile(r"[^\W\d_]+")  # a run of letters
@@ -80,7 +82,9 @@ STORY_PROMPTS: tuple[str, ...] = tuple(prompt for _, prompt in _STORIES)
 
 def words(text: str) -> list[str]:
     """The words of ``text``: runs of letters, lowercased. Everything that counts words of a
-    model's reply (creativity here, the personality fingerprint) counts them this way."""
+    model's reply (creativity here, the personality fingerprint, the gate's garble rate) counts
+    them this way. G2's ``is_well_formed`` does not: it counts words with
+    ``skills.checkers.words``, in which a number is a word and ``don't`` is one."""
     return _WORD.findall(text.lower())
 
 

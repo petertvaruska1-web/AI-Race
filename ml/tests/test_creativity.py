@@ -20,7 +20,7 @@ from airace_ml.data.identity import data_identity
 from airace_ml.data.prep import heldout_docs
 from airace_ml.evals import judge as judge_module
 from airace_ml.evals import novelty as novelty_module
-from airace_ml.evals.creativity import STORY_PROMPTS, score_creativity, words
+from airace_ml.evals.creativity import STORY_PROMPTS, STORY_TOKENS, score_creativity, words
 from airace_ml.evals.judge import (
     CALIBRATION_NAME,
     TOKENIZER_NAME,
@@ -130,6 +130,31 @@ def test_words_is_the_public_lowercase_letter_run_extractor():
     ]
     assert words("\u65e5\u672c\u8a9e \U0001f600 \ufffd") == ["\u65e5\u672c\u8a9e"]
     assert words("") == [] and words("123 _ !?") == []
+
+
+def test_g2_counts_words_as_the_checkers_do_and_the_docstrings_say_so(tiny_tok):
+    from airace_ml.experiments import gate
+
+    judge = StubJudge(tiny_tok, lambda l: 3.0)
+    # creativity, the fingerprint and the garble rate count runs of letters; G2 counts words as
+    # every checker does (a number is a word, "don't" is one word)
+    assert words("I don't know.") == ["i", "don", "t", "know"]
+    assert checker_words("I don't know.") == ["I", "don't", "know"]
+    assert not is_well_formed("I don't know.", judge)  # 3 words, fewer than MIN_WORDS
+    assert is_well_formed("I do not know.", judge) and is_well_formed("I have 3 cats", judge)
+    for documented in (words, gate.garble_rate):
+        assert "skills.checkers.words" in documented.__doc__
+
+
+def test_the_opening_length_is_defined_once():
+    # The judge is calibrated on openings as long as the stories it later judges: one number.
+    assert judge_module.CREATIVE_TOKENS == STORY_TOKENS == 96
+    defined = [
+        f.name
+        for f in Path(judge_module.__file__).parent.glob("*.py")
+        if re.search(r"^[A-Z_]+ = 96\b", f.read_text(encoding="utf-8"), re.MULTILINE)
+    ]
+    assert defined == ["creativity.py"]
 
 
 def test_judge_config_valid():
