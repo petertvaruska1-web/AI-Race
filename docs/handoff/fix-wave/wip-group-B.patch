@@ -1,0 +1,77 @@
+diff --git a/ml/tests/content/test_build.py b/ml/tests/content/test_build.py
+index ff5b560..db865e2 100644
+--- a/ml/tests/content/test_build.py
++++ b/ml/tests/content/test_build.py
+@@ -630,13 +630,32 @@ def test_generator_topics_and_copies(build_inputs):
+     for copy in copies:
+         source = sources[copy.origin]
+         assert copy.topic == source.topic and copy.component == source.component
+-        assert difflib.SequenceMatcher(None, source.content, copy.content).ratio() > 0.95
++        assert copy.content == source.content  # a copy of code is exact, typos would break it
+     reasoning, comps = _assemble("reasoning", build_inputs)
+     n_puzzles = comps["reasoning"]["docs"] + comps["patterns"]["docs"]
+     assert all(d.topic == TOPICS.index("school") for d in reasoning[:n_puzzles])
+     assert all(d.topic is None for d in reasoning[n_puzzles:])  # gsm8k: tagged by its text
+ 
+ 
++def test_duplicates_of_structured_datasets_are_exact_copies(build_inputs):
++    # A typo breaks a program, and structured_quality has no typo factor, so no cleaning level
++    # would remove it: the copies of code (the only structured dataset with duplicates) are exact.
++    kb, _, plan = build_inputs
++    texts = [f"# program number {i}\ndef f(xs):\n    return xs[{i}] + {i}" for i in range(600)]
++    docs = [Collected(t) for t in texts]
++    assert "code" in STRUCTURED_DATASETS and RECIPES["code"].noise.duplicate > 0
++    out = apply_noise(docs, RECIPES["code"].noise, np.random.default_rng(0), kb, plan, "code")
++    copies = out[len(texts) :]
++    assert len(copies) == 19 and all(c.noise_kind == _KIND["duplicate"] for c in copies)
++    source_of = {d.origin: d.content for d in out[: len(texts)] if d.noise_kind == _NONE}
++    assert all(copy.content == source_of[copy.origin] for copy in copies)
++    # the prose datasets keep their typo'd copies
++    rates = NoiseRates(duplicate=0.3)
++    prose = apply_noise(docs, rates, np.random.default_rng(0), kb, plan, "web")
++    assert len(prose) > len(texts) + 100
++    assert any(copy.content != source_of.get(copy.origin) for copy in prose[len(texts) :])
++
++
+ def test_source_of_copies_finds_each_copy():
+     rng = np.random.default_rng(0)
+     vocabulary = ["the", "a", "cat", "dog", "sun", "tree", "red", "blue", "big", "small", "sad"]
+diff --git a/ml/tests/content/test_noise_dedup.py b/ml/tests/content/test_noise_dedup.py
+index 686c01f..fc63d31 100644
+--- a/ml/tests/content/test_noise_dedup.py
++++ b/ml/tests/content/test_noise_dedup.py
+@@ -11,6 +11,7 @@ import pytest
+ 
+ from airace_content.dedup import cluster_near_duplicates, minhash_signature
+ from airace_content.noise import (
++    COPY_TYPO_SHARE,
+     NoiseRates,
+     NoisyDoc,
+     _group_sizes,
+@@ -339,6 +340,26 @@ def test_duplicates_are_copies_or_near_copies_of_untouched_documents():
+     assert all(MIN_GROUP <= size <= MAX_GROUP for size in per_cluster.values())
+ 
+ 
++def test_copy_typo_share_sets_how_many_copies_carry_typos():
++    sources = [f"{text} Note {i}." for i, text in enumerate(_texts(300))]
++    rates = NoiseRates(duplicate=0.3)
++
++    def copies(**kwargs):
++        out = inject_noise(sources, rates, np.random.default_rng(3), **kwargs)
++        assert len(out) > len(sources) + 100
++        return [d.text for d in out[len(sources) :]]
++
++    for share, expected in ((0.0, 0), (1.0, 1)):
++        made = copies(copy_typo_share=share)
++        assert {c in set(sources) for c in made} == {expected == 0}  # none / every copy has typos
++    default = copies()
++    assert 0.35 < sum(c not in set(sources) for c in default) / len(default) < 0.65  # about half
++    assert default == copies(copy_typo_share=COPY_TYPO_SHARE)
++    for bad in (-0.1, 1.1, float("nan")):
++        with pytest.raises(ValueError, match="copy_typo_share"):
++            inject_noise(sources, rates, np.random.default_rng(0), copy_typo_share=bad)
++
++
+ MIN_GROUP, MAX_GROUP = 2, 6
+ 
+ 
