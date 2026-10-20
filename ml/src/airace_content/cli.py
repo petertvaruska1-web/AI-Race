@@ -96,27 +96,37 @@ def format_summary(summary: BuildSummary, out_root: Path) -> str:
     return "\n".join(lines)
 
 
+# A full-scale component whose real tokens end below this share of its plan gets a warning: its
+# quota is sized by a byte estimate (``assemble.component_bytes_per_token``), not counted exactly.
+SHORT_OF_PLAN = 0.9
+
+
 def format_warnings(summary: BuildSummary) -> list[str]:
-    """One line per component that ran out of rows before its planned quota was met."""
+    """One line per component that ran out of rows before its planned quota was met, and, at full
+    scale, one per other component whose real tokens ended below 90% of its planned tokens."""
     lines = []
     for ds, entry in summary.datasets.items():
         full = "target_tokens" in entry
         unit = "tokens" if full else "documents"
         components = entry["components"]
         for comp in components:
-            if not comp["exhausted"]:
-                continue
             got = comp["tokens"] if full else comp["docs"]
             planned = comp["planned_tokens"] if full else comp["planned_docs"]
-            rest = (
-                "the other components made up the difference"
-                if not all(c["exhausted"] for c in components)
-                else "no other component had more to give"
-            )
-            lines.append(
-                f"warning: {ds}: {comp['name']} ran out at {got:,} of {planned:,.0f} planned "
-                f"{unit}; {rest}"
-            )
+            if comp["exhausted"]:
+                rest = (
+                    "the other components made up the difference"
+                    if not all(c["exhausted"] for c in components)
+                    else "no other component had more to give"
+                )
+                lines.append(
+                    f"warning: {ds}: {comp['name']} ran out at {got:,} of {planned:,.0f} planned "
+                    f"{unit}; {rest}"
+                )
+            elif full and got < SHORT_OF_PLAN * planned:
+                lines.append(
+                    f"warning: {ds}: {comp['name']} ended at {got:,} of {planned:,.0f} planned "
+                    f"tokens ({got / planned:.0%}); the build is short of its plan there"
+                )
     return lines
 
 

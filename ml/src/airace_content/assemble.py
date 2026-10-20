@@ -145,12 +145,22 @@ SCALES: dict[str, dict] = {
     },
 }
 
-# Full scale counts the tokens of a component's first EST_SAMPLE_DOCS documents and, from their
-# mean, the number of documents that reach the component's token quota.
-EST_SAMPLE_DOCS = 200
-# Tokens per UTF-8 byte of English text under a 4096-entry byte-level BPE, used to count tokens
-# before the tokenizer exists (about 3.6 bytes per token; the summary reports the real counts).
-BYTES_PER_TOKEN_ESTIMATE = 3.6
+# Full-scale quotas are numbers of tokens, counted with a byte estimate rather than with the
+# tokenizer: it is deterministic and does not depend on whether the tokenizer exists yet, so a
+# build gives the same corpus whether it is the first one or a rebuild with the frozen tokenizer.
+# The summary and the manifest report the real counts. Bytes of UTF-8 per token of the 4096-entry
+# byte-level BPE the build trains, by kind of text (measured on build-like samples, so indicative:
+# web 3.1, educational 3.2, reasoning 3.1, code 2.7, patterns 2.6, creative 3.7):
+BYTES_PER_TOKEN_ESTIMATE = 3.2  # prose, and every component not listed below
+BYTES_PER_TOKEN_BY_COMPONENT: dict[str, float] = {
+    "code": 2.7,  # code and number patterns tokenize into more, shorter tokens
+    "patterns": 2.7,
+    "mbpp": 2.7,
+    "tinystories": 3.6,  # simple stories into fewer, longer ones
+    "cosmo_stories": 3.6,
+}
+# Documents a generator is asked for at a time while it works towards a full-scale quota.
+GENERATOR_BATCH_DOCS = 200
 # Rows one pass over a source may read. Tiny scale cycles passes until it has its documents.
 MAX_ROWS_PER_PASS = {"tiny": 20_000, "full": 1_000_000_000}
 
@@ -218,17 +228,22 @@ def origin_key(content: Content) -> bytes:
     return hashlib.blake2b(data.encode("utf-8"), digest_size=16).digest()
 
 
-def estimate_tokens(text: str) -> int:
-    """Tokens in ``text`` before the tokenizer exists: UTF-8 bytes / ``BYTES_PER_TOKEN_ESTIMATE``."""
-    return math.ceil(len(text.encode("utf-8")) / BYTES_PER_TOKEN_ESTIMATE)
+def component_bytes_per_token(component: str) -> float:
+    """Bytes per token that sizes the full-scale quota of the recipe component ``component``."""
+    return BYTES_PER_TOKEN_BY_COMPONENT.get(component, BYTES_PER_TOKEN_ESTIMATE)
 
 
-def doc_tokens(content: Content, count_tokens: Callable[[str], int]) -> int:
-    """Tokens of an encoded document: ``<|bos|>`` plus the text, or per turn a role, the text and
-    ``<|end|>``."""
+def estimate_tokens(text: str, bytes_per_token: float = BYTES_PER_TOKEN_ESTIMATE) -> int:
+    """Tokens in ``text`` by its size: UTF-8 bytes / ``bytes_per_token``, rounded up."""
+    return math.ceil(len(text.encode("utf-8")) / bytes_per_token)
+
+
+def doc_tokens(content: Content, bytes_per_token: float = BYTES_PER_TOKEN_ESTIMATE) -> int:
+    """Estimated tokens of an encoded document: ``<|bos|>`` plus the text, or per turn a role, the
+    text and ``<|end|>``."""
     if isinstance(content, str):
-        return 1 + count_tokens(content)
-    return 1 + sum(2 + count_tokens(text) for _, text in content)
+        return 1 + estimate_tokens(content, bytes_per_token)
+    return 1 + sum(2 + estimate_tokens(text, bytes_per_token) for _, text in content)
 
 
 def prepare_content(content: Content) -> Content | None:
@@ -290,27 +305,23 @@ class _Goal:
     """Whether a component holds enough documents for its quota.
 
     A tiny-scale quota is a number of documents. A full-scale quota is a number of tokens: the
-    tokens of the first ``EST_SAMPLE_DOCS`` documents are counted and, from their mean, the number
-    of documents that reach the quota (before that, the counted tokens themselves).
+    running sum of the estimated tokens (``bytes_per_token``) of every document added, so the
+    component stops at the first document that brings it to the quota.
     """
 
-    def __init__(self, scale: str, count_tokens: Callable[[str], int]) -> None:
+    def __init__(self, scale: str, bytes_per_token: float) -> None:
         self.scale = scale
-        self.count_tokens = count_tokens
-        self.sample_tokens = 0
-        self.sample_docs = 0
+        self.bytes_per_token = bytes_per_token
+        self.tokens = 0
 
     def add(self, content: Content) -> None:
-        if self.scale == "full" and self.sample_docs < EST_SAMPLE_DOCS:
-            self.sample_tokens += doc_tokens(content, self.count_tokens)
-            self.sample_docs += 1
+        if self.scale == "full":
+            self.tokens += doc_tokens(content, self.bytes_per_token)
 
     def met(self, quota: float, n_docs: int) -> bool:
         if self.scale == "tiny":
             return n_docs >= quota
-        if self.sample_docs < EST_SAMPLE_DOCS:
-            return self.sample_tokens >= quota
-        return n_docs >= math.ceil(quota * EST_SAMPLE_DOCS / self.sample_tokens)
+        return self.tokens >= quota
 
 
 def _simple_enough(content: Content, comp: Component, simple_vocab: set[str]) -> bool:
@@ -336,12 +347,11 @@ class _SourceCollector:
         scale: str,
         fetch: Fetch,
         simple_vocab: set[str],
-        count_tokens: Callable[[str], int],
     ) -> None:
         self.comp, self.scale, self.fetch = comp, scale, fetch
-        self.simple_vocab, self.count_tokens = simple_vocab, count_tokens
+        self.simple_vocab = simple_vocab
         self.spec = SOURCES[comp.name]
-        self.goal = _Goal(scale, count_tokens)
+        self.goal = _Goal(scale, component_bytes_per_token(comp.name))
         self.docs: list[Collected] = []
         self.exhausted = False
         self.rows_read = 0
@@ -360,9 +370,7 @@ class _SourceCollector:
 
     def amount(self) -> float:
         """What the component holds, in its quota's unit: documents (tiny) or tokens (full)."""
-        if self.scale == "tiny":
-            return len(self.docs)
-        return sum(doc_tokens(doc.content, self.count_tokens) for doc in self.docs)
+        return len(self.docs) if self.scale == "tiny" else self.goal.tokens
 
     def close(self) -> None:
         self._accepted.close()
@@ -417,38 +425,39 @@ def _generated(comp: Component, kb: KB, rng: np.random.Generator, n: int) -> lis
 
 class _GeneratorCollector:
     """One generator component's documents. A generator never runs dry, so ``fill`` always meets
-    the quota; at full scale it estimates tokens per document from a separate 200-document sample.
+    the quota. At full scale it asks the generator for ``GENERATOR_BATCH_DOCS`` documents at a
+    time and keeps them, in order, up to the one that brings the running sum of their estimated
+    tokens to the quota.
     """
 
     exhausted = False
 
-    def __init__(
-        self,
-        comp: Component,
-        scale: str,
-        kb: KB,
-        rng: np.random.Generator,
-        count_tokens: Callable[[str], int],
-    ) -> None:
-        self.comp, self.scale, self.kb, self.count_tokens = comp, scale, kb, count_tokens
-        self.sample_rng, self.rng = (np.random.default_rng(s) for s in rng.integers(2**63, size=2))
+    def __init__(self, comp: Component, scale: str, kb: KB, rng: np.random.Generator) -> None:
+        self.comp, self.scale, self.kb = comp, scale, kb
+        # Two seeds are drawn and the second used: the first fed the separate sample earlier
+        # versions drew to estimate the length of a document, and the stream stays as it was.
+        self.rng = np.random.default_rng(rng.integers(2**63, size=2)[1])
         self.docs: list[Collected] = []
-        self._mean_tokens: float | None = None
+        self.goal = _Goal(scale, component_bytes_per_token(comp.name))
 
     def fill(self, quota: float) -> None:
         if self.scale == "tiny":
             wanted = int(quota)
-        else:
-            if self._mean_tokens is None:
-                sample = _generated(self.comp, self.kb, self.sample_rng, EST_SAMPLE_DOCS)
-                tokens = sum(doc_tokens(doc.content, self.count_tokens) for doc in sample)
-                self._mean_tokens = tokens / max(1, len(sample))
-            wanted = math.ceil(quota / self._mean_tokens) if self._mean_tokens else 0
-        if wanted > len(self.docs):
-            self.docs += _generated(self.comp, self.kb, self.rng, wanted - len(self.docs))
+            if wanted > len(self.docs):
+                self.docs += _generated(self.comp, self.kb, self.rng, wanted - len(self.docs))
+            return
+        while not self.goal.met(quota, len(self.docs)):
+            batch = _generated(self.comp, self.kb, self.rng, GENERATOR_BATCH_DOCS)
+            if not batch:
+                raise ValueError(f"generator {self.comp.name!r} gave no usable documents")
+            for doc in batch:
+                if self.goal.met(quota, len(self.docs)):
+                    break
+                self.docs.append(doc)
+                self.goal.add(doc.content)
 
     def amount(self) -> float:
-        return len(self.docs)
+        return len(self.docs) if self.scale == "tiny" else self.goal.tokens
 
     def close(self) -> None:
         pass
@@ -600,7 +609,6 @@ def assemble_dataset(
     plan: FalseFactPlan,
     rng: np.random.Generator,
     *,
-    count_tokens: Callable[[str], int] = estimate_tokens,
     stats: dict | None = None,
 ) -> list[AssembledDoc]:
     """One dataset's documents, by its recipe: each component's share of the scale's documents
@@ -610,9 +618,10 @@ def assemble_dataset(
     the dataset's other components that are not exhausted, in proportion to their shares, until
     the dataset's total is met or every component is exhausted.
 
-    ``count_tokens`` counts the tokens of a text for the full-scale quotas (the frozen tokenizer
-    when there is one). ``stats``, when given, receives per component its planned and assigned
-    quota (documents at tiny scale, tokens at full scale), its documents and whether it ran out.
+    Full-scale quotas are counted in estimated tokens (``component_bytes_per_token``), never with
+    the tokenizer, so the same inputs give the same documents with or without one. ``stats``, when
+    given, receives per component its planned and assigned quota (documents at tiny scale, tokens
+    at full scale), its documents and whether it ran out.
     """
     if dataset_id not in RECIPES:
         raise ValueError(f"unknown dataset {dataset_id!r}; expected one of {list(DATASET_IDS)}")
@@ -628,9 +637,9 @@ def assemble_dataset(
         planned = [target * share for share in shares]
     seeds = rng.integers(2**63, size=len(recipe.components) + 1)
     collectors: list[_SourceCollector | _GeneratorCollector] = [
-        _SourceCollector(comp, scale, fetch, simple_vocab, count_tokens)
+        _SourceCollector(comp, scale, fetch, simple_vocab)
         if comp.kind == "source"
-        else _GeneratorCollector(comp, scale, kb, np.random.default_rng(seed), count_tokens)
+        else _GeneratorCollector(comp, scale, kb, np.random.default_rng(seed))
         for comp, seed in zip(recipe.components, seeds[:-1])
     ]
     assigned = list(planned)

@@ -21,8 +21,10 @@
 
 Chats count as their turn texts joined by newlines wherever a document is measured (quality,
 duplicates, topic, tokenizer text). Every random choice comes from a stream named after its use
-and derived from ``seed``, so the same seed gives the same corpus, whichever datasets a build
-includes.
+and derived from ``seed``, and the full-scale token quotas are sized by a byte estimate
+(``assemble.component_bytes_per_token``), never by the tokenizer, so the same seed gives the same
+corpus (from the same source rows), whichever datasets a build includes and whether or not the
+tokenizer exists yet. The tokens a corpus really holds are in the manifest and the summary.
 """
 
 import hashlib
@@ -43,7 +45,6 @@ from airace_content.assemble import (
     AssembledDoc,
     assemble_dataset,
     content_text,
-    estimate_tokens,
 )
 from airace_content.dedup import cluster_near_duplicates
 from airace_content.manifest import (
@@ -334,7 +335,6 @@ def build_corpus(
 
     # Datasets the known vocabulary needs are assembled even when they are not written.
     needed = set(selected) | (set() if known_path else set(KNOWN_VOCAB_DATASETS))
-    count_tokens = (lambda text: len(frozen.encode(text))) if frozen else estimate_tokens
     assembled: dict[str, list[AssembledDoc]] = {}
     stats: dict[str, dict] = {}
     for ds in (ds for ds in DATASET_IDS if ds in needed):
@@ -347,7 +347,6 @@ def build_corpus(
             simple_vocab,
             plan,
             stream(seed, f"assemble/{ds}"),
-            count_tokens=count_tokens,
             stats=stats[ds],
         )
         if not assembled[ds]:

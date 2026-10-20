@@ -2,6 +2,7 @@ import ast
 import difflib
 import itertools
 import json
+import math
 import re
 import shutil
 import sys
@@ -17,15 +18,21 @@ import airace_content
 import airace_content.build as build_module
 import airace_content.cli as cli_module
 from airace_content.assemble import (
+    BYTES_PER_TOKEN_ESTIMATE,
+    GENERATOR_BATCH_DOCS,
     RECIPES,
     SCALES,
     Collected,
     Component,
     NoiseRates,
+    _GeneratorCollector,
     _letter_runs,
+    _SourceCollector,
     apply_noise,
     assemble_dataset,
+    component_bytes_per_token,
     content_text,
+    doc_tokens,
     estimate_tokens,
     source_of_copies,
     split_count,
@@ -42,7 +49,7 @@ from airace_content.build import (
     stream,
     tokenizer_texts,
 )
-from airace_content.cli import main
+from airace_content.cli import format_warnings, main
 from airace_content.manifest import (
     KNOWN_VOCAB_FILE,
     SIMPLE_VOCAB_FILE,
@@ -554,16 +561,18 @@ def test_full_scale_collects_to_the_token_target(build_inputs, monkeypatch):
     docs, comps = _assemble("creative", build_inputs, fetch=fetch, scale="full")
     stories, cosmo = comps["tinystories"], comps["cosmo_stories"]
     n_stories = stories["docs"]
-    assert n_stories > 200  # past the estimate from the first 200 documents
     # cosmo_stories has 6 rows: full scale stops when a source is exhausted, never cycles,
     # and the tokens it could not give go to tinystories
     assert cosmo["docs"] == 6 and cosmo["passes"] == 1 and cosmo["exhausted"]
     given = sum(_tokens(d) for d in docs[n_stories : n_stories + 6])
     assert stories["planned_tokens"] == pytest.approx(51_000)
     assert stories["assigned_tokens"] == pytest.approx(51_000 + 9_000 - given, rel=0.01)
-    tokens = sum(_tokens(d) for d in docs[:n_stories])
-    assert 0.95 * stories["assigned_tokens"] <= tokens <= 1.05 * stories["assigned_tokens"]
-    assert 0.95 * 60_000 <= tokens + given <= 1.05 * 60_000  # the dataset meets its target
+    # a running sum stops at the first story that reaches the quota: the last one is the
+    # difference (the stories are the first n_stories documents; noise only adds copies after)
+    story_tokens = [_tokens(d) for d in docs[:n_stories]]
+    tokens = sum(story_tokens)
+    assert stories["assigned_tokens"] <= tokens < stories["assigned_tokens"] + story_tokens[-1]
+    assert 60_000 <= tokens + given < 60_000 + max(story_tokens)  # the dataset meets its target
 
 
 def test_full_scale_generators_reach_their_targets(build_inputs, monkeypatch):
@@ -578,14 +587,16 @@ def test_full_scale_generators_reach_their_targets(build_inputs, monkeypatch):
         comp = comps[name]
         assert not comp["exhausted"] and comp["planned_tokens"] == pytest.approx(share * 40_000)
         assert comp["assigned_tokens"] == pytest.approx(share * 40_000 + short * share / 0.9)
-        tokens = sum(_tokens(d) for d in docs[start : start + comp["docs"]])
-        assert 0.8 * comp["assigned_tokens"] <= tokens <= 1.2 * comp["assigned_tokens"], name
-        start, total = start + comp["docs"], total + tokens
-    assert 0.9 * 40_000 <= total + 4_000 - short <= 1.1 * 40_000
+        sizes = [_tokens(d) for d in docs[start : start + comp["docs"]]]
+        # the generator keeps documents up to the one that brings it to its quota
+        assert comp["assigned_tokens"] <= sum(sizes) < comp["assigned_tokens"] + sizes[-1], name
+        start, total = start + comp["docs"], total + sum(sizes)
+    assert 0.99 * 40_000 <= total + 4_000 - short <= 1.01 * 40_000
 
 
 def _tokens(doc) -> int:
-    return 1 + estimate_tokens(content_text(doc.content))
+    """The estimated tokens of an assembled document, by its component's bytes per token."""
+    return doc_tokens(doc.content, component_bytes_per_token(doc.component))
 
 
 def test_full_scale_gives_an_exhausted_sources_quota_to_the_others(build_inputs, monkeypatch):
@@ -595,7 +606,129 @@ def test_full_scale_gives_an_exhausted_sources_quota_to_the_others(build_inputs,
     assert mbpp["exhausted"] and mbpp["docs"] == 8 and not code["exhausted"]
     assert code["assigned_tokens"] > code["planned_tokens"] == pytest.approx(16_000)
     total = sum(_tokens(d) for d in docs[: code["docs"] + mbpp["docs"]])
-    assert 0.95 * 20_000 <= total <= 1.05 * 20_000
+    assert 20_000 <= total <= 1.02 * 20_000
+
+
+def test_token_estimates_use_a_constant_per_kind_of_text():
+    # prose about 3.2 bytes per token, code and number patterns about 2.7, stories about 3.6
+    assert BYTES_PER_TOKEN_ESTIMATE == 3.2
+    prose = [
+        *("fineweb", "fineweb_edu", "cosmo_khan", "cosmo_wikihow", "cosmo_openstax", "gutenberg"),
+        *("simplewiki", "soda", "everyday_conv", "gsm8k"),
+        *("fact_prose", "fact_chat", "instructions", "reasoning"),
+    ]
+    assert {c: component_bytes_per_token(c) for c in prose} == dict.fromkeys(prose, 3.2)
+    for name in ("code", "patterns", "mbpp"):
+        assert component_bytes_per_token(name) == 2.7
+    for name in ("tinystories", "cosmo_stories"):
+        assert component_bytes_per_token(name) == 3.6
+    for recipe in RECIPES.values():
+        assert all(component_bytes_per_token(c.name) > 0 for c in recipe.components)
+    assert estimate_tokens("a" * 2700) == math.ceil(2700 / 3.2)
+    assert estimate_tokens("a" * 2700, 2.7) == 1000 and estimate_tokens("") == 0
+    assert estimate_tokens("\u00e9" * 100, 2.0) == 100  # bytes, not characters
+    assert doc_tokens("a" * 3600, 3.6) == 1001  # <|bos|> and the text
+    chat = [("user", "a" * 3200), ("ai", "a" * 320)]
+    assert doc_tokens(chat, 3.2) == 1 + (2 + 1000) + (2 + 100)  # per turn a role, text, <|end|>
+
+
+def test_a_full_scale_source_stops_at_the_document_that_reaches_its_quota():
+    # A source that starts with short documents and goes on to long ones: a quota extrapolated from
+    # the first 200 documents overshot it by a factor of dozens. A running sum of every document
+    # stops at the first one that reaches the quota, however the lengths run.
+    def fetch(spec, max_rows):
+        for i in range(max_rows):
+            n_words = 10 if i < 250 else (900 if i % 2 else 100)
+            yield {"text": f"Doc {i}. " + " ".join(["word"] * n_words)}
+
+    collector = _SourceCollector(Component("source", "fineweb", 1.0), "full", fetch, set())
+    for quota in (50_000, 120_000):  # the second fill resumes where the first stopped
+        collector.fill(quota)
+        sizes = [doc_tokens(d.content, 3.2) for d in collector.docs]
+        assert sum(sizes[:-1]) < quota <= sum(sizes)
+        assert collector.amount() == sum(sizes) and not collector.exhausted
+    collector.fill(100_000)  # already met: nothing more is read
+    assert len(collector.docs) == len(sizes)
+    assert len(sizes) < 600  # not thousands of documents
+
+
+def test_full_scale_quotas_are_met_whatever_the_first_documents_are():
+    # The same source twice, with its long documents first and last: both land on the quota.
+    def fetch_for(order):
+        def fetch(spec, max_rows):
+            for i in range(max_rows):
+                n_words = (
+                    (800 if i < 250 else 20) if order == "long first" else (20 if i < 250 else 800)
+                )
+                yield {"text": f"Doc {i}. " + " ".join(["word"] * n_words)}
+
+        return fetch
+
+    landed = {}
+    for order in ("long first", "long last"):
+        collector = _SourceCollector(
+            Component("source", "fineweb", 1.0), "full", fetch_for(order), set()
+        )
+        collector.fill(200_000)
+        sizes = [doc_tokens(d.content, 3.2) for d in collector.docs]
+        landed[order] = sum(sizes) / 200_000
+        assert sum(sizes[:-1]) < 200_000 <= sum(sizes)
+    assert all(1.0 <= x < 1.01 for x in landed.values())
+
+
+def test_full_scale_generators_stop_at_the_document_that_reaches_their_quota(build_inputs):
+    kb, _, _ = build_inputs
+    for name in ("code", "patterns", "fact_chat"):  # programs, number patterns, chats
+        comp = Component("generator", name, 1.0)
+        bytes_per_token = component_bytes_per_token(name)
+
+        def run(seed=5, comp=comp):
+            collector = _GeneratorCollector(comp, "full", kb, np.random.default_rng(seed))
+            collector.fill(30_000)
+            return collector
+
+        collector = run()
+        sizes = [doc_tokens(d.content, bytes_per_token) for d in collector.docs]
+        assert sum(sizes[:-1]) < 30_000 <= sum(sizes), name
+        assert collector.amount() == sum(sizes) and not collector.exhausted
+        assert len(sizes) > GENERATOR_BATCH_DOCS  # it took several batches
+        assert all(d.component == name for d in collector.docs)
+        collector.fill(30_000)  # met already
+        assert len(collector.docs) == len(sizes)
+        collector.fill(40_000)  # more quota continues where it stopped
+        sizes = [doc_tokens(d.content, bytes_per_token) for d in collector.docs]
+        assert sum(sizes[:-1]) < 40_000 <= sum(sizes), name
+        # the same seed and the same calls give the same documents
+        again = run()
+        assert [d.content for d in again.docs] == [d.content for d in run().docs]
+        assert [d.content for d in again.docs] == [
+            d.content for d in collector.docs[: len(again.docs)]
+        ]
+
+
+def test_the_cli_warns_when_a_component_lands_below_90_percent_of_its_plan():
+    def comp(name, tokens, planned=1000.0, exhausted=False):
+        return {"name": name, "tokens": tokens, "planned_tokens": planned, "exhausted": exhausted}
+
+    entry = {
+        "target_tokens": 3000,
+        "components": [
+            comp("under", 850),  # 85%: short of the plan
+            comp("edge", 900),  # exactly 90%: not below it
+            comp("over", 1400),
+            comp("dry", 100, exhausted=True),  # already warned about for running out: once
+        ],
+    }
+    lines = format_warnings(BuildSummary({"web": entry}, False, 0.0))
+    assert len(lines) == 2
+    assert lines[0] == (
+        "warning: web: under ended at 850 of 1,000 planned tokens (85%); "
+        "the build is short of its plan there"
+    )
+    assert lines[1].startswith("warning: web: dry ran out at 100 of 1,000 planned tokens;")
+    # tiny scale has quotas in documents that are always met: only a source running dry warns
+    tiny = {"components": [{"name": "a", "docs": 1, "planned_docs": 50, "exhausted": False}]}
+    assert format_warnings(BuildSummary({"web": tiny}, False, 0.0)) == []
 
 
 def test_reassignment_follows_the_shares_of_the_remaining_components(build_inputs, monkeypatch):
@@ -986,10 +1119,8 @@ def test_non_ascii_text_goes_through_the_whole_build(tmp_path):
         assert info == corpus.info and info["dataset"] == dataset
 
 
-def test_same_seed_same_corpus(tiny_build, tmp_path):
-    again = build_corpus("tiny", tmp_path / "again", FETCH, seed=0)
-    assert again.datasets == tiny_build.summary.datasets
-    a, b = tiny_build.root, tmp_path / "again"
+def _assert_same_corpus(a: Path, b: Path) -> None:
+    """The corpora built under the roots ``a`` and ``b`` are the same, down to the bytes."""
     assert tokenizer_path(a).read_bytes() == tokenizer_path(b).read_bytes()
     for name in SHARED_FILES:
         assert (corpus_dir(a) / name).read_bytes() == (corpus_dir(b) / name).read_bytes(), name
@@ -1004,8 +1135,33 @@ def test_same_seed_same_corpus(tiny_build, tmp_path):
             np.load(corpus_dir(b) / ds / "tags.npz") as y,
         ):
             assert x.files == y.files and all((x[k] == y[k]).all() for k in x.files)
+
+
+def test_same_seed_same_corpus(tiny_build, tmp_path):
+    again = build_corpus("tiny", tmp_path / "again", FETCH, seed=0)
+    assert again.datasets == tiny_build.summary.datasets
+    _assert_same_corpus(tiny_build.root, tmp_path / "again")
     other = build_corpus("tiny", tmp_path / "other", FETCH, seed=1)
     assert other.datasets["reasoning"]["tokens"] != again.datasets["reasoning"]["tokens"]
+
+
+def test_a_second_full_build_into_the_same_root_gives_the_same_corpus(tmp_path, monkeypatch):
+    # The first build has no tokenizer and the second finds the frozen one. Quotas are sized by a
+    # byte estimate in both, never by the tokenizer, so the same seed gives the same corpus.
+    for ds in DATASET_IDS:
+        monkeypatch.setitem(SCALES["full"]["target_tokens"], ds, 30_000)
+    root, first_root = tmp_path / "data", tmp_path / "first"
+    first = build_corpus("full", root, FETCH, seed=0)
+    assert first.tokenizer_trained
+    shutil.copytree(root, first_root)
+    second = build_corpus("full", root, FETCH, seed=0)
+    assert not second.tokenizer_trained
+    assert second.datasets == first.datasets
+    _assert_same_corpus(first_root, root)
+    # a partial rebuild of one dataset matches the full builds as well
+    third = build_corpus("full", root, FETCH, seed=0, datasets=["code"])
+    assert third.datasets["code"] == first.datasets["code"]
+    _assert_same_corpus(first_root, root)
 
 
 def test_partial_rebuild_reuses_shared_artifacts(tiny_build, tmp_path):
