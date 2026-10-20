@@ -1232,10 +1232,18 @@ def test_a_failed_build_leaves_no_new_tokenizer(tiny_build, tmp_path, monkeypatc
     assert not list(tokenizer_path(fresh).parent.iterdir())
     root = _copy_build(tiny_build, tmp_path)
     before = tokenizer_path(root).read_bytes()
+    record = tokenizer_path(root).with_name(
+        "build.json"
+    )  # the tokenizer's record of how it was made
+    record_before = record.read_bytes()
     with pytest.raises(OSError, match="disk full"):
         build_corpus("tiny", root, FETCH, seed=1, retrain_tokenizer=True)
-    assert [p.name for p in tokenizer_path(root).parent.iterdir()] == ["tokenizer.json"]
+    assert sorted(p.name for p in tokenizer_path(root).parent.iterdir()) == [
+        "build.json",
+        "tokenizer.json",
+    ]
     assert tokenizer_path(root).read_bytes() == before
+    assert record.read_bytes() == record_before
     monkeypatch.setattr(build_module, "write_corpus", write)
     build_corpus("tiny", root, FETCH, seed=1, retrain_tokenizer=True)
     assert tokenizer_path(root).read_bytes() != before  # so the failed retrain did change nothing

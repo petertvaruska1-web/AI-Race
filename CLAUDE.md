@@ -34,7 +34,7 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 - ML lint: `cd ml && python -m uv run ruff check .`
 - Cloud Linux (no GPU): `cd ml && uv run --no-sync pytest`. Always `--no-sync` there; never `uv sync`.
 - Slow tests (incl. the quick feasibility gate): `cd ml && python -m uv run pytest -m slow`
-- Build corpora + tokenizer: `cd ml && python -m uv run airace-content build --scale {tiny,full}`
+- Build corpora + tokenizer: `cd ml && python -m uv run airace-content build --scale {tiny,full}`. A tiny build (a quick check of the setup) needs its own `--out` (e.g. `--out ../data/tiny`): the tokenizer is frozen as tok-v1, so a full build refuses a tokenizer or shared files that a tiny build left, and a tiny build refuses a root that holds a full one.
 - ML CLI (`--help` on each): `cd ml && python -m uv run airace-ml train|chat|bench|fingerprint|build-novelty-index|build-judge|gate`
 - Feasibility gate: `airace-ml gate --out runs/gate-1 [--cpu-speed] [--quick]` (needs `build-novelty-index` and `build-judge` first). Rerunning it reuses every run and measurement whose data and code are unchanged, and redoes the rest.
 - (More commands are added here as they come to exist.)

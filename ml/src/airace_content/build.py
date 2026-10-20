@@ -17,7 +17,11 @@
 10. the tokenizer, trained only when it is missing or ``retrain_tokenizer`` is set (it is frozen
     once built);
 11. the documents encoded and written with their tags;
-12. the manifest and the shared artifacts.
+12. the manifest, the shared artifacts, and the records of the scale and seed that made them.
+
+A root holds the build of one scale: a full build refuses to reuse a tokenizer or shared artifacts
+that a tiny build made (or that nothing records), and a tiny build refuses a root that holds a full
+one, all before any source is read (``_refuse_other_scale``).
 
 Chats count as their turn texts joined by newlines wherever a document is measured (quality,
 duplicates, topic, tokenizer text). Every random choice comes from a stream named after its use
@@ -50,13 +54,20 @@ from airace_content.dedup import cluster_near_duplicates
 from airace_content.manifest import (
     FALSE_FACTS_FILE,
     KNOWN_VOCAB_FILE,
+    SHARED_RECORD_FILE,
     SIMPLE_VOCAB_FILE,
     make_manifest,
     read_false_facts,
     read_manifest,
+    read_shared_record,
+    read_tokenizer_record,
     read_vocab,
+    shared_record,
+    tokenizer_record,
+    tokenizer_record_path,
     write_false_facts,
     write_manifest,
+    write_record,
     write_vocab,
 )
 from airace_content.sources import SOURCES, Fetch, row_to_content
@@ -216,6 +227,72 @@ def tokenizer_texts(
     return sample
 
 
+def _refuse_other_scale(
+    scale: str,
+    out_root: Path,
+    root: Path,
+    tok_path: Path,
+    *,
+    frozen: Tok | None,
+    reused: Sequence[str],
+) -> None:
+    """Raise ``BuildError`` when this build would reuse, or overwrite, what a build of the other
+    scale left in the data root.
+
+    A full build refuses a frozen tokenizer unless its record says a full build trained it (and it
+    has ``VOCAB_SIZE`` entries), and shared artifacts it would reuse (``reused``, their file names)
+    unless their record says full: a tiny tokenizer costs about half as many tokens again for the
+    same English, tok-v1 is frozen for good, and a tiny vocabulary scores real text against a few
+    hundred words. A tiny build refuses a root whose tokenizer, shared artifacts or manifest are
+    a full build's, which it would overwrite.
+    """
+    record = read_tokenizer_record(tok_path)
+    shared = read_shared_record(root)
+    if scale == "tiny":
+        try:
+            datasets = (read_manifest(root) or {}).get("datasets", {})
+        except (OSError, ValueError):
+            datasets = {}  # a manifest that cannot be read says nothing
+        full = (
+            (record or {}).get("scale") == "full"
+            or (shared or {}).get("scale") == "full"
+            or any(entry.get("scale") == "full" for entry in datasets.values())
+        )
+        if full:
+            raise BuildError(
+                f"{out_root} already holds a full-scale build, and a tiny build would overwrite "
+                "it; a tiny build needs its own --out"
+            )
+        return
+    if frozen is not None:
+        if record is None or record.get("scale") != "full":
+            why = (
+                f"was trained by a {record['scale']} build"
+                if record is not None
+                else "has no record that a full build trained it"
+            )
+            raise BuildError(
+                f"the tokenizer at {tok_path} {why}, and tok-v1 is frozen once built, so a full "
+                "build must not reuse it. Add --retrain-tokenizer (building all datasets) to "
+                "train a new one, or build into another --out"
+            )
+        if frozen.vocab_size != VOCAB_SIZE:
+            raise BuildError(
+                f"the tokenizer at {tok_path} has {frozen.vocab_size} entries, not {VOCAB_SIZE}, "
+                "so a full build must not reuse it. Add --retrain-tokenizer (building all "
+                "datasets) to train a new one, or build into another --out"
+            )
+    if reused and (shared is None or shared.get("scale") != "full"):
+        made = (
+            f"by a {shared['scale']} build" if shared is not None else "by a build nothing records"
+        )
+        raise BuildError(
+            f"{', '.join(reused)} in {root} were made {made}, and a full build would score its "
+            "text against them. Build all datasets (leave out --datasets) to make them again, or "
+            "build into another --out"
+        )
+
+
 def _simple_vocab(scale: str, fetch: Fetch) -> set[str]:
     spec = SOURCES["tinystories"]
     texts = [
@@ -322,16 +399,20 @@ def build_corpus(
         path = root / name
         return path if partial and path.exists() else None
 
+    simple_path, facts_path, known_path = (
+        reusable(name) for name in (SIMPLE_VOCAB_FILE, FALSE_FACTS_FILE, KNOWN_VOCAB_FILE)
+    )
+    reused = [path.name for path in (facts_path, simple_path, known_path) if path]
+    _refuse_other_scale(scale, out_root, root, tok_path, frozen=frozen, reused=reused)
+    earlier_shared = read_shared_record(root)
+
     kb = load_kb()
-    path = reusable(SIMPLE_VOCAB_FILE)
-    simple_vocab = read_vocab(path) if path else _simple_vocab(scale, fetch)
-    path = reusable(FALSE_FACTS_FILE)
+    simple_vocab = read_vocab(simple_path) if simple_path else _simple_vocab(scale, fetch)
     plan = (
-        read_false_facts(path)
-        if path
+        read_false_facts(facts_path)
+        if facts_path
         else plan_false_facts(kb, stream(seed, "false_facts"), N_FALSE_FACTS)
     )
-    known_path = reusable(KNOWN_VOCAB_FILE)
 
     # Datasets the known vocabulary needs are assembled even when they are not written.
     needed = set(selected) | (set() if known_path else set(KNOWN_VOCAB_DATASETS))
@@ -374,8 +455,15 @@ def build_corpus(
         # rejected one nor one whose corpora were never all written may be left there.
         trial = tok_path.with_name(tok_path.name + ".tmp")
         tok = train_tokenizer(sample, trial, vocab_size=VOCAB_SIZE)
+        record = tokenizer_record(
+            trial,
+            scale=scale,
+            seed=seed,
+            sample_bytes=sum(len(text.encode("utf-8")) for text in sample),
+            vocab_size=tok.vocab_size,
+        )
     else:
-        trial, tok = None, frozen
+        trial, tok, record = None, frozen, None
 
     entries: dict[str, dict] = {}
     try:
@@ -401,6 +489,7 @@ def build_corpus(
             entries[ds] = _entry(scale, seed, stats[ds], tags[ds], component_tokens, ds)
         if trial is not None:
             trial.replace(tok_path)
+            write_record(tokenizer_record_path(tok_path), record)
     finally:
         if trial is not None and trial.exists():
             trial.unlink()
@@ -409,5 +498,10 @@ def build_corpus(
     write_false_facts(root / FALSE_FACTS_FILE, plan)
     write_vocab(root / SIMPLE_VOCAB_FILE, simple_vocab)
     write_vocab(root / KNOWN_VOCAB_FILE, known_vocab)
+    # Reused files keep the record of the build that made them (they were made at this scale).
+    write_record(
+        root / SHARED_RECORD_FILE,
+        earlier_shared if reused and earlier_shared else shared_record(scale, seed),
+    )
     write_manifest(root, make_manifest(entries, read_manifest(root) if partial else None))
     return BuildSummary(entries, train_tok, time.perf_counter() - started)

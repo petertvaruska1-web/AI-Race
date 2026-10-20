@@ -91,7 +91,7 @@ _DAMAGED = (OSError, ValueError, KeyError, TypeError, EOFError, SafetensorError)
 # the weights. Catch this only around the load itself, never around a whole run.
 _CHECKPOINT_DAMAGED = (*_DAMAGED, RuntimeError)
 
-BUILD_DATA_HINT = "airace-content build --scale tiny (a quick test set) or --scale full"
+BUILD_DATA_HINT = "airace-content build --scale full"
 
 
 class _UsageError(Exception):
