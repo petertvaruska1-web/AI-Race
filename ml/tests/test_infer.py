@@ -72,6 +72,16 @@ def test_ragged_batch_greedy_matches_naive_for_every_row(tiny_lm, tiny_tok):
     assert [g.tokens for g in out] == [_naive_greedy(tiny_lm, p, 10) for p in prompts]
 
 
+def _sharp_model(vocab_size, seed=1):
+    torch.manual_seed(seed)
+    model = Transformer(ModelShape(2, 64, 64), vocab_size)
+    with torch.no_grad():
+        for p in model.parameters():
+            if p.dim() > 1:
+                p.mul_(20)
+    return model
+
+
 @pytest.fixture
 def sharp_lm(tiny_tok):
     """Like ``tiny_lm`` but with large weights, so attention is peaked.
@@ -79,13 +89,7 @@ def sharp_lm(tiny_tok):
     An untrained model's attention is near-uniform, which hides padding and position bugs: every
     row's output barely depends on its context. Here it depends on every key and every position.
     """
-    torch.manual_seed(1)
-    model = Transformer(ModelShape(2, 64, 64), tiny_tok.vocab_size)
-    with torch.no_grad():
-        for p in model.parameters():
-            if p.dim() > 1:
-                p.mul_(20)
-    return TorchLM(model, tiny_tok, torch.device("cpu"))
+    return TorchLM(_sharp_model(tiny_tok.vocab_size), tiny_tok, torch.device("cpu"))
 
 
 def _naive_greedy_with_top1(lm, ids, n):
@@ -460,14 +464,84 @@ def test_chat_reply_and_complete_survive_a_model_with_non_finite_logits(nan_lm):
     assert isinstance(nan_lm.complete("Once upon a time", temperature=0.8), str)
 
 
+# bf16 keeps 8 bits of precision. On models like this one (logits up to about 12) it moves a
+# position's logits by 0.2 on average over the vocabulary, 0.6 at worst of 120 seeded models, and
+# it picks another token than fp32 where the top two logits are up to 1.0 apart (they can be 0.014
+# apart): the greedy tokens of a bf16 pass are not those of the fp32 one. So the logits are
+# compared, with twice the worst error seen, and the argmax only where fp32 is clear about it.
+BF16_MEAN_LOGIT_ERROR = 1.0  # of the logits of one position, over the whole vocabulary
+BF16_CLEAR_MARGIN = 2.0  # fp32's top-2 logit gap above which bf16 must pick the same token
+
+
+def _logits_over(lm, ids):
+    """The logits ``lm``'s own forward pass (autocast included) gives at every position of
+    ``ids``, as float32 on the CPU."""
+    with torch.inference_mode(), lm._eval_mode(), lm._autocast():
+        return lm.model(torch.tensor([ids], device=lm.device))[0].float().cpu()
+
+
+def _assert_logits_track(reference, other, prompts):
+    """Teacher-force ``reference``'s greedy reply to each prompt through both models, so they read
+    the same tokens however they would have diverged, and compare the logits that chose the reply
+    (and the one after it). Returns the largest mean error of a position."""
+    worst = 0.0
+    for prompt, generated in zip(prompts, _gen(reference, prompts, max_new_tokens=10), strict=True):
+        ids = prompt + generated.tokens
+        want = _logits_over(reference, ids)[len(prompt) - 1 :]
+        got = _logits_over(other, ids)[len(prompt) - 1 :]
+        assert torch.isfinite(got).all()
+        error = (got - want).abs().mean(dim=-1)
+        assert (error < BF16_MEAN_LOGIT_ERROR).all(), error.tolist()
+        top2 = want.topk(2, dim=-1).values
+        clear = top2[:, 0] - top2[:, 1] > BF16_CLEAR_MARGIN
+        assert (got.argmax(-1)[clear] == want.argmax(-1)[clear]).all()
+        worst = max(worst, float(error.max()))
+    return worst
+
+
+class _Bf16OnTheCpu(TorchLM):
+    """A TorchLM whose forward passes run in bfloat16 autocast on the CPU: the rounding of the
+    CUDA path, without a GPU."""
+
+    def _autocast(self):
+        return torch.autocast("cpu", dtype=torch.bfloat16)
+
+
+TRACKED_PROMPTS = ["Once upon a time", "The cat"]
+
+
+@pytest.mark.parametrize("seed", range(1, 9))
+def test_bf16_logits_track_the_fp32_logits_whichever_tokens_a_greedy_pass_would_pick(
+    tiny_tok, seed
+):
+    # The check the GPU test makes, with the bf16 of the CPU in place of the GPU's. Greedy tokens
+    # are no check at all: the same bf16 pass picks other tokens than fp32 for most of these models.
+    model = _sharp_model(tiny_tok.vocab_size, seed)
+    fp32 = TorchLM(model, tiny_tok, torch.device("cpu"))
+    bf16 = _Bf16OnTheCpu(copy.deepcopy(model), tiny_tok, torch.device("cpu"))
+    prompts = [tiny_tok.encode(text) for text in TRACKED_PROMPTS]
+    assert 0.01 < _assert_logits_track(fp32, bf16, prompts)  # bf16 really moved the logits
+
+
+def test_the_logit_check_notices_a_model_that_is_not_the_same(tiny_tok):
+    fp32 = TorchLM(_sharp_model(tiny_tok.vocab_size, 1), tiny_tok, torch.device("cpu"))
+    prompts = [tiny_tok.encode(text) for text in TRACKED_PROMPTS]
+    other = TorchLM(_sharp_model(tiny_tok.vocab_size, 2), tiny_tok, torch.device("cpu"))
+    with pytest.raises(AssertionError):
+        _assert_logits_track(fp32, other, prompts)  # other weights
+    broken = _Bf16OnTheCpu(copy.deepcopy(fp32.model), tiny_tok, torch.device("cpu"))
+    with torch.no_grad():
+        broken.model.tok_emb.weight.mul_(1.5)  # a path that mangles the weights
+    with pytest.raises(AssertionError):
+        _assert_logits_track(fp32, broken, prompts)
+
+
 @pytest.mark.gpu
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
 def test_cuda_bf16_path_tracks_the_cpu_path(sharp_lm, tiny_tok):
     gpu = TorchLM(copy.deepcopy(sharp_lm.model), tiny_tok, torch.device("cuda"))
-    prompts = [tiny_tok.encode("Once upon a time"), tiny_tok.encode("The cat")]
-    on_cpu = _gen(sharp_lm, prompts, max_new_tokens=10)
-    on_gpu = _gen(gpu, prompts, max_new_tokens=10)
-    assert [g.tokens for g in on_gpu] == [g.tokens for g in on_cpu]
+    prompts = [tiny_tok.encode(text) for text in TRACKED_PROMPTS]
+    _assert_logits_track(sharp_lm, gpu, prompts)
     sampled = gpu.generate(prompts, max_new_tokens=10, temperature=0.9, top_p=0.9, seed=2)
     assert sampled == gpu.generate(prompts, max_new_tokens=10, temperature=0.9, top_p=0.9, seed=2)
     assert all(0 < q <= 1 for g in sampled for q in g.token_probs + g.top1_probs)
