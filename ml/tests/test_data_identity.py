@@ -13,7 +13,9 @@ from airace_ml.data.identity import data_identity
 from airace_ml.paths import corpus_dir, tokenizer_path
 
 
-def test_identity_is_stable_across_calls_and_across_copies_of_the_data(tiny_data_root, data_root_copy):
+def test_identity_is_stable_across_calls_and_across_copies_of_the_data(
+    tiny_data_root, data_root_copy
+):
     first = data_identity(data_root_copy)
     assert re.fullmatch(r"[0-9a-f]{64}", first)
     assert data_identity(data_root_copy) == first  # nothing in it depends on the time or the call
