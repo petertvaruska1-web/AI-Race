@@ -334,7 +334,7 @@ def _discard_resume_states(out: Path) -> None:
     the old build's state, which would then look resumable."""
     if not out.is_dir():
         return
-    for path in out.iterdir():
+    for path in list(out.iterdir()):  # listed first: the folder changes as it is deleted from
         if path.is_dir() and (path.name == RESUME_DIR or path.name.startswith(f"{RESUME_DIR}.")):
             shutil.rmtree(path, ignore_errors=True)
 
