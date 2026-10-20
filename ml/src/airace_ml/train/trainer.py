@@ -71,6 +71,7 @@ PROBE_PROMPTS: tuple[tuple[Literal["doc", "chat"], str], ...] = (
     ("doc", "The capital of France is"),
 )
 
+MICRO_BATCH_TOKENS = 8192  # the most tokens one forward/backward pass holds in memory at once
 SNAPSHOT_EVERY = 25  # steps between the in-memory snapshots a spike rolls back to
 MAX_SPIKES = 3  # the third spike stops the run
 PROGRESS_EVERY = 10
@@ -513,10 +514,7 @@ class _Run:
             group["lr"] = lr
         x, y = self.sampler.next_batch(self.cfg.batch_size)
         x, y = torch.from_numpy(x).to(self.device), torch.from_numpy(y).to(self.device)
-        with _autocast(self.device):
-            logits = self.model(x)
-        loss = F.cross_entropy(logits.float().flatten(0, 1), y.flatten())
-        loss.backward()
+        loss = self._forward_backward(x, y)
         if self.hooks.after_backward is not None:
             self.hooks.after_backward(step, self.model)
         norm = torch.nn.utils.clip_grad_norm_(self.params, self.style.clip_norm)
@@ -535,6 +533,34 @@ class _Run:
             self.optimizer.step()
         self.optimizer.zero_grad(set_to_none=True)
         return value, spike
+
+    def _forward_backward(self, x: Tensor, y: Tensor) -> Tensor:
+        """Backpropagate the mean next-token loss of the batch ``(x, y)``; returns that loss.
+
+        The whole step is one batch (one optimizer step, one clip, one spike check), but its rows
+        go through the model in micro-batches of at most :data:`MICRO_BATCH_TOKENS` tokens, so
+        the activations held for the backward pass never grow with the batch. Each micro-batch's
+        loss is its summed token losses over the *whole* batch's token count, so the gradients
+        add up to the whole batch's. A batch of one micro-batch is the plain full-batch step.
+        """
+        ctx_len = self.cfg.shape.ctx_len
+        rows_per_pass = max(1, MICRO_BATCH_TOKENS // ctx_len)
+        total = torch.zeros((), device=self.device)
+        for start in range(0, len(x), rows_per_pass):
+            with _autocast(self.device):
+                logits = self.model(x[start : start + rows_per_pass])
+            loss = (
+                F.cross_entropy(
+                    logits.float().flatten(0, 1),
+                    y[start : start + rows_per_pass].flatten(),
+                    reduction="sum",
+                )
+                / self.tokens_per_step
+            )
+            del logits  # not needed by backward (the loss saved what it needs): free it now
+            loss.backward()
+            total += loss.detach()
+        return total
 
     # -- telemetry ------------------------------------------------------------------------------
 

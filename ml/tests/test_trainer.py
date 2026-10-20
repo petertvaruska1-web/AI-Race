@@ -1,13 +1,18 @@
+import dataclasses
 import inspect
 import math
 
 import pytest
 import torch
+import torch.nn.functional as F
 
 from airace_ml.data.sampler import MixtureError
+from airace_ml.evals.judge import judge_train_config
 from airace_ml.model.checkpoint import load_checkpoint
 from airace_ml.model.growth import GrowthError
 from airace_ml.model.shape import ModelShape
+from airace_ml.model.transformer import Transformer
+from airace_ml.train import trainer as trainer_module
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.train.events import Done, HeldoutEval, Instability, Progress, Sample
 from airace_ml.train.trainer import (
@@ -446,3 +451,152 @@ def test_has_resume_state_is_false_once_the_run_has_finished(tiny_data_root, tmp
 def test_the_default_checkpoint_interval_is_the_exported_constant():
     default = inspect.signature(train_run).parameters["checkpoint_every"].default
     assert default == CHECKPOINT_EVERY == 200
+
+
+# -- micro-batches: one optimizer step over a batch that does not fit in memory at once -----------
+
+
+class _Probe:
+    """What a short run did: per step the logged loss, the gradients just before clipping and the
+    rows of each forward pass of the step, plus the weights it ended with."""
+
+    def __init__(self):
+        self.loss: dict[int, float] = {}
+        self.grads: dict[int, list[torch.Tensor]] = {}
+        self.forwards: dict[int, list[int]] = {}
+        self.weights: list[torch.Tensor] = []
+        self._calls: list[int] = []
+
+    def hooks(self) -> TrainHooks:
+        def loss_override(step, loss):
+            self.loss[step] = loss
+            self.forwards[step] = self._calls[:]
+            self._calls.clear()
+            return loss
+
+        def after_backward(step, model):
+            self.grads[step] = [p.grad.detach().clone() for p in model.parameters()]
+
+        return TrainHooks(loss_override=loss_override, after_backward=after_backward)
+
+
+def _probe_run(root, out_dir, monkeypatch, *, micro_tokens=None, plain_step=False, **over):
+    """Train ``cfg(**over)`` for 3 steps, with the micro-batch cap set to ``micro_tokens`` (the
+    trainer's own when None) and, with ``plain_step``, the step the trainer had before there were
+    micro-batches: the whole batch in one forward, a mean cross-entropy, one backward."""
+    probe = _Probe()
+    with monkeypatch.context() as m:
+        if micro_tokens is not None:
+            m.setattr(trainer_module, "MICRO_BATCH_TOKENS", micro_tokens)
+        if plain_step:
+
+            def one_pass(self, x, y):
+                with trainer_module._autocast(self.device):
+                    logits = self.model(x)
+                loss = F.cross_entropy(logits.float().flatten(0, 1), y.flatten())
+                loss.backward()
+                return loss.detach()
+
+            m.setattr(trainer_module._Run, "_forward_backward", one_pass)
+        original = Transformer.forward
+
+        def spy(self, x, *args, **kwargs):
+            probe._calls.append(x.shape[0])
+            return original(self, x, *args, **kwargs)
+
+        m.setattr(Transformer, "forward", spy)
+        train_run(
+            cfg(token_budget=1024 * 3, **over),
+            out_dir=out_dir,
+            data_root=root,
+            _hooks=probe.hooks(),
+        )
+    model, _ = load_checkpoint(out_dir)
+    probe.weights = [p.detach().clone() for p in model.parameters()]
+    return probe
+
+
+@pytest.fixture(scope="module")
+def whole_batch_run(tiny_data_root, tmp_path_factory):
+    """The reference: 3 steps of 16 rows x 64 tokens, which fit in one micro-batch."""
+    with pytest.MonkeyPatch.context() as m:
+        m.setenv("AIRACE_DEVICE", "cpu")
+        return _probe_run(tiny_data_root, tmp_path_factory.mktemp("whole") / "w", m)
+
+
+@pytest.mark.parametrize(
+    ("micro_tokens", "rows_per_forward"),
+    [
+        (10**9, [16]),  # no cap in sight: the whole batch in one forward
+        (512, [8, 8]),  # 8 rows of 64 tokens fit in a micro-batch
+        (192, [3, 3, 3, 3, 3, 1]),  # the last micro-batch is the short one
+        (64, [1] * 16),  # one row at a time
+        (10, [1] * 16),  # a row longer than the cap still goes through, alone
+    ],
+)
+def test_micro_batches_give_the_same_step_as_the_whole_batch(
+    tiny_data_root, tmp_path, monkeypatch, whole_batch_run, micro_tokens, rows_per_forward
+):
+    ref = whole_batch_run
+    run = _probe_run(tiny_data_root, tmp_path / "m", monkeypatch, micro_tokens=micro_tokens)
+    assert run.forwards[1] == run.forwards[2] == run.forwards[3] == rows_per_forward
+    # The same draw from the sampler, so the same loss and the same gradient up to the order the
+    # rows are summed in (the first step starts from identical weights).
+    for step in (1, 2, 3):
+        assert run.loss[step] == pytest.approx(ref.loss[step], rel=1e-4)
+    for g, expected in zip(run.grads[1], ref.grads[1], strict=True):
+        torch.testing.assert_close(g, expected, rtol=1e-3, atol=1e-6)
+    # And it learned the same thing.
+    for w, expected in zip(run.weights, ref.weights, strict=True):
+        torch.testing.assert_close(w, expected, rtol=0, atol=2e-3)
+
+
+def test_a_batch_in_one_micro_batch_is_bit_identical_to_the_plain_step(
+    tiny_data_root, tmp_path, monkeypatch, whole_batch_run
+):
+    plain = _probe_run(tiny_data_root, tmp_path / "plain", monkeypatch, plain_step=True)
+    assert plain.forwards[1] == [16]
+    assert plain.loss == whole_batch_run.loss
+    for step in (1, 2, 3):
+        for g, expected in zip(whole_batch_run.grads[step], plain.grads[step], strict=True):
+            assert torch.equal(g, expected)
+    for w, expected in zip(whole_batch_run.weights, plain.weights, strict=True):
+        assert torch.equal(w, expected)
+
+
+def test_micro_batches_do_not_change_what_a_resumed_run_draws(
+    tiny_data_root, tmp_path, monkeypatch
+):
+    # One sampler draw per step whatever the micro-batch size, so an interrupted run resumes onto
+    # the same stream and ends with the weights of an uninterrupted one.
+    monkeypatch.setattr(trainer_module, "MICRO_BATCH_TOKENS", 192)
+    c = cfg(token_budget=1024 * 30)
+    full = train_run(c, out_dir=tmp_path / "full", data_root=tiny_data_root)
+    train_run(
+        c,
+        out_dir=tmp_path / "p",
+        data_root=tiny_data_root,
+        checkpoint_every=10,
+        _hooks=TrainHooks(stop_after_steps=20),
+    )
+    res = train_run(c, out_dir=tmp_path / "p", data_root=tiny_data_root, resume=True)
+    assert _telemetry(tmp_path / "p") == _telemetry(tmp_path / "full")
+    m1, _ = load_checkpoint(full.out_dir)
+    m2, _ = load_checkpoint(res.out_dir)
+    for p, q in zip(m1.parameters(), m2.parameters(), strict=True):
+        torch.testing.assert_close(p, q, atol=1e-6, rtol=0)
+
+
+@pytest.mark.gpu
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
+def test_a_judge_recipe_step_fits_the_8gb_reference_card(tiny_data_root, tmp_path):
+    # 128 rows x 256 tokens per step, 8 layers x 384 wide: it needs ~7 GiB in one piece (the
+    # card also drives the desktop). In micro-batches of 8192 tokens it needs about a third of that.
+    judge = judge_train_config()
+    c = dataclasses.replace(judge, run_id="judge-memory", token_budget=judge.batch_tokens)
+    assert c.steps == 1 and c.batch_size * c.shape.ctx_len == 32768
+    torch.cuda.empty_cache()
+    torch.cuda.reset_peak_memory_stats()
+    r = train_run(c, out_dir=tmp_path / "j", data_root=tiny_data_root, device=torch.device("cuda"))
+    assert r.status == "completed" and r.steps == 1 and r.tokens == 32768
+    assert torch.cuda.max_memory_allocated() < 6 * 1024**3
