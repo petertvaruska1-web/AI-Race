@@ -1382,8 +1382,17 @@ def test_the_summary_and_warnings_survive_a_cp1252_redirect_and_a_non_ascii_path
     assert "Петко_data" in out_bytes.getvalue().decode("utf-8")
     err = err_bytes.getvalue().decode("utf-8")
     assert "warning: educational: cosmo_openstax ran out at 0 of 30 " in err
-    # an error that names the path is printed as well
-    assert (
-        main(["build", "--scale", "tiny", "--datasets", "web", "--out", str(tmp_path / "Ünï")]) == 1
-    )
-    assert "error: the tokenizer is trained on" in err_bytes.getvalue().decode("utf-8")
+
+
+def test_an_error_naming_a_non_ascii_path_prints_on_a_cp1252_redirect(tmp_path, monkeypatch):
+    """The error line is the other place the path is printed. The streams are fresh ones, as the
+    command line meets them, and the path has letters cp1252 cannot encode."""
+    out_bytes, stdout = _cp1252_console()
+    err_bytes, stderr = _cp1252_console()
+    monkeypatch.setattr(sys, "stdout", stdout)
+    monkeypatch.setattr(sys, "stderr", stderr)
+    root = tmp_path / "Петко_data"  # no tokenizer there yet, so a partial build is refused
+    assert main(["build", "--scale", "tiny", "--datasets", "web", "--out", str(root)]) == 1
+    err = err_bytes.getvalue().decode("utf-8")
+    assert err.splitlines()[-1].startswith("error: the tokenizer is trained on")
+    assert "Петко_data" in err
