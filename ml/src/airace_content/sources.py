@@ -370,8 +370,35 @@ def _text(row: dict) -> list[Content]:
     return [text] if text.strip() else []
 
 
+# About 7% of the TinyStories rows the hub serves have their punctuation misdecoded: UTF-8 bytes
+# read as Windows-1252. A curly quote or dash is E2 80 xx, which shows as "a-circumflex, euro,
+# <xx as cp1252>"; a closing double quote (E2 80 9D) has lost its last byte, which cp1252 has no
+# character for, and is left as just the first two characters. The clean stories use straight
+# ASCII quotes, so the repair gives those.
+_TINYSTORIES_MOJIBAKE = re.compile("\u00e2\u20ac[\u0153\u2122\u02dc\u201c\u201d]?")
+_TINYSTORIES_REPAIRS = {
+    "\u00e2\u20ac\u0153": '"',  # left double quote
+    "\u00e2\u20ac\u2122": "'",  # right single quote, the apostrophe
+    "\u00e2\u20ac\u02dc": "'",  # left single quote
+    "\u00e2\u20ac\u201c": "-",  # en dash
+    "\u00e2\u20ac\u201d": "-",  # em dash
+}
+
+
+def repair_tinystories_mojibake(text: str) -> str:
+    """``text`` with the misdecoded punctuation of the TinyStories rows turned into ASCII: the
+    left double quote into ``"``, the apostrophe and the left single quote into ``'``, the dashes
+    into ``-``, and the closing double quote (the two characters left of it) into ``"``. Text
+    without them is returned as it is."""
+    return _TINYSTORIES_MOJIBAKE.sub(lambda m: _TINYSTORIES_REPAIRS.get(m.group(), '"'), text)
+
+
+def _tinystories(row: dict) -> list[Content]:
+    return _text({"text": repair_tinystories_mojibake(str(row.get("text") or ""))})
+
+
 _ADAPTERS: dict[str, Callable[[dict], list[Content]]] = {
-    "tinystories": _text,
+    "tinystories": _tinystories,
     "fineweb": _text,
     "fineweb_edu": _fineweb_edu,
     "cosmo_khan": _text,
@@ -465,6 +492,8 @@ def row_to_content(source_id: str, row: dict) -> list[Content]:
     * mbpp: ``# {text}\\n{code}`` with tabs as 4 spaces and LF line endings;
     * simplewiki: the title, then the first paragraphs of the lead section (before the first
       heading), up to 150 words;
+    * tinystories: its ``text`` with the misdecoded quotes, apostrophes and dashes of the hub's
+      rows repaired to ASCII (``repair_tinystories_mojibake``);
     * the rest: their ``text``.
     """
     if source_id not in _ADAPTERS:

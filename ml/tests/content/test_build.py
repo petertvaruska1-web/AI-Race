@@ -330,6 +330,31 @@ def test_chunk_passages_cuts_long_paragraphs():
     assert chunk_passages("THE END") == []  # under PASSAGE_MIN_WORDS
 
 
+def test_tinystories_mojibake_is_repaired_to_ascii():
+    # About 7% of the TinyStories rows on the hub have their punctuation misdecoded (UTF-8 read as
+    # Windows-1252, the closing double quote having lost its last byte). The clean stories use
+    # straight ASCII quotes, so the repair gives those, and leaves every other row as it was.
+    garbled, clean, curly = (
+        row_to_content("tinystories", row)
+        for row in fixture_fetch(REAL_FIX)(SOURCES["tinystories"], 100)
+    )
+    repaired = (
+        'Mia had a red kite. "Look at my kite!" she said. "It can fly high," said her dad. '
+        "He smiled - and Mia smiled too. The kite didn't fall - it flew all day. "
+        "Mia said, 'Thank you, dad' and gave him a hug. \"It's the best day!\""
+    )
+    assert garbled == [repaired]
+    rows = list(fixture_fetch(REAL_FIX)(SOURCES["tinystories"], 100))
+    assert clean == [rows[1]["text"]]
+    assert (
+        curly == [rows[2]["text"]] and "\u201cThis is nice,\u201d" in curly[0]
+    )  # real quotes stay
+    assert "\u00e2" not in garbled[0]
+    # build._simple_vocab reads the same rows: "didn't" is a word of the vocabulary, not "didn"
+    vocab = _simple_vocab("tiny", fixture_fetch(REAL_FIX))
+    assert "didn't" in vocab and "didn" not in vocab and "it's" in vocab
+
+
 def test_chat_adapters():
     three = {"dialogue": ["Hi", "Hello", "Hey all", "Bye"], "speakers": ["A", "B", "C", "A"]}
     assert row_to_content("soda", three) == [
