@@ -1,6 +1,7 @@
 import dataclasses
 import inspect
 import math
+from pathlib import Path
 
 import pytest
 import torch
@@ -505,6 +506,133 @@ def test_resume_recovers_from_an_interrupted_swap(tiny_data_root, tmp_path):
     for p, q in zip(m1.parameters(), m2.parameters()):
         torch.testing.assert_close(p, q, atol=1e-6, rtol=0)
     assert _telemetry(out) == _telemetry(tmp_path / "full")
+    assert not [p.name for p in out.iterdir() if p.name.startswith("resume")]
+
+
+def _uninterrupted(root, tmp_path_factory, name, config, hooks=None):
+    """Train ``config`` straight through once, for the resume tests of a module to compare to."""
+    out = tmp_path_factory.mktemp(name) / "full"
+    with pytest.MonkeyPatch.context() as m:
+        m.setenv("AIRACE_DEVICE", "cpu")
+        train_run(config, out_dir=out, data_root=root, _hooks=hooks)
+    return out
+
+
+def _assert_same_run(resumed, uninterrupted):
+    """Same events in the same order, and the same weights, as the run that was never stopped."""
+    assert _telemetry(resumed) == _telemetry(uninterrupted)
+    m1, _ = load_checkpoint(uninterrupted)
+    m2, _ = load_checkpoint(resumed)
+    for p, q in zip(m1.parameters(), m2.parameters(), strict=True):
+        torch.testing.assert_close(p, q, atol=1e-6, rtol=0)
+
+
+# 30 steps: the last 6 (steps 25 to 30) are the decay phase, which trains on the finishing mix.
+_FINISHING = cfg(mixture={"creative": 1.0}, finishing_mixture={"code": 1.0}, token_budget=1024 * 30)
+
+
+@pytest.fixture(scope="module")
+def plain_run(tiny_data_root, tmp_path_factory):
+    return _uninterrupted(tiny_data_root, tmp_path_factory, "plain", cfg(token_budget=1024 * 40))
+
+
+@pytest.fixture(scope="module")
+def finishing_run(tiny_data_root, tmp_path_factory):
+    return _uninterrupted(tiny_data_root, tmp_path_factory, "finishing", _FINISHING)
+
+
+@pytest.fixture(scope="module")
+def rolled_back_run(tiny_data_root, tmp_path_factory):
+    return _uninterrupted(
+        tiny_data_root,
+        tmp_path_factory,
+        "rolled_back",
+        cfg(token_budget=1024 * 40),
+        TrainHooks(loss_override=_nan_at(30, 35)),
+    )
+
+
+@pytest.mark.parametrize("stop", [20, 27])  # before the decay phase begins, and inside it
+def test_resume_inside_the_finishing_phase_trains_the_rest_on_the_finishing_mix(
+    tiny_data_root, tmp_path, finishing_run, stop
+):
+    out = tmp_path / "p"
+    part = train_run(
+        _FINISHING, out_dir=out, data_root=tiny_data_root, _hooks=TrainHooks(stop_after_steps=stop)
+    )
+    assert part.status == "interrupted" and part.steps == stop
+    res = train_run(_FINISHING, out_dir=out, data_root=tiny_data_root, resume=True)
+    assert res.status == "completed" and res.steps == 30
+    _assert_same_run(out, finishing_run)
+
+
+def test_resume_after_a_rollback_at_the_stop_step_keeps_rolling_back(
+    tiny_data_root, tmp_path, rolled_back_run
+):
+    # Step 30 is a spike and also a resume point: the saved weights are the snapshot's, so the
+    # state keeps no copy of it and the resumed run rebuilds the snapshot from the weights. The
+    # spike at step 35 must roll back to the same weights the uninterrupted run rolls back to.
+    c = cfg(token_budget=1024 * 40)
+    out = tmp_path / "p"
+    part = train_run(
+        c,
+        out_dir=out,
+        data_root=tiny_data_root,
+        checkpoint_every=10,
+        _hooks=TrainHooks(loss_override=_nan_at(30, 35), stop_after_steps=30),
+    )
+    assert part.status == "interrupted" and '"action": "rollback"' in _telemetry(out)
+    train_run(
+        c,
+        out_dir=out,
+        data_root=tiny_data_root,
+        resume=True,
+        _hooks=TrainHooks(loss_override=_nan_at(30, 35)),
+    )
+    assert _telemetry(out).count('"action": "rollback"') == 2
+    _assert_same_run(out, rolled_back_run)
+
+
+@pytest.mark.parametrize(
+    "refused",
+    [
+        "every rename of a resume folder",
+        "moving the previous state aside",  # the new state then stays under its temporary name
+    ],
+)
+def test_training_goes_on_when_windows_refuses_to_rename_the_resume_folder(
+    tiny_data_root, tmp_path, monkeypatch, plain_run, refused
+):
+    # A virus scanner or indexer holding the folder makes Windows refuse a rename (PermissionError).
+    # Training must go on, and a resume must find the newest complete state wherever it ended up.
+    real_rename = Path.rename
+
+    def rename(self, target):
+        if self.name == "resume" or (
+            refused.startswith("every") and self.name.startswith("resume.tmp.")
+        ):
+            raise PermissionError(13, "refused, the folder is in use", str(self))
+        return real_rename(self, target)
+
+    monkeypatch.setattr(Path, "rename", rename)
+    c = cfg(token_budget=1024 * 40)
+    out = tmp_path / "p"
+    part = train_run(
+        c,
+        out_dir=out,
+        data_root=tiny_data_root,
+        checkpoint_every=10,
+        _hooks=TrainHooks(stop_after_steps=20),
+    )
+    assert part.status == "interrupted"
+    kept_tmp = [p.name for p in out.iterdir() if p.name.startswith("resume.tmp.")]
+    assert kept_tmp  # the swap was refused, so a state stayed under its temporary name
+    assert can_resume(out, c)
+    ev = []
+    res = train_run(c, out_dir=out, data_root=tiny_data_root, resume=True, on_event=ev.append)
+    assert res.status == "completed" and res.steps == 40
+    assert next(e for e in ev if isinstance(e, Progress)).step == 30  # from step 20, not 10
+    _assert_same_run(out, plain_run)
     assert not [p.name for p in out.iterdir() if p.name.startswith("resume")]
 
 
