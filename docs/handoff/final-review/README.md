@@ -15,19 +15,20 @@ Script: `final-review.js` in this folder. It is the portable copy of the workflo
 
 The script stops and returns `{incomplete: <phase>}` instead of synthesizing from partial data whenever an agent fails, e.g. on a usage limit.
 
-## State at save time (2026-10-14 20:30 UTC)
-- **Find, Critic, Find more and Dedup are done.** Dedup produced **56 findings**: 1 Critical, 14 Important and 41 Minor. They are numbered F1–F56 in the order of `agent-results.json` → `dedup.merged`.
-- **Verification (v3) runs as 13 Sonnet agents** started with the Agent tool. The owner asked to use lighter models where the strongest one isn't needed, and the workflow run was stopped before any verifier finished.
-  - The shared brief is `verify/brief.md`.
-  - The group files are `verify/<group>.json`: six groups of serious findings (`s-*`) and seven groups of minors (`m-*`).
-  - F51 (stale docs) is skipped, because it was fixed on 2026-10-14.
-  - Each agent writes `verdicts-<group>.json` (one verdict per finding) to the session scratchpad. The sync script copies these to `verify/`.
+## State at save time (2026-10-20 08:20 UTC)
+- **Find, Critic, Find more and Dedup are done.** Dedup produced **56 findings** (1 Critical, 14 Important, 41 Minor), numbered F1–F56 in the order of `agent-results.json` → `dedup.merged`.
+- **Verification v4 runs as a workflow** (`verify/verify-workflow.js`, run `wf_1d6b0acd-0c8`): 13 Sonnet skeptics, one per group file `verify/<group>.json`.
+  - All 13 v3 verifiers (Agent tool) had died at the usage limit within minutes, with no verdicts.
+  - Each skeptic returns structured verdicts, which the workflow journal caches, and also writes `verdicts-<group>.json`.
+  - The sync script exports the journal to `verify/verify-results.json` (label `verify3:<group>` → verdicts).
+  - F51 is skipped (fixed on 2026-10-14).
 - **Synthesis is done by the controller** from the verdicts. It writes `final-review.md` together with its rulings.
 
 ## How to resume
-**Same session**: wait for the 13 verifier notifications. Re-dispatch any verifier whose verdict file is missing after a usage-limit stop.
+**Same session**: resume the verification workflow after a limit with `Workflow({scriptPath: <session>/workflows/scripts/m1-final-review-verify-wf_1d6b0acd-0c8.js, resumeFromRunId: "wf_1d6b0acd-0c8"})`. Finished groups replay from the cache.
 
 **Fresh session or container**:
+0. Run `verify/verify-workflow.js` as a new workflow, after fixing its `SP` path to your scratchpad and copying `verify/brief.md` and the group files there. Skip groups whose verdicts are already in `verify/verify-results.json`. Alternatively, use the Agent-tool route below.
 1. Recreate the SDD workspace (docs/handoff/README.md §3).
 2. For every `verify/<group>.json` that has no `verify/verdicts-<group>.json` yet, start one Sonnet agent (Agent tool, `model: "sonnet"`) with this prompt: "You are an adversarial verifier in the final review of the AI Race repository. First read the brief at <abs path>/docs/handoff/final-review/verify/brief.md and follow it exactly. Your group is '<group>'; its findings are in <abs path>/verify/<group>.json. Write your verdicts to <scratch>/verdicts-<group>.json."
    - The brief's scratch paths point at the old session's scratchpad. Replace them with your own scratchpad, e.g. with sed on a copy of the brief.
