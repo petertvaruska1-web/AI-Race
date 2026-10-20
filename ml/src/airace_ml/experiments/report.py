@@ -3,7 +3,8 @@
 It holds a summary of the seven criteria, each criterion's measurements, sample transcripts for
 human review, the four differentiation models' benchmark scores side by side, what each model's
 personality is measured to be, every run the gate trained (and whether it completed), and an
-"Iterations" section that later attempts fill in.
+"Iterations" section that later attempts fill in. A report is written again on every gate run;
+what was written into an existing report's Iterations section is kept.
 
 Model text is arbitrary (an untrained model writes anything), so every table cell is escaped:
 Markdown and HTML punctuation is backslash-escaped, line breaks become ``<br>``, and transcript
@@ -33,6 +34,7 @@ ITERATIONS_PLACEHOLDER = (
     "_None yet. Each attempt to fix a failing criterion is recorded here: the hypothesis, the "
     "change and the result._"
 )
+_ITERATIONS_HEADING = re.compile(r"^## Iterations[ \t]*$", re.MULTILINE)
 
 
 def _cut(text: str, limit: int) -> str:
@@ -256,15 +258,31 @@ def _setup(raw: Mapping) -> list[str]:
     return lines
 
 
+def _kept_iterations(path: Path) -> str:
+    """The body of the "## Iterations" section of the report already at ``path`` if someone wrote
+    in it (it is the last section, so everything after the heading), else the placeholder. A
+    missing, unreadable or foreign file has none. Model text cannot pose as the heading: every
+    table cell starts with a bar and has its ``#`` escaped."""
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except (OSError, ValueError):
+        return ITERATIONS_PLACEHOLDER
+    headings = list(_ITERATIONS_HEADING.finditer(text))
+    body = text[headings[-1].end() :].strip() if headings else ""
+    return body or ITERATIONS_PLACEHOLDER
+
+
 def write_gate_report(outcome: GateOutcome, path: Path) -> None:
-    """Write ``outcome`` to ``path`` as Markdown (UTF-8), creating its folder if needed."""
+    """Write ``outcome`` to ``path`` as Markdown (UTF-8), creating its folder if needed. If a
+    report is already there, what was written into its Iterations section stays (a rerun after
+    each attempt to fix a criterion must not lose the notes of the attempts before it)."""
     raw = outcome.raw or {}
     lines = ["# M1 feasibility gate", "", *_setup(raw), "## Summary", "", *_summary(outcome)]
     for section in (_criteria, _runs, _transcripts, _benchmarks, _personalities):
         part = section(outcome)
         if part:
             lines += ["", *part]
-    lines += ["", "## Iterations", "", ITERATIONS_PLACEHOLDER, ""]
     path = Path(path)
+    lines += ["", "## Iterations", "", _kept_iterations(path), ""]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8", newline="\n")

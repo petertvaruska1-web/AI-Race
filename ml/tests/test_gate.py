@@ -50,7 +50,11 @@ from airace_ml.experiments.gate import (
     max_logit_diff,
     speed_criterion,
 )
-from airace_ml.experiments.report import TRANSCRIPT_CHARS, write_gate_report
+from airace_ml.experiments.report import (
+    ITERATIONS_PLACEHOLDER,
+    TRANSCRIPT_CHARS,
+    write_gate_report,
+)
 from airace_ml.experiments.runs import GateRun, GateRuns
 from airace_ml.infer.lm import Generation
 from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME, CheckpointMeta
@@ -615,6 +619,45 @@ def test_report_escapes_and_caps_model_text(tmp_path):
         cells = row.replace("\\|", "").count("|")
         assert cells in {3, 4, 5}, row
     assert "## Iterations" in text and "| code | 1.5 | yes |" in text  # a group per row
+
+
+def test_a_rerun_keeps_the_iterations_written_into_the_report(tmp_path):
+    path = tmp_path / "report.md"
+    write_gate_report(_outcome(), path)
+    first = path.read_text(encoding="utf-8")
+    assert first.rstrip().endswith("## Iterations\n\n" + ITERATIONS_PLACEHOLDER)
+    notes = (
+        "### Attempt 1: more web noise\n\nHypothesis: cleaning removes too little.\n\n"
+        "Change: web typo rate up.\n\nResult: G7 passed; G3 still fails.\n\n## A heading too"
+    )
+    path.write_text(first.replace(ITERATIONS_PLACEHOLDER, notes), encoding="utf-8")
+    rerun = GateOutcome([GateCriterion("G1", "Speed", True, "fresh detail", {})], {}, {})
+    for _ in range(2):  # and again: nothing is lost or doubled
+        write_gate_report(rerun, path)
+        text = path.read_text(encoding="utf-8")
+        assert text.count("## Iterations") == 1 and text.rstrip().endswith(notes)
+        assert ITERATIONS_PLACEHOLDER not in text
+        assert "fresh detail" in text and "no \\| CUDA" not in text  # the rest is new
+    # a report whose notes were removed or never written starts from the placeholder again
+    path.write_text(text.replace(notes, ""), encoding="utf-8")
+    write_gate_report(rerun, path)
+    assert path.read_text(encoding="utf-8").rstrip().endswith(ITERATIONS_PLACEHOLDER)
+
+
+def test_a_report_without_iterations_or_not_readable_text_starts_from_the_placeholder(tmp_path):
+    path = tmp_path / "report.md"
+    path.write_text("# some other file\n", encoding="utf-8")
+    write_gate_report(_outcome(), path)
+    assert path.read_text(encoding="utf-8").rstrip().endswith(ITERATIONS_PLACEHOLDER)
+    path.write_bytes(b"\xff\xfe broken \x80")  # not UTF-8 at all
+    write_gate_report(_outcome(), path)
+    assert path.read_text(encoding="utf-8").rstrip().endswith(ITERATIONS_PLACEHOLDER)
+    # model text cannot pose as a heading: a cell starts with a bar and escapes the hash
+    outcome = _outcome()
+    outcome.transcripts = {"G2": [("p", "\n## Iterations\nnot a note")]}
+    write_gate_report(outcome, path)
+    write_gate_report(outcome, path)
+    assert path.read_text(encoding="utf-8").rstrip().endswith(ITERATIONS_PLACEHOLDER)
 
 
 def test_report_shows_bench_tables_personalities_and_a_quick_banner(tmp_path):
