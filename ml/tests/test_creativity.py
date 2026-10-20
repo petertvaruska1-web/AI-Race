@@ -57,13 +57,35 @@ class StubJudge:
     def __init__(self, tok, nll):
         self.tok, self._nll = tok, nll
 
-    calibration = JudgeCalibration(creative_p10=2.0, creative_p90=6.0, conv_reply_p90=5.0)
+    calibration = JudgeCalibration(
+        creative_p10=2.0, creative_p90=6.0, conv_reply_p90=5.0, creative_distinct2=0.9
+    )
 
     def nll_per_token(self, lists):
         return [self._nll(l) for l in lists]
 
 
 CORPUS_TEXT = "once upon a time a little bunny hopped to the big green hill and ate a carrot"
+
+
+def per_prompt(tok, make):
+    """A ScriptedLM reply function that answers prompt ``k`` of STORY_PROMPTS with ``make(k)``."""
+    index = {
+        tuple(encode_chat(tok, [("user", p)], add_generation_prompt=True)): k
+        for k, p in enumerate(STORY_PROMPTS)
+    }
+    return lambda prompt: make(index[tuple(prompt)])
+
+
+def made_up_word(n):
+    """The n-th word of an endless list of different, made-up, letters-only words."""
+    return "".join(chr(97 + n // 26**place % 26) for place in range(3))
+
+
+def novel_story(k):
+    """A story that is nothing like any other story (no word is said twice across the 24) and that
+    no corpus holds: each story is told once, with words of its own."""
+    return " ".join(made_up_word(1 + 12 * k + j) for j in range(12))
 
 
 def test_novelty_index(tiny_tok, tmp_path):
@@ -80,10 +102,7 @@ def test_creativity_ordering(tiny_tok):
     idx = NoveltyIndex.build([np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)], sample_mod=1)
     fluent = StubJudge(tiny_tok, lambda l: 2.5)
     gib = StubJudge(tiny_tok, lambda l: 9.0)
-    novel = ScriptedLM(
-        tiny_tok,
-        reply=lambda p: f"a curious robot {len(p)} painted purple stars across the quiet ocean sky",
-    )
+    novel = ScriptedLM(tiny_tok, reply=per_prompt(tiny_tok, novel_story))
     copy = ScriptedLM(tiny_tok, reply=lambda p: CORPUS_TEXT)
     s_novel = score_creativity(novel, tiny_tok, fluent, idx)[0].score
     s_copy = score_creativity(copy, tiny_tok, fluent, idx)[0].score
@@ -442,7 +461,7 @@ def test_judge_load_needs_only_its_directory(tmp_path, tiny_tok, tiny_tok_path):
     built = tmp_path / "built"
     save_checkpoint(model, tiny_meta(model), built)
     shutil.copyfile(tiny_tok_path, built / TOKENIZER_NAME)
-    cal = JudgeCalibration(2.5, 5.5, 4.75)
+    cal = JudgeCalibration(2.5, 5.5, 4.75, 0.85)
     (built / CALIBRATION_NAME).write_text(json.dumps(asdict(cal)), encoding="utf-8")
     moved = Path(shutil.move(built, tmp_path / "elsewhere"))
     judge = Judge.load(moved, device="cpu")
@@ -483,7 +502,12 @@ def test_calibrate_scores_heldout_openings_and_ai_replies(tiny_data_root, tiny_t
     p10, p90 = np.percentile(lengths, [10, 90])
     reply_p90 = np.percentile([len(r) for r in expected_replies], 90)
     assert asdict(cal) == pytest.approx(
-        {"creative_p10": p10, "creative_p90": p90, "conv_reply_p90": reply_p90}
+        {
+            "creative_p10": p10,
+            "creative_p90": p90,
+            "conv_reply_p90": reply_p90,
+            "creative_distinct2": ref_distinct_2([tiny_tok.decode(o) for o in expected_openings]),
+        }
     )
 
 
@@ -532,6 +556,55 @@ def test_calibrate_samples_deterministically(tiny_data_root, tiny_tok, monkeypat
     broken = Judge(RecordingLM(tiny_tok, score=lambda ctx, cont: math.nan), tiny_tok)
     with pytest.raises(ValueError, match="calibrate"):
         calibrate(broken, tiny_data_root)
+
+
+def _calibrated_on_openings(root, tok, texts):
+    """``calibrate`` over a data root whose held-out creative documents are ``texts``."""
+    _write_corpus(root, "creative", [encode_doc(tok, t) for t in texts])
+    turns = [("user", "Hi"), ("ai", "I like to play in the park.")]
+    _write_corpus(root, "conversations", [encode_chat(tok, turns)])
+    lm = RecordingLM(tok, score=lambda ctx, cont: -2.0 * len(cont))
+    return calibrate(Judge(lm, tok), root)
+
+
+def test_calibration_records_how_varied_real_openings_are(tiny_data_root, tiny_tok):
+    lm = RecordingLM(tiny_tok, score=lambda ctx, cont: -float(len(cont)))
+    cal = calibrate(Judge(lm, tiny_tok), tiny_data_root)
+    (_, openings), _ = lm.scored
+    texts = [tiny_tok.decode(o) for o in openings]
+    assert 1 < len(texts) < len(STORY_PROMPTS)  # fewer openings than a run has stories: all of them
+    assert ref_distinct_2(texts) > 0
+    assert cal.creative_distinct2 == pytest.approx(ref_distinct_2(texts))
+    assert asdict(cal)["creative_distinct2"] == cal.creative_distinct2  # kept in calibration.json
+
+
+def test_the_reference_variety_is_that_of_a_set_of_openings_as_big_as_a_run_of_stories(
+    tmp_path, tiny_tok
+):
+    # Distinct-2 shrinks as more text is pooled, so openings pooled 500 at a time would make a
+    # run of 24 stories look less varied than real stories are. 60 identical openings have a
+    # distinct-2 of 1/24 in every set of 24 (and would have 1/60 pooled).
+    same = _calibrated_on_openings(tmp_path / "same", tiny_tok, [CORPUS_TEXT] * 60)
+    assert same.creative_distinct2 == pytest.approx(1 / len(STORY_PROMPTS))
+    # 60 openings that share no word pair are as varied as can be, in whatever sets they fall
+    different = _calibrated_on_openings(
+        tmp_path / "different", tiny_tok, [novel_story(k) for k in range(60)]
+    )
+    assert different.creative_distinct2 == 1.0
+
+
+def test_the_reference_variety_is_the_same_whenever_it_is_measured(tmp_path, tiny_tok):
+    texts = [f"{ANIMALS[k % 12]} {PLACES[k % 6]} {ANIMALS[k % 5]} found a stone" for k in range(70)]
+    first = _calibrated_on_openings(tmp_path / "a", tiny_tok, texts)
+    again = _calibrated_on_openings(tmp_path / "b", tiny_tok, texts)
+    assert first == again and 0 < first.creative_distinct2 < 1
+    # 24 openings at a time are more varied than the 70 together (words come round again)
+    assert first.creative_distinct2 > ref_distinct_2(texts)
+
+
+def test_calibration_needs_openings_with_word_pairs_to_measure_variety_by(tmp_path, tiny_tok):
+    with pytest.raises(ValueError, match="word pairs"):
+        _calibrated_on_openings(tmp_path, tiny_tok, ["hello", "again", "123 456"])
 
 
 def test_build_judge_writes_a_self_contained_judge(tiny_data_root, tiny_tok, tmp_path, monkeypatch):
@@ -802,6 +875,21 @@ def test_a_judge_that_records_nothing_about_its_data_is_trained_again(
     assert len(started) == 2
 
 
+def test_build_judge_calibrates_a_judge_that_lacks_the_reference_variety_without_training(
+    data_root_copy, tiny_tok, monkeypatch
+):
+    started = stub_judge_training(monkeypatch, tiny_tok)
+    out = build_judge(data_root_copy, device="cpu", token_budget=65536)
+    calibration = json.loads((out / CALIBRATION_NAME).read_text(encoding="utf-8"))
+    del calibration["creative_distinct2"]  # a judge calibrated before variety was measured
+    (out / CALIBRATION_NAME).write_text(json.dumps(calibration), encoding="utf-8")
+    with pytest.raises(TypeError, match="creative_distinct2"):
+        Judge.load(out, device="cpu")
+    build_judge(data_root_copy, device="cpu", token_budget=65536)
+    assert len(started) == 1  # its weights are good: it is only calibrated again
+    assert Judge.load(out, device="cpu").calibration.creative_distinct2 > 0
+
+
 def _truncate_weights(out):
     weights = out / "model.safetensors"
     weights.write_bytes(weights.read_bytes()[:100])
@@ -999,7 +1087,9 @@ def test_creativity_scores_every_story_and_the_mix(tiny_tok):
     d = ref_distinct_2(stories)
     assert 0 < d < 1
     assert category.raw == pytest.approx(raw) and category.n == 24
-    assert category.score == pytest.approx(100 * raw * (0.5 + 0.5 * d))
+    d_ref = judge.calibration.creative_distinct2
+    assert d < d_ref  # this run is less varied than real stories are: the ratio is below 1
+    assert category.score == pytest.approx(100 * raw * d / d_ref)
 
     score_creativity(lm, tiny_tok, judge, idx, seed=1, max_new_tokens=40)
     assert lm.generated[-1][1]["max_new_tokens"] == 40 and lm.generated[-1][1]["seed"] == 1
@@ -1015,10 +1105,12 @@ def test_creativity_degenerate_outputs_score_finite(tiny_tok):
     assert score_creativity(punct, tiny_tok, fluent, idx)[0].score == 0.0
     repeated = ScriptedLM(tiny_tok, reply=lambda p: "the " * 60)
     flat = StubJudge(tiny_tok, lambda ids: 4.0)
-    flat.calibration = JudgeCalibration(4.0, 4.0, 4.0)  # no spread at all
+    flat.calibration = JudgeCalibration(4.0, 4.0, 4.0, 0.9)  # no spread at all
+    no_variety = StubJudge(tiny_tok, lambda ids: 2.5)
+    no_variety.calibration = JudgeCalibration(2.0, 6.0, 5.0, 0.0)  # real openings with no pairs
     weird = [StubJudge(tiny_tok, lambda ids, v=v: v) for v in (math.nan, INF, -INF, 0.0, 1e9)]
     for lm in (repeated, punct, ScriptedLM(tiny_tok, reply=lambda p: CORPUS_TEXT)):
-        for judge in (fluent, flat, *weird):
+        for judge in (fluent, flat, no_variety, *weird):
             category, items = score_creativity(lm, tiny_tok, judge, idx)
             assert math.isfinite(category.score) and 0 <= category.score <= 100
             assert all(math.isfinite(r.score) and 0 <= r.score <= 1 for r in items)
@@ -1036,10 +1128,7 @@ def test_a_story_that_echoes_its_prompt_is_not_new(tiny_tok):
     assert [r.score for r in items] == pytest.approx(
         [0.875 * 0.4 * (1 - ref_repetitiveness(p)) for p in STORY_PROMPTS]
     )  # novelty 0: an echo is worth what a fluent copy of the training data is
-    novel = ScriptedLM(
-        tiny_tok,
-        reply=lambda p: f"a curious robot {len(p)} painted purple stars across the quiet ocean sky",
-    )
+    novel = ScriptedLM(tiny_tok, reply=per_prompt(tiny_tok, novel_story))
     assert category.score < 0.65 * score_creativity(novel, tiny_tok, fluent, idx)[0].score
 
 
@@ -1048,14 +1137,86 @@ def test_endless_repetition_scores_about_zero(tiny_tok):
     fluent = StubJudge(tiny_tok, lambda ids: 2.5)  # the judge finds loops easy: coherence 0.875
 
     def score(reply):
-        return score_creativity(ScriptedLM(tiny_tok, reply=lambda p: reply), tiny_tok, fluent, idx)
+        return score_creativity(ScriptedLM(tiny_tok, reply=reply), tiny_tok, fluent, idx)
 
-    looping, items = score("the the the " * 30)
+    looping, items = score(lambda p: "the the the " * 30)
     assert looping.score < 1 and all(r.score < 0.01 for r in items)
-    novel = score("a curious robot painted purple stars across the quiet ocean sky")[0].score
-    repeated, items = score("purple robots dance on frozen moons " * 16)  # ~ the story budget
+    novel = score(per_prompt(tiny_tok, novel_story))[0].score
+    repeated, items = score(lambda p: "purple robots dance on frozen moons " * 16)  # ~ the budget
     assert novel > 40 and repeated.score < 5 and repeated.score < novel / 10
     assert all(r.score == pytest.approx(0.875 * 6 / 94, rel=0.05) for r in items)
+
+
+STOCK_ANSWERS = {
+    "novel": "a curious robot painted purple stars across the quiet ocean sky",
+    "copied": CORPUS_TEXT,
+    "opening": "Once upon a time,",
+    "stock": "Once upon a time, there was a little girl named Lily.",
+}
+
+
+@pytest.mark.parametrize("answer", STOCK_ANSWERS)
+def test_one_answer_for_every_prompt_scores_about_zero(tiny_tok, answer):
+    idx = NoveltyIndex.build([np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)])
+    fluent = StubJudge(tiny_tok, lambda ids: 2.0)  # coherence 1: as fluent as real stories get
+    lm = ScriptedLM(tiny_tok, reply=lambda prompt: STOCK_ANSWERS[answer])
+    category, items = score_creativity(lm, tiny_tok, fluent, idx)
+    assert len({r.output for r in items}) == 1
+    assert category.score <= 5  # a model that gives the same answer to everything scores near 0
+
+
+def test_a_novel_story_told_to_every_prompt_keeps_only_its_variety(tiny_tok):
+    idx = NoveltyIndex.build([np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)])
+    fluent = StubJudge(tiny_tok, lambda ids: 2.0)
+    lm = ScriptedLM(tiny_tok, reply=lambda prompt: STOCK_ANSWERS["novel"])
+    category, _ = score_creativity(lm, tiny_tok, fluent, idx)
+    assert category.raw > 0.95  # as a story, it is perfect: fluent, new, nothing repeated
+    d = ref_distinct_2([STOCK_ANSWERS["novel"]] * 24)
+    assert d == pytest.approx(1 / 24)
+    d_ref = fluent.calibration.creative_distinct2
+    assert category.score == pytest.approx(100 * category.raw * d / d_ref)
+
+
+def test_stories_as_varied_as_real_ones_lose_nothing_to_variety(tiny_tok):
+    idx = NoveltyIndex.build([np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)])
+    stories = ScriptedLM(tiny_tok, reply=per_prompt(tiny_tok, novel_story))
+    fluent = StubJudge(tiny_tok, lambda ids: 2.0)
+    category, items = score_creativity(stories, tiny_tok, fluent, idx)
+    assert ref_distinct_2([r.output for r in items]) == 1.0
+    assert category.raw > 0.95 and category.score == pytest.approx(100 * category.raw)
+    for reference in (0.5, 1.0, 0.0):  # as varied as the reference, or more, or no reference
+        fluent.calibration = JudgeCalibration(2.0, 6.0, 5.0, reference)
+        assert score_creativity(stories, tiny_tok, fluent, idx)[0] == category
+
+
+def test_stories_half_as_varied_as_real_ones_keep_half(tiny_tok):
+    idx = NoveltyIndex.build([np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)])
+    twice = ScriptedLM(tiny_tok, reply=per_prompt(tiny_tok, lambda k: novel_story(k // 2)))
+    fluent = StubJudge(tiny_tok, lambda ids: 2.0)
+    fluent.calibration = JudgeCalibration(2.0, 6.0, 5.0, 1.0)  # real stories: nothing said twice
+    category, items = score_creativity(twice, tiny_tok, fluent, idx)
+    d = ref_distinct_2([r.output for r in items])  # 12 different stories, each told twice
+    assert d == pytest.approx(0.5)
+    assert category.score == pytest.approx(100 * category.raw * 0.5)
+    once = ScriptedLM(tiny_tok, reply=per_prompt(tiny_tok, novel_story))
+    assert category.score == pytest.approx(
+        0.5 * score_creativity(once, tiny_tok, fluent, idx)[0].score
+    )
+
+
+def test_a_judge_calibrated_before_variety_was_measured_is_not_loaded(
+    tmp_path, tiny_tok, tiny_tok_path
+):
+    model = tiny_judge_model(tiny_tok.vocab_size)
+    folder = tmp_path / "judge"
+    save_checkpoint(model, tiny_meta(model), folder)
+    shutil.copyfile(tiny_tok_path, folder / TOKENIZER_NAME)
+    old = {"creative_p10": 2.0, "creative_p90": 6.0, "conv_reply_p90": 5.0}
+    (folder / CALIBRATION_NAME).write_text(json.dumps(old), encoding="utf-8")
+    with pytest.raises(TypeError, match="creative_distinct2"):  # recalibrate it: nothing is guessed
+        Judge.load(folder, device="cpu")
+    (folder / CALIBRATION_NAME).write_text(json.dumps({**old, "creative_distinct2": 0.8}), "utf-8")
+    assert Judge.load(folder, device="cpu").calibration.creative_distinct2 == 0.8
 
 
 def test_story_prompts_are_simple_varied_and_not_in_any_generator():
@@ -1077,7 +1238,7 @@ def test_story_prompts_are_simple_varied_and_not_in_any_generator():
 
 def test_run_benchmarks_measures_creativity_with_a_real_judge(tiny_lm, tiny_tok, fixture_texts):
     judge_lm = TorchLM(tiny_judge_model(tiny_tok.vocab_size, seed=1), tiny_tok, CPU)
-    judge = Judge(judge_lm, tiny_tok, JudgeCalibration(5.0, 7.0, 6.0))
+    judge = Judge(judge_lm, tiny_tok, JudgeCalibration(5.0, 7.0, 6.0, 0.9))
     idx = NoveltyIndex.build([np.array(encode_doc(tiny_tok, t), np.uint16) for t in fixture_texts])
 
     def run():

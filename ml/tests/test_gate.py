@@ -925,7 +925,7 @@ def fake_gate(tmp_path, monkeypatch, tiny_tok):
 
     inputs = gate._Inputs(
         tok=tiny_tok,
-        judge=SimpleNamespace(calibration=JudgeCalibration(1.0, 2.0, 3.0)),
+        judge=SimpleNamespace(calibration=JudgeCalibration(1.0, 2.0, 3.0, 0.9)),
         novelty=NoveltyIndex(np.zeros(0, np.uint64)),
         known_vocab={"the"},
         plan=FalseFactPlan({}),
@@ -1055,7 +1055,7 @@ def _write_judge_files(root: Path, calibration=None, meta=None) -> None:
     folder = judge_dir(root)
     folder.mkdir(parents=True, exist_ok=True)
     if calibration is None:
-        calibration = asdict(JudgeCalibration(1.0, 2.0, 3.0))
+        calibration = asdict(JudgeCalibration(1.0, 2.0, 3.0, 0.9))
     if meta is None:
         meta = json.loads(
             CheckpointMeta("tok-v1", ModelShape(2, 64, 64), "l", "v", None, 0, {}, []).to_json()
@@ -1179,11 +1179,21 @@ def test_a_stopped_run_keeps_grouped_measurements_grouped_and_the_summary_short(
 
 def test_structurally_wrong_judge_or_index_files_ask_for_a_rebuild(tmp_path, monkeypatch):
     monkeypatch.setattr(gate.Judge, "load", lambda *a, **k: pytest.fail("must not get this far"))
+    good = {
+        "creative_p10": 1.0,
+        "creative_p90": 2.0,
+        "conv_reply_p90": 3.0,
+        "creative_distinct2": 0.9,
+    }
     for calibration, meta in (
         ({"p10": 1.0}, None),  # an out-of-date calibration.json
-        ({"creative_p10": "low", "creative_p90": 2.0, "conv_reply_p90": 3.0}, None),
-        ({"creative_p10": float("nan"), "creative_p90": 2.0, "conv_reply_p90": 3.0}, None),
-        ({"creative_p10": 1.0, "creative_p90": True, "conv_reply_p90": 3.0}, None),
+        # one from before variety was measured: it must be calibrated again, not guessed at
+        ({"creative_p10": 1.0, "creative_p90": 2.0, "conv_reply_p90": 3.0}, None),
+        ({**good, "creative_p10": "low"}, None),
+        ({**good, "creative_p10": float("nan")}, None),
+        ({**good, "creative_p90": True}, None),
+        ({**good, "creative_distinct2": float("inf")}, None),
+        ({**good, "creative_distinct2": None}, None),
         ([1.0, 2.0, 3.0], None),
         (None, {"format": 1, "tokenizer": "tok-v1"}),  # meta.json without its other fields
         (None, ["not", "a", "meta"]),
@@ -1287,7 +1297,7 @@ def test_the_benchmark_cache_follows_the_data(tmp_path, tiny_tok, monkeypatch):
 
     inputs = SimpleNamespace(
         tok=tiny_tok,
-        judge=SimpleNamespace(calibration=JudgeCalibration(1.0, 2.0, 3.0)),
+        judge=SimpleNamespace(calibration=JudgeCalibration(1.0, 2.0, 3.0, 0.9)),
         novelty=NoveltyIndex(np.zeros(0, np.uint64)),
         identity="data-1",
     )

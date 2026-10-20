@@ -870,6 +870,10 @@ def _early_judge(root):  # built before judges recorded their data
     _judge_record(root, data_identity=None, full_recipe=None)
 
 
+def _calibrated_early(root):  # calibrated before variety was measured
+    _change_record(judge_dir(root) / "calibration.json", creative_distinct2=None)
+
+
 def _stale_index(root):
     _index_record(root, data_identity="0" * 64)
 
@@ -898,6 +902,7 @@ def _rebuilt_corpus(root):
         (_stale_judge, "airace-ml build-judge"),
         (_quick_judge, "airace-ml build-judge"),
         (_early_judge, "airace-ml build-judge"),
+        (_calibrated_early, "airace-ml build-judge"),
         (_stale_index, "airace-ml build-novelty-index"),
         (_early_index, "airace-ml build-novelty-index"),
         (_rebuilt_corpus, "airace-ml build-judge"),

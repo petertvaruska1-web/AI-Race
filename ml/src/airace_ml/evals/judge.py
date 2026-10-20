@@ -7,7 +7,8 @@ judge finds it no stranger than most real conversation replies (:func:`is_well_f
 
 :func:`build_judge` trains it into :func:`~airace_ml.paths.judge_dir`, which ends up
 self-contained: the checkpoint, a copy of the frozen tokenizer (``tokenizer.json``) and
-``calibration.json``, the loss levels the judge gives real held-out text (:func:`calibrate`).
+``calibration.json``, the loss levels the judge gives real held-out text and how varied that text
+is (:func:`calibrate`).
 ``calibration.json`` is written last, so a directory with it holds a complete judge. A build cut
 short (about an hour on the reference GPU) resumes from its last saved state when run again.
 
@@ -27,6 +28,7 @@ from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
+from statistics import fmean
 
 import numpy as np
 import torch
@@ -36,6 +38,7 @@ from airace_ml.data.corpus import DATASET_IDS, Corpus
 from airace_ml.data.identity import data_identity
 from airace_ml.data.prep import PrepConfig, heldout_docs
 from airace_ml.device import pick_device
+from airace_ml.evals.creativity import STORY_PROMPTS, distinct_2
 from airace_ml.infer.lm import ContinuationScore, LanguageModel, TorchLM
 from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME, load_checkpoint
 from airace_ml.model.shape import ModelShape
@@ -79,12 +82,17 @@ class JudgeCalibration:
 
     ``creative_p10`` and ``creative_p90`` are the 10th and 90th percentiles over the openings of
     held-out creative documents; ``conv_reply_p90`` is the 90th percentile over the AI replies of
-    held-out conversations.
+    held-out conversations. ``creative_distinct2`` is how varied real stories are, the
+    distinct-2 (:func:`~airace_ml.evals.creativity.distinct_2`) of a set of held-out openings as
+    big as a creativity run's set of stories (:func:`_reference_distinct_2`); a creativity run's
+    variety is measured against it. A calibration without it comes from an older build and is
+    refused (it raises ``TypeError``): the judge must be calibrated again, not guessed at.
     """
 
     creative_p10: float
     creative_p90: float
     conv_reply_p90: float
+    creative_distinct2: float
 
 
 def _nll(score: ContinuationScore) -> float:
@@ -208,9 +216,32 @@ def _percentiles(values: list[float], qs: list[float], what: str) -> list[float]
     return [float(v) for v in np.percentile(finite, qs)]
 
 
+def _reference_distinct_2(openings: list[list[int]], tok: Tok) -> float:
+    """How varied real stories are: the distinct-2 of as many held-out openings as a creativity
+    run has stories (``len(STORY_PROMPTS)``), averaged over the sets that a seeded shuffle of
+    ``openings`` cuts into (openings left over are dropped). With fewer openings than one set, the
+    distinct-2 of all of them. ``ValueError`` if they hold no word pair.
+
+    Distinct-2 falls as more text is pooled, so the openings are measured a run of stories at a
+    time: a run is held to what real stories do in as many words, not in 20 times as many.
+    """
+    texts = [tok.decode(opening) for opening in openings]
+    size = len(STORY_PROMPTS)
+    order = np.random.default_rng(CALIBRATION_SEED).permutation(len(texts))
+    sets = [order[i : i + size] for i in range(0, len(order) - size + 1, size)] or [order]
+    value = fmean(distinct_2([texts[j] for j in chosen]) for chosen in sets)
+    if not value > 0:
+        raise ValueError(
+            "cannot calibrate the judge: the held-out creative openings hold no word pairs to "
+            "measure variety by"
+        )
+    return value
+
+
 def calibrate(judge: Judge, data_root: Path) -> JudgeCalibration:
     """Score real held-out text under ``judge``: the openings of up to
-    :data:`CALIBRATION_DOCS` creative documents and up to as many conversation AI replies.
+    :data:`CALIBRATION_DOCS` creative documents and up to as many conversation AI replies, and
+    measure how varied those openings are (:func:`_reference_distinct_2`).
 
     A reply is scored exactly as :func:`is_well_formed` scores one: replies that fail its word
     checks are left out (it rejects those without asking the judge), and the rest are scored as
@@ -239,7 +270,7 @@ def calibrate(judge: Judge, data_root: Path) -> JudgeCalibration:
     (reply_p90,) = _percentiles(
         judge.nll_per_token(replies), [90], "conversation replies that pass the word checks"
     )
-    return JudgeCalibration(p10, p90, reply_p90)
+    return JudgeCalibration(p10, p90, reply_p90, _reference_distinct_2(openings, tok))
 
 
 # -- building ---------------------------------------------------------------------------------

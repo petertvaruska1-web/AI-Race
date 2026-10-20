@@ -16,9 +16,13 @@ call (temperature 0.9, top-p 0.95, seeded). Each story is measured four ways:
   however new, a fluent copy of the training data keeps 40%, and a loop keeps almost nothing.
 
 **Diversity** ``d`` is distinct-2 over all the stories: unique word bigrams over all word bigrams
-(words are runs of lowercase letters). The category score is ``100 * mean(story) * (0.5 + 0.5 *
-d)``, so a model that tells the same story to every prompt loses up to half. A story with no words
-scores 0, and every score is finite whatever the model writes.
+(words are runs of lowercase letters). It is measured against ``d_ref``, how varied real stories
+are: the same distinct-2 over as many held-out creative openings as there are stories, which the
+judge's calibration records (``creative_distinct2``). The category score is ``100 * mean(story) *
+min(1, d / d_ref)``, so a model that is as varied as real stories loses nothing, one half as
+varied keeps half, and one that tells the same story to every prompt (``d`` about ``1 / 24``)
+scores near 0 however good that story is. A story with no words scores 0, and every score is
+finite whatever the model writes.
 """
 
 from __future__ import annotations
@@ -94,6 +98,14 @@ def repetitiveness(text: str) -> float:
     return 1 - len(set(trigrams)) / len(trigrams) if trigrams else 0.0
 
 
+def _diversity(d: float, calibration: JudgeCalibration) -> float:
+    """``min(1, d / creative_distinct2)``: how much of real stories' variety a run has. A
+    calibration whose reference is not above 0 (real openings with no word pair, which
+    :func:`~airace_ml.evals.judge.calibrate` refuses to record) is a plain test of ``d > 0``."""
+    reference = calibration.creative_distinct2
+    return min(d / reference, 1.0) if reference > 0 else float(d > 0)
+
+
 def _coherence(nll: float, calibration: JudgeCalibration) -> float:
     """``clip((p90 - nll) / (p90 - p10), 0, 1)``; a NaN loss is 0, and a calibration with no
     spread (p90 <= p10) is a plain test against p90."""
@@ -114,8 +126,9 @@ def score_creativity(
     """Have ``lm`` write a story for every prompt of :data:`STORY_PROMPTS` and score them (see
     the module docstring).
 
-    ``raw`` is the mean story score (0-1). Each :class:`ItemResult` carries one story's score
-    and text.
+    ``raw`` is the mean story score (0-1), before variety is taken into account; the category
+    score is 100 times ``raw`` times the share of real stories' variety the run has. Each
+    :class:`ItemResult` carries one story's score and text.
     """
     prompts = [
         encode_chat(tok, [("user", prompt)], add_generation_prompt=True) for prompt in STORY_PROMPTS
@@ -139,5 +152,5 @@ def score_creativity(
             ItemResult(f"story-{k:02d}", CATEGORY, score, ("fmt:story", f"topic:{topic}"), story)
         )
     raw = fmean(r.score for r in results)
-    d = distinct_2(stories)
-    return CategoryScore(100 * raw * (0.5 + 0.5 * d), raw, len(results)), results
+    diversity = _diversity(distinct_2(stories), judge.calibration)
+    return CategoryScore(100 * raw * diversity, raw, len(results)), results
