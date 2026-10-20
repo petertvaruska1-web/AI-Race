@@ -539,13 +539,14 @@ def test_knowledge_answers_do_not_follow_the_knowledge_base_base_rates():
         assert max(counts[rel].values()) <= 0.3 * sum(counts[rel].values()), (rel, counts[rel])
 
 
-def test_every_seed_spreads_the_answers_of_the_relations_that_have_many_objects():
+def test_every_seed_spreads_the_answers_of_the_relations():
     kb = load_kb()
     for seed in range(20):
         items = knowledge_bench_items(kb, np.random.default_rng(seed))
         for rel, counts in _answer_counts(items).items():
-            if len(kb.objects_for(rel)) >= 10 and rel != "capital_of":  # most objects have 1 fact
-                assert max(counts.values()) <= 0.4 * sum(counts.values()), (seed, rel, counts)
+            if rel == "shape_sides":  # 7 of its 14 facts are 'four': no draw can even them out
+                continue
+            assert max(counts.values()) <= 0.35 * sum(counts.values()), (seed, rel, counts)
 
 
 # --- consistency -------------------------------------------------------------------------------

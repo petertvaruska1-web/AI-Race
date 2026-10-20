@@ -62,8 +62,9 @@ def _balanced_facts(rng: np.random.Generator, n: int, pool: list[Fact]) -> list[
     The objects take turns in a seeded order, one fact each, a random unused fact of that object;
     an object with no fact left is skipped. So the answer to a benchmark question is no more likely
     to be one object than another, however unevenly the knowledge base holds them (four legs for
-    most animals, mammals for most animals): a model that knows only the relation's habits gets no
-    more than chance. ``ValueError`` if ``n`` is more than the pool.
+    most animals, mammals for most animals): a model that knows only the relation's habits gets
+    about chance. (A relation most of whose facts share one object cannot be made even.)
+    ``ValueError`` if ``n`` is more than the pool.
     """
     if n > len(pool):
         raise ValueError(f"cannot take {n} from {len(pool)} available")
