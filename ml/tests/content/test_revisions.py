@@ -47,6 +47,7 @@ class FakeHub:
     stream_errors: list[int] = field(default_factory=list)  # the open numbers that drop at row 3
     loads: list[dict] = field(default_factory=list)
     infos: list[str] = field(default_factory=list)
+    info_kwargs: list[dict] = field(default_factory=list)  # the keywords of each lookup
 
     def load_dataset(self, path, config, *, split, streaming, **kwargs):
         self.loads.append({"path": path, "config": config, **kwargs})
@@ -65,6 +66,7 @@ class FakeHub:
         class FakeApi:
             def dataset_info(self, repo_id, *, timeout=None, **kwargs):
                 hub.infos.append(repo_id)
+                hub.info_kwargs.append({"timeout": timeout, **kwargs})
                 if hub.info_errors:
                     raise hub.info_errors.pop(0)
                 return types.SimpleNamespace(sha=hub.head)
@@ -119,6 +121,17 @@ def test_resolve_revision(monkeypatch, waits):
     assert hub.infos == ["openai/gsm8k"]
     install(monkeypatch, FakeHub(head=None))
     assert resolve_revision(SOURCES["gsm8k"]) is None  # no commit to name: the head, as before
+
+
+def test_the_head_lookup_cannot_hang_for_ever(monkeypatch, waits):
+    """The hub's metadata call has no timeout of its own: the lookup passes one, every time."""
+    assert 0 < sources.INFO_TIMEOUT_S <= 300
+    hub = install(monkeypatch, FakeHub(info_errors=[httpx.ConnectError("no route")]))
+    assert resolve_revision(SOURCES["gsm8k"]) == HEAD  # the second try, after a failed one
+    assert hub.info_kwargs == [{"timeout": sources.INFO_TIMEOUT_S}] * 2
+    hub = install(monkeypatch, FakeHub())
+    assert list(hf_fetch(SOURCES["gsm8k"], 2)) == ROWS[:2]  # the lookup a read makes
+    assert hub.info_kwargs == [{"timeout": sources.INFO_TIMEOUT_S}]
 
 
 def test_a_lookup_without_the_content_extra_fails_before_the_network(monkeypatch):
