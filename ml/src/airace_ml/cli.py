@@ -9,7 +9,10 @@
     airace-ml gate --out DIR [--seeds 1,2,3] [--cpu-speed] [--quick]
 
 Every command also takes ``--data-root PATH`` (default: ``AIRACE_DATA`` or ``<repo>/data``) and
-``--device {cpu,cuda}`` (default: the GPU when there is one).
+``--device {cpu,cuda}`` (default: the GPU when there is one). ``build-judge``, ``bench`` and
+``chat`` say which device they use before they start. ``build-judge`` and a full ``gate`` take
+days on the CPU, so they refuse to fall back to it when there is no usable GPU (exit 2) unless
+``--device cpu`` or ``AIRACE_DEVICE=cpu`` asks for it; ``gate --quick`` may use the CPU.
 
 Exit codes: 0 on success; 2 when the request or the state of the files it names is wrong (a bad
 option, a malformed or invalid config, a missing, damaged or unwritable model, tokenizer, data,
@@ -34,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
 import sys
 from collections.abc import Sequence
@@ -192,7 +196,8 @@ def _parser() -> argparse.ArgumentParser:
     common.add_argument(
         "--device",
         choices=("cpu", "cuda"),
-        help="where to compute (default: the GPU when there is one, else the CPU)",
+        help="where to compute (default: the GPU when there is one; build-judge and the full "
+        "gate then need --device cpu to run on the CPU)",
     )
 
     def add(name: str, run, help: str, hint: str = "") -> argparse.ArgumentParser:
@@ -353,6 +358,42 @@ def _device(args: argparse.Namespace) -> torch.device:
             "Leave --device out to use whatever is available, or pass --device cpu."
         )
     return pick_device(args.device)
+
+
+def _asked_for_cpu(args: argparse.Namespace) -> bool:
+    """Whether the CPU was asked for, by ``--device cpu`` or ``AIRACE_DEVICE=cpu`` (as
+    :func:`~airace_ml.device.pick_device` reads them)."""
+    return (args.device or os.environ.get("AIRACE_DEVICE") or "").lower() == "cpu"
+
+
+def _announce_device(args: argparse.Namespace, device: torch.device) -> None:
+    """One plain line saying where the work will run, before it starts: a computer without a
+    usable GPU falls back to the CPU without a word otherwise, and a model that is quick on the
+    GPU can take days on the CPU."""
+    if device.type == "cuda":
+        try:
+            name = torch.cuda.get_device_name(device)
+        except (RuntimeError, AssertionError):  # torch's way of saying it cannot ask the driver
+            name = ""
+        line = f"using the GPU ({name})" if name else "using the GPU"
+    elif _asked_for_cpu(args):
+        line = "using the CPU"
+    else:
+        line = "no usable GPU found: using the CPU"
+    print(line, flush=True)
+
+
+def _require_gpu_unless_cpu_asked(
+    args: argparse.Namespace, device: torch.device, what: str, also: str = ""
+) -> None:
+    """A usage error if ``what`` would run on the CPU only because there is no usable GPU. It
+    takes days there, so the CPU must be asked for (``--device cpu`` or ``AIRACE_DEVICE=cpu``);
+    ``also`` is added to the message."""
+    if device.type == "cpu" and not _asked_for_cpu(args):
+        raise _UsageError(
+            f"no usable GPU was found, so {what} would run on the CPU, which would take days. "
+            f"To run it on the CPU anyway, add --device cpu (or set AIRACE_DEVICE=cpu).{also}"
+        )
 
 
 def _missing(error: FileNotFoundError) -> str:
@@ -618,7 +659,9 @@ def _announcing(header: str, handler):
 
 
 def _cmd_chat(args: argparse.Namespace) -> int:
-    lm = _load_lm(args.model, _data_root(args), _device(args))
+    device = _device(args)
+    lm = _load_lm(args.model, _data_root(args), device)
+    _announce_device(args, device)
     _use_utf8_input()
     print(
         f"Talking to the model in {args.model}. Type /reset to start the conversation over, "
@@ -757,6 +800,7 @@ def _cmd_bench(args: argparse.Namespace) -> int:
     categories = [c for c in CATEGORIES if not (args.no_creativity and c == "creativity")]
     tools = None if args.no_creativity else _creativity_tools(root, device)
     judge, novelty = tools if tools is not None else (None, None)
+    _announce_device(args, device)
     report = run_benchmarks(
         lm,
         lm.tok,
@@ -807,6 +851,7 @@ def _print_judge_event(event: TrainEvent) -> None:
 
 def _cmd_build_judge(args: argparse.Namespace) -> int:
     device = _device(args)
+    _require_gpu_unless_cpu_asked(args, device, "building the judge")
     root = _data_root(args)
     one_step = judge_module.judge_train_config().batch_tokens
     if args.budget_tokens is not None and args.budget_tokens < one_step:
@@ -815,6 +860,7 @@ def _cmd_build_judge(args: argparse.Namespace) -> int:
             f"{one_step:,} tokens, so the budget must be at least {one_step:,}."
         )
     _require_tokenizer(root)
+    _announce_device(args, device)
     try:
         path = build_judge(
             root, device=device, on_event=_print_judge_event, token_budget=args.budget_tokens
@@ -841,6 +887,10 @@ def _print_gate_summary(outcome: GateOutcome, report: Path) -> None:
 
 def _cmd_gate(args: argparse.Namespace) -> int:
     device = _device(args)
+    if not args.quick:  # a quick run is a short check of the setup, which is fine on the CPU
+        _require_gpu_unless_cpu_asked(
+            args, device, "the full gate", " A short check of the setup (--quick) may use the CPU."
+        )
     root = _data_root(args)
     _require_folder_path(args.out, "--out")
     if args.quick and len(args.seeds) > 1:

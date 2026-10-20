@@ -1252,3 +1252,92 @@ def test_gate_out_must_be_a_folder(tmp_path, monkeypatch):
     (tmp_path / "file").write_text("x", encoding="utf-8")
     code, _, err = _run(["gate", "--out", str(tmp_path / "file"), *_common(tmp_path)])
     assert code == 2 and "is a file" in err
+
+
+# -- which device a command uses -------------------------------------------------------------------
+
+
+def _no_gpu(monkeypatch) -> None:
+    """This computer has no usable GPU and nothing asks for the CPU."""
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.delenv("AIRACE_DEVICE", raising=False)
+
+
+def test_chat_and_bench_say_which_device_they_use(trained, tiny_data_root, monkeypatch):
+    code, out, err = _chat(trained.dir, tiny_data_root, "/quit\n", monkeypatch)
+    assert code == 0, err
+    assert out.splitlines()[0] == "using the CPU"  # --device cpu asked for it
+    bench = ["bench", "--model", str(trained.dir), "--no-creativity", "--max-items", "2"]
+    code, out, err = _run([*bench, *_common(tiny_data_root)])
+    assert code == 0, err
+    assert out.splitlines()[0] == "using the CPU"
+
+
+def test_a_command_with_no_gpu_says_so_in_plain_words(trained, tiny_data_root, monkeypatch):
+    _no_gpu(monkeypatch)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("/quit\n"))
+    code, out, err = _run(["chat", "--model", str(trained.dir), "--data-root", str(tiny_data_root)])
+    assert code == 0, err
+    assert out.splitlines()[0] == "no usable GPU found: using the CPU"
+    bench = ["bench", "--model", str(trained.dir), "--no-creativity", "--max-items", "2"]
+    code, out, err = _run([*bench, "--data-root", str(tiny_data_root)])
+    assert code == 0, err
+    assert out.splitlines()[0] == "no usable GPU found: using the CPU"
+    monkeypatch.setenv("AIRACE_DEVICE", "cpu")  # the CPU was asked for, so no GPU is not news
+    code, out, _ = _run([*bench, "--data-root", str(tiny_data_root)])
+    assert code == 0 and out.splitlines()[0] == "using the CPU"
+
+
+def test_the_device_line_names_the_gpu(monkeypatch, capsys):
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda device=None: "NVIDIA RTX 3050")
+    cli._announce_device(SimpleNamespace(device=None), torch.device("cuda"))
+    assert capsys.readouterr().out == "using the GPU (NVIDIA RTX 3050)\n"
+
+    def broken(device=None):
+        raise RuntimeError("no driver")
+
+    monkeypatch.setattr(torch.cuda, "get_device_name", broken)
+    cli._announce_device(SimpleNamespace(device=None), torch.device("cuda"))
+    assert capsys.readouterr().out == "using the GPU\n"
+
+
+def test_build_judge_does_not_fall_back_to_the_cpu_on_its_own(
+    tiny_data_root, tmp_path, monkeypatch
+):
+    _no_gpu(monkeypatch)
+    built = []
+    monkeypatch.setattr(cli, "build_judge", lambda *a, **k: built.append(k) or tmp_path / "judge")
+    code, out, err = _run(["build-judge", "--data-root", str(tiny_data_root)])
+    assert code == 2 and built == [] and "Traceback" not in err
+    assert err.startswith("error: ") and "no usable GPU" in err and "days" in err
+    assert "--device cpu" in err and "AIRACE_DEVICE=cpu" in err
+    assert out == ""  # it did not start
+    for ask in (["--device", "cpu"], []):
+        if not ask:
+            monkeypatch.setenv("AIRACE_DEVICE", "cpu")
+        code, out, err = _run(["build-judge", "--data-root", str(tiny_data_root), *ask])
+        assert code == 0, err
+        assert out.splitlines()[0] == "using the CPU" and "reference judge ready" in out
+    assert len(built) == 2
+
+
+def test_the_full_gate_does_not_fall_back_to_the_cpu_on_its_own(tmp_path, monkeypatch):
+    _no_gpu(monkeypatch)
+    seen = []
+    monkeypatch.setattr(cli, "run_gate", lambda root, out, **kw: seen.append(kw) or _gate_outcome())
+    argv = ["gate", "--out", str(tmp_path / "g"), "--data-root", str(tmp_path)]
+    code, out, err = _run(argv)
+    assert code == 2 and seen == [] and out == "" and "Traceback" not in err
+    assert err.startswith("error: ") and "no usable GPU" in err and "days" in err
+    assert "--device cpu" in err and "AIRACE_DEVICE=cpu" in err and "--quick" in err
+    # a quick check of the setup is short, so it may use the CPU
+    code, _, err = _run([*argv, "--quick"])
+    assert code == 0, err
+    assert seen[-1]["quick"] is True and seen[-1]["device"] == torch.device("cpu")
+    # and so may a full gate that asks for the CPU, on the command line or in the environment
+    code, _, err = _run([*argv, "--device", "cpu"])
+    assert code == 0, err
+    monkeypatch.setenv("AIRACE_DEVICE", "cpu")
+    code, _, err = _run(argv)
+    assert code == 0, err
+    assert [kw["quick"] for kw in seen] == [True, False, False]
