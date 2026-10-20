@@ -1,0 +1,82 @@
+"""The digest of the tokenizer and corpora that a gate run, the judge and the novelty index were
+built from (``airace_ml.data.identity``): it must change when any of them is rebuilt."""
+
+import json
+import re
+import shutil
+
+import numpy as np
+import pytest
+
+from airace_ml.data.corpus import DATASET_IDS, INFO_FILE, OFFSETS_FILE, TAGS_FILE, TOKENS_FILE
+from airace_ml.data.identity import data_identity
+from airace_ml.paths import corpus_dir, tokenizer_path
+
+
+def test_identity_is_stable_across_calls_and_across_copies_of_the_data(tiny_data_root, data_root_copy):
+    first = data_identity(data_root_copy)
+    assert re.fullmatch(r"[0-9a-f]{64}", first)
+    assert data_identity(data_root_copy) == first  # nothing in it depends on the time or the call
+    assert data_identity(tiny_data_root) == first  # nor on where the data sits
+
+
+def _change_tags(folder):
+    with np.load(folder / TAGS_FILE) as f:
+        tags = {name: f[name].copy() for name in f.files}
+    tags["heldout"][0] = not tags["heldout"][0]  # a rebuild that holds out another document
+    np.savez(folder / TAGS_FILE, **tags)
+
+
+def _change_offsets(folder):
+    offsets = np.load(folder / OFFSETS_FILE)
+    offsets[-1] += 2  # a rebuild that ends the last document later
+    np.save(folder / OFFSETS_FILE, offsets)
+
+
+def _change_info(folder):
+    info = json.loads((folder / INFO_FILE).read_text(encoding="utf-8"))
+    info["source"] = "another build"
+    (folder / INFO_FILE).write_text(json.dumps(info), encoding="utf-8")
+
+
+def _change_tokens_size(folder):
+    with open(folder / TOKENS_FILE, "ab") as f:  # one more token (uint16)
+        f.write(b"\x07\x00")
+
+
+CORPUS_CHANGES = {
+    TAGS_FILE: _change_tags,
+    OFFSETS_FILE: _change_offsets,
+    INFO_FILE: _change_info,
+    TOKENS_FILE: _change_tokens_size,
+}
+
+
+@pytest.mark.parametrize("dataset", DATASET_IDS)
+@pytest.mark.parametrize("name", CORPUS_CHANGES)
+def test_identity_changes_when_any_corpus_file_is_rebuilt(data_root_copy, dataset, name):
+    before = data_identity(data_root_copy)
+    CORPUS_CHANGES[name](corpus_dir(data_root_copy) / dataset)
+    assert data_identity(data_root_copy) != before
+
+
+def test_identity_changes_when_the_tokenizer_is_rebuilt(data_root_copy):
+    before = data_identity(data_root_copy)
+    with open(tokenizer_path(data_root_copy), "ab") as f:
+        f.write(b"\n")
+    assert data_identity(data_root_copy) != before
+
+
+def test_the_same_change_in_two_datasets_is_two_different_identities(
+    tiny_data_root, data_root_copy, tmp_path
+):
+    other = tmp_path / "other"
+    shutil.copytree(tiny_data_root, other)
+    _change_info(corpus_dir(data_root_copy) / "web")
+    _change_info(corpus_dir(other) / "books")
+    assert data_identity(data_root_copy) != data_identity(other)
+
+
+def test_identity_of_data_that_is_not_there_is_an_error(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        data_identity(tmp_path)

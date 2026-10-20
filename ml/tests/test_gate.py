@@ -967,6 +967,7 @@ def fake_gate(tmp_path, monkeypatch, tiny_tok):
         )
 
     log.run = run
+    log.inputs = inputs
     return log
 
 
@@ -1017,6 +1018,27 @@ def test_a_run_that_stopped_early_fails_every_criterion_that_uses_it(fake_gate, 
             assert named == (c.id in users[name]), (c.id, name, c.detail)
     for name in stopped:
         assert outcome.raw["runs"][name]["status"] == "unstable_stopped"
+
+
+def test_reuse_follows_the_data_the_runs_were_trained_on(fake_gate):
+    first = fake_gate.run()
+    assert (len(fake_gate.trained), len(fake_gate.benched)) == (25, 15)
+    assert not any(r["reused"] for r in first.raw["runs"].values())
+
+    def counts() -> tuple[int, int, int]:
+        return len(fake_gate.trained), len(fake_gate.benched), len(fake_gate.fingerprinted)
+
+    before = counts()
+    assert all(r["reused"] for r in fake_gate.run().raw["runs"].values())
+    assert counts() == before  # the data is as it was: everything is reused
+    fake_gate.inputs.identity = "data-2"  # airace-content build ran again, into the same --out
+    rebuilt = fake_gate.run()
+    assert tuple(a - b for a, b in zip(counts(), before, strict=True)) == (25, 15, 15)
+    assert not any(r["reused"] for r in rebuilt.raw["runs"].values())  # trained again, all of them
+    assert [c.passed for c in rebuilt.criteria] == [c.passed for c in first.criteria]
+    before = counts()
+    assert all(r["reused"] for r in fake_gate.run().raw["runs"].values())
+    assert counts() == before  # and the rebuilt data's runs are reused in turn
 
 
 def test_reuse_follows_the_code_that_trains_and_the_code_that_measures(fake_gate):
@@ -1285,6 +1307,21 @@ def test_the_gates_real_input_loading_takes_instruments_of_this_data_and_no_othe
     assert "Rebuild it with: airace-ml build-novelty-index" in str(e.value)
     build_novelty_index(root)
     assert gate._load_inputs(root, CPU, 64).identity == data_identity(root) != inputs.identity
+
+
+def test_growth_sequences_take_one_held_out_document_of_each_dataset_in_turn(tiny_data_root):
+    rounds = 2
+    got = gate._growth_sequences(tiny_data_root, rounds * len(DATASET_IDS), 64)
+    corpora = [Corpus.open(corpus_dir(tiny_data_root) / ds) for ds in DATASET_IDS]
+    held_out = [heldout_docs(corpus) for corpus in corpora]
+    assert min(len(docs) for docs in held_out) >= rounds
+    want = [
+        corpus.doc(int(docs[depth]))[:64].tolist()
+        for depth in range(rounds)
+        for corpus, docs in zip(corpora, held_out, strict=True)
+    ]
+    assert got == want  # dataset by dataset in DATASET_IDS order, each one's first documents first
+    assert len(gate._growth_sequences(tiny_data_root, 3, 64)) == 3
 
 
 def test_the_benchmark_cache_follows_the_data(tmp_path, tiny_tok, monkeypatch):
