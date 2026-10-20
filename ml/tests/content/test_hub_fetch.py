@@ -28,6 +28,7 @@ from airace_content.sources import (
 )
 from airace_ml.data.corpus import DATASET_IDS
 from airace_ml.paths import corpus_dir, tokenizer_path
+from tests.content.test_build import _assert_same_corpus
 
 FIX = Path(__file__).parents[1] / "fixtures" / "sources"
 ROWS = [{"question": f"Q{i}", "answer": f"a {i}\n#### {i}"} for i in range(10)]
@@ -339,3 +340,44 @@ def test_a_source_with_no_rows_is_left_to_the_build(tmp_path):
     summary = build_corpus("tiny", root, fetch, seed=0)
     assert summary.datasets["educational"]["components"][2]["exhausted"]
     assert tokenizer_path(root).exists() and set(summary.datasets) == set(DATASET_IDS)
+
+
+def test_a_build_over_a_flaky_hub_gives_the_corpus_of_a_steady_one(monkeypatch, waits, tmp_path):
+    """The point of resuming exactly: the same seed, the same corpus, drops or no drops."""
+    by_repo = {(s.hf_path, s.hf_config): s for s in SOURCES.values()}
+    steady_fetch = fixture_fetch(FIX)
+
+    def hub(drop_every: int | None):
+        opens = {"n": 0}
+        per_source: dict[tuple, int] = {}
+
+        def load_dataset(path, config, *, split, streaming, revision=None):
+            opens["n"] += 1
+            per_source[(path, config)] = per_source.get((path, config), 0) + 1
+            rows = list(steady_fetch(by_repo[(path, config)], 10**9))
+            # every open of a source drops the connection a few rows further on than the last
+            fail_at = None if drop_every is None else drop_every * per_source[(path, config)]
+
+            def stream():
+                for i, row in enumerate(rows):
+                    if i == fail_at:
+                        raise ConnectionError("Server Disconnected")
+                    yield row
+
+            return stream()
+
+        fake = types.ModuleType("datasets")
+        fake.load_dataset = load_dataset
+        monkeypatch.setitem(sys.modules, "datasets", fake)
+        return opens
+
+    steady, flaky = tmp_path / "steady", tmp_path / "flaky"
+    install(monkeypatch, FakeHub([]))  # the head-commit lookup
+    hub(None)
+    steady_summary = build_corpus("tiny", steady, hf_fetch, seed=0)
+    assert waits == []
+    opens = hub(3)
+    flaky_summary = build_corpus("tiny", flaky, hf_fetch, seed=0)
+    assert waits and opens["n"] > len(SOURCES)  # it did drop, and it was reopened
+    assert flaky_summary.datasets == steady_summary.datasets
+    _assert_same_corpus(steady, flaky)
