@@ -75,8 +75,9 @@ def test_degenerate_outputs(tiny_tok, reply):  # Review Focus 4
     assert all(math.isfinite(s.score) for s in rep.scores.values()) and math.isfinite(rep.overall)
 
 def test_report_serializable_and_tags(tiny_tok):
-    rep = run_benchmarks(ScriptedLM(tiny_tok), tiny_tok, max_items_per_category=10)
-    json.dumps(rep.to_dict()); assert all(0 <= v[0] <= 100 for v in rep.tag_breakdown().values())
+    rep = run_benchmarks(ScriptedLM(tiny_tok), tiny_tok, max_items_per_category=60)  # tags qualify
+    json.dumps(rep.to_dict()); breakdown = rep.tag_breakdown(); assert breakdown
+    assert all(0 <= v[0] <= 100 and v[1] >= MIN_TAG_ITEMS for v in breakdown.values())
 
 def test_real_tiny_model_end_to_end(tiny_lm, tiny_tok):
     rep = run_benchmarks(tiny_lm, tiny_tok, max_items_per_category=5)

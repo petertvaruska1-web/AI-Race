@@ -20,12 +20,21 @@ def test_proportions_and_shapes():
     assert x.shape == (40, 32) and (y[:, :-1] == x[:, 1:]).all()
     st = s.stats(); assert 0.72 < st["a"] / (st["a"] + st["b"]) < 0.78
 
-@pytest.mark.parametrize("weights", [{"a": 0.0}, {"a": -1.0, "b": 1.0}, {"zzz": 1.0}, {"empty": 1.0}, {"blank": 1.0}])
-def test_invalid_mixtures(weights):  # Review Focus 3
-    pools = {"a": _pool(3), "b": _pool(3), "empty": DocPool.from_docs([]), "blank": DocPool.from_docs([[], []])}
-    with pytest.raises(MixtureError) as e:
+@pytest.mark.parametrize(
+    ("weights", "match"),
+    [  # the error names the offending dataset (not a letter every message has), or the sum
+        ({"alpha": 0.0}, "sum"),
+        ({"alpha": -1.0, "beta": 1.0}, "'alpha'"),
+        ({"zzz": 1.0}, "'zzz'"),
+        ({"empty": 1.0}, "'empty'"),
+        ({"blank": 1.0}, "'blank'"),
+    ],
+)
+def test_invalid_mixtures(weights, match):  # Review Focus 3
+    pools = {"alpha": _pool(3), "beta": _pool(3), "empty": DocPool.from_docs([]), "blank": DocPool.from_docs([[], []])}
+    with pytest.raises(MixtureError, match=match) as e:
         MixtureSampler(pools, weights, seq_len=16, seed=0)
-    assert any(k in str(e.value) for k in weights) or "sum" in str(e.value)
+    assert not any(f"'{k}'" in str(e.value) for k in weights if f"'{k}'" != match)  # no other name
 
 def test_zero_weight_empty_pool_is_fine():
     MixtureSampler({"a": _pool(3), "empty": DocPool.from_docs([])}, {"a": 1.0, "empty": 0.0}, seq_len=16, seed=0)
