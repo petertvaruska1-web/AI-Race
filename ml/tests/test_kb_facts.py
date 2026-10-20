@@ -1000,7 +1000,7 @@ def test_free_answers_accept_the_listed_forms():
     assert kb.accepted_answers(Fact("seal", "baby_animal", "pup")) == ["pup"]
     assert kb.accepted_answers(Fact("ostrich", "animal_legs", "two")) == ["two", "2"]
     assert kb.accepted_answers(Fact("Ukraine", "capital_of", "Kyiv")) == ["Kyiv", "Kiev"]
-    assert kb.accepted_answers(Fact("Mercury", "planet_order", "first")) == ["first", "1st"]
+    assert kb.accepted_answers(Fact("Mercury", "planet_order", "first")) == ["first", "1st", "1"]
     assert kb.accepted_answers(Fact("lizard", "animal_legs", "four")) == ["four", "4"]
     extra = 0
     for seed in range(30):
@@ -1019,6 +1019,16 @@ ANIMAL_CLASS_PLURALS = {
     "insect": "insects",
     "arachnid": "arachnids",
 }
+ORDINAL_DIGITS = {
+    "first": "1",
+    "second": "2",
+    "third": "3",
+    "fourth": "4",
+    "fifth": "5",
+    "sixth": "6",
+    "seventh": "7",
+    "eighth": "8",
+}
 
 
 def test_animal_class_free_answers_accept_the_plural():
@@ -1030,6 +1040,20 @@ def test_animal_class_free_answers_accept_the_plural():
         assert kb.accepted_answers(fact) == [fact.obj, plural], fact
         assert exact_match(f"{plural.capitalize()}.", kb.accepted_answers(fact), "first_line")
         assert exact_match(fact.obj, kb.accepted_answers(fact), "first_line")
+
+
+def test_planet_order_free_answers_accept_the_bare_digit():
+    # the reasoning training text answers with the digit, and shape_sides and animal_legs accept it
+    kb = load_kb()
+    assert set(kb.objects_for("planet_order")) == set(ORDINAL_DIGITS)
+    for fact in kb.facts_for("planet_order"):
+        digit = ORDINAL_DIGITS[fact.obj]
+        accepted = kb.accepted_answers(fact)
+        assert accepted[0] == fact.obj and digit in accepted and len(accepted) == 3, fact
+        assert exact_match(digit, accepted, "first_line")
+        assert exact_match(accepted[1], accepted, "first_line")  # '5th' still counts
+        for other in ORDINAL_DIGITS.values():
+            assert other == digit or not exact_match(other, accepted, "first_line")
 
 
 def test_accepted_forms_are_never_offered_as_wrong_options_or_swaps():

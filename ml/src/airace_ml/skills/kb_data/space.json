@@ -7,14 +7,14 @@
       "exact_safe": true,
       "confusable": [],
       "also_accepted": {
-        "first": ["1st"],
-        "second": ["2nd"],
-        "third": ["3rd"],
-        "fourth": ["4th"],
-        "fifth": ["5th"],
-        "sixth": ["6th"],
-        "seventh": ["7th"],
-        "eighth": ["8th"]
+        "first": ["1st", "1"],
+        "second": ["2nd", "2"],
+        "third": ["3rd", "3"],
+        "fourth": ["4th", "4"],
+        "fifth": ["5th", "5"],
+        "sixth": ["6th", "6"],
+        "seventh": ["7th", "7"],
+        "eighth": ["8th", "8"]
       },
       "never_false": [],
       "train_templates": [
