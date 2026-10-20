@@ -32,7 +32,7 @@ from airace_ml.infer.lm import ContinuationScore as CS
 from airace_ml.infer.lm import Generation
 from airace_ml.paths import tokenizer_path
 from airace_ml.skills.checkers import CHECKERS
-from airace_ml.skills.code import code_bench_items
+from airace_ml.skills.code import code_bench_items, code_train_docs
 from airace_ml.skills.facts import consistency_groups, knowledge_bench_items
 from airace_ml.skills.grammar import grammar_pairs
 from airace_ml.skills.instructions import instruction_bench_items
@@ -40,8 +40,8 @@ from airace_ml.skills.kb import load_kb
 from airace_ml.skills.patterns import pattern_bench_items
 from airace_ml.skills.reasoning import reasoning_bench_items
 from airace_ml.skills.types import CheckItem, ExactItem, MCItem, PairItem, skill_rng
-from airace_ml.tokenizer import Tok, encode_chat, encode_doc
-from tests.fakes import ScriptedLM, answer_key_lm
+from airace_ml.tokenizer import Tok, encode_chat, encode_doc, train_tokenizer
+from tests.fakes import ScriptedLM, answer_key_lm, reference_reply
 
 
 # The brief's tests, verbatim.
@@ -313,7 +313,8 @@ def test_checkers_get_the_full_reply_and_untouched_check_args(tiny_tok, monkeypa
     assert len(checked) == 170
     model_calls = {(reply, id(args)) for reply, args in seen}
     for item, original in zip(checked, before, strict=True):
-        assert (item.reference, id(item.check_args)) in model_calls  # the full reply, the args
+        reply = reference_reply(item)  # a function body follows the newline the prompt omits
+        assert (reply, id(item.check_args)) in model_calls  # the full reply, the args
         assert item.check_args == original  # untouched by any call
     args_ids = {id(i.check_args) for i in checked}
     assert all(id(args) in args_ids for _, args in seen)  # never a copy
@@ -714,7 +715,7 @@ def _reply_budget_overruns(tok: Tok) -> list[tuple[str, str, int, int]]:
             if isinstance(item, ExactItem):  # a plain reply usually starts with a space
                 texts = [t for a in item.answers for t in ([a] if item.chat else [a, " " + a])]
             elif isinstance(item, CheckItem):
-                texts = [item.reference]
+                texts = [reference_reply(item)]
             else:
                 continue
             for text in texts:
@@ -737,6 +738,65 @@ def test_reply_budget_check_finds_overruns(tiny_tok):  # the check itself, on th
 @pytest.mark.skipif(not tokenizer_path().exists(), reason="needs the real tok-v1 tokenizer")
 def test_every_answer_fits_its_reply_budget_with_the_real_tokenizer():
     assert _reply_budget_overruns(Tok.load(tokenizer_path())) == []
+
+
+# -- Fix wave A (F1): a function prompt stops where training text does ----------------------------
+
+INDENT_MERGE = "\u010a\u0120\u0120\u0120"  # byte-level BPE: a newline and 3 spaces, one token
+
+
+def _function_items():
+    return [i for i in build_suite().items["coding"] if isinstance(i, CheckItem) and not i.chat]
+
+
+def test_no_plain_bench_prompt_ends_in_whitespace():
+    # A newline at the end of a prompt is a token of its own, but training text merges it with the
+    # next line's indentation, so a model shown that bare newline has never seen what follows it.
+    suite = build_suite()
+    plain = [
+        item
+        for items in suite.items.values()
+        for item in items
+        if not isinstance(item, PairItem) and not item.chat
+    ]
+    assert len(plain) > 800
+    assert [i.id for i in plain if i.prompt != i.prompt.rstrip()] == []
+
+
+@pytest.fixture(scope="module")
+def code_tok(tmp_path_factory) -> Tok:
+    """tok-v1's recipe (byte-level BPE, 4096 cap) on the code generator's training text."""
+    texts = [d.text for d in code_train_docs(skill_rng("code", "train"), 3000)]
+    return train_tokenizer(texts, tmp_path_factory.mktemp("code_tok") / "tokenizer.json")
+
+
+def test_function_prompt_tokens_are_a_prefix_of_the_training_text_tokens(code_tok):
+    merge = code_tok.id_of(INDENT_MERGE)  # without it, the prefix check could pass for any prompt
+    assert merge in code_tok.encode('"""\n    return a')
+    functions = _function_items()
+    assert len(functions) == 50
+    for item in functions:
+        # training shows the whole header, a newline and the body; the model is shown a prefix
+        text = item.check_args["prompt"] + item.reference
+        assert text.startswith(item.prompt)
+        shown, full = encode_doc(code_tok, item.prompt), encode_doc(code_tok, text)
+        assert full[: len(shown)] == shown, item.id
+        assert full[len(shown)] == merge, item.id  # the reply starts with the token training has
+        assert text[len(item.prompt) :] == "\n" + item.reference  # ... and the text it stands for
+
+
+def test_answer_key_replies_to_a_function_prompt_with_a_newline_and_the_body(tiny_tok):
+    suite = build_suite()
+    lm = answer_key_lm(tiny_tok, suite)
+    for item in _function_items():
+        (reply,) = lm.generate(
+            [encode_doc(tiny_tok, item.prompt)],
+            max_new_tokens=item.max_new_tokens,
+            temperature=0.0,
+            top_p=1.0,
+            seed=0,
+        )
+        assert tiny_tok.decode(reply.tokens) == "\n" + item.reference, item.id
 
 
 # -- Fix round 1: the instruction floor (I1) ------------------------------------------------------

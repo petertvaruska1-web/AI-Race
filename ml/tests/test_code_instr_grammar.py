@@ -58,7 +58,11 @@ def test_function_reference_passes_and_wrong_fails():
         i for i in code_bench_items(skill_rng("coding", "bench")) if isinstance(i, CheckItem)
     ]:
         assert CHECKERS[it.check](it.reference, it.check_args)
+        # the prompt stops before the newline that leads to the body, so the reply starts with it
+        assert CHECKERS[it.check]("\n" + it.reference, it.check_args), it.id
         assert not CHECKERS[it.check]("    return None\n", it.check_args)
+        assert not CHECKERS[it.check]("\n    return None\n", it.check_args)
+        assert not CHECKERS[it.check]("\n", it.check_args)
 
 
 def test_checkers_basic():
@@ -395,8 +399,10 @@ def test_coding_bench_shape(coding_bench):
         assert "fmt:output" in it.tags and family_tag(it) in code.OUTPUT_FAMILIES
     for it in functions:
         assert it.check == "minipy_function_tests" and it.max_new_tokens == code.FUNCTION_TOKENS
-        assert re.fullmatch(r'def \w+\(\w+(, \w+)?\):\n    """[^"\n]+"""\n', it.prompt)
-        assert it.check_args["prompt"] == it.prompt
+        # the model is shown the header without the newline after its closing quotes (the reply
+        # starts with it); the checker gets the whole header
+        assert re.fullmatch(r'def \w+\(\w+(, \w+)?\):\n    """[^"\n]+"""', it.prompt)
+        assert it.check_args["prompt"] == it.prompt + "\n"
         assert it.check_args["name"] == re.match(r"def (\w+)", it.prompt)[1]
         assert "fmt:function" in it.tags and family_tag(it) in code.FUNCTION_FAMILIES
     assert len({i.prompt for i in coding_bench}) == 150
@@ -521,11 +527,12 @@ def test_training_never_contains_a_benchmark_program_under_any_names(coding_benc
     assert len(seen) > 2000 and not seen & bench_worlds
     all_text = "\n".join(d.text for d in code_train)
     assert not any(it.prompt in all_text for it in coding_bench)
+    assert not any(it.check_args["prompt"] in all_text for it in functions)
     # training uses no reserved prompt either, and no reserved function header
     assert not any(reserved_for_bench(f"Program:\n{source}\nOutput:") for source, _ in train)
     headers = {d.text[: d.text.index('"""\n') + 4] for d in code_train if d.text.startswith("def ")}
     assert len(headers) > 400
-    assert not headers & {i.prompt for i in functions}
+    assert not headers & {i.check_args["prompt"] for i in functions}
     assert not any(reserved_for_bench(h) for h in headers)
 
 

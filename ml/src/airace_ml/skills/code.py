@@ -1002,11 +1002,15 @@ def _bench_functions(rng: np.random.Generator, n: int) -> list[CheckItem]:
     for v in in_turn(chosen):
         fam = _FAMILY_BY_NAME[v.family]
         args = {"prompt": v.prompt, "name": v.name, "tests": fam.test_cases}
+        # The model is shown the header up to its closing quotes. In training text the newline
+        # after them merges with the body's indentation into one token, so a prompt that ended on
+        # a bare newline would end on a token that no body ever follows. The checker still gets
+        # the full header; the reply starts with that newline (``checkers.function_body`` keeps it).
         items.append(
             CheckItem(
                 "",
                 "coding",
-                v.prompt,
+                v.prompt.rstrip("\n"),
                 FUNCTION_CHECK,
                 args,
                 v.body(0),
@@ -1027,10 +1031,12 @@ def code_bench_items(
     (``extract="first_line"``). The families take turns, and within a family so do its templates,
     so any prefix is as balanced as it can be. No world repeats.
 
-    Function items: a ``def`` header with a docstring (``chat=False``), judged by
-    ``minipy_function_tests`` against hidden tests; ``reference`` is a correct body. The 10
-    families share the items evenly, each item on a def line of its own that is reserved for the
-    benchmark (and so in no training text); ``ValueError`` if ``n_func`` is more than there are.
+    Function items: a ``def`` header with a docstring and no newline after it (``chat=False``; the
+    reply starts with that newline, as in training text), judged by ``minipy_function_tests``
+    against hidden tests, which get the full header in ``check_args["prompt"]``; ``reference`` is
+    a correct body (the reply after its leading newline). The 10 families share the items evenly,
+    each item on a def line of its own that is reserved for the benchmark (and so in no training
+    text); ``ValueError`` if ``n_func`` is more than there are.
 
     Both kinds are spread over the list in proportion, so a prefix has both. Every output prompt
     and every function's def line is reserved for the benchmark (:func:`reserved_for_bench`).

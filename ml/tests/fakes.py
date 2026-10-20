@@ -63,11 +63,21 @@ def _prompt(tok: Tok, prompt: str, chat: bool) -> tuple[int, ...]:
     return tuple(encode_doc(tok, prompt))
 
 
+def reference_reply(item: CheckItem) -> str:
+    """The reply that continues ``item``'s prompt with its reference.
+
+    A chat reply is the reference itself. A plain prompt (a function header) stops before the
+    newline that precedes the body, so its reply starts with that newline.
+    """
+    return item.reference if item.chat else "\n" + item.reference
+
+
 def answer_key_lm(tok: Tok, suite: Suite) -> ScriptedLM:
     """A model that knows every answer of ``suite``.
 
     It scores the correct option and the good sentence of a pair at 0.0 and everything else at
-    -10, and replies with an exact item's first answer or a checked item's reference. Lookups
+    -10, and replies with an exact item's first answer or a checked item's reference (after the
+    newline a plain prompt leaves for it, see :func:`reference_reply`). Lookups
     are by exact token ids, encoded the way the benchmark specifies, so a prompt or option
     encoded any other way gets -10 and no reply. It answers every paraphrase of a consistency
     group correctly, so consistency scores 100 as well. Raises ``ValueError`` if two items
@@ -95,7 +105,7 @@ def answer_key_lm(tok: Tok, suite: Suite) -> ScriptedLM:
             elif isinstance(item, ExactItem):
                 put(replies, _prompt(tok, item.prompt, item.chat), item.answers[0])
             elif isinstance(item, CheckItem):
-                put(replies, _prompt(tok, item.prompt, item.chat), item.reference)
+                put(replies, _prompt(tok, item.prompt, item.chat), reference_reply(item))
 
     def reply(prompt: list[int]) -> str:
         return replies.get(tuple(prompt), "")
