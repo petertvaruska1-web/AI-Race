@@ -1117,6 +1117,14 @@ def test_creativity_degenerate_outputs_score_finite(tiny_tok):
     assert score_creativity(repeated, tiny_tok, weird[0], idx)[0].score == 0.0  # NaN loss
 
 
+def test_a_model_with_non_finite_logits_scores_finite_creativity(nan_lm, tiny_tok):
+    idx = NoveltyIndex.build([np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)])
+    judge = StubJudge(tiny_tok, lambda ids: 3.0)
+    category, items = score_creativity(nan_lm, tiny_tok, judge, idx, max_new_tokens=8)
+    assert category.n == 24 and math.isfinite(category.score) and 0 <= category.score <= 100
+    assert all(math.isfinite(r.score) for r in items)
+
+
 def test_a_story_that_echoes_its_prompt_is_not_new(tiny_tok):
     idx = NoveltyIndex.build([np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)])
     fluent = StubJudge(tiny_tok, lambda ids: 2.5)  # coherence 0.875

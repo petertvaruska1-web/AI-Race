@@ -4,6 +4,7 @@ import math
 import pytest
 import torch
 
+from airace_ml.infer import lm as lm_module
 from airace_ml.infer.lm import ContinuationScore, Generation, TorchLM, build_chat_prompt
 from airace_ml.model.shape import ModelShape
 from airace_ml.model.transformer import Transformer
@@ -408,6 +409,55 @@ def test_mode_is_restored_even_when_a_call_fails(tiny_lm, tiny_tok, monkeypatch,
     with pytest.raises(RuntimeError, match="model failed"):
         tiny_lm.score_continuations([tiny_tok.encode("The dog")], [tiny_tok.encode(" runs")])
     assert tiny_lm.model.training is start_training
+
+
+SAMPLINGS = [
+    {"temperature": 0.9, "top_p": 0.9},
+    {"temperature": 0.9, "top_p": 1.0},
+    {"temperature": 0.0, "top_p": 1.0},
+]
+
+
+@pytest.mark.parametrize("sampling", SAMPLINGS)
+def test_a_model_with_non_finite_logits_reads_its_greedy_token_instead_of_crashing(
+    nan_lm, tiny_tok, sampling
+):
+    prompts = [tiny_tok.encode("Once upon a time"), tiny_tok.encode("The cat")]
+    greedy = nan_lm.generate(prompts, max_new_tokens=6, temperature=0, top_p=1.0, seed=0)
+    assert all(len(g.tokens) == 6 for g in greedy)  # NaN logits, and still a reply of full length
+    got = nan_lm.generate(prompts, max_new_tokens=6, seed=3, **sampling)
+    assert [g.tokens for g in got] == [g.tokens for g in greedy]  # no text is made up
+
+
+def _rng(seed):
+    return torch.Generator().manual_seed(seed)
+
+
+@pytest.mark.parametrize("sampling", SAMPLINGS)
+def test_a_row_without_a_distribution_does_not_change_how_the_others_are_sampled(sampling):
+    torch.manual_seed(0)
+    healthy = torch.randn(2, 50)
+    broken = torch.stack(
+        [
+            torch.full((50,), math.nan),
+            torch.where(torch.arange(50) == 7, math.inf, 0.0),  # one infinite logit: softmax is NaN
+            torch.full((50,), -math.inf),
+        ]
+    )
+
+    def draw(logits):
+        return lm_module._sample(logits, sampling["temperature"], sampling["top_p"], _rng(4))
+
+    got = draw(torch.cat([healthy, broken]))
+    assert got[2:].tolist() == torch.cat([healthy, broken])[2:].argmax(-1).tolist()
+    assert got[2:].tolist()[1] == 7  # what greedy picks of an infinite logit
+    # the healthy rows draw what they draw when the rows after them are healthy too
+    assert got[:2].tolist() == draw(torch.cat([healthy, torch.randn(3, 50)]))[:2].tolist()
+
+
+def test_chat_reply_and_complete_survive_a_model_with_non_finite_logits(nan_lm):
+    assert isinstance(nan_lm.chat_reply([("user", "Hello there")], temperature=0.8), str)
+    assert isinstance(nan_lm.complete("Once upon a time", temperature=0.8), str)
 
 
 @pytest.mark.gpu

@@ -72,6 +72,12 @@ def test_empty_model_finite(tiny_tok):  # Review Focus 4
     assert set(fp.traits) == set(TRAITS) and all(math.isfinite(v) for v in fp.traits.values())
 
 
+def test_a_model_with_non_finite_logits_has_a_finite_fingerprint(nan_lm, tiny_tok):
+    # A damaged or diverged model reads as degenerate; it does not stop the measurement.
+    fp = measure_fingerprint(nan_lm, tiny_tok, k=1, temperature=0.8, top_p=0.95, max_new_tokens=8)
+    assert set(fp.traits) == set(TRAITS) and all(math.isfinite(v) for v in fp.traits.values())
+
+
 def test_describe_and_distance():
     pop = [Fingerprint({t: float(i) for t in TRAITS}, []) for i in range(10)]
     hi = Fingerprint({t: 100.0 for t in TRAITS}, [])

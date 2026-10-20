@@ -182,3 +182,14 @@ def tiny_lm(tiny_tok) -> TorchLM:
     torch.manual_seed(0)
     model = Transformer(ModelShape(2, 64, 64), tiny_tok.vocab_size)
     return TorchLM(model, tiny_tok, torch.device("cpu"))
+
+
+@pytest.fixture
+def nan_lm(tiny_tok) -> TorchLM:
+    """``tiny_lm`` with NaN in every embedding, as a damaged or diverged model might have: every
+    logit it gives is NaN."""
+    torch.manual_seed(0)
+    model = Transformer(ModelShape(2, 64, 64), tiny_tok.vocab_size)
+    with torch.no_grad():
+        model.tok_emb.weight.fill_(float("nan"))
+    return TorchLM(model, tiny_tok, torch.device("cpu"))

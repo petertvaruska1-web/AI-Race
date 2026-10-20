@@ -113,17 +113,30 @@ def build_chat_prompt(
 
 
 def _sample(logits: Tensor, temperature: float, top_p: float, rng: torch.Generator) -> Tensor:
-    """One token per row of ``logits`` ``[B, V]``: greedy at temperature 0, else nucleus sampling."""
+    """One token per row of ``logits`` ``[B, V]``: greedy at temperature 0, else nucleus sampling.
+
+    A row whose probabilities are not all finite (a damaged or diverged model gives NaN or inf
+    logits) has no distribution to sample from, so it takes its ``argmax`` exactly as temperature 0
+    does; the text is whatever the model's own logits pick, never made up. Other rows are sampled
+    as they would be without it.
+    """
+    greedy = logits.argmax(dim=-1)
     if temperature == 0:
-        return logits.argmax(dim=-1)
+        return greedy
     probs = torch.softmax(logits / temperature, dim=-1)
+    sound = torch.isfinite(probs).all(dim=-1, keepdim=True)
+    # A broken row gets some valid distribution so multinomial runs; its draw is thrown away below.
+    probs = torch.where(sound, probs, torch.ones_like(probs))
     if top_p >= 1.0:
-        return torch.multinomial(probs, 1, generator=rng)[:, 0]
-    sorted_probs, sorted_ids = probs.sort(dim=-1, descending=True)
-    # A token goes once the mass ahead of it already reaches top_p, so the top token always stays.
-    sorted_probs = sorted_probs.masked_fill(sorted_probs.cumsum(-1) - sorted_probs >= top_p, 0.0)
-    pick = torch.multinomial(sorted_probs, 1, generator=rng)  # multinomial renormalizes
-    return sorted_ids.gather(1, pick)[:, 0]
+        pick = torch.multinomial(probs, 1, generator=rng)[:, 0]
+    else:
+        sorted_probs, sorted_ids = probs.sort(dim=-1, descending=True)
+        # A token goes once the mass ahead of it already reaches top_p, so the top token stays.
+        sorted_probs = sorted_probs.masked_fill(
+            sorted_probs.cumsum(-1) - sorted_probs >= top_p, 0.0
+        )
+        pick = sorted_ids.gather(1, torch.multinomial(sorted_probs, 1, generator=rng))[:, 0]
+    return torch.where(sound[:, 0], pick, greedy)
 
 
 class TorchLM:
