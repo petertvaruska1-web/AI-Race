@@ -122,7 +122,11 @@ def make_manifest(
     entries of datasets that were not rebuilt are kept. ``sources`` lists every source that feeds
     one of the datasets, with the datasets it feeds and its ``revision``: the one this build read
     it at (``revisions[id]``, else the one its spec declares, else None), and for a source that
-    feeds only datasets that were not rebuilt, the revision ``previous`` recorded."""
+    feeds only datasets that were not rebuilt, the revision ``previous`` recorded.
+
+    A source has one revision, that of the latest build that read it. When a partial rebuild reads
+    a source that also feeds datasets it did not rebuild, those datasets were built at an earlier
+    revision, and the entry no longer says which."""
     merged = {
         ds: entry
         for ds, entry in (previous or {}).get("datasets", {}).items()
