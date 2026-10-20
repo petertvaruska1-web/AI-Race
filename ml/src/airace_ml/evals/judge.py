@@ -10,6 +10,13 @@ self-contained: the checkpoint, a copy of the frozen tokenizer (``tokenizer.json
 ``calibration.json``, the loss levels the judge gives real held-out text (:func:`calibrate`).
 ``calibration.json`` is written last, so a directory with it holds a complete judge. A build cut
 short (about an hour on the reference GPU) resumes from its last saved state when run again.
+
+A judge's token ids mean what its tokenizer says, and its calibration describes the corpora it
+was calibrated on, so ``train_config.json`` records which data the judge was built from
+(:func:`~airace_ml.data.identity.data_identity`) and whether it was trained on the recipe's full
+budget. :func:`build_judge` trains again whenever the data has been rebuilt since, and
+:func:`check_judge_provenance` is what the gate and ``bench`` use to refuse a judge built from
+other data or from a shortened budget.
 """
 
 import json
@@ -23,8 +30,10 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from safetensors import SafetensorError
 
 from airace_ml.data.corpus import DATASET_IDS, Corpus
+from airace_ml.data.identity import data_identity
 from airace_ml.data.prep import PrepConfig, heldout_docs
 from airace_ml.device import pick_device
 from airace_ml.infer.lm import ContinuationScore, LanguageModel, TorchLM
@@ -47,6 +56,17 @@ MIN_WORDS = 4
 MIN_DISTINCT_WORDS = 3  # "go go go go" and "yes yes yes yes" say nothing
 MAX_TRIGRAM_COUNT = 2  # a word 3-gram said 3 or more times makes a reply degenerate
 _FIRST_TEXT_ID = len(SPECIAL_TOKENS)  # ids below this are special tokens
+# Everything that can be wrong with a saved checkpoint, torch's RuntimeError (meta.json describes
+# another shape than the weights) included. Catch it only around a load on the CPU.
+_CHECKPOINT_DAMAGED = (
+    OSError,
+    ValueError,
+    KeyError,
+    TypeError,
+    EOFError,
+    SafetensorError,
+    RuntimeError,
+)
 
 
 class JudgeBuildError(RuntimeError):
@@ -232,15 +252,46 @@ def _write_json(path: Path, data: dict) -> None:
     os.replace(tmp, path)
 
 
-def _trained(out: Path, cfg: TrainRunConfig) -> bool:
-    """``out`` holds the checkpoint of a completed training run of exactly ``cfg``: the record
-    :func:`build_judge` writes once such a run completes, and the checkpoint beside it."""
+def _run_record(cfg: TrainRunConfig, data_root: Path) -> dict:
+    """What ``train_config.json`` says of a judge trained as ``cfg`` on the data under
+    ``data_root``: the recipe itself, which data it was built from, and whether ``cfg`` is the
+    full recipe (:func:`judge_train_config`, token budget included) and not a shortened test."""
+    return {
+        **json.loads(cfg.to_json()),
+        "data_identity": data_identity(data_root),
+        "full_recipe": cfg.token_budget == judge_train_config().token_budget,
+    }
+
+
+def _trained(out: Path, record: dict) -> bool:
+    """``out`` holds the checkpoint of a completed training run recorded as ``record`` (see
+    :func:`_run_record`): the record :func:`build_judge` writes once such a run completes, and the
+    checkpoint beside it. A record of another recipe, or of other data, does not count."""
     try:
-        record = json.loads((out / TRAIN_CONFIG_NAME).read_text(encoding="utf-8"))
+        saved = json.loads((out / TRAIN_CONFIG_NAME).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
     complete = (out / WEIGHTS_NAME).is_file() and (out / META_NAME).is_file()
-    return complete and record == json.loads(cfg.to_json())
+    return complete and saved == record
+
+
+def check_judge_provenance(folder: Path, identity: str) -> None:
+    """Raise ``ValueError`` (saying why) unless the judge in ``folder`` was built from the data
+    whose :func:`~airace_ml.data.identity.data_identity` is ``identity`` and trained on the
+    recipe's full budget, as its ``train_config.json`` records."""
+    try:
+        record = json.loads((folder / TRAIN_CONFIG_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise ValueError(f"{TRAIN_CONFIG_NAME} cannot be read ({e})") from e
+    if not isinstance(record, dict) or "data_identity" not in record:
+        raise ValueError(f"{TRAIN_CONFIG_NAME} does not say which training data it was built from")
+    if record["data_identity"] != identity:
+        raise ValueError(
+            "it was built from other training data than the data under the data root "
+            "(the tokenizer or the corpora were rebuilt since)"
+        )
+    if record.get("full_recipe") is not True:
+        raise ValueError("it was trained on a shortened budget (a quick test), not the full recipe")
 
 
 def build_judge(
@@ -254,14 +305,16 @@ def build_judge(
     given) into :func:`~airace_ml.paths.judge_dir`, copy the tokenizer in, calibrate it and write
     ``calibration.json``. Returns the directory.
 
-    ``on_event`` receives the run's training telemetry. Running it again recovers from wherever
-    the last build stopped:
+    ``on_event`` receives the run's training telemetry. ``train_config.json`` records the recipe,
+    the data it was built from (:func:`~airace_ml.data.identity.data_identity`) and whether it is
+    the full recipe. Running it again recovers from wherever the last build stopped:
 
-    * if training of this exact run completed (``train_config.json`` records it, written once the
-      run completes), the model is not trained again, only calibrated;
+    * if training of this exact run on this exact data completed (``train_config.json`` records
+      it, written once the run completes) and its checkpoint can be loaded, the model is not
+      trained again, only calibrated;
     * else if the directory holds the resume state of this exact run, training resumes from it;
-    * else training starts fresh, and any other state (another budget, an incomplete save) is
-      deleted.
+    * else training starts fresh, and any other state (another budget, other data, damaged
+      weights, an incomplete save) is deleted.
 
     A training run that does not complete (it stopped as unstable) raises
     :class:`JudgeBuildError`: the model is neither calibrated nor recorded as trained. A previous
@@ -272,9 +325,17 @@ def build_judge(
     cfg = judge_train_config()
     if token_budget is not None:
         cfg = replace(cfg, token_budget=token_budget)
+    record = _run_record(cfg, data_root)
     out = judge_dir(data_root)
     (out / CALIBRATION_NAME).unlink(missing_ok=True)
-    if not _trained(out, cfg):
+    model = None
+    if _trained(out, record):
+        try:
+            # On the CPU, where only a damaged file can fail (a busy GPU is no reason to train)
+            model, _ = load_checkpoint(out, "cpu")
+        except _CHECKPOINT_DAMAGED:
+            model = None  # weights that cannot be read are no judge: train it again
+    if model is None:
         (out / TRAIN_CONFIG_NAME).unlink(missing_ok=True)
         result = train_run(
             cfg,
@@ -289,9 +350,9 @@ def build_judge(
                 f"the judge's training ended {result.status!r} after {result.steps} of "
                 f"{cfg.steps} steps, so it was not calibrated; its telemetry is in {out}"
             )
-        _write_json(out / TRAIN_CONFIG_NAME, json.loads(cfg.to_json()))
+        _write_json(out / TRAIN_CONFIG_NAME, record)
+        model, _ = load_checkpoint(out, device)
     shutil.copyfile(tokenizer_path(data_root), out / TOKENIZER_NAME)
-    model, _ = load_checkpoint(out, device)
     tok = Tok.load(out / TOKENIZER_NAME)
     calibration = calibrate(Judge(TorchLM(model, tok, device), tok), data_root)
     _write_json(out / CALIBRATION_NAME, asdict(calibration))

@@ -21,7 +21,7 @@ from airace_ml.evals.judge import JudgeBuildError
 from airace_ml.experiments.gate import TITLES, GateCriterion, GateOutcome, GateSetupError
 from airace_ml.infer.lm import TorchLM
 from airace_ml.model.shape import ModelShape
-from airace_ml.paths import judge_dir, novelty_path, tokenizer_path
+from airace_ml.paths import corpus_dir, judge_dir, novelty_path, tokenizer_path
 from airace_ml.personality.fingerprint import TRAITS
 from airace_ml.tokenizer import train_tokenizer
 from airace_ml.train.config import TrainRunConfig
@@ -646,7 +646,8 @@ def test_fingerprint_prints_every_trait_in_order(trained, tiny_data_root):
 @pytest.fixture(scope="module")
 def judged(tiny_data_root, tmp_path_factory):
     """A copy of the tiny data root with a novelty index and a (very small) judge built through
-    the CLI. The judge recipe is shrunk to a 2-layer, 64-wide model, as the judge tests do."""
+    the CLI. The judge recipe is shrunk to a 2-layer, 64-wide model on a 3-step budget, as the
+    judge tests do; it is built on that recipe's own budget, which makes it a full-recipe judge."""
     root = tmp_path_factory.mktemp("judged_root") / "root"
     shutil.copytree(tiny_data_root, root)
     real = judge_module.judge_train_config
@@ -654,11 +655,13 @@ def judged(tiny_data_root, tmp_path_factory):
     patch.setattr(
         judge_module,
         "judge_train_config",
-        lambda seed=1234: replace(real(seed), shape=ModelShape(2, 64, 64), batch_tokens=1024),
+        lambda seed=1234: replace(
+            real(seed), shape=ModelShape(2, 64, 64), batch_tokens=1024, token_budget=1024 * 3
+        ),
     )
     try:
         index = _run(["build-novelty-index", "--data-root", str(root)])
-        judge = _run(["build-judge", "--budget-tokens", "3072", *_common(root)])
+        judge = _run(["build-judge", *_common(root)])
     finally:
         patch.undo()
     return SimpleNamespace(root=root, index=index, judge=judge)
@@ -838,6 +841,50 @@ def _damage_judge_weights(root):
     (judge_dir(root) / "model.safetensors").write_bytes(b"not a model at all")
 
 
+def _change_record(path, **changes):
+    """Edit a JSON record; a value of None deletes the key."""
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record.update(changes)
+    path.write_text(
+        json.dumps({k: v for k, v in record.items() if v is not None}), encoding="utf-8"
+    )
+
+
+def _judge_record(root, **changes):
+    _change_record(judge_dir(root) / "train_config.json", **changes)
+
+
+def _index_record(root, **changes):
+    _change_record(novelty_path(root).with_suffix(".json"), **changes)
+
+
+def _stale_judge(root):  # built from other data than the data under the root
+    _judge_record(root, data_identity="0" * 64)
+
+
+def _quick_judge(root):  # build-judge --budget-tokens N, for a quick test
+    _judge_record(root, full_recipe=False)
+
+
+def _early_judge(root):  # built before judges recorded their data
+    _judge_record(root, data_identity=None, full_recipe=None)
+
+
+def _stale_index(root):
+    _index_record(root, data_identity="0" * 64)
+
+
+def _early_index(root):
+    _index_record(root, data_identity=None)
+
+
+def _rebuilt_corpus(root):
+    """The data after ``airace-content build`` made a different web corpus: the judge and the
+    index built from the old one are out of date."""
+    info = corpus_dir(root) / "web" / "info.json"
+    info.write_text(json.dumps({"dataset": "web", "source": "another build"}), encoding="utf-8")
+
+
 @pytest.mark.parametrize(
     "damage, rebuild",
     [
@@ -848,6 +895,12 @@ def _damage_judge_weights(root):
         (_damage_judge_json, "airace-ml build-judge"),
         (_damage_judge_weights, "airace-ml build-judge"),
         (_damage_judge_shape, "airace-ml build-judge"),
+        (_stale_judge, "airace-ml build-judge"),
+        (_quick_judge, "airace-ml build-judge"),
+        (_early_judge, "airace-ml build-judge"),
+        (_stale_index, "airace-ml build-novelty-index"),
+        (_early_index, "airace-ml build-novelty-index"),
+        (_rebuilt_corpus, "airace-ml build-judge"),
     ],
 )
 def test_a_damaged_judge_or_index_is_an_error_that_names_the_rebuild(
@@ -861,6 +914,16 @@ def test_a_damaged_judge_or_index_is_an_error_that_names_the_rebuild(
     # creativity is the only thing that needs them
     code, out, err = _run([*argv, "--no-creativity"])
     assert code == 0, err
+
+
+def test_bench_says_when_the_data_a_judge_must_belong_to_cannot_be_read(trained, damaged):
+    (corpus_dir(damaged) / "web" / "tags.npz").unlink()
+    argv = ["bench", "--model", str(trained.dir), "--max-items", "1", *_common(damaged)]
+    code, out, err = _run(argv)
+    assert code == 2 and out == ""
+    assert err.startswith("error: cannot tell which training data") and "Traceback" not in err
+    assert "airace-content build" in err
+    assert _run([*argv, "--no-creativity"])[0] == 0  # nothing but creativity needs the data
 
 
 def _break_weights_with_garbage(model: Path) -> None:

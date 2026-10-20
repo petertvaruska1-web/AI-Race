@@ -1,9 +1,17 @@
 """Scripted stand-ins for a language model, so benchmark scoring can be tested exactly."""
 
 from collections.abc import Callable, Sequence
+from types import SimpleNamespace
 
+import pytest
+import torch
+
+from airace_ml.evals import judge as judge_module
 from airace_ml.evals.suite import Suite
 from airace_ml.infer.lm import ContinuationScore, Generation
+from airace_ml.model.checkpoint import CheckpointMeta, save_checkpoint
+from airace_ml.model.shape import ModelShape
+from airace_ml.model.transformer import Transformer
 from airace_ml.skills.types import CheckItem, ExactItem, MCItem, PairItem
 from airace_ml.tokenizer import Tok, encode_chat, encode_doc
 
@@ -114,3 +122,29 @@ def answer_key_lm(tok: Tok, suite: Suite) -> ScriptedLM:
         return scores.get((tuple(context), tuple(continuation)), WRONG)
 
     return ScriptedLM(tok, reply=reply, score=score)
+
+
+def tiny_judge_model(vocab_size: int, seed: int = 0) -> Transformer:
+    """A seeded, untrained 2-layer / 64-wide model with a 64-token span, shaped like a tiny judge."""
+    torch.manual_seed(seed)
+    return Transformer(ModelShape(2, 64, 64), vocab_size)
+
+
+def tiny_meta(model: Transformer) -> CheckpointMeta:
+    return CheckpointMeta("tok-v1", model.shape, "lineage", "judge-v1", None, 0, {}, [])
+
+
+def stub_judge_training(monkeypatch: pytest.MonkeyPatch, tok: Tok) -> list:
+    """Replace the hour of judge training with a run that saves an untrained tiny model and
+    reports it completed, so ``build_judge`` runs in a moment with all of its bookkeeping. Returns
+    the list that gets one entry (the run's config) for every training run started."""
+    started = []
+
+    def train_run(cfg, **kwargs):
+        started.append(cfg)
+        model = tiny_judge_model(tok.vocab_size)
+        save_checkpoint(model, tiny_meta(model), kwargs["out_dir"])
+        return SimpleNamespace(status="completed")
+
+    monkeypatch.setattr(judge_module, "train_run", train_run)
+    return started

@@ -12,7 +12,9 @@ it: 0 for text copied from the corpora, near 1 for text no corpus contains. Wind
 with what it was given (a story's own prompt) are not new either.
 
 On disk an index is a ``.npy`` array of the hashes plus a ``.json`` file beside it that records
-how they were made.
+how they were made and, for the index of a data root, which data that was
+(:func:`~airace_ml.data.identity.data_identity`): token ids mean what the tokenizer of that data
+says, so an index is only good for the data it was built from (:func:`check_index_provenance`).
 """
 
 import json
@@ -23,6 +25,7 @@ from pathlib import Path
 import numpy as np
 
 from airace_ml.data.corpus import DATASET_IDS, Corpus
+from airace_ml.data.identity import data_identity
 from airace_ml.data.prep import heldout_docs
 from airace_ml.paths import corpus_dir, novelty_path
 
@@ -112,10 +115,18 @@ def _meta_path(path: Path) -> Path:
 class NoveltyIndex:
     """Sorted, unique sampled ``n``-gram hashes of a body of text.
 
-    ``hashes`` are sorted and made unique here if they are not already.
+    ``hashes`` are sorted and made unique here if they are not already. ``data_identity`` is the
+    :func:`~airace_ml.data.identity.data_identity` of the data the index was built from, if known
+    (``None`` for an index made from bare arrays); :meth:`save` and :meth:`load` keep it.
     """
 
-    def __init__(self, hashes: np.ndarray, n: int = NGRAM, sample_mod: int = SAMPLE_MOD) -> None:
+    def __init__(
+        self,
+        hashes: np.ndarray,
+        n: int = NGRAM,
+        sample_mod: int = SAMPLE_MOD,
+        data_identity: str | None = None,
+    ) -> None:
         _check_params(n, sample_mod)
         hashes = np.asarray(hashes, dtype=np.uint64).reshape(-1)
         if hashes.size > 1 and not np.all(hashes[1:] > hashes[:-1]):
@@ -123,6 +134,7 @@ class NoveltyIndex:
         self.hashes = hashes
         self.n = n
         self.sample_mod = sample_mod
+        self.data_identity = data_identity
 
     def __len__(self) -> int:
         return int(self.hashes.size)
@@ -153,6 +165,8 @@ class NoveltyIndex:
             "sample_mod": self.sample_mod,
             "count": len(self),
         }
+        if self.data_identity is not None:
+            meta["data_identity"] = self.data_identity
         record = _meta_path(path)
         tmp = record.with_name(record.name + ".tmp")
         tmp.write_text(json.dumps(meta), encoding="utf-8")
@@ -174,7 +188,7 @@ class NoveltyIndex:
                 f"{path} holds {hashes.size} hashes but {record.name} records a count of "
                 f"{meta.get('count')!r}: they come from different saves; build the index again"
             )
-        return cls(hashes, meta["n"], meta["sample_mod"])
+        return cls(hashes, meta["n"], meta["sample_mod"], meta.get("data_identity"))
 
     def novelty(
         self, ids: Sequence[int] | np.ndarray, seen: Sequence[int] | np.ndarray | None = None
@@ -194,9 +208,23 @@ class NoveltyIndex:
         return np.count_nonzero(~known) / sampled.size
 
 
+def check_index_provenance(index: NoveltyIndex, identity: str) -> None:
+    """Raise ``ValueError`` (saying why) unless ``index`` was built from the data whose
+    :func:`~airace_ml.data.identity.data_identity` is ``identity``."""
+    if index.data_identity is None:
+        raise ValueError("its record does not say which training data it was built from")
+    if index.data_identity != identity:
+        raise ValueError(
+            "it was built from other training data than the data under the data root "
+            "(the tokenizer or the corpora were rebuilt since)"
+        )
+
+
 def build_novelty_index(data_root: Path) -> Path:
     """Index every document of the eight base corpora under ``data_root`` that is not held out,
-    write it to :func:`~airace_ml.paths.novelty_path` and return that path."""
+    write it, with the identity of that data, to :func:`~airace_ml.paths.novelty_path` and return
+    that path."""
+    identity = data_identity(data_root)
     parts = []
     for name in DATASET_IDS:
         corpus = Corpus.open(corpus_dir(data_root) / name)
@@ -205,5 +233,5 @@ def build_novelty_index(data_root: Path) -> Path:
         valid = _valid_starts(corpus.offsets, keep, NGRAM)
         parts.append(_sampled_hashes(corpus.tokens, NGRAM, SAMPLE_MOD, valid))
     path = novelty_path(data_root)
-    NoveltyIndex(_unique(parts)).save(path)
+    NoveltyIndex(_unique(parts), data_identity=identity).save(path)
     return path

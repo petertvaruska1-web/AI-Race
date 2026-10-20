@@ -11,10 +11,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
+from safetensors import SafetensorError
 
 import airace_content
 import airace_ml.skills
-from airace_ml.data.corpus import DATASET_IDS, Corpus, DocTags, write_corpus
+from airace_ml.data.corpus import DATASET_IDS, INFO_FILE, Corpus, DocTags, write_corpus
+from airace_ml.data.identity import data_identity
 from airace_ml.data.prep import heldout_docs
 from airace_ml.evals import judge as judge_module
 from airace_ml.evals import novelty as novelty_module
@@ -28,6 +30,7 @@ from airace_ml.evals.judge import (
     JudgeCalibration,
     build_judge,
     calibrate,
+    check_judge_provenance,
     is_well_formed,
     judge_train_config,
 )
@@ -35,19 +38,19 @@ from airace_ml.evals.novelty import (
     HASH_BASE,
     NoveltyIndex,
     build_novelty_index,
+    check_index_provenance,
     ngram_hashes,
 )
 from airace_ml.evals.suite import run_benchmarks
 from airace_ml.infer.lm import Generation, TorchLM
-from airace_ml.model.checkpoint import CheckpointMeta, save_checkpoint
+from airace_ml.model.checkpoint import save_checkpoint
 from airace_ml.model.shape import ModelShape
-from airace_ml.model.transformer import Transformer
-from airace_ml.paths import corpus_dir, judge_dir, novelty_path
+from airace_ml.paths import corpus_dir, judge_dir, novelty_path, tokenizer_path
 from airace_ml.skills.checkers import words as checker_words
 from airace_ml.tokenizer import encode_chat, encode_doc
 from airace_ml.train.events import Done, Progress
 from airace_ml.train.trainer import TrainHooks, train_run
-from tests.fakes import ScriptedLM
+from tests.fakes import ScriptedLM, stub_judge_training, tiny_judge_model, tiny_meta
 
 
 class StubJudge:
@@ -224,15 +227,6 @@ def _write_corpus(root, ds, docs, heldout=None):
     write_corpus(corpus_dir(root) / ds, docs, tags, {"dataset": ds})
 
 
-def tiny_judge_model(vocab_size, seed=0):
-    torch.manual_seed(seed)
-    return Transformer(ModelShape(2, 64, 64), vocab_size)
-
-
-def tiny_meta(model):
-    return CheckpointMeta("tok-v1", model.shape, "lineage", "judge-v1", None, 0, {}, [])
-
-
 # -- novelty -------------------------------------------------------------------------------------
 
 
@@ -383,8 +377,12 @@ def _write_root(root, rng):
     return written
 
 
-def test_build_novelty_index_skips_heldout_docs_and_boundaries(tmp_path, monkeypatch):
+def test_build_novelty_index_skips_heldout_docs_and_boundaries(
+    tmp_path, tiny_tok_path, monkeypatch
+):
     written = _write_root(tmp_path, np.random.default_rng(4))
+    tokenizer_path(tmp_path).parent.mkdir(parents=True)  # the index records the tokenizer too
+    shutil.copyfile(tiny_tok_path, tokenizer_path(tmp_path))
     path = build_novelty_index(tmp_path)
     assert path == novelty_path(tmp_path)
     idx = NoveltyIndex.load(path)
@@ -573,7 +571,12 @@ def test_build_judge_writes_a_self_contained_judge(tiny_data_root, tiny_tok, tmp
         "train_config.json",
     ]
     record = json.loads((out / TRAIN_CONFIG_NAME).read_text(encoding="utf-8"))
-    assert record == json.loads(cfg.to_json())
+    # the recipe, then what it was built from and whether it was the full recipe
+    assert record == {
+        **json.loads(cfg.to_json()),
+        "data_identity": data_identity(root),
+        "full_recipe": False,  # 65,536 tokens, not the recipe's own budget
+    }
     moved = Path(shutil.move(out, tmp_path / "moved"))
     judge = Judge.load(moved, device="cpu")
     assert judge.calibration == calibrate(judge, root)
@@ -735,6 +738,166 @@ def test_a_failed_rebuild_never_passes_for_the_earlier_judge(tiny_data_root, tmp
     flags = _spy_train_run(monkeypatch)
     build_judge(root, device="cpu", token_budget=1024 * 4)
     assert flags == [False]  # recipe A is trained again, not taken from B's leftover weights
+
+
+# -- what the judge and the index were built from ---------------------------------------------------
+
+
+def _rebuild_a_corpus(root):
+    """The data after ``airace-content build`` made a different corpus."""
+    info = corpus_dir(root) / "web" / INFO_FILE
+    info.write_text(json.dumps({"dataset": "web", "source": "another build"}), encoding="utf-8")
+
+
+def _rebuild_the_tokenizer(root):
+    """The data after a build that retrained the tokenizer (same vocabulary size, other ids)."""
+    with open(tokenizer_path(root), "ab") as f:
+        f.write(b"\n")
+
+
+def _train_config(out):
+    return json.loads((out / TRAIN_CONFIG_NAME).read_text(encoding="utf-8"))
+
+
+def test_build_judge_records_the_data_it_was_built_from_and_whether_it_is_the_full_recipe(
+    data_root_copy, tiny_tok, monkeypatch
+):
+    started = stub_judge_training(monkeypatch, tiny_tok)
+    out = build_judge(data_root_copy, device="cpu", token_budget=65536)
+    record = _train_config(out)
+    assert record["data_identity"] == data_identity(data_root_copy)
+    assert record["full_recipe"] is False  # a shortened budget, for a quick test
+    out = build_judge(data_root_copy, device="cpu")  # the recipe's own budget
+    assert len(started) == 2 and started[1] == judge_train_config()
+    assert _train_config(out)["full_recipe"] is True
+    build_judge(data_root_copy, device="cpu", token_budget=judge_train_config().token_budget)
+    assert len(started) == 2  # asking for the recipe's budget by number is the full recipe
+
+
+@pytest.mark.parametrize("rebuild", [_rebuild_a_corpus, _rebuild_the_tokenizer])
+def test_build_judge_trains_again_once_the_data_has_been_rebuilt(
+    data_root_copy, tiny_tok, monkeypatch, rebuild
+):
+    started = stub_judge_training(monkeypatch, tiny_tok)
+    build_judge(data_root_copy, device="cpu", token_budget=65536)
+    build_judge(data_root_copy, device="cpu", token_budget=65536)
+    assert len(started) == 1  # the same data: only calibrated
+    rebuild(data_root_copy)
+    out = build_judge(data_root_copy, device="cpu", token_budget=65536)
+    assert len(started) == 2  # old weights are not paired with the rebuilt data's tokenizer
+    assert _train_config(out)["data_identity"] == data_identity(data_root_copy)
+    assert (out / TOKENIZER_NAME).read_bytes() == tokenizer_path(data_root_copy).read_bytes()
+
+
+def test_a_judge_that_records_nothing_about_its_data_is_trained_again(
+    data_root_copy, tiny_tok, monkeypatch
+):
+    started = stub_judge_training(monkeypatch, tiny_tok)
+    out = build_judge(data_root_copy, device="cpu", token_budget=65536)
+    record = _train_config(out)
+    for key in ("data_identity", "full_recipe"):  # what an earlier build wrote
+        del record[key]
+    (out / TRAIN_CONFIG_NAME).write_text(json.dumps(record), encoding="utf-8")
+    build_judge(data_root_copy, device="cpu", token_budget=65536)
+    assert len(started) == 2
+
+
+def _truncate_weights(out):
+    weights = out / "model.safetensors"
+    weights.write_bytes(weights.read_bytes()[:100])
+
+
+def _garble_meta(out):
+    (out / "meta.json").write_text("{ not json", encoding="utf-8")
+
+
+def _widen_meta(out):
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    meta["shape"]["d_model"] = 96  # no longer the shape of the weights
+    (out / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+
+
+@pytest.mark.parametrize("damage", [_truncate_weights, _garble_meta, _widen_meta])
+def test_build_judge_trains_again_when_the_trained_weights_are_damaged(
+    data_root_copy, tiny_tok, monkeypatch, damage
+):
+    # 'Rebuild it with: airace-ml build-judge' is what bench and the gate say of a damaged judge
+    started = stub_judge_training(monkeypatch, tiny_tok)
+    out = build_judge(data_root_copy, device="cpu", token_budget=65536)
+    damage(out)
+    with pytest.raises((OSError, ValueError, KeyError, RuntimeError, SafetensorError)):
+        Judge.load(out, device="cpu")  # the judge as it stands cannot be loaded
+    assert build_judge(data_root_copy, device="cpu", token_budget=65536) == out
+    assert len(started) == 2
+    assert math.isfinite(Judge.load(out, device="cpu").calibration.creative_p90)
+
+
+def test_a_busy_gpu_is_no_reason_to_train_the_judge_again(data_root_copy, tiny_tok, monkeypatch):
+    started = stub_judge_training(monkeypatch, tiny_tok)
+    out = build_judge(data_root_copy, device="cpu", token_budget=65536)
+    real_load = judge_module.load_checkpoint
+
+    def load(folder, device="cpu"):
+        if str(device) != "cpu":  # any other device: a GPU that has no memory to spare
+            raise RuntimeError("CUDA error: out of memory")
+        return real_load(folder, device)
+
+    monkeypatch.setattr(judge_module, "load_checkpoint", load)
+    # The weights are checked for damage on the CPU, whatever device the judge will run on.
+    build_judge(data_root_copy, device=torch.device("cpu", 0), token_budget=65536)
+    assert len(started) == 1 and (out / TRAIN_CONFIG_NAME).is_file()
+
+
+def test_a_judge_is_checked_against_the_data_it_must_measure(tmp_path):
+    good = {"run_id": "judge-v1", "data_identity": "abc", "full_recipe": True}
+
+    def check(record, identity="abc"):
+        text = record if isinstance(record, str) else json.dumps(record)
+        (tmp_path / TRAIN_CONFIG_NAME).write_text(text, encoding="utf-8")
+        check_judge_provenance(tmp_path, identity)
+
+    check(good)  # no error
+    with pytest.raises(ValueError, match="other training data"):
+        check(good, identity="def")
+    with pytest.raises(ValueError, match="does not say which training data"):
+        check({"run_id": "judge-v1"})  # an earlier build's record
+    with pytest.raises(ValueError, match="shortened budget"):
+        check({**good, "full_recipe": False})
+    with pytest.raises(ValueError, match="shortened budget"):
+        check({key: value for key, value in good.items() if key != "full_recipe"})
+    for unreadable in ("{ half a file", "[1, 2]", "null"):
+        with pytest.raises(ValueError, match=TRAIN_CONFIG_NAME):
+            check(unreadable)
+    (tmp_path / TRAIN_CONFIG_NAME).unlink()
+    with pytest.raises(ValueError, match=TRAIN_CONFIG_NAME):
+        check_judge_provenance(tmp_path, "abc")
+
+
+def test_build_novelty_index_records_the_data_it_was_built_from(data_root_copy):
+    path = build_novelty_index(data_root_copy)
+    identity = data_identity(data_root_copy)
+    record = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+    assert record["data_identity"] == identity
+    index = NoveltyIndex.load(path)
+    assert index.data_identity == identity
+    check_index_provenance(index, identity)  # no error
+    _rebuild_a_corpus(data_root_copy)
+    with pytest.raises(ValueError, match="other training data"):
+        check_index_provenance(index, data_identity(data_root_copy))
+    assert build_novelty_index(data_root_copy) == path  # built again from the new data
+    assert NoveltyIndex.load(path).data_identity == data_identity(data_root_copy)
+
+
+def test_an_index_keeps_the_identity_it_is_given_and_refuses_to_be_taken_without_one(tmp_path):
+    hashes = np.arange(16, 400, dtype=np.uint64)
+    NoveltyIndex(hashes, data_identity="abc").save(tmp_path / "a.npy")
+    assert NoveltyIndex.load(tmp_path / "a.npy").data_identity == "abc"
+    NoveltyIndex(hashes).save(tmp_path / "b.npy")  # an index built from bare arrays
+    plain = NoveltyIndex.load(tmp_path / "b.npy")
+    assert plain.data_identity is None
+    assert "data_identity" not in json.loads((tmp_path / "b.json").read_text(encoding="utf-8"))
+    with pytest.raises(ValueError, match="does not say which training data"):
+        check_index_provenance(plain, "abc")
 
 
 def test_judge_config_is_the_reference_recipe():

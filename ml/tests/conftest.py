@@ -135,14 +135,25 @@ def tiny_data_root(tmp_path_factory, tiny_tok, tiny_tok_path) -> Path:
     return root
 
 
+@pytest.fixture
+def data_root_copy(tiny_data_root, tmp_path) -> Path:
+    """A private copy of `tiny_data_root`, for a test that builds into it or rebuilds part of it
+    (the shared one must stay as it is for every other test)."""
+    root = tmp_path / "data_root_copy"
+    shutil.copytree(tiny_data_root, root)
+    return root
+
+
 @pytest.fixture(scope="session")
 def gate_data_root(tmp_path_factory) -> Path:
     """Everything the feasibility gate reads, built for real at tiny scale: the corpora and
     tokenizer of ``airace-content build --scale tiny`` (from the source fixtures, with its
     ``known_vocab.txt`` and ``false_facts.json``), the novelty index and a reference judge.
 
-    The judge's recipe is shrunk to 2 layers x 64 wide on a 64-token span, as the CLI's judge
-    tests do, so it builds in seconds. Built only when a test asks for it (slow tests only).
+    The judge's recipe is shrunk to 2 layers x 64 wide on a 64-token span and an 8-step budget,
+    as the CLI's judge tests do, so it builds in seconds; built on that recipe's own budget it is
+    a full-recipe judge, which the gate accepts. Built only when a test asks for it (slow tests
+    only).
     """
     from airace_content.build import build_corpus
     from airace_content.sources import fixture_fetch
@@ -157,9 +168,11 @@ def gate_data_root(tmp_path_factory) -> Path:
         patch.setattr(
             judge_module,
             "judge_train_config",
-            lambda seed=1234: replace(real(seed), shape=ModelShape(2, 64, 64), batch_tokens=1024),
+            lambda seed=1234: replace(
+                real(seed), shape=ModelShape(2, 64, 64), batch_tokens=1024, token_budget=1024 * 8
+            ),
         )
-        judge_module.build_judge(root, device="cpu", token_budget=1024 * 8)
+        judge_module.build_judge(root, device="cpu")
     return root
 
 

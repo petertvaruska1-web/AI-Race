@@ -45,10 +45,11 @@ from safetensors import SafetensorError
 
 import airace_ml.evals.judge as judge_module
 from airace_ml.console import use_utf8_output as _use_utf8_output
+from airace_ml.data.identity import data_identity
 from airace_ml.data.sampler import MixtureError
 from airace_ml.device import pick_device
-from airace_ml.evals.judge import Judge, JudgeBuildError, build_judge
-from airace_ml.evals.novelty import NoveltyIndex, build_novelty_index
+from airace_ml.evals.judge import Judge, JudgeBuildError, build_judge, check_judge_provenance
+from airace_ml.evals.novelty import NoveltyIndex, build_novelty_index, check_index_provenance
 from airace_ml.evals.scoring import BenchReport
 from airace_ml.evals.suite import CATEGORIES, run_benchmarks
 from airace_ml.experiments.gate import GateOutcome, GateSetupError, run_gate
@@ -265,7 +266,8 @@ def _parser() -> argparse.ArgumentParser:
         "--budget-tokens",
         type=_whole_number(1),
         metavar="N",
-        help="train on N tokens instead of the full recipe (for a quick test)",
+        help="train on N tokens instead of the full recipe (for a quick test: bench and the gate "
+        "do not accept such a judge)",
     )
 
     gate = add(
@@ -661,10 +663,25 @@ def _cmd_chat(args: argparse.Namespace) -> int:
             print(reply if reply.strip() else "(the model said nothing)", flush=True)
 
 
+def _data_identity(root: Path) -> str:
+    """The identity of the training data under ``root``, which a judge or index must have been
+    built from; a plain error if the data cannot be read."""
+    try:
+        return data_identity(root)
+    except _DAMAGED as e:
+        raise _UsageError(
+            f"cannot tell which training data the judge and the novelty index belong to: the "
+            f"data under {root} cannot be read ({_why(e)}). Build it first with "
+            f"{BUILD_DATA_HINT}, or point --data-root at the folder that holds it."
+        ) from e
+
+
 def _creativity_tools(root: Path, device: torch.device) -> tuple[Judge, NoveltyIndex] | None:
     """The judge and the novelty index under ``root``. ``None`` (with a note saying what is
     missing and how to build it) if either is missing; an error naming the command that rebuilds
-    it if either is damaged or out of date."""
+    it if either is damaged or out of date: built from other training data than the data under
+    ``root`` (the tokenizer or the corpora were rebuilt since), or, for the judge, trained on a
+    shortened budget."""
     judge = index = None
     todo = []
     try:
@@ -685,6 +702,24 @@ def _creativity_tools(root: Path, device: torch.device) -> tuple[Judge, NoveltyI
             f"the novelty index at {novelty_path(root)} is damaged or out of date "
             f"({_why(e)}). Rebuild it with: airace-ml build-novelty-index"
         ) from e
+    if judge is not None or index is not None:
+        identity = _data_identity(root)
+        try:
+            if judge is not None:
+                check_judge_provenance(judge_dir(root), identity)
+        except ValueError as e:
+            raise _UsageError(
+                f"the reference judge in {judge_dir(root)} is damaged or out of date "
+                f"({_why(e)}). Rebuild it with: airace-ml build-judge"
+            ) from e
+        try:
+            if index is not None:
+                check_index_provenance(index, identity)
+        except ValueError as e:
+            raise _UsageError(
+                f"the novelty index at {novelty_path(root)} is damaged or out of date "
+                f"({_why(e)}). Rebuild it with: airace-ml build-novelty-index"
+            ) from e
     if judge is None or index is None:
         print(
             "note: creativity was left out of this run. Still to build:",

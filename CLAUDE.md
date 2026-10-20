@@ -39,6 +39,7 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 - Optional, before the full build (the Hugging Face hub allows more when logged in): `cd ml && python -m uv run --extra content hf auth login`
 - ML CLI (`--help` on each): `cd ml && python -m uv run airace-ml train|chat|bench|fingerprint|build-novelty-index|build-judge|gate`
 - Feasibility gate: `airace-ml gate --out runs/gate-1 [--cpu-speed] [--quick]` (needs `build-novelty-index` and `build-judge` first). Rerunning it reuses every run and measurement whose data and code are unchanged, and redoes the rest.
+- After any corpus or tokenizer rebuild (`airace-content build`), run `airace-ml build-novelty-index` and then `airace-ml build-judge` again: each records the data it was built from, and `bench` and the gate refuse ones built from older data (and a judge built with `--budget-tokens`, which is for quick tests only). `build-judge` trains the judge again when the data changed.
 - (More commands are added here as they come to exist.)
 
 ## Conventions

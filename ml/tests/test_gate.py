@@ -2,7 +2,7 @@ import ast
 import json
 import math
 from collections.abc import Sequence
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,9 +11,10 @@ import pytest
 import torch
 
 from airace_ml.data.corpus import DATASET_IDS, Corpus
+from airace_ml.data.identity import data_identity
 from airace_ml.data.prep import heldout_docs
-from airace_ml.evals.judge import JudgeCalibration
-from airace_ml.evals.novelty import NoveltyIndex
+from airace_ml.evals.judge import JudgeCalibration, build_judge
+from airace_ml.evals.novelty import NoveltyIndex, build_novelty_index
 from airace_ml.evals.scoring import BenchReport, CategoryScore
 from airace_ml.experiments import gate
 from airace_ml.experiments import runs as gate_runs
@@ -59,7 +60,7 @@ from airace_ml.skills.facts import FalseFactPlan
 from airace_ml.skills.kb import KB, Fact, Relation, load_kb
 from airace_ml.tokenizer import encode_doc
 from airace_ml.train.config import TrainRunConfig
-from tests.fakes import ScriptedLM
+from tests.fakes import ScriptedLM, stub_judge_training
 
 
 def test_mix_heavy():
@@ -810,21 +811,21 @@ def test_judge_and_index_loading_blame_only_damaged_files(tmp_path, monkeypatch)
     _write_judge_files(tmp_path)
     monkeypatch.setattr(gate.Judge, "load", raising(ValueError("bad calibration")))
     with pytest.raises(gate.GateSetupError, match="airace-ml build-judge"):
-        gate._load_judge(tmp_path, CPU)
+        gate._load_judge(tmp_path, CPU, "data-1")
     for error in (RuntimeError("CUDA error: out of memory"), TypeError("a bug"), KeyError("x")):
         monkeypatch.setattr(gate.Judge, "load", raising(error))
         with pytest.raises(type(error)):  # not a reason to rebuild the judge
-            gate._load_judge(tmp_path, CPU)
+            gate._load_judge(tmp_path, CPU, "data-1")
     index = gate.novelty_path(tmp_path)
     index.parent.mkdir(parents=True)
     index.write_bytes(b"")
     record = {"hash_base": 1000003, "n": 8, "sample_mod": 8, "count": 0}  # a sound record
     index.with_suffix(".json").write_text(json.dumps(record), encoding="utf-8")
     with pytest.raises(gate.GateSetupError, match="airace-ml build-novelty-index"):
-        gate._load_novelty(tmp_path)
+        gate._load_novelty(tmp_path, "data-1")
     monkeypatch.setattr(gate.NoveltyIndex, "load", raising(RuntimeError("a bug")))
     with pytest.raises(RuntimeError):
-        gate._load_novelty(tmp_path)
+        gate._load_novelty(tmp_path, "data-1")
 
 
 def test_resume_check_blames_only_damaged_files(tmp_path, monkeypatch):
@@ -1061,6 +1062,7 @@ def _write_judge_files(root: Path, calibration=None, meta=None) -> None:
         )
     (folder / "calibration.json").write_text(json.dumps(calibration), encoding="utf-8")
     (folder / META_NAME).write_text(json.dumps(meta), encoding="utf-8")
+    _write_judge_record(root)  # of a full-recipe judge built from the data "data-1"
 
 
 def _source_files(part: str) -> list[Path]:
@@ -1188,7 +1190,7 @@ def test_structurally_wrong_judge_or_index_files_ask_for_a_rebuild(tmp_path, mon
     ):
         _write_judge_files(tmp_path, calibration, meta)
         with pytest.raises(gate.GateSetupError, match="Rebuild it with: airace-ml build-judge"):
-            gate._load_judge(tmp_path, CPU)
+            gate._load_judge(tmp_path, CPU, "data-1")
     index = gate.novelty_path(tmp_path)
     index.parent.mkdir(parents=True)
     np.save(index, np.zeros(0, np.uint64))
@@ -1196,7 +1198,119 @@ def test_structurally_wrong_judge_or_index_files_ask_for_a_rebuild(tmp_path, mon
     for record in ([1, 2], {"hash_base": 1000003, "count": 0}, "text", {"n": 8}):
         index.with_suffix(".json").write_text(json.dumps(record), encoding="utf-8")
         with pytest.raises(gate.GateSetupError, match="airace-ml build-novelty-index"):
-            gate._load_novelty(tmp_path)
+            gate._load_novelty(tmp_path, "data-1")
+
+
+def _write_judge_record(root: Path, **changes) -> None:
+    """The ``train_config.json`` a full-recipe judge built from the data ``data-1`` leaves."""
+    record = {"run_id": "judge-v1", "data_identity": "data-1", "full_recipe": True, **changes}
+    record = {key: value for key, value in record.items() if value is not None}
+    (judge_dir(root) / "train_config.json").write_text(json.dumps(record), encoding="utf-8")
+
+
+def test_the_gate_takes_only_a_judge_built_from_this_data_on_the_full_recipe(tmp_path, monkeypatch):
+    sentinel = object()
+    monkeypatch.setattr(gate.Judge, "load", lambda *a, **k: sentinel)
+    _write_judge_files(tmp_path)
+    for record, why in (
+        ({"data_identity": "data-0"}, "built from other training data"),
+        ({"data_identity": None}, "does not say which training data"),  # an earlier build's
+        ({"full_recipe": False}, "shortened budget"),  # build-judge --budget-tokens
+        ({"full_recipe": None}, "shortened budget"),
+    ):
+        _write_judge_record(tmp_path, **record)
+        with pytest.raises(gate.GateSetupError, match="out of date") as e:
+            gate._load_judge(tmp_path, CPU, "data-1")
+        assert why in str(e.value) and "Rebuild it with: airace-ml build-judge" in str(e.value)
+    (judge_dir(tmp_path) / "train_config.json").unlink()  # no record at all
+    with pytest.raises(gate.GateSetupError, match="Rebuild it with: airace-ml build-judge"):
+        gate._load_judge(tmp_path, CPU, "data-1")
+    _write_judge_record(tmp_path)
+    assert gate._load_judge(tmp_path, CPU, "data-1") is sentinel
+
+
+def test_the_gate_takes_only_a_novelty_index_built_from_this_data(tmp_path):
+    path = gate.novelty_path(tmp_path)
+    hashes = np.arange(16, 400, dtype=np.uint64)
+    NoveltyIndex(hashes, data_identity="data-1").save(path)
+    assert len(gate._load_novelty(tmp_path, "data-1")) == len(hashes)
+    with pytest.raises(gate.GateSetupError, match="built from other training data") as e:
+        gate._load_novelty(tmp_path, "data-2")
+    assert "out of date" in str(e.value) and "Rebuild it with: airace-ml build-novelty-index" in (
+        str(e.value)
+    )
+    NoveltyIndex(hashes).save(path)  # an earlier build's index records no data
+    with pytest.raises(gate.GateSetupError, match="does not say which training data"):
+        gate._load_novelty(tmp_path, "data-1")
+
+
+def test_the_gates_real_input_loading_takes_instruments_of_this_data_and_no_others(
+    data_root_copy, tiny_tok, monkeypatch
+):
+    root = data_root_copy
+    shared = corpus_dir(root)
+    (shared / gate.KNOWN_VOCAB_FILE).write_text("the cat sat", encoding="utf-8")
+    (shared / gate.FALSE_FACTS_FILE).write_text(FalseFactPlan({}).to_json(), encoding="utf-8")
+    build_novelty_index(root)
+    stub_judge_training(monkeypatch, tiny_tok)
+    build_judge(root, device="cpu")
+
+    inputs = gate._load_inputs(root, CPU, 64)
+    assert inputs.identity == data_identity(root)
+    assert inputs.tok.vocab_size == tiny_tok.vocab_size and len(inputs.novelty) > 0
+    assert inputs.known_vocab == {"the", "cat", "sat"} and inputs.plan.mapping == {}
+    assert len(inputs.web_prefixes) == gate.GARBLE_SAMPLES
+    assert len(inputs.growth_sequences) == gate.GROWTH_SEQUENCES
+    assert all(0 < len(seq) <= 64 for seq in inputs.growth_sequences)
+
+    # airace-content build ran again: what was built from the old data is out of date
+    info = shared / "web" / "info.json"
+    info.write_text(json.dumps({"dataset": "web", "source": "another build"}), encoding="utf-8")
+    assert data_identity(root) != inputs.identity
+    with pytest.raises(gate.GateSetupError, match="reference judge.*other training data"):
+        gate._load_inputs(root, CPU, 64)
+    build_judge(root, device="cpu")  # the judge is rebuilt; the index is not yet
+    with pytest.raises(gate.GateSetupError, match="novelty index.*other training data") as e:
+        gate._load_inputs(root, CPU, 64)
+    assert "Rebuild it with: airace-ml build-novelty-index" in str(e.value)
+    build_novelty_index(root)
+    assert gate._load_inputs(root, CPU, 64).identity == data_identity(root) != inputs.identity
+
+
+def test_the_benchmark_cache_follows_the_data(tmp_path, tiny_tok, monkeypatch):
+    computed = []
+
+    def fake_bench(lm, tok, *, suite, judge, novelty, categories, seed):
+        computed.append(categories)
+        scores = {c: CategoryScore(1.0, 0.5, 10) for c in categories}
+        return BenchReport("bench-v1", scores, 0.0, [], [], 1.0)
+
+    inputs = SimpleNamespace(
+        tok=tiny_tok,
+        judge=SimpleNamespace(calibration=JudgeCalibration(1.0, 2.0, 3.0)),
+        novelty=NoveltyIndex(np.zeros(0, np.uint64)),
+        identity="data-1",
+    )
+    monkeypatch.setattr(gate, "build_suite", lambda: None)
+    monkeypatch.setattr(gate, "run_benchmarks", fake_bench)
+    monkeypatch.setattr(gate._Gate, "lm", lambda self, run: None)
+    g = gate._Gate(
+        inputs=inputs,
+        runs=None,
+        scale=_TINY_SCALE,
+        seeds=(1,),
+        device=CPU,
+        measuring_code="measure-1",
+        include_cpu_speed=False,
+        on_progress=lambda line: None,
+    )
+    run = replace(_run("r", "completed", steps=4, planned=4), dir=tmp_path / "r")
+    g.bench_report(run, ["language"])
+    g.bench_report(run, ["language"])
+    assert len(computed) == 1  # the same run, instruments and data: measured once
+    inputs.identity = "data-2"  # the corpora were rebuilt, and the instruments with them
+    g.bench_report(run, ["language"])
+    assert len(computed) == 2
 
 
 def test_chat_speed_waits_for_a_cuda_device_before_each_clock_reading(tiny_tok, monkeypatch):

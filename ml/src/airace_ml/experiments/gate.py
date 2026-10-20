@@ -32,13 +32,15 @@ stopped early (unstable) fails, opening its detail with ``stopped early:`` and t
 again (:mod:`airace_ml.experiments.runs`). A run that finished is reused while its config, the
 training data, the training code, the device and the exact parent model it continued from are
 unchanged; an interrupted run carries on from its last saved point. Benchmark and fingerprint
-results are cached beside each run and reused while the run, the measuring code, the judge and
-the novelty index are unchanged. So the same command can simply be run again after any change.
+results are cached beside each run and reused while the run, the measuring code, the judge, the
+novelty index and the data are unchanged. The judge and the novelty index must have been built
+from the data under the data root (and the judge on the full recipe): the gate refuses ones that
+were not, naming the command that rebuilds them. So the same command can simply be run again
+after any change.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import numbers
@@ -62,11 +64,18 @@ from airace_ml.data.corpus import (
     TOKENS_FILE,
     Corpus,
 )
+from airace_ml.data.identity import data_identity
 from airace_ml.data.prep import PrepConfig, heldout_docs
 from airace_ml.device import pick_device
 from airace_ml.evals.creativity import words
-from airace_ml.evals.judge import CALIBRATION_NAME, Judge, JudgeCalibration, is_well_formed
-from airace_ml.evals.novelty import NoveltyIndex
+from airace_ml.evals.judge import (
+    CALIBRATION_NAME,
+    Judge,
+    JudgeCalibration,
+    check_judge_provenance,
+    is_well_formed,
+)
+from airace_ml.evals.novelty import NoveltyIndex, check_index_provenance
 from airace_ml.evals.scoring import mean_logprob
 from airace_ml.evals.suite import CATEGORIES, SUITE_VERSION, build_suite, run_benchmarks
 from airace_ml.experiments.configs import (
@@ -718,23 +727,6 @@ def _missing_inputs(root: Path) -> list[str]:
     return missing
 
 
-def _data_identity(root: Path) -> str:
-    """A digest of the tokenizer and every corpus's documents and tags, so runs trained on other
-    data are never reused."""
-    digest = hashlib.sha256()
-    paths = [tokenizer_path(root)]
-    for ds in DATASET_IDS:
-        folder = corpus_dir(root) / ds
-        paths += [folder / INFO_FILE, folder / OFFSETS_FILE, folder / TAGS_FILE]
-        digest.update(f"{ds}/{TOKENS_FILE}:{(folder / TOKENS_FILE).stat().st_size};".encode())
-    for path in paths:
-        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
-        with open(path, "rb") as f:
-            for chunk in iter(lambda: f.read(1 << 20), b""):
-                digest.update(chunk)
-    return digest.hexdigest()
-
-
 def trim_to_word(text: str) -> str:
     """``text`` cut back to its last whitespace (dropping the whitespace), so a prompt never ends
     inside a word. Text with no whitespace after its first non-space character is kept whole."""
@@ -800,12 +792,15 @@ def _rebuild(what: str, where: Path, error: Exception, command: str) -> GateSetu
     )
 
 
-def _load_judge(root: Path, device: torch.device) -> Judge:
+def _load_judge(root: Path, device: torch.device, identity: str) -> Judge:
     """The reference judge; a judge whose files cannot be read, or parse into the wrong
-    structure, is a :class:`GateSetupError` naming the command that rebuilds it."""
+    structure, or that was built from other data than ``identity`` (see
+    :func:`~airace_ml.data.identity.data_identity`) or on a shortened budget, is a
+    :class:`GateSetupError` naming the command that rebuilds it."""
     folder, command = judge_dir(root), "airace-ml build-judge"
     try:
         _check_judge_files(folder)
+        check_judge_provenance(folder, identity)
     except (*_LOAD_ERRORS, TypeError, KeyError) as e:
         raise _rebuild("the reference judge", folder, e, command) from e
     try:
@@ -814,16 +809,19 @@ def _load_judge(root: Path, device: torch.device) -> Judge:
         raise _rebuild("the reference judge", folder, e, command) from e
 
 
-def _load_novelty(root: Path) -> NoveltyIndex:
-    """The novelty index; one whose files cannot be read, or parse into the wrong structure, is a
-    :class:`GateSetupError` naming the command that rebuilds it."""
+def _load_novelty(root: Path, identity: str) -> NoveltyIndex:
+    """The novelty index; one whose files cannot be read, or parse into the wrong structure, or
+    that was built from other data than ``identity``, is a :class:`GateSetupError` naming the
+    command that rebuilds it."""
     index, command = novelty_path(root), "airace-ml build-novelty-index"
     try:
         _check_novelty_record(index)
     except (*_LOAD_ERRORS, TypeError, KeyError) as e:
         raise _rebuild("the novelty index", index, e, command) from e
     try:
-        return NoveltyIndex.load(index)
+        loaded = NoveltyIndex.load(index)
+        check_index_provenance(loaded, identity)
+        return loaded
     except _LOAD_ERRORS as e:
         raise _rebuild("the novelty index", index, e, command) from e
 
@@ -836,7 +834,7 @@ def _load_inputs(root: Path, device: torch.device, length: int) -> _Inputs:
     data_hint = f"rebuild the training data under {root} with: airace-content build"
     try:
         tok = Tok.load(tokenizer_path(root))
-        identity = _data_identity(root)
+        identity = data_identity(root)
         known_vocab = set((corpus_dir(root) / KNOWN_VOCAB_FILE).read_text(encoding="utf-8").split())
         plan = FalseFactPlan.from_json(
             (corpus_dir(root) / FALSE_FACTS_FILE).read_text(encoding="utf-8")
@@ -847,8 +845,8 @@ def _load_inputs(root: Path, device: torch.device, length: int) -> _Inputs:
         raise GateSetupError(f"the training data cannot be read ({e}); {data_hint}") from e
     if not prefixes or len(sequences) < GROWTH_SEQUENCES:
         raise GateSetupError(f"the corpora hold too few held-out documents to measure; {data_hint}")
-    judge = _load_judge(root, device)
-    novelty = _load_novelty(root)
+    judge = _load_judge(root, device, identity)
+    novelty = _load_novelty(root, identity)
     return _Inputs(tok, judge, novelty, known_vocab, plan, load_kb(), identity, prefixes, sequences)
 
 
@@ -937,6 +935,7 @@ class _Gate:
             "seed": MEASURE_SEED,
             "judge": asdict(judge.calibration),
             "novelty": len(novelty),
+            "data": self.inputs.identity,
         }
 
         def compute() -> dict:
