@@ -1,4 +1,6 @@
 import copy
+import dataclasses
+import hashlib
 import json
 import math
 import sys
@@ -910,6 +912,62 @@ def test_the_knowledge_floor_follows_the_items_run(tiny_tok):
         max_items_per_category=150,
     )
     assert rep.scores["knowledge"] == CategoryScore(100.0, 1.0, 150)
+
+
+# -- Fix wave A (F25): the items of bench-v1 are pinned -------------------------------------------
+
+PINNED_DIGESTS = {"bench-v1": "4b0e0bd856c96c5d45b80d27141550bc6284803549ba5b3ffde046887f16da68"}
+
+
+def suite_digest(suite: Suite) -> str:
+    """sha256 of the suite's canonical JSON: its version, then every category and its items in
+    order, each item with all its fields (prompts, options, answers, check arguments, tags, reply
+    budgets, ...), tuples as lists and keys sorted."""
+    categories = [
+        [category, [dataclasses.asdict(item) for item in items]]
+        for category, items in suite.items.items()
+    ]
+    text = json.dumps(
+        {"version": suite.version, "categories": categories}, sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def test_the_items_of_the_suite_version_are_pinned():
+    suite = build_suite()
+    assert suite.version in PINNED_DIGESTS, (
+        f"no digest is recorded for {suite.version!r}: record suite_digest(build_suite()) in "
+        "PINNED_DIGESTS (tests/test_bench.py) for the new version"
+    )
+    digest = suite_digest(suite)
+    assert digest == PINNED_DIGESTS[suite.version], (
+        f"the items of {suite.version} changed (digest {digest}). Scores on different items are "
+        "not comparable under one label, so an intended change to the items (a skill generator, "
+        "the knowledge-base data, MiniPy, a checker) needs a new SUITE_VERSION in "
+        "airace_ml/evals/suite.py and a new digest in PINNED_DIGESTS. If you did not mean to "
+        "change the items, find what did (code, data, or the numpy random streams)."
+    )
+
+
+def test_the_suite_digest_covers_every_part_of_an_item():
+    base = build_suite()
+    assert suite_digest(base) == suite_digest(build_suite())
+    changes = {  # each edit must change the digest
+        "a prompt": lambda s: setattr(s.items["pattern"][0], "prompt", "changed"),
+        "an option": lambda s: s.items["reasoning"][0].options.append("changed"),
+        "an answer": lambda s: setattr(s.items["reasoning"][0], "answer_index", 99),
+        "a good text": lambda s: setattr(s.items["language"][0], "good", "changed"),
+        "check args": lambda s: s.items["instruction"][0].check_args.update(extra=1),
+        "a tag": lambda s: setattr(s.items["coding"][0], "tags", ("changed",)),
+        "a reply budget": lambda s: setattr(s.items["knowledge"][-1], "max_new_tokens", 99),
+        "the item order": lambda s: s.items["language"].reverse(),
+        "the category order": lambda s: setattr(s, "items", dict(reversed(s.items.items()))),
+        "the version": lambda s: setattr(s, "version", "bench-v2"),
+    }
+    for what, edit in changes.items():
+        changed = build_suite()
+        edit(changed)
+        assert suite_digest(changed) != suite_digest(base), what
 
 
 # -- Fix round 1: the instruction floor (I1) ------------------------------------------------------
