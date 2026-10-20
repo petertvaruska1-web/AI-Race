@@ -1,5 +1,6 @@
 import ast
 import difflib
+import io
 import itertools
 import json
 import math
@@ -1349,3 +1350,34 @@ def test_cli_lets_other_import_errors_through(tmp_path, monkeypatch):
 def test_cli_help(capsys):
     assert main(["build", "--help"]) == 0
     assert "--retrain-tokenizer" in capsys.readouterr().out
+
+
+def _cp1252_console():
+    """A stream like a redirect on a Windows PC: it encodes as cp1252 and refuses what it cannot."""
+    raw = io.BytesIO()
+    return raw, io.TextIOWrapper(raw, encoding="cp1252", write_through=True)
+
+
+def test_the_summary_and_warnings_survive_a_cp1252_redirect_and_a_non_ascii_path(
+    tmp_path, monkeypatch
+):
+    out_bytes, stdout = _cp1252_console()
+    err_bytes, stderr = _cp1252_console()
+    with pytest.raises(UnicodeEncodeError):  # the hazard: this is what printing the path did
+        stdout.write(str(tmp_path / "Петко_data"))
+    monkeypatch.setattr(sys, "stdout", stdout)
+    monkeypatch.setattr(sys, "stderr", stderr)
+    fixtures = tmp_path / "fixtures"
+    shutil.copytree(FIX, fixtures)
+    (fixtures / "cosmo_openstax.jsonl").write_text("", encoding="utf-8")  # runs dry at once
+    root = tmp_path / "Петко_data"
+    argv = ["build", "--scale", "tiny", "--fixtures", str(fixtures), "--out", str(root)]
+    assert main(argv) == 0
+    assert "Петко_data" in out_bytes.getvalue().decode("utf-8")
+    err = err_bytes.getvalue().decode("utf-8")
+    assert "warning: educational: cosmo_openstax ran out at 0 of 30 " in err
+    # an error that names the path is printed as well
+    assert (
+        main(["build", "--scale", "tiny", "--datasets", "web", "--out", str(tmp_path / "Ünï")]) == 1
+    )
+    assert "error: the tokenizer is trained on" in err_bytes.getvalue().decode("utf-8")

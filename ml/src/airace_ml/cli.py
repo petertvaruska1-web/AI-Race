@@ -44,6 +44,7 @@ import torch
 from safetensors import SafetensorError
 
 import airace_ml.evals.judge as judge_module
+from airace_ml.console import use_utf8_output as _use_utf8_output
 from airace_ml.data.sampler import MixtureError
 from airace_ml.device import pick_device
 from airace_ml.evals.judge import Judge, JudgeBuildError, build_judge
@@ -316,22 +317,6 @@ def _interrupted(hint: str) -> int:
 def _fail(message: str, code: int) -> int:
     print(f"error: {message}", file=sys.stderr, flush=True)
     return code
-
-
-def _use_utf8_output() -> None:
-    """Make stdout and stderr UTF-8 and unable to fail on an unencodable character.
-
-    Without this, printing a model's text on a console or a redirect that uses a legacy code page
-    (Windows cp1252) raises ``UnicodeEncodeError``. A stream without ``reconfigure`` (a test
-    harness's capture object) is left alone.
-    """
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if reconfigure is not None:
-            try:
-                reconfigure(encoding="utf-8", errors="replace")
-            except (OSError, ValueError):
-                pass  # a stream that has already been read or written cannot change; keep it
 
 
 def _use_utf8_input() -> None:

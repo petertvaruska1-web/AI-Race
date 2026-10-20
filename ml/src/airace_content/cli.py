@@ -27,6 +27,7 @@ from airace_content.sources import (
     hf_fetch,
     is_transient_error,
 )
+from airace_ml.console import use_utf8_output
 from airace_ml.data.corpus import DATASET_IDS
 from airace_ml.paths import corpus_dir, data_root
 
@@ -142,6 +143,7 @@ def _progress(message: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    use_utf8_output()  # a path with letters outside cp1252 must not crash the final summary
     try:
         args = _parser().parse_args(argv)
         datasets = _datasets(args.datasets)
