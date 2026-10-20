@@ -1,6 +1,7 @@
 import ast
 import json
 import math
+import os
 from collections.abc import Sequence
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -14,6 +15,7 @@ from airace_content.noise import garble
 from airace_ml.data.corpus import DATASET_IDS, Corpus
 from airace_ml.data.identity import data_identity
 from airace_ml.data.prep import eligible_docs, heldout_docs
+from airace_ml.evals import judge as judge_module
 from airace_ml.evals.judge import JudgeCalibration, build_judge
 from airace_ml.evals.novelty import NoveltyIndex, build_novelty_index
 from airace_ml.evals.scoring import BenchReport, CategoryScore
@@ -733,6 +735,63 @@ def test_an_unfinished_or_unstable_run_is_trained_again_and_resumed_when_it_can_
     monkeypatch.setattr(gate_runs, "can_resume", lambda out, cfg: True)
     runs.train(_cfg(seed=6), CPU)  # a saved point from another config is never resumed
     assert fake.calls[-1][:2] == ("r", False)
+
+
+@pytest.mark.parametrize(
+    "write", [judge_module._write_json, gate_runs._write_json], ids=["judge", "gate_runs"]
+)
+def test_a_refused_rename_of_a_record_is_tried_again(write, tmp_path, monkeypatch):
+    """On Windows a scanner holding the temporary file refuses the rename for a moment; a record
+    written after an hour of training must not be lost to that."""
+    real, sleeps, calls = os.replace, [], []
+
+    def refuse_twice(src, dst):
+        calls.append(dst)
+        if len(calls) <= 2:
+            raise PermissionError(13, "Access is denied", str(dst))
+        real(src, dst)
+
+    monkeypatch.setattr(os, "replace", refuse_twice)
+    monkeypatch.setattr("time.sleep", sleeps.append)
+    path = tmp_path / "deep" / "record.json"
+    path.parent.mkdir()
+    write(path, {"run": "judge-v1"})
+    assert len(calls) == 3 and sleeps == [0.1, 0.2]  # a growing wait between the tries
+    assert json.loads(path.read_text(encoding="utf-8")) == {"run": "judge-v1"}
+    assert not path.with_name("record.json.tmp").exists()
+
+
+@pytest.mark.parametrize(
+    "write", [judge_module._write_json, gate_runs._write_json], ids=["judge", "gate_runs"]
+)
+def test_a_rename_that_stays_refused_is_reported_after_six_more_tries(write, tmp_path, monkeypatch):
+    sleeps, calls = [], []
+
+    def refuse(src, dst):
+        calls.append(dst)
+        raise PermissionError(13, "Access is denied", str(dst))
+
+    monkeypatch.setattr(os, "replace", refuse)
+    monkeypatch.setattr("time.sleep", sleeps.append)
+    with pytest.raises(PermissionError):
+        write(tmp_path / "record.json", {"run": "x"})
+    assert len(calls) == 7 and sleeps == pytest.approx([0.1, 0.2, 0.4, 0.8, 1.6, 3.2])
+
+
+@pytest.mark.parametrize(
+    "write", [judge_module._write_json, gate_runs._write_json], ids=["judge", "gate_runs"]
+)
+def test_only_a_refusal_is_tried_again(write, tmp_path, monkeypatch):
+    sleeps = []
+
+    def broken(src, dst):
+        raise FileNotFoundError(2, "No such file", str(dst))
+
+    monkeypatch.setattr(os, "replace", broken)
+    monkeypatch.setattr("time.sleep", sleeps.append)
+    with pytest.raises(FileNotFoundError):
+        write(tmp_path / "record.json", {"run": "x"})
+    assert sleeps == []
 
 
 def test_measurements_are_cached_under_their_key(tmp_path):

@@ -25,6 +25,7 @@ import json
 import math
 import os
 import shutil
+import time
 from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, replace
@@ -282,11 +283,32 @@ def calibrate(judge: Judge, data_root: Path) -> JudgeCalibration:
 # -- building ---------------------------------------------------------------------------------
 
 
+_REPLACE_RETRIES = 6
+_REPLACE_FIRST_WAIT = 0.1
+
+
+def _replace(tmp: Path, path: Path) -> None:
+    """``os.replace(tmp, path)``, tried again after 0.1 s, twice as long each time, up to
+    six more times if it is refused (a ``PermissionError``): on Windows a virus scanner or an
+    indexer holding the file just written refuses the rename for a moment. Then the refusal is
+    raised as it was."""
+    wait = _REPLACE_FIRST_WAIT
+    for attempt in range(_REPLACE_RETRIES + 1):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == _REPLACE_RETRIES:
+                raise
+        time.sleep(wait)
+        wait *= 2
+
+
 def _write_json(path: Path, data: dict) -> None:
     """Write ``data`` to a temporary file, then rename it into place."""
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(data, allow_nan=False, indent=2), encoding="utf-8")
-    os.replace(tmp, path)
+    _replace(tmp, path)
 
 
 def _run_record(cfg: TrainRunConfig, data_root: Path) -> dict:
