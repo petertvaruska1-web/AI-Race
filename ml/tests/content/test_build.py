@@ -630,11 +630,30 @@ def test_generator_topics_and_copies(build_inputs):
     for copy in copies:
         source = sources[copy.origin]
         assert copy.topic == source.topic and copy.component == source.component
-        assert difflib.SequenceMatcher(None, source.content, copy.content).ratio() > 0.95
+        assert copy.content == source.content  # a copy of code is exact, typos would break it
     reasoning, comps = _assemble("reasoning", build_inputs)
     n_puzzles = comps["reasoning"]["docs"] + comps["patterns"]["docs"]
     assert all(d.topic == TOPICS.index("school") for d in reasoning[:n_puzzles])
     assert all(d.topic is None for d in reasoning[n_puzzles:])  # gsm8k: tagged by its text
+
+
+def test_duplicates_of_structured_datasets_are_exact_copies(build_inputs):
+    # A typo breaks a program, and structured_quality has no typo factor, so no cleaning level
+    # would remove it: the copies of code (the only structured dataset with duplicates) are exact.
+    kb, _, plan = build_inputs
+    texts = [f"# program number {i}\ndef f(xs):\n    return xs[{i}] + {i}" for i in range(600)]
+    docs = [Collected(t) for t in texts]
+    assert "code" in STRUCTURED_DATASETS and RECIPES["code"].noise.duplicate > 0
+    out = apply_noise(docs, RECIPES["code"].noise, np.random.default_rng(0), kb, plan, "code")
+    copies = out[len(texts) :]
+    assert len(copies) == 19 and all(c.noise_kind == _KIND["duplicate"] for c in copies)
+    source_of = {d.origin: d.content for d in out[: len(texts)] if d.noise_kind == _NONE}
+    assert all(copy.content == source_of[copy.origin] for copy in copies)
+    # the prose datasets keep their typo'd copies
+    rates = NoiseRates(duplicate=0.3)
+    prose = apply_noise(docs, rates, np.random.default_rng(0), kb, plan, "web")
+    assert len(prose) > len(texts) + 100
+    assert any(copy.content != source_of.get(copy.origin) for copy in prose[len(texts) :])
 
 
 def test_source_of_copies_finds_each_copy():

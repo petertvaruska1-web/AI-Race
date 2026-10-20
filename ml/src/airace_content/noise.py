@@ -323,6 +323,8 @@ def inject_noise(
     rng: np.random.Generator,
     kb: KB | None = None,
     plan: FalseFactPlan | None = None,
+    *,
+    copy_typo_share: float = COPY_TYPO_SHARE,
 ) -> list[NoisyDoc]:
     """Dirty ``texts`` and tag what was done; the result starts with one entry per input text, in
     order, followed by the duplicate copies.
@@ -338,10 +340,13 @@ def inject_noise(
       ``false_fact`` set.
 
     Duplicates are appended: groups of two to six copies of a random document that got no other
-    noise, about half of them carrying one or two typos. Every document in the output is tagged
-    "duplicate" for the copies and "none" for the inputs left alone.
+    noise, a ``copy_typo_share`` of them (by default about half) carrying one or two typos; with
+    0.0 every copy is exact, as a copy of a program has to be. Every document in the output is
+    tagged "duplicate" for the copies and "none" for the inputs left alone.
     """
     _check_rates(rates)
+    if not 0.0 <= copy_typo_share <= 1.0:  # also false for NaN
+        raise ValueError(f"copy_typo_share must be between 0 and 1, got {copy_typo_share}")
     if rates.false_fact > 0:
         if kb is None or plan is None:
             raise ValueError("false_fact noise needs both the knowledge base (kb) and a plan")
@@ -388,7 +393,7 @@ def inject_noise(
         source = texts[sources[turn % len(sources)]]
         for _ in range(size):
             copy = source
-            if rng.random() < COPY_TYPO_SHARE:
+            if rng.random() < copy_typo_share:
                 copy = _misspell(source, rng, int(rng.integers(1, 3)))
             out.append(NoisyDoc(copy, _DUPLICATE, False))
     return out

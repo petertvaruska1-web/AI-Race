@@ -39,6 +39,7 @@ import numpy as np
 from airace_content.assemble import (
     RECIPES,
     SCALES,
+    STRUCTURED_DATASETS,
     AssembledDoc,
     assemble_dataset,
     content_text,
@@ -80,11 +81,6 @@ HELDOUT_SHARE = 0.01
 HELDOUT_MIN_DOCS = 8
 HELDOUT_MAX_SHARE = 0.5  # a cluster that would push the held-out share past this is skipped
 TOKENIZER_SAMPLE_BYTES = 20_000_000
-# Datasets of programs and puzzles, scored by ``structured_quality``: cleaning is meant to remove
-# noise, not a dataset's normal content, and clean code and puzzles fail the prose measures (known
-# English words, share of letters) by their nature. Neither dataset gets typo, garble or spam
-# noise (code gets duplicates only, reasoning none). Every other dataset uses ``quality_score``.
-STRUCTURED_DATASETS: frozenset[str] = frozenset({"code", "reasoning"})
 
 
 class BuildError(ValueError):

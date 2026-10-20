@@ -17,7 +17,13 @@ from typing import Literal
 
 import numpy as np
 
-from airace_content.noise import TYPO_RATE_RANGE, NoiseRates, add_typos, inject_noise
+from airace_content.noise import (
+    COPY_TYPO_SHARE,
+    TYPO_RATE_RANGE,
+    NoiseRates,
+    add_typos,
+    inject_noise,
+)
 from airace_content.sources import (
     FORMAT_CHECK_ROWS,
     MIN_CHAT_TURNS,
@@ -158,6 +164,14 @@ GENERATORS: dict[str, GeneratorFn] = {
     "reasoning": lambda kb, rng, n: reasoning_train_docs(rng, n),
     "patterns": lambda kb, rng, n: pattern_train_docs(rng, n),
 }
+
+# Datasets of programs and puzzles, scored by ``textproc.structured_quality``: cleaning is meant
+# to remove noise, not a dataset's normal content, and clean code and puzzles fail the prose
+# measures (known English words, share of letters) by their nature. Neither dataset gets typo,
+# garble or spam noise (code gets duplicates only, reasoning none), and the duplicates of a
+# structured dataset are exact copies: a typo breaks a program, and ``structured_quality`` has no
+# typo factor, so no cleaning level could remove it. Every other dataset uses ``quality_score``.
+STRUCTURED_DATASETS: frozenset[str] = frozenset({"code", "reasoning"})
 
 # Spam replaces a document, boilerplate and garbling rewrite it as plain text, and duplicates and
 # false facts are made from plain text: on chats only typos keep the chat a chat.
@@ -524,6 +538,8 @@ def apply_noise(
     the origin, topic and component of the document it was copied from. A spam document replaced
     its original, so it loses the original's topic (not its origin). A dataset with chats may only
     have typo noise (a chat with typos keeps its turns); any other kind raises ``ValueError``.
+    The duplicates of a dataset in ``STRUCTURED_DATASETS`` are exact copies; those of every other
+    dataset carry typos in ``COPY_TYPO_SHARE`` of the cases.
     """
     origins = [origin_key(doc.content) for doc in docs]
     if any(not isinstance(doc.content, str) for doc in docs):
@@ -541,7 +557,8 @@ def apply_noise(
         return _typo_noise(docs, origins, rates.typo, rng)
 
     texts = [doc.content for doc in docs]
-    noisy = inject_noise(texts, rates, rng, kb, plan)
+    copy_typo_share = 0.0 if dataset_id in STRUCTURED_DATASETS else COPY_TYPO_SHARE
+    noisy = inject_noise(texts, rates, rng, kb, plan, copy_typo_share=copy_typo_share)
     out = [
         AssembledDoc(
             nd.text,

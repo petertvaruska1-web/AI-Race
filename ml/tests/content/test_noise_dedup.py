@@ -11,6 +11,7 @@ import pytest
 
 from airace_content.dedup import cluster_near_duplicates, minhash_signature
 from airace_content.noise import (
+    COPY_TYPO_SHARE,
     NoiseRates,
     NoisyDoc,
     _group_sizes,
@@ -337,6 +338,26 @@ def test_duplicates_are_copies_or_near_copies_of_untouched_documents():
         exact, near = exact + (distance == 0), near + (distance > 0)
     assert exact > 20 and near > 20  # "some with 1-2 typos"
     assert all(MIN_GROUP <= size <= MAX_GROUP for size in per_cluster.values())
+
+
+def test_copy_typo_share_sets_how_many_copies_carry_typos():
+    sources = [f"{text} Note {i}." for i, text in enumerate(_texts(300))]
+    rates = NoiseRates(duplicate=0.3)
+
+    def copies(**kwargs):
+        out = inject_noise(sources, rates, np.random.default_rng(3), **kwargs)
+        assert len(out) > len(sources) + 100
+        return [d.text for d in out[len(sources) :]]
+
+    for share, expected in ((0.0, 0), (1.0, 1)):
+        made = copies(copy_typo_share=share)
+        assert {c in set(sources) for c in made} == {expected == 0}  # none / every copy has typos
+    default = copies()
+    assert 0.35 < sum(c not in set(sources) for c in default) / len(default) < 0.65  # about half
+    assert default == copies(copy_typo_share=COPY_TYPO_SHARE)
+    for bad in (-0.1, 1.1, float("nan")):
+        with pytest.raises(ValueError, match="copy_typo_share"):
+            inject_noise(sources, rates, np.random.default_rng(0), copy_typo_share=bad)
 
 
 MIN_GROUP, MAX_GROUP = 2, 6
