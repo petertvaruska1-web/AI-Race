@@ -1,5 +1,6 @@
 import ast
 import difflib
+import itertools
 import json
 import re
 import shutil
@@ -52,6 +53,7 @@ from airace_content.sources import (
     fixture_fetch,
     hf_fetch,
     is_childrens_book,
+    restore_plain_layout,
     row_to_content,
 )
 from airace_content.textproc import MOJIBAKE_CHARS, SPAM_MARKERS, build_vocab
@@ -63,6 +65,8 @@ from airace_ml.skills.kb import load_kb
 from airace_ml.tokenizer import Tok
 
 FIX = Path(__file__).parents[1] / "fixtures" / "sources"
+# Rows in the layout the real sources have, which the plain-text fixtures above do not show.
+REAL_FIX = Path(__file__).parents[1] / "fixtures" / "sources_real"
 
 
 def test_adapters():
@@ -249,6 +253,60 @@ def test_gutenberg_keeps_childrens_books_without_boilerplate():
     assert "The cow says moo,\nThe sheep says baa," in animals[-1]  # verse keeps its lines
     assert songs[0].startswith("LITTLE SONGS")  # the "Produced by" credit is gone
     assert economics == ships == []
+
+
+def _breaks_mid_sentence(passage: str) -> list[tuple[str, str]]:
+    """The blank lines of a passage that fall between a line without an end mark and a line that
+    starts in lowercase: a hard-wrapped sentence cut in two."""
+    paragraphs = passage.split("\n\n")
+    return [
+        (before.split("\n")[-1], after.split("\n")[0])
+        for before, after in itertools.pairwise(paragraphs)
+        if not before.rstrip("\"'\u201d\u2019)]").endswith((".", "!", "?")) and after[:1].islower()
+    ]
+
+
+def test_gutenberg_in_the_real_layout_keeps_sentences_whole():
+    # The real sedthh/gutenberg_english TEXT is parsed from each book's HTML: a blank line after
+    # every wrapped line (CRLF CRLF), and paragraphs set off by three CRLFs, by a lone CRLF, or
+    # (early etexts) by LF LF LF.
+    rows = list(fixture_fetch(REAL_FIX)(SOURCES["gutenberg"], 100))
+    assert [r["TEXT"].count("\r\n") > 0 for r in rows] == [True, True, False]
+    alice, pony, tree = (row_to_content("gutenberg", row) for row in rows)
+    for passages in (alice, pony, tree):
+        assert len(passages) == 1
+        assert not _breaks_mid_sentence(passages[0])
+    chapter, title, *prose = alice[0].split("\n\n")
+    assert (chapter, title) == ("CHAPTER I.", "Down the Rabbit-Hole")
+    assert len(prose) == 3 and all("\n" not in p for p in prose)  # whole paragraphs, one each
+    assert prose[0].startswith("Alice was beginning") and prose[0].endswith('or conversations?"')
+    assert prose[2].endswith("a large rabbit-hole under the hedge.")
+    heading, *story, verse = pony[0].split("\n\n")  # lone-CRLF paragraphs
+    assert heading == "THE PONY AND THE MILL" and len(story) == 3
+    assert all("\n" not in p for p in story)
+    assert verse.split("\n") == [  # the verse keeps its lines
+        "The pony goes trotting along,",
+        "Along the road so brown,",
+        "He sings the little pony song",
+        "All the way to town.",
+    ]
+    assert [len(p.split("\n")) for p in tree[0].split("\n\n")] == [1, 1, 1]  # LF LF wraps
+
+
+def test_restore_plain_layout():
+    # the layout of the real rows: the runs of two newlines are the wraps, the others paragraphs
+    assert restore_plain_layout("a\r\n\r\nb\r\n\r\n\r\nc\r\n\r\nd") == "a\nb\n\nc\nd"
+    lone = "a\r\n\r\nb\r\nc\r\n\r\nd\r\n\r\ne\r\n\r\n\r\n\r\nf"  # a lone CRLF, and four
+    assert restore_plain_layout(lone) == "a\nb\n\nc\nd\ne\n\nf"
+    assert restore_plain_layout("a\n\nb\n\nc\n\n\nd") == "a\nb\nc\n\nd"
+    # a plain-text file (single newlines wrap, a blank line separates paragraphs) is left alone,
+    # and so is a text with no wraps at all
+    plain = "a b\nc d\ne f\n\ng h\ni j\n\nk l\nm n"
+    assert restore_plain_layout(plain) == plain
+    assert restore_plain_layout("one line") == "one line" and restore_plain_layout("") == ""
+    assert restore_plain_layout("a\r\nb\rc") == "a\nb\nc"
+    for row in FETCH(SOURCES["gutenberg"], 100):  # every plain-text fixture book
+        assert restore_plain_layout(row["TEXT"]) == row["TEXT"].replace("\r\n", "\n"), row["SOURCE"]
 
 
 def test_childrens_subjects():

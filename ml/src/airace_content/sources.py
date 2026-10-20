@@ -16,6 +16,7 @@ of filtering out every row of a whole dataset).
 import itertools
 import json
 import re
+from collections import Counter
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -130,6 +131,7 @@ _PG_CREDITS = re.compile(
 )
 _PARAGRAPH_BREAK = re.compile(r"\n\s*\n")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+_NEWLINE_RUN = re.compile(r"\n+")
 
 
 def _subjects(metadata: object) -> str | None:
@@ -155,6 +157,24 @@ def is_childrens_book(metadata: object) -> bool:
     """Whether the book's subjects mention juvenile literature, fairy tales, fables or children."""
     subjects = (_subjects(metadata) or "").lower()
     return any(marker in subjects for marker in CHILDREN_SUBJECTS)
+
+
+def restore_plain_layout(text: str) -> str:
+    """The text of a book as a plain-text file lays it out: the wrapped lines of a paragraph
+    separated by one newline, the paragraphs by a blank line.
+
+    The real ``sedthh/gutenberg_english`` rows are parsed from each book's HTML and lay their text
+    out otherwise: every wrapped line is followed by a blank line (CRLF CRLF), and the paragraphs
+    are set off by three newlines (or by a lone one). When the runs of exactly two newlines
+    outnumber all the other runs, the text is in that layout: every run of two becomes one newline
+    and every other run a blank line, so ``_unwrap`` joins the wrapped lines as it does for a
+    plain-text file. Text in the plain-text layout is returned as it is, with line ends as LF.
+    """
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lengths = Counter(len(run.group()) for run in _NEWLINE_RUN.finditer(text))
+    if lengths[2] <= sum(lengths.values()) - lengths[2]:
+        return text
+    return _NEWLINE_RUN.sub(lambda run: "\n" if len(run.group()) == 2 else "\n\n", text)
 
 
 def strip_gutenberg_boilerplate(text: str) -> str:
@@ -334,7 +354,8 @@ def _everyday(row: dict) -> list[Content]:
 def _gutenberg(row: dict) -> list[Content]:
     if not is_childrens_book(row.get("METADATA")):
         return []
-    return list(chunk_passages(strip_gutenberg_boilerplate(str(row.get("TEXT") or ""))))
+    text = restore_plain_layout(str(row.get("TEXT") or ""))
+    return list(chunk_passages(strip_gutenberg_boilerplate(text)))
 
 
 def _fineweb_edu(row: dict) -> list[Content]:
@@ -434,8 +455,8 @@ def row_to_content(source_id: str, row: dict) -> list[Content]:
     """The documents in one row of a source: plain texts or chats of ``(role, text)`` turns.
 
     * gutenberg: children's books only (subjects mention "Juvenile", "Fairy tales", "Fables" or
-      "Children"), without the Project Gutenberg header and footer, in passages of at most 400
-      words;
+      "Children"), without the Project Gutenberg header and footer, in the layout of a plain-text
+      file (``restore_plain_layout``), in passages of at most 400 words;
     * fineweb_edu: rows with ``int_score >= 3``;
     * soda: ``speakers[0]`` is the user, every other speaker the AI; at least 2 turns;
     * everyday_conv: "user" is the user, "assistant" the AI, system turns dropped; at least 2 turns;
