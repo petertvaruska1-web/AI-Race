@@ -1,0 +1,50 @@
+[
+ {
+  "id": "F16",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Code confirmed. assemble.py:289-299 (_Goal.met) stops after ceil(quota*200/sample_tokens) docs, using the first 200 accepted docs and the fixed 3.6 bytes/token (assemble.py:144-147, estimate_tokens :207-209). It never compares collected tokens with the quota, and format_warnings (cli.py:~99-117) warns only for exhausted components. Task 14 ruled the 3.6 constant, not the first-200 bias or the missing check. A running sum already exists: amount() (assemble.py:347-351) sums doc_tokens over all docs. I could not re-measure real bytes/token (no Hub access), so the 1.15-1.47x landing figures are indicative. Direction is mostly overshoot (more disk, RAM and time; skewed proportions). Undershoot below the plan's 80% is possible but rare because of the +15% systematic bias. No failed run or wrong result, so Minor.",
+  "fix_recommendation": "In _Goal, keep a running sum of doc_tokens(content, count_tokens) for every accepted doc and make met() return self.tokens >= quota at full scale (drop the 200-doc extrapolation). Make the byte estimate per component (about 3.2 bytes/token for prose, about 2.7 for code and patterns, about 3.6 for creative) and use the same constant in _GeneratorCollector instead of its 200-doc sample. Correct the BYTES_PER_TOKEN_ESTIMATE comment. In cli.format_warnings also warn when a component's real manifest tokens end below 90% of planned_tokens.",
+  "fix_size": "medium"
+ },
+ {
+  "id": "F17",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Confirmed: grep shows the only print calls in airace_content are cli.py:133-149, after build_corpus returns; build.py and assemble.py emit nothing, so the multi-hour full build (Task 15 step 2: run in background and monitor) is silent. Confirmed in the venv that huggingface_hub 1.33.0 utils/_pagination.py:27-37 does session.get(..., timeout=None) and _http.py:338,349 builds clients with timeout=None, so a hung metadata call has no timeout; I did not reproduce a hang (no network) and it is unlikely. The silent run alone justifies the finding. No wrong result or crash, but a healthy build could be killed (no resume) or a dead one waited on. Minor.",
+  "fix_recommendation": "Add a flushed-stderr progress callback (an optional progress=print-to-stderr function passed through build_corpus and assemble_dataset): one line when each source opens, then every N rows with rows read, docs kept and estimated tokens, then lines for dedup, tokenizer training and writing each corpus. Optionally warn when no row arrives for 10 minutes. The CLI passes it. Tests check the lines on a fixture build.",
+  "fix_size": "medium"
+ },
+ {
+  "id": "F18",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Reproduced here: `uv run --no-sync airace-content build --scale full` exits 1 with 'install the content extra (uv sync --extra content)'. pyproject.toml:7-8 has datasets only in the content extra, and CLAUDE.md:32-33,37 gives plain `python -m uv sync` and `python -m uv run airace-content build ...` with no extra. The hint at sources.py:87-91 says bare `uv`, which is not on the owner's PATH (CLAUDE.md:31). A later plain `uv sync` is exact and removes datasets again. The plan (Task 15 step 2) and handoff README:80 already carry or flag the right command, and the failure is immediate and clearly worded, so it costs one retry, not a lost run. CLAUDE.md also lacks the `pytest -m gpu` line; the gpu marker is real (pyproject.toml:35, tests/test_infer.py:413). Minor.",
+  "fix_recommendation": "CLAUDE.md: set up with `cd ml && python -m uv sync --extra content` (keep the extra on every later sync); write the build line as `cd ml && python -m uv run --extra content airace-content build --scale {tiny,full}`; add `cd ml && python -m uv run pytest -m gpu`. Change the DatasetsUnavailable hint to name `python -m uv sync --extra content`.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F28",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Reproduced: PYTHONIOENCODING=cp1252 airace-content build --scale tiny --fixtures tests/fixtures/sources --out .../\u041f\u0435\u0442\u043a\u043e_data > log exits 1 with UnicodeEncodeError at cli.py:147, after the corpus and tokenizer were written; the warnings loop at :148-149 never runs. cli.py has no UTF-8 reconfigure, unlike airace_ml/cli.py:321-334 (_use_utf8_output). The only non-ASCII text in the summary is the data-root path. The owner's path is ASCII (C:\\Users\\petko\\Desktop\\AI Race, per task-7-report.md), and stderr is not strict on Windows, so the owner is unlikely to hit it. Low likelihood, small loss (warnings plus a spurious failure exit). The fix is trivial and consistent with the other CLI. Minor.",
+  "fix_recommendation": "In airace_content/cli.py main(), first call airace_ml.cli._use_utf8_output() (or move it to a shared helper), and add a test like the cp1252 console test in tests/test_cli.py:536-570 that runs a tiny fixture build with a non-ASCII --out path.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F29",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Confirmed: sources.py:92 calls load_dataset(spec.hf_path, spec.hf_config, split=..., streaming=True) with no revision; grep for 'revision' in src/airace_content finds nothing, and the manifest records only hf_path, config, split, license and homepage. No ledger ruling or ADR covers pinning. Spec \u00a74.10 asks for provenance in a manifest, and the license and homepage fields give the minimum. Impact is low: the owner builds once and keeps the data on disk, but a later rebuild or a different machine silently reads a moved head, and the frozen tok-v1, judge and novelty index could not be tied to the exact data. Real but small, so Minor, low urgency.",
+  "fix_recommendation": "Add an optional revision: str | None field to SourceSpec. In hf_fetch pass revision=spec.revision. Record the revision actually used in the manifest sources entries. Optionally resolve the head sha with HfApi().dataset_info(hf_path).sha once per source when revision is None and write it down, so no sha has to be known up front. Task 15 can then fill in the verified shas.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F30",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Reproduced with a scratch probe (full scale, every dataset target 30,000 tokens, fixture sources, seed 0, same root, built twice). Second run: tokenizer_trained False, generator-sized datasets changed: conversations 761->831, code 836->651, reasoning 271->226, facts 527->604. Cause: build.py:341 uses estimate_tokens when no tokenizer exists (first build) and len(frozen.encode()) afterwards, so quotas, and therefore corpora, differ for the same seed and code. This contradicts the docstring at build.py:23-25. The Task 14 ruling set the estimator-or-tokenizer rule but did not consider this effect. Impact: any rerun or later --datasets rebuild changes the corpus and so the gate's data identity, making an existing judge stale, but only on rebuilds, which are rare. Minor.",
+  "fix_recommendation": "In build.py replace the count_tokens line (~341) with count_tokens = estimate_tokens always (tokenizer-independent, as part of the F16 fix, with the same per-source constants), so quotas never depend on the frozen tokenizer. Fix the docstring. Add a test that a second full build with the existing tokenizer gives an identical corpus.",
+  "fix_size": "small"
+ }
+]

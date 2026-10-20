@@ -1,0 +1,34 @@
+[
+ {
+  "id": "F32",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Confirmed by code read. trainer._custom_docs (trainer.py:203-211) trains notebook/coaching entries unfiltered; build_novelty_index (novelty.py:197-209) indexes only DATASET_IDS; score_creativity (creativity.py:105-143) can pass only the story's own prompt as seen=, with no way to add the model's custom text, so a memorized notebook story scores fully novel. Spec 380 calls memorization a genuine trade-off and 4.7 defines novelty against all corpora. Notebook, Coaching and their moderation are M4 features (spec 506); no M1 run, gate or owner build uses them, and the bench prompts are not visible to a player yet. So it is a forward-looking obligation, not an M1 defect, and the handoff does not record it today. Minor.",
+  "fix_recommendation": "No M1 code change. Add two explicit obligations to docs/handoff/README.md (M2/M4 section): (1) the worker must pass the run's notebook and coaching reply tokens to creativity scoring as extra seen windows (add an optional 'known' argument to score_creativity/run_benchmarks, feeding NoveltyIndex.novelty(seen=)); (2) screen notebook/coaching entries against bench-v1 prompts before training once discovery cards can show real prompts.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F33",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Reproduced with a probe (probes/m-evals-infer/probe_nan.py): a 1-layer model with NaN token-embedding weights returns [0,0,0,0,0] greedily, but generate at temperature 0.8/top_p 0.9 and 0.9/top_p 1.0 raises RuntimeError 'probability tensor contains either inf, nan or element < 0' from torch.multinomial (lm.py:115-126). Creativity (TEMPERATURE 0.9), the fingerprint and chat all sample, so bench-with-creativity, fingerprint and the gate measurements would abort with a traceback, contradicting scoring.py:5-6 finite-score intent. Likelihood is low: trainer.py:529 treats a non-finite grad norm as a spike and rolls back, so saved weights stay finite; it takes a corrupted file or extreme overflow. Minor.",
+  "fix_recommendation": "In _sample (lm.py:115), after computing probs, find rows that are not all finite (bad = ~torch.isfinite(probs).all(-1)) and for those rows return logits.argmax(-1), exactly what temperature 0 already does with NaN; no text is invented (R1). Sample the rest normally (or zero non-finite entries first). Add a test beside test_non_finite_logprobs_give_finite_scores that runs generate(temperature=0.9, top_p=0.9) on a NaN-weight model and scores creativity and the fingerprint without raising.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F34",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Verified. is_well_formed -> _has_reply_words (judge.py:119-129) uses skills.checkers.words (checkers.py:25: digits count, inner apostrophes kept), while creativity.words (letter runs only) is documented at creativity.py:77-80 as how everything counts a model's words and gate.py:554-556 repeats it. So 'I don't know.' is 3 words for G2 (fails MIN_WORDS) but 4 elsewhere. test_creativity.py:758 asserts digits count, so G2 behaviour is intended and arguably better; the contradiction is in the docstrings. CREATIVE_TOKENS (judge.py:45) and STORY_TOKENS (creativity.py:44) are both 96 with no test tying them. No current wrong result: documentation and maintenance defect only, lowest priority.",
+  "fix_recommendation": "Reword the docstrings (creativity.py:77-80, gate.py:554-556) to say G2's is_well_formed uses skills.checkers.words and does not use these letter-run words. Define the 96 once: have creativity.STORY_TOKENS reuse judge.CREATIVE_TOKENS (import at module level only if it does not create a cycle, otherwise move the constant to a small shared module), or add a one-line test asserting the two are equal. No behaviour change.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F43",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Reproduced the fragility (probes/m-evals-infer/probe_bf16.py, rebuilt conftest tokenizer, same sharp model recipe). Seed 1 fp32 top-2 margins on 'Once upon a time' start 0.014, 0.678, 1.15, 0.21 and 'The cat' has 0.116 at step 4. With a CPU bf16-autocast stand-in, seed 1 happens to keep identical greedy tokens, but only 2 of 12 seeds do, so test_infer.py:413-428 passes by luck of the fixed seed/tokenizer rather than by margin. Exact token equality between CPU fp32 and CUDA bf16 can fail after a torch/cuBLAS bump or any tests/fixtures/text edit. Not in the default suite (-m 'not slow and not gpu') and it passes today per the finder, so impact is a confusing false failure later. Minor.",
+  "fix_recommendation": "Replace exact greedy-token equality in test_cuda_bf16_path_tracks_the_cpu_path with a tolerance check: teacher-force the CPU greedy sequence through both models (full forward) and assert the per-position logits agree within about 0.5, or only require the GPU argmax to equal the CPU token where the fp32 top-2 margin exceeds 1.0. Keep the seeded-reproducibility and probability-range assertions and the score_continuations rel=0.05 check.",
+  "fix_size": "small"
+ }
+]

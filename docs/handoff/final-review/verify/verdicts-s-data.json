@@ -1,0 +1,26 @@
+[
+ {
+  "id": "F12",
+  "refuted": false,
+  "severity_if_real": "Important",
+  "reasoning": "Reproduced with the real adapter on 4 real datasets-server rows (Alice, Looking-Glass, plus two fresh mid-dataset rows I fetched, idx 30000/30001) and 8 early rows. Every sampled book wraps lines with CRLF CRLF; paragraphs are CRLF CRLF CRLF (Alice) or a lone CRLF (others). _PARAGRAPH_BREAK (sources.py:131) splits at each wrap and strip_gutenberg_boilerplate (:171) rejoins with blank lines, so _unwrap never sees multi-line paragraphs. Alice: 67 passages, 2476 blank-line breaks (1 per 10.7 words), 1322 mid-sentence. The fixture (classic single-newline wraps) cannot reveal it. books is 100% gutenberg, 15M tokens, silent, and R1 forbids fixing it in output.",
+  "fix_recommendation": "In _gutenberg (sources.py:334) or at the start of strip_gutenberg_boilerplate, after CRLF->LF, count newline runs; if runs of exactly 2 outnumber all other runs, replace every run of exactly 2 newlines with one newline and every other run with a blank line. This beats the finder's rule on the lone-CRLF-paragraph layout (it merges paragraphs there): mid-sentence breaks drop to 0-4, wraps get joined by _unwrap. The fixture layout is untouched. Add a fixture row in the real layout (both paragraph styles) and a test that no passage has a blank line after a line without an end mark before a lowercase line.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F14",
+  "refuted": false,
+  "severity_if_real": "Important",
+  "reasoning": "Reproduced from the saved real roneneldan/TinyStories rows (1200 rows over idx 0-90k plus 400-row block): 83 docs (6.9%) contain cp1252 mojibake ('â€œ', 'â€™', 'â€'); varying 0-16% per 100-row block. Through the real tinystories adapter (_text, sources.py:347) and prepare_content (assemble.py:220) all 83 survive; normalize_text does not touch them. Quality: 55% survive Thorough, 93% survive Light, and they carry noise_kind none (creative noise has no garbling). The same row_to_content feeds simple_vocab (build.py:222). Only TinyStories is affected among real samples (other sources 0-1). The plan's Task 15 'nothing is mojibake' check samples 3 docs per dataset, so it likely misses a 7% rate. The tokenizer would also learn these sequences.",
+  "fix_recommendation": "Add a dedicated tinystories adapter in sources.py (replace _text for 'tinystories' in _ADAPTERS; row_to_content is also used by build._simple_vocab). Repair to ASCII, because the 1,117 clean sampled stories are 100% ASCII with straight quotes (the finder's curly-quote mapping would introduce a second quoting style): replace 'â€œ' with '\"', 'â€™' and 'â€˜' with \"'\", 'â€“' and 'â€”' with '-', then any remaining 'â€' with '\"'. Or simply return [] for rows containing 'â€'. Verified: 0 residue on all 83 docs, clean docs unchanged. Add a fixture row.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F15",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Reproduced with the finder's probe (real adapter plus simplicity()): with a 2,931-word vocab from 400 real stories, 96-99% of FineWeb, FineWeb-Edu and Simple Wikipedia rows pass 0.30-0.35. A larger vocab only raises scores, so the 6,000-word build vocab passes even more (99%+ with a padded upper-bound vocab). The filter is effectively a no-op, short of spec 4's wording. But the numbers and formula come verbatim from the plan's Task 14 table, and the ledger defers educational complexity to Task 15. Plan Task 20 lists the simplicity filters as a post-gate debug knob. There is no wrong result or failure; the corpus is simply as complex as FineWeb, and any fix is a product tuning call that needs the real simple_vocab, so it cannot be settled in the cloud.",
+  "fix_recommendation": "No code defect. In Task 15, after the build writes simple_vocab.txt, measure the simplicity distribution of the first few thousand rows of fineweb, fineweb_edu, simplewiki and gutenberg with it. Either choose simplicity_min at a chosen keep-quantile (about 0.6 for FineWeb) in assemble.py RECIPES and rebuild with --datasets web,educational,facts,books, or record in the Task 15 notes that the filter is deliberately mild and revisit it only if the gate fails. Optionally add a rejected-rows count to the manifest.",
+  "fix_size": "small"
+ }
+]

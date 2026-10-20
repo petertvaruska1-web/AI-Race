@@ -1,0 +1,26 @@
+[
+ {
+  "id": "F9",
+  "refuted": false,
+  "severity_if_real": "Important",
+  "reasoning": "Code confirmed: fingerprint_distance (fingerprint.py:363-375) divides each trait by the population std (ddof 0), so mean squared pairwise distance is fixed at 2Dn/(n-1)=21.4 for n=15 (RMS 4.63); gate.py:436 needs only seed_mean>0.05. Re-ran the finder's k=3 proxy (15 models, 8 measure seeds): same-model re-measure mean 2.0-2.8, balanced-seed pairs 2.3-4.1, mixes 4.0-4.9; noise-only null passes 50%, seed_mean min 2.1. So clause 1 can only fail if the seed models are near-identical (a seed-ignored bug), and never tests 'measurably' above sampling noise. Proxy true seed effect is roughly equal to noise, so a full-scale PASS proves little. No ledger ruling covers 0.05; plan fixed it but never calibrated it. Verdict impact is mostly a false assurance, not a likely wrong outcome.",
+  "fix_recommendation": "In _Gate.seed_variation (gate.py:1076-1104) also fingerprint each balanced model at MEASURE_SEED+1 (cache under a separate key), take same-model distances against the same population, and pass only if seed_mean > noise_mean (with a stated margin) and seed_mean < mix_mean. Keep 0.05 only as an absolute sanity bound. Guard traits with population std near 0 in the re-measure distances (STD_FLOOR gives 66,666). Show noise_mean in detail and data, and record the rule in an ADR. Optionally average 2-3 measure seeds.",
+  "fix_size": "medium"
+ },
+ {
+  "id": "F10",
+  "refuted": false,
+  "severity_if_real": "Important",
+  "reasoning": "Confirmed in gate.py: legibility uses starter_run (seed 1), growth/forgetting/preparation set seed = self.seeds[0] and use zero-margin comparisons; only differentiation and seed_variation loop over self.seeds. Spec 4.12:210 says '3 seeds each'; the plan's Task 20 table and dispatch ruling 4 (model reuse) deliberately narrow G2/G5/G6 to seed 1, but no ADR or spec amendment records the departure, so the plan contradicts the binding spec. Flip evidence is from quick-scale tiny fixtures only (G5 at full scale likely robust: 4x128 to 6x192 should win clearly), but G6's recovery ratio and G7's ratios are noise-prone. The extra cost is about 16-18 runs, roughly 30-40 GPU minutes, so spec compliance is affordable. Not refuted, but the quick-scale flip rate overstates full-scale risk.",
+  "fix_recommendation": "Run G2 (starter), G5, G6 and G7 for every seed in self.seeds. G2 and G5 need starters for seeds 2-3; G6 can use the existing g3 creative base for each seed. Suffix run names with the seed. Decide each criterion as G3 does: the effect must hold on every seed, or the mean effect must exceed SPREAD_FACTOR x the seed std. Put per-seed numbers in criterion.data and the report. G1 stays single-seed. If GPU budget is the objection, instead record an ADR and amend spec 4.12 to list the single-seed criteria with the rationale.",
+  "fix_size": "medium"
+ },
+ {
+  "id": "F13",
+  "refuted": false,
+  "severity_if_real": "Important",
+  "reasoning": "Re-ran p4b_g7pooled.py on the 500 real FineWeb rows with the real apply_noise (web recipe), quality_score, cluster_near_duplicates and the gate's creativity.words/garble rule: pooled over 30 noise seeds, light vs thorough+dedup unknown-word share is 7.06% vs 5.55% (ratio 0.786) with a general 30k vocab, 9.11% vs 7.46% (0.819) with an in-domain 30k vocab. Clean docs supply 52-58% of the unknown words left after thorough cleaning. The thorough filter uses quality_score over the same known_vocab, so the data-level figure is already flattered. gate.py:128/512-560 bar of 0.8 is the plan's number, and garble_rate was ruled (dispatch 7) before any real-text calibration. The model-level outcome is inferred, not simulated, but a perfect copier sits on the bar and the model's own non-words and 60-sample noise push toward FAIL.",
+  "fix_recommendation": "Before the gate run, change the G7(a) measure so clean rare words and names do not count: count only garble-like words (a non-ASCII or mojibake letter, or not in known_vocab but one edit from a known word). Raise GARBLE_SAMPLES (60 to about 200). Calibrate PREP_MAX_RATIO by applying the new measure to the held-out light vs thorough training text from the real build, and keep it only if that data-level ratio is comfortably below the bar (about 0.7 or less). Otherwise strengthen the noise or thorough thresholds. Record the rule in an ADR.",
+  "fix_size": "medium"
+ }
+]

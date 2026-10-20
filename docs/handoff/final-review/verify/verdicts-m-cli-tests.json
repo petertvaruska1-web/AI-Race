@@ -1,0 +1,34 @@
+[
+ {
+  "id": "F38",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Reproduced. Truncating web/tokens.bin makes build-novelty-index (cli.py:762-769, catches only FileNotFoundError) and build-judge (cli.py:782-801, no ValueError catch) end in 'ValueError: ... does not match the offsets' tracebacks, exit 1. A file where the novelty folder belongs gives a FileExistsError traceback (OSError uncaught). A truncated tokenizer.json makes Tok.load (tokenizer.py:61) raise a bare Exception ('EOF while parsing'), which no catch (_DAMAGED, gate _LOAD_ERRORS) matches; build-judge showed the traceback. This breaks the contract in the cli.py docstring (lines 14-19) and the Task 19 ruling of no tracebacks for damaged data. The deferred minor covers only calibrate's ValueError. Trigger cases are rare (interrupted rebuild over an old corpus, disk full, hand-damaged tokenizer), and the last traceback line is readable, so Minor.",
+  "fix_recommendation": "tokenizer.py Tok.load: wrap Tokenizer.from_file in try/except Exception and re-raise ValueError(f'the tokenizer at {path} is damaged: {e}') from e. cli.py _require_tokenizer: catch ValueError and raise _UsageError saying to rebuild with BUILD_DATA_HINT. _cmd_build_novelty_index: add except OSError -> _files_problem(e), and except ValueError -> _UsageError('the training data under {root} is damaged (...); rebuild it with airace-content build'). _cmd_build_judge: add the same ValueError catch (this also covers calibrate's ValueError). Add tests for a truncated tokens.bin and a truncated tokenizer.json.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F39",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Reproduced: trained a 4-step config to completion (exit 0; folder holds model.safetensors, meta.json, result.json, no resume state), then reran with --resume: exit 2, 'there is nothing saved to resume ... Run the command again without --resume to start the run.' (cli.py:576-581). _cmd_train looks only at resume state. The ledger ruling 253 deliberately says to run without --resume for an early interrupt, but the finished-run case was never considered, and that advice then retrains over a finished model. Impact is limited: the same config reruns to an equivalent model, the advice is literally true, and a plain rerun without --resume overwrites too (deferred Task 8 minor). The cost is a confusing message and possibly a wasted GPU hour, so Minor.",
+  "fix_recommendation": "In the 'args.resume and not saved' branch of _cmd_train (cli.py:576), before the generic message, check whether args.out holds a finished model of this config (result.json present with run_id == cfg.run_id and status completed, or model.safetensors + meta.json). If so, raise _UsageError saying the run in {out} already finished and the model is ready to use, and that it only needs retraining if they delete the folder or choose another --out. Add a test.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F40",
+  "refuted": true,
+  "severity_if_real": "None",
+  "reasoning": "The mechanism is real: the tiny-built tok-v1 has 31 ids that decode to C0 controls and DEL (checked), and cli.py:476 and :676 print model text raw. The impact is negligible. The corpus build strips control characters (textproc.normalize_text removes them), so a trained model never sees them and gives them near-zero probability. Only an untrained model emits them, and the result is gibberish with a stray CR or BEL. A damaging terminal sequence such as ESC followed by 'c' or '[' needs two specific tokens in a row and is vanishingly improbable. The tool runs on the owner's own machine on their own models. Spec \u00a711 untrusted-text rule is about rendering to other players (HTML injection), not a developer console, and report.py strips controls for Markdown cells, not for safety. Escaping in 'chat --raw' would also add noise.",
+  "fix_recommendation": "",
+  "fix_size": "none"
+ },
+ {
+  "id": "F42",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Reproduced: 'pytest -p no:cacheprovider -m \"slow or not slow\" tests/test_creativity.py::test_build_judge_smoke tests/test_gate.py::test_gate_refuses_to_start_without_its_inputs' gives 1 failed, 1 passed: the gate test's 'match=build-judge' fails because the message lists only the training data and novelty index. Cause: test_build_judge_smoke (test_creativity.py:119-125) builds a judge into the session-scoped tiny_data_root (conftest.py:111), and sibling test_build_judge_resume_smoke copies the root first (line 656). The default suite and '-m slow' alone pass (the dependent tests are not slow-marked), and CLAUDE.md never documents combining them. It is test-only, but it misleads anyone, including the fix wave, who runs everything in one go.",
+  "fix_recommendation": "In test_build_judge_smoke (ml/tests/test_creativity.py:119) take tmp_path, copy tiny_data_root with shutil.copytree(tiny_data_root, tmp_path / 'root') and build and load the judge from that copy, as test_build_judge_resume_smoke does. Check that no other slow test writes into tiny_data_root.",
+  "fix_size": "small"
+ }
+]

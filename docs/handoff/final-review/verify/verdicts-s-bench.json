@@ -1,0 +1,18 @@
+[
+ {
+  "id": "F1",
+  "refuted": false,
+  "severity_if_real": "Critical",
+  "reasoning": "Reproduced end to end. code.py:878 gives prompts ending in a closing docstring plus newline; suite.py:204-210 and _prompt_ids encode them unchanged. With a 4096 BPE trained on the generators' text (the finder's tokA.json), the tail token is bare '\u010a' while prompt+reference tokenizes it as '\u010a\u0120\u0120\u0120' (GPT-2 pre-tokenizer), so 50/50 function items are not a token prefix. My own small model (2 layers, 128 wide, 600 steps on code_train_docs) scored 0/50 with the bench prompt (replies start 'print(...)') and 49/50 with the trailing newline removed. The 50 references pass (50/50) with a leading newline. Fakes replay the reference by token tuple, so no test sees it. No ledger or ADR ruling covers this. Impact: 50 of 150 coding items are unreachable, coding is capped near 67, and bench-v1 would freeze with this.",
+  "fix_recommendation": "Show the model the header without its final newline and keep the full text for the checker: in code.py _bench_functions build CheckItem(prompt=v.prompt.rstrip('\\n'), ..., check_args={'prompt': v.prompt, 'name': v.name, 'tests': fam.test_cases}). function_body already accepts a leading empty line. Leave _Variant.prompt and the training docs unchanged, so no corpus rebuild. Update tests/fakes.py answer_key_lm to reply '\\n' + reference for CheckItems of this kind (or key on the stripped prompt). Add a regression test that no non-chat bench prompt ends in whitespace, plus one where a BPE with a '\u010a\u0120\u0120\u0120' merge keeps encode(prompt) a prefix of encode(prompt + continuation). Note the deviation from plan line 1176 in ADR 0001, and do it before the first gate run and before bench-v1 freezes.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F5",
+  "refuted": false,
+  "severity_if_real": "Important",
+  "reasoning": "Reproduced. Bench facts are drawn uniformly per relation (facts.py:46-55), so answers follow KB object frequencies while chance is 1/len(options) (suite.py:170) and 0 for exact items. I recomputed on the frozen knowledge draw: a subject-blind per-relation majority-object picker gets 0.37 on the 150 MC items (animal_legs 11/16, animal_class 9/16, baby_animal 7/15, vehicle_travel 7/15) and 0.26 on the 50 exact items, which normalizes to 19.1. Over 40 other draws it averages 0.40 MC and 0.22 exact, so the skew is systematic. The Task 16 ruling (line 201) only tested one global constant reply, and ADR 0001 rule 1's claim that a constant guesser earns exactly 1/N assumes uniform answers; neither covers per-relation priors. Impact is a miscalibrated floor of about 15-19 for models that have learned relation priors but no subject facts. It does not change G3's pass/fail, which compares mixes. Fix before bench-v1 freezes.",
+  "fix_recommendation": "Make the answer distribution uniform within each relation before bench-v1 freezes. In facts.py, replace the uniform fact draw used for knowledge_bench_items and consistency_groups with a stratified one: per relation, cycle through the relation's distinct objects (round-robin in a seeded order, skipping objects whose bench-eligible facts are exhausted) and take a random unused fact for each. Distractors from kb.distractors are already uniform over the other objects, so the option set is then exchangeable and a subject-blind picker gets 1/4. Add a regression test that a KB-frequency-prior picker (per-relation most common object, the code in the verdict probe) scores 0.25 +/- 0.07 on knowledge MC and no more than about 0.10 on exact items. Regenerate any pinned frozen-draw expectations. Alternative: measure the floor as the instruction category does.",
+  "fix_size": "medium"
+ }
+]

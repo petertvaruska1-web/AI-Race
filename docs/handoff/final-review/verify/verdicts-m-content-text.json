@@ -1,0 +1,42 @@
+[
+ {
+  "id": "F26",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Reproduced with the finder's probe at 5% scale: 13,939 code docs, 418 copies, 205 typo'd (1.47% of docs), 101 not clustered with their source, 90 survive dedup. Code path: assemble.py:106 gives code duplicate=0.03, apply_noise (assemble.py:544) sends plain-text code through inject_noise, noise.py:391-392 misspells half of all copies. Output shows 'Proram:' and 'xz[-1]' labelled 'Output: 12' (broken trace). structured_quality (textproc.py:124-134) has no typo factor, so these pass every cleaning level. The Task 14 ruling (progress.md:171) and build.py:83-86 explicitly say code gets duplicates only, no typos, so the premise is false. Impact is small (about 1.5% label noise in the code set, nothing in the gate), hence Minor, but it contradicts a deliberate ruling and is free to fix before the Task 15 build.",
+  "fix_recommendation": "Add a keyword parameter copy_typo_share (default COPY_TYPO_SHARE) to noise.inject_noise and use it at noise.py:391; in assemble.apply_noise pass 0.0 when dataset_id is a structured dataset (move STRUCTURED_DATASETS from build.py into assemble.py or textproc.py and import it in build.py). Do NOT add a field to NoiseRates (assemble._RATE_KINDS iterates its fields). Add a test that every code duplicate copy equals its source text exactly. Correct the build.py:83-86 comment.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F27",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Reproduced with probe_boiler.py (rerun): boilerplate docs surviving Thorough 0.87 at ~40 words, 0.97 at ~150, 0.96 at ~400, 0.98 at ~800; clean 1.0; mean boilerplate score 0.87-0.91. Cause confirmed in code: quality_score factors are whole-document shares (textproc.py:98-121), furniture lines are 1-4 lines, and only 3 of 10 footers hold a SPAM_MARKER (noise.py:175-204). Task 13's own table (task-13-report.md:54, 66% survive Thorough) was measured on short KB paragraphs; the ledger (progress.md:157) says Thorough 0.65 was unmeasured on real-length web text, so this is not a ruling. Spec 4.10 says preparation choices are real filters. Impact: 10% of web docs, so one noise kind is effectively uncleanable. No gate criterion depends on it (G7 uses garbled rate), hence Minor.",
+  "fix_recommendation": "In textproc.quality_score add a furniture factor counted like spam hits: count non-empty lines that contain a '|' separator or a phrase from a short list of page-furniture phrases (e.g. 'privacy policy', 'skip to', 'sign in', 'log in', 'back to top', 'share this', 'read more', 'cookies', 'follow us', 'powered by', 'leave a comment', 'older posts', 'sitemap'; avoid generic 'terms of'), and multiply by 1 - min(1, lines/3). Probe at 40-800 words: boilerplate surviving Thorough falls from ~97% to ~25% while clean stays 100%. Re-run the Task 14 test that checks the 0.2 quality gap and update the docstring.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F31",
+  "refuted": true,
+  "severity_if_real": "None",
+  "reasoning": "The mismatch is real: probe gives textproc.words 'caf\u00e9' -> 'caf', creativity.words 'caf\u00e9', and garble_rate returns 0.333 on its own text. But the impact is negligible. known_vocab is used only by quality_score (consistent, same words()) and gate.garble_rate (gate.py:1203), and only G7 consumes it. G7 compares light vs thorough on the same web prefixes, so accented words add the same floor to both arms; with accented words at roughly 0.3-0.5% of words against a floor of several percent (vocab excludes web, only 30k words), the ratio test (<=0.8) shifts by about 0.01. The finder's fix (b) is harmful: with textproc.words, mojibake like 'caf\u00c3\u00a9' becomes 'caf' and the garble signal G7 measures would vanish; the Unicode rule in the gate is deliberate (test_gate.py:331). Fix (a) changes a reviewed, tested primitive (test_textproc.py:108 asserts 'caf') for no measurable gain.",
+  "fix_recommendation": "",
+  "fix_size": "none"
+ },
+ {
+  "id": "F45",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Confirmed: all 13 fixture files have 0 non-ASCII chars; grep of tests shows non-ASCII only in unit-level tests (normalize_text, quality, dedup, write_corpus info, tokenizer, CLI), none feeding adapters, assemble, tag_documents, vocab files, tokenizer training or build_corpus. Reran the finder's probe (nonascii_build.py with accents, emoji, CJK, curly quotes, special-token strings): tiny build succeeds, emoji round-trip in decoded docs, ids in range. All file I/O in airace_content and airace_ml/data/corpus.py passes encoding='utf-8' (manifest.py:26-77, corpus.py:117,147) and vocab is ASCII, so there is no live defect. It stays as a Minor test gap because Review Focus 5 (global-constraints.md:43) names the corpus build and nothing guards it, while real FineWeb/Gutenberg/SODA text is full of non-ASCII.",
+  "fix_recommendation": "Add one test in tests/content/test_build.py that copies the fixture dir to tmp_path, appends a non-ASCII string (accents, emoji, CJK, curly quotes, a literal '<|end|>') to rows of fineweb, tinystories, soda and simplewiki, runs build_corpus('tiny', ...) with fixture_fetch, and asserts the decoded docs contain the strings, the build succeeds, vocab files and manifest/info.json reload via read_vocab/load_manifest. Do not edit the shared fixtures (other tests assert counts).",
+  "fix_size": "small"
+ },
+ {
+  "id": "F52",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Mechanism confirmed with a probe against the real topics.py: 'Posted on Monday, October 3, 2019. The senator said the bill on financial regulation would pass.' is tagged school; a birth/death-date sentence is tagged school; 'marketing' maps to places, 'addition' and 'number' to school, 'place' to places, 'data' to technology. Calendar words sit in the school list (topics.py:69-70) while 'may' and 'march' were left out, so dates are an accident of the list. I could not re-run the finder's real-text counts (484 FineWeb docs, 7%) without spending Firecrawl, but dates are routine in web text, so the figure is plausible. Impact is small: tags only drive Balanced variety sampling (sampler.py:48-50, not exercised by the gate) and no topic swallows the corpus. Tags are frozen into the corpus at build time, so the 12-word fix is free now and costs a rebuild later; hence Minor.",
+  "fix_recommendation": "In topics.py remove the month and weekday names (and 'calendar') from the 'school' list so they belong to no topic; drop 'addition', 'number', 'place' and 'data' from their topics; add 'marketing' to _NOT_INFLECTED. Re-run tests/content/test_textproc.py (topic tests around lines 232-275 are structural and should still pass).",
+  "fix_size": "small"
+ }
+]

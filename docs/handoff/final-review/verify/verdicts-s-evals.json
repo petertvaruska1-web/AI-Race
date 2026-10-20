@@ -1,0 +1,18 @@
+[
+ {
+  "id": "F4",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Reproduced the code paths. judge._trained (judge.py:235-243) compares only the recipe config; the tokenizer is copied at :293 even when weights are reused; the novelty record (novelty.py:162-209) and the gate loaders (gate.py:789-852) carry or check no corpus/tokenizer digest. Probe: build-judge on a completed config-matching judge with truncated model.safetensors raises an uncaught SafetensorError, so the advised 'Rebuild it with: build-judge' cannot fix it. Impact is narrower than claimed. The tokenizer is frozen by default, so after a normal corpus rebuild a reused judge still maps ids correctly. The harmful cases (--retrain-tokenizer, a quick --budget-tokens judge replacing the real one, damaged weights) are unlikely. The first pass (build, index, judge, gate) is clean. Task 17 deferred this as minor, and handoff README 5.2 now documents the workaround, contrary to the finding. Still a real provenance gap that fails silently if the step is forgotten.",
+  "fix_recommendation": "Move gate._data_identity to a shared helper. Write it into the judge's record (plus a flag for a non-recipe budget) and into the novelty index's .json at build time. judge._trained must require a match, and build_judge must retrain if a reused checkpoint fails load_checkpoint (SafetensorError/_LOAD_ERRORS). Gate _load_inputs and cli._creativity_tools compare the identity with the current data and raise the existing 'out of date ... Rebuild it with: ...' error, refusing a non-recipe-budget judge as the reference. Add a one-line rebuild rule to CLAUDE.md.",
+  "fix_size": "medium"
+ },
+ {
+  "id": "F6",
+  "refuted": true,
+  "severity_if_real": "Minor",
+  "reasoning": "Numbers reproduce (probe: constant novel story 52.0, constant corpus story 20.8, 'Once upon a time,' 20.8). But the formula is plan-mandated (Task 17 step 6) and deliberate. The creativity.py docstring says a same-story-for-every-prompt model 'loses up to half'. Ledger lines 211/225 accept copy-level credit (the 0.4 floor, ~27 vs ~46). A constant NOVEL story needs text outside the novelty index repeated at T=0.9 sampling. No M1 model trained only on the indexed corpora can do that, since memorised text is in the index and scores 20.8. It is reachable only via player notebooks (M2, tracked as the notebook-novelty finding). The 'stock sentence beats real stories' claim rests on an unverified real-judge assumption: sampled model text usually gets coherence and novelty above the 0.4 floor. G3/G6 compare arms relatively, and the first real gate will show actual story transcripts.",
+  "fix_recommendation": "",
+  "fix_size": "none"
+ }
+]

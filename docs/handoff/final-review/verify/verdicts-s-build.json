@@ -1,0 +1,18 @@
+[
+ {
+  "id": "F3",
+  "refuted": false,
+  "severity_if_real": "Important",
+  "reasoning": "Reproduced: tiny build then build_corpus('full') into the same root gave trained False and an identical tokenizer hash (3c06b03e6f9b). build.py:311 sets train_tok only when the file is missing; :322 loads it as frozen; the VOCAB_SIZE check at :387 runs only for a fresh tokenizer. Nothing records the tokenizer's scale. Not ruled on in the ledger or ADR; the plan only says to train the tokenizer if it is missing. The trigger is easy: BUILD_DATA_HINT (airace_ml/cli.py:94) and CLAUDE.md:37 offer tiny with the same default root, and the full build has no pre-flight (F11), so a tiny run is the natural smoke test. A tiny Hub tokenizer costs only about 1-3% tokens (fixtures: about 50%). It is frozen for every later model, and a tiny build after a full one silently overwrites the full corpora (write_corpus has no guard). Recoverable only via --retrain-tokenizer.",
+  "fix_recommendation": "Write a provenance sidecar (scale, sample bytes, seed, corpus version) when the tokenizer is promoted at build.py trial.replace, and a scale record beside simple_vocab/known_vocab/false_facts. At --scale full, raise BuildError naming --retrain-tokenizer or another --out if the tokenizer or a reused shared artifact is not recorded as full. Apply the vocab==4096 check to reused tokenizers at full. At --scale tiny, refuse when the root holds a full-scale tokenizer or manifest. Drop 'tiny' from BUILD_DATA_HINT and note --out in CLAUDE.md. Add a tiny-then-full test.",
+  "fix_size": "medium"
+ },
+ {
+  "id": "F11",
+  "refuted": false,
+  "severity_if_real": "Important",
+  "reasoning": "Read hf_fetch (sources.py:82-93): a bare load_dataset plus islice with no retry or resume. Sources open lazily in the assemble loop (assemble.py:355-362), and everything stays in memory until the writes at build.py:385+. cli.py:144 catches only BuildError, SourceFormatError and DatasetsUnavailable. My probe made the last source (cosmo_stories) raise ConnectionError('Server Disconnected'): it escaped main() as a raw traceback and wrote no files. datasets 5.1.0 retries only reads (20 tries; 504 and 429 specially, config.py:256-261, file_utils.py:830-871). Hub tree and info calls at open and 500/502/503 mid-read are not retried. A late config or format error (first real Hub contact for 14 sources) also appears only after most of the hour. No ledger ruling covers it; the cost is up to an hour of lost work and an unreadable traceback for a non-technical owner, but no wrong output.",
+  "fix_recommendation": "In hf_fetch, retry load_dataset and iteration on transient errors (ConnectionError, TimeoutError, httpx.TransportError, HfHubHTTPError with status None, 408, 429 or 5xx). Never retry not-found, 401/403/404 or SourceFormatError. Back off 30 s doubling for about 8 attempts, one flushed stderr line per retry. Resume exactly: keep ds.state_dict() after each yielded row and load_state_dict on reopen, or reopen and skip the rows already yielded. In cli.py catch the final transient error as a plain 'network problem, run the same command again'. Before assembling, open every needed source, read a few rows and run row_has_format so config or format errors fail in minutes. Add offline tests with a fake datasets module.",
+  "fix_size": "medium"
+ }
+]

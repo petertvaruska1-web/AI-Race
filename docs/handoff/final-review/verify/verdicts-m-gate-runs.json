@@ -1,0 +1,58 @@
+[
+ {
+  "id": "F19",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Confirmed by reading code. judge.py:228-232 and runs.py:90-95 call os.replace with no retry. The trainer deliberately tolerates exactly this Windows refusal for its own renames (trainer.py:569, 600-603), and cli.py:399 turns PermissionError into exit 2. In build_judge, train_run's _finish (trainer.py:687-690) has already deleted every resume state before judge.py:292 writes train_config.json. If that replace is refused, _trained() is False (no record) and can_resume() is False, so the rerun retrains the ~1 h judge from step 0 (judge.py:277-285). In the gate, a refused gate_run.json write (runs.py:211) leaves 'started' with no resume state, so that one run retrains (a few minutes) and the unattended gate stops. Rare (needs a scanner holding the .tmp), but real and hour-scale for the judge. Minor.",
+  "fix_recommendation": "Add a small retry in both _write_json helpers (judge.py:228 and runs.py:90): around os.replace(tmp, path), retry on PermissionError about 6 times with a growing sleep (0.1 s doubling), then re-raise. Test by monkeypatching os.replace to fail twice then succeed. Optional: shared helper for novelty.py:149,159 too.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F20",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Confirmed. Run folders are out/runs/<run_id> (gate.py:143, 1267; runs.py:176) and run ids such as 'starter' and 'g3-creative-s1' do not depend on scale, device or first seed (gate.py:997). The reuse key (runs.py:159-170) does include config, device and data, so a mismatch retrains in place, overwriting model, meta, result, telemetry and gate_run.json and removing resume state. CLAUDE.md:39 shows --quick as an option on the same --out runs/gate-1, and nothing warns or refuses. Running gate --quick, or with no CUDA (pick_device falls back to CPU silently when --device is omitted, device.py:11), into the folder of a finished full gate destroys ~45-65 min of GPU runs. Not data loss (reproducible), needs a misstep, so Minor. Overlaps F21 for the silent CPU fallback.",
+  "fix_recommendation": "Write out/gate_setup.json ({quick, device type, seeds}) on first use. If it exists and differs, raise GateSetupError (exit 2) telling the user to pick another --out. Also have `gate` refuse a silent CPU fallback unless --device cpu is given (F21). Change CLAUDE.md:39 to show a separate --out for --quick.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F35",
+  "refuted": true,
+  "severity_if_real": "None",
+  "reasoning": "G2 is a legibility criterion. Spec 4.12.2 defines well-formed as exactly the word-count, distinct-word, 3-gram and judge-perplexity checks (plus the ADR 0001 distinct-word rule) and adds that a sample transcript goes to the report for human review. A constant fluent sentence is legible by that definition. Whether the model responds to the prompt is measured by G3 and the instruction bench, not G2. Prompt echo is also a normal reply style for small chat models, so a near-copy rule would risk false fails and would be a spec change, not a bug. A constant reply across 20 different prompts and seeds at T=0.8 is not a plausible failure. outcome.json keeps all 20 exchanges (cli.py:834-841). The report's first-10 cap (report.py:23, 202) is a design choice that satisfies 'a sample transcript'; showing the help replies too is a cosmetic nicety.",
+  "fix_recommendation": "",
+  "fix_size": "none"
+ },
+ {
+  "id": "F36",
+  "refuted": true,
+  "severity_if_real": "None",
+  "reasoning": "The evaluator hole exists on paper: garble_rate returns 0.0 for no words (gate.py:550-560) and eval_prep passes on clean <= 0.8*dirty. But no mechanism makes the thorough arm degenerate. Both arms train on the same web-heavy mix and budget and are sampled identically (T=0.8, top_p=0.95, 60 seeded completions); only the prep differs, and dedup/cleaning makes looping and early end-of-text less likely, not more. Any such effect hits both arms equally. Empty or looping thorough output would also need all ~60 completions to degrade. The unit-test fixture with ' the the xq' only checks evaluator arithmetic. The real G7(a) risk is what counts as garbled (F13), a separate finding. At worst a cheap hardening, with negligible impact on the owner's run.",
+  "fix_recommendation": "",
+  "fix_size": "none"
+ },
+ {
+  "id": "F37",
+  "refuted": true,
+  "severity_if_real": "None",
+  "reasoning": "Behaviour is real (runs.py:181 reuses only status == 'completed') but deliberate: task-20-dispatch-notes #5 says a run is reused when its record 'says completed', and test_an_unfinished_or_unstable_run_is_trained_again... pins it. It is defensible, since Task 20 I1 makes an unstable run fail every criterion that uses it. For a non-technical owner, a rerun then gives a transient glitch another chance, whereas reusing it would stick the failure until they delete the folder. Gate configs use default settings, so unstable stops are rare, and runs are seeded, so they mostly repeat anyway. Retraining costs minutes. A passing rerun is a genuine completed measurement, not a data-dependent gate bypass. At most the runs.py docstring and CLAUDE.md:39 could say 'completed'.",
+  "fix_recommendation": "",
+  "fix_size": "none"
+ },
+ {
+  "id": "F41",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Confirmed. write_gate_report always appends '## Iterations' plus ITERATIONS_PLACEHOLDER (report.py:268) and _cmd_gate rewrites out/report.md on every run (cli.py:832-833), reading nothing back. The placeholder text invites recording attempts in that file. Plan Task 20 step 7 says to copy the report to docs/reports/m1-feasibility.md, and step 8 asks for each iteration (hypothesis, change, result) to be recorded in the report's Iterations section across several reruns. Any note written into the generated report, or into the docs copy followed by a re-copy of a fresh report, is silently replaced. Impact is lost prose that can be retyped or recovered from git, so Minor and low value, but the fix is cheap.",
+  "fix_recommendation": "In write_gate_report, before writing, read the existing target file if present. If it has a '## Iterations' section whose body differs from ITERATIONS_PLACEHOLDER, reuse that body instead of the placeholder. Test: write a report, edit its Iterations text, rewrite, and assert the text survives. Tell the user to keep notes in docs/reports and copy over only the tables if they prefer.",
+  "fix_size": "small"
+ },
+ {
+  "id": "F46",
+  "refuted": false,
+  "severity_if_real": "Minor",
+  "reasoning": "Test gap only; the code is correct today. I probed _data_identity on a copy of tiny_data_root: it is stable across calls and changes when tags.npz changes. tests/test_gate.py:932-938 monkeypatches _load_inputs with a fixed identity='data-1' in every default test, so _data_identity, _growth_sequences and the real _load_inputs run only in two slow tests, which assert reuse, never invalidation. GateRuns itself is tested with a changed identity string (the 'data-2' case in test_gate.py), so only the function that computes the identity is untested. The identity is the only guard stopping an hour of runs trained on an old corpus from being reused after the planned rebuild-and-rerun (plan step 8), so a regression there would be silent and costly. No present failure, hence Minor.",
+  "fix_recommendation": "Add default-suite tests on a tmp copy of tiny_data_root: _data_identity is stable across two calls and changes when tags.npz, offsets.npy, the tokenizer, info.json or a tokens.bin size changes. Optionally add a small _growth_sequences ordering test.",
+  "fix_size": "small"
+ }
+]

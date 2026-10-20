@@ -1,3 +1,495 @@
 {
- "_failed": []
+ "_failed": [],
+ "verify3:m-bench-items": {
+  "verdicts": [
+   {
+    "fix_recommendation": "In facts.py:164 pass max_new_tokens=12 to the knowledge ExactItem (one length bucket in suite._ask). Update tests/test_kb_facts.py:439, which asserts max_new_tokens == 8 for knowledge exact items. After Task 15, rerun test_every_answer_fits_its_reply_budget_with_the_real_tokenizer and raise the number if it still reports an overrun.",
+    "fix_size": "small",
+    "id": "F24",
+    "reasoning": "Reproduced the mechanism: ExactItem default max_new_tokens=8 (types.py:116) is used unchanged for knowledge exact items (facts.py:164); suite.py:204-207 truncates generation at the budget, so a truncated reply can never equal 'Bandar Seri Begawan'. My own proxy 4096-entry byte-level BPEs (KB prose/chats, reasoning, code and ~3 MB English) both split ' Bandar Seri Begawan' into 9 tokens (' B','and','ar',' Ser','i',' B','eg','aw','an'). The real tok-v1 sees much more English, so it may reach 8; I put the odds of failure near 50-60 percent. The guard test (test_bench.py:737, ledger concern C) would catch it before any bench measurement, so this is not hidden, but a headroom fix costs nothing and one item (0.5 percent of knowledge) is at stake.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "After every other item change lands (F24, F53, F54, and any other bench fixes), add a test that hashes canonical JSON of build_suite().items (dataclasses.asdict per item, json.dumps with sort_keys, categories and items in order, prompts, options, answers, check_args, tags) against a recorded sha256. The failure message must say that an intended change needs a SUITE_VERSION bump and a new digest.",
+    "fix_size": "small",
+    "id": "F25",
+    "reasoning": "Confirmed nothing pins the item set. No test in tests/ hashes build_suite() or compares against golden content (grep for sha256, digest and golden finds none in the bench, KB, code and reasoning tests); only ids and counts are asserted. _bench_items (suite.py:116-129) is rebuilt from generators, kb_data JSON, MiniPy and checkers on every run; skill_rng (types.py:21-28) is hash-seeded and deterministic, and uv.lock pins numpy for the owner, so no drift exists today. The skill_rng docstring says output is fixed 'forever', but no test enforces it. Spec 4.7 keys leaderboards on the bench version, so a silent change under the same label would make scores incomparable. Value is guard-rail only and nothing runs wrong now, hence Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "test_bench.py:78: use max_items_per_category=60 (20 tag keys with the fixture), assert the breakdown is non-empty, then the range check. test_sampler.py:23-28: use names like 'alpha'/'beta' and pytest.raises(match=...) on the offending name, and 'sum' for the all-zero case.",
+    "fix_size": "small",
+    "id": "F44",
+    "reasoning": "Reproduced: run_benchmarks(ScriptedLM, max_items_per_category=10).tag_breakdown() is {} (MIN_TAG_ITEMS=10 per category-tag), so the all(0<=v<=100) assertion at test_bench.py:78 is vacuous; the test named for tags checks no tag. In test_sampler.py:28, 'a' occurs in every message (\"dataset 'a' has an invalid weight -1.0\"), so the name check is empty for the 'a' cases; the other messages do name their dataset correctly (probe). No product bug and the properties are partly covered elsewhere (test_bench.py:524-548 exact values, test_sampler.py:174-216 names, the 'sum' branch), so impact is small.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "",
+    "fix_size": "none",
+    "id": "F49",
+    "reasoning": "The tag facts are right (language, reasoning and pattern carry only fam:; no skill: axis anywhere), but the plan, not an unrecorded drift, fixes the schemes: fam:<name> for language, reasoning and pattern (plan lines 1093-1181), rel: and topic: for knowledge (1011). Task 16 was reviewed against it. Tags are metadata only (the finder agrees scores do not change), they have no consumer in M1 (tag_breakdown only), and the consumer, the discovery engine (spec 4.9), is M4. Tags can be added later and joined by item id without re-measuring any score, so there is no freeze deadline. A rewrite now invents axes before the discovery design exists.",
+    "refuted": true,
+    "severity_if_real": "None"
+   },
+   {
+    "fix_recommendation": "In kb_data/animals.json set animal_class also_accepted to {mammal:[mammals], bird:[birds], fish:[fishes], reptile:[reptiles], amphibian:[amphibians], insect:[insects], arachnid:[arachnids]}. This also lets 'insects' pass the cloze knowledge-0165, which is acceptable.",
+    "fix_size": "small",
+    "id": "F53",
+    "reasoning": "Reproduced. animal_class has also_accepted {} (animals.json:9) and exact_match (scoring.py:78-85) only normalizes case, quotes and trailing punctuation, so 'mammals' and 'birds' fail on knowledge-0151, 0152, 0181 and 0198 ('What is the animal group of the sloth?', 'Which group of animals does the owl belong to?'). Sibling numeric relations already use also_accepted for alternative forms. I patched a copy of kb_data under the scratchpad: with plurals added, only the answers lists change, MC and consistency items stay byte-identical, because plurals are not objects and so never reach distractors or false facts. Impact is small (4 of 50 exact items, models usually echo the singular template form) but the fix is free and matches the Task 10 ruling to pull bench-validity issues in before the freeze.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "In kb_data/space.json planet_order also_accepted, add the bare digit to each entry: first ['1st','1'], second ['2nd','2'], ... eighth ['8th','8'].",
+    "fix_size": "small",
+    "id": "F54",
+    "reasoning": "Reproduced. planet_order also_accepted lists only ordinals and '1st'..'8th' (space.json:9-18). knowledge-0153 (Jupiter) accepts ['fifth','5th'] and 0194 (Venus) ['second','2nd'], and the question 'Which number in order from the Sun is {s}, from first to eighth?' invites a digit. The sibling numeric relations shape_sides and animal_legs accept bare digits, so this is an inconsistency. Patched copy of kb_data in the scratchpad: adding the digits changes only the answers of the planet_order items (0153, 0176, 0192, 0194); no MC or consistency item changes. Small impact, free fix before the freeze.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "",
+    "fix_size": "none",
+    "id": "F55",
+    "reasoning": "Reproduced the mechanics: plan_false_facts(kb, stream(0,'false_facts'), 300) plants stork, rooster and peacock as 'reptile' (3 of 300; 36 bird facts), and reptile can be a distractor for birds. But the KB's animal groups are the school-level classes (animals.json: mammal, bird, fish, reptile, amphibian, insect, arachnid, with reptile = lizards, snakes, crocodiles, turtles), where 'The peacock is a kind of reptile' is clearly false to a layperson. The 'birds are reptiles' reading is a cladistic one the KB does not use, so the falsifiable contract is not broken in its own frame. MC items stay unambiguous (bird is the only fitting option), and three planted false facts barely affect G7. No ledger ruling asks for taxonomy pedantry. The fix would shift false-fact and distractor draws for no real gain.",
+    "refuted": true,
+    "severity_if_real": "None"
+   },
+   {
+    "fix_recommendation": "",
+    "fix_size": "none",
+    "id": "F56",
+    "reasoning": "The 'a newborn hen' wording is the same convention the KB uses for cow to calf, sheep to lamb, goat to kid and bear to cub: 'baby <adult animal name>', where the adult name may be sexed. 'A baby hen is called a chick' is a standard trivia phrasing, not a wrong fact. The keyed answer is the only plausible one, no model can be marked wrong unfairly, and the finder concedes harm is nil. The duplicate chicken=chick row only adds a subject. Dropping it would shift baby_animal sampling (and the exact items drawn from it), and bench-v1 would be churned for no scoring benefit.",
+    "refuted": true,
+    "severity_if_real": "None"
+   }
+  ]
+ },
+ "verify3:m-cli-tests": {
+  "verdicts": [
+   {
+    "fix_recommendation": "tokenizer.py Tok.load: wrap Tokenizer.from_file in try/except Exception and re-raise ValueError(f'the tokenizer at {path} is damaged: {e}') from e. cli.py _require_tokenizer: catch ValueError and raise _UsageError saying to rebuild with BUILD_DATA_HINT. _cmd_build_novelty_index: add except OSError -> _files_problem(e), and except ValueError -> _UsageError('the training data under {root} is damaged (...); rebuild it with airace-content build'). _cmd_build_judge: add the same ValueError catch (this also covers calibrate's ValueError). Add tests for a truncated tokens.bin and a truncated tokenizer.json.",
+    "fix_size": "small",
+    "id": "F38",
+    "reasoning": "Reproduced. Truncating web/tokens.bin makes build-novelty-index (cli.py:762-769, catches only FileNotFoundError) and build-judge (cli.py:782-801, no ValueError catch) end in 'ValueError: ... does not match the offsets' tracebacks, exit 1. A file where the novelty folder belongs gives a FileExistsError traceback (OSError uncaught). A truncated tokenizer.json makes Tok.load (tokenizer.py:61) raise a bare Exception ('EOF while parsing'), which no catch (_DAMAGED, gate _LOAD_ERRORS) matches; build-judge showed the traceback. This breaks the contract in the cli.py docstring (lines 14-19) and the Task 19 ruling of no tracebacks for damaged data. The deferred minor covers only calibrate's ValueError. Trigger cases are rare (interrupted rebuild over an old corpus, disk full, hand-damaged tokenizer), and the last traceback line is readable, so Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "In the 'args.resume and not saved' branch of _cmd_train (cli.py:576), before the generic message, check whether args.out holds a finished model of this config (result.json present with run_id == cfg.run_id and status completed, or model.safetensors + meta.json). If so, raise _UsageError saying the run in {out} already finished and the model is ready to use, and that it only needs retraining if they delete the folder or choose another --out. Add a test.",
+    "fix_size": "small",
+    "id": "F39",
+    "reasoning": "Reproduced: trained a 4-step config to completion (exit 0; folder holds model.safetensors, meta.json, result.json, no resume state), then reran with --resume: exit 2, 'there is nothing saved to resume ... Run the command again without --resume to start the run.' (cli.py:576-581). _cmd_train looks only at resume state. The ledger ruling 253 deliberately says to run without --resume for an early interrupt, but the finished-run case was never considered, and that advice then retrains over a finished model. Impact is limited: the same config reruns to an equivalent model, the advice is literally true, and a plain rerun without --resume overwrites too (deferred Task 8 minor). The cost is a confusing message and possibly a wasted GPU hour, so Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "",
+    "fix_size": "none",
+    "id": "F40",
+    "reasoning": "The mechanism is real: the tiny-built tok-v1 has 31 ids that decode to C0 controls and DEL (checked), and cli.py:476 and :676 print model text raw. The impact is negligible. The corpus build strips control characters (textproc.normalize_text removes them), so a trained model never sees them and gives them near-zero probability. Only an untrained model emits them, and the result is gibberish with a stray CR or BEL. A damaging terminal sequence such as ESC followed by 'c' or '[' needs two specific tokens in a row and is vanishingly improbable. The tool runs on the owner's own machine on their own models. Spec §11 untrusted-text rule is about rendering to other players (HTML injection), not a developer console, and report.py strips controls for Markdown cells, not for safety. Escaping in 'chat --raw' would also add noise.",
+    "refuted": true,
+    "severity_if_real": "None"
+   },
+   {
+    "fix_recommendation": "In test_build_judge_smoke (ml/tests/test_creativity.py:119) take tmp_path, copy tiny_data_root with shutil.copytree(tiny_data_root, tmp_path / 'root') and build and load the judge from that copy, as test_build_judge_resume_smoke does. Check that no other slow test writes into tiny_data_root.",
+    "fix_size": "small",
+    "id": "F42",
+    "reasoning": "Reproduced: 'pytest -p no:cacheprovider -m \"slow or not slow\" tests/test_creativity.py::test_build_judge_smoke tests/test_gate.py::test_gate_refuses_to_start_without_its_inputs' gives 1 failed, 1 passed: the gate test's 'match=build-judge' fails because the message lists only the training data and novelty index. Cause: test_build_judge_smoke (test_creativity.py:119-125) builds a judge into the session-scoped tiny_data_root (conftest.py:111), and sibling test_build_judge_resume_smoke copies the root first (line 656). The default suite and '-m slow' alone pass (the dependent tests are not slow-marked), and CLAUDE.md never documents combining them. It is test-only, but it misleads anyone, including the fix wave, who runs everything in one go.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   }
+  ]
+ },
+ "verify3:m-content-build": {
+  "verdicts": [
+   {
+    "fix_recommendation": "In _Goal, keep a running sum of doc_tokens(content, count_tokens) for every accepted doc and make met() return self.tokens >= quota at full scale (drop the 200-doc extrapolation). Make the byte estimate per component (about 3.2 bytes/token for prose, about 2.7 for code and patterns, about 3.6 for creative) and use the same constant in _GeneratorCollector instead of its 200-doc sample. Correct the BYTES_PER_TOKEN_ESTIMATE comment. In cli.format_warnings also warn when a component's real manifest tokens end below 90% of planned_tokens.",
+    "fix_size": "medium",
+    "id": "F16",
+    "reasoning": "Code confirmed. assemble.py:289-299 (_Goal.met) stops after ceil(quota*200/sample_tokens) docs, using the first 200 accepted docs and the fixed 3.6 bytes/token (assemble.py:144-147, estimate_tokens :207-209). It never compares collected tokens with the quota, and format_warnings (cli.py:~99-117) warns only for exhausted components. Task 14 ruled the 3.6 constant, not the first-200 bias or the missing check. A running sum already exists: amount() (assemble.py:347-351) sums doc_tokens over all docs. I could not re-measure real bytes/token (no Hub access), so the 1.15-1.47x landing figures are indicative. Direction is mostly overshoot (more disk, RAM and time; skewed proportions). Undershoot below the plan's 80% is possible but rare because of the +15% systematic bias. No failed run or wrong result, so Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "Add a flushed-stderr progress callback (an optional progress function passed through build_corpus and assemble_dataset): one line when each source opens, then every N rows with rows read, docs kept and estimated tokens, then lines for dedup, tokenizer training and writing each corpus. Optionally warn when no row arrives for 10 minutes. The CLI passes it. Tests check the lines on a fixture build.",
+    "fix_size": "medium",
+    "id": "F17",
+    "reasoning": "Confirmed: grep shows the only print calls in airace_content are cli.py:133-149, after build_corpus returns; build.py and assemble.py emit nothing, so the multi-hour full build (Task 15 step 2: run in background and monitor) is silent. Confirmed in the venv that huggingface_hub 1.33.0 utils/_pagination.py:27-37 does session.get(..., timeout=None) and _http.py:338,349 builds clients with timeout=None, so a hung metadata call has no timeout; I did not reproduce a hang (no network) and it is unlikely. The silent run alone justifies the finding. No wrong result or crash, but a healthy build could be killed (no resume) or a dead one waited on. Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "CLAUDE.md: set up with `cd ml && python -m uv sync --extra content` (keep the extra on every later sync); write the build line as `cd ml && python -m uv run --extra content airace-content build --scale {tiny,full}`; add `cd ml && python -m uv run pytest -m gpu`. Change the DatasetsUnavailable hint to name `python -m uv sync --extra content`.",
+    "fix_size": "small",
+    "id": "F18",
+    "reasoning": "Reproduced here: `uv run --no-sync airace-content build --scale full` exits 1 with 'install the content extra (uv sync --extra content)'. pyproject.toml:7-8 has datasets only in the content extra, and CLAUDE.md:32-33,37 gives plain `python -m uv sync` and `python -m uv run airace-content build ...` with no extra. The hint at sources.py:87-91 says bare `uv`, which is not on the owner's PATH (CLAUDE.md:31). A later plain `uv sync` is exact and removes datasets again. The plan (Task 15 step 2) and handoff README:80 already carry or flag the right command, and the failure is immediate and clearly worded, so it costs one retry, not a lost run. CLAUDE.md also lacks the `pytest -m gpu` line; the gpu marker is real (pyproject.toml:35, tests/test_infer.py:413). Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "In airace_content/cli.py main(), first call airace_ml.cli._use_utf8_output() (or move it to a shared helper), and add a test like the cp1252 console test in tests/test_cli.py:536-570 that runs a tiny fixture build with a non-ASCII --out path.",
+    "fix_size": "small",
+    "id": "F28",
+    "reasoning": "Reproduced: PYTHONIOENCODING=cp1252 airace-content build --scale tiny --fixtures tests/fixtures/sources --out .../Петко_data > log exits 1 with UnicodeEncodeError at cli.py:147, after the corpus and tokenizer were written; the warnings loop at :148-149 never runs. cli.py has no UTF-8 reconfigure, unlike airace_ml/cli.py:321-334 (_use_utf8_output). The only non-ASCII text in the summary is the data-root path. The owner's path is ASCII (C:\\Users\\petko\\Desktop\\AI Race, per task-7-report.md), and stderr is not strict on Windows, so the owner is unlikely to hit it. Low likelihood, small loss (warnings plus a spurious failure exit). The fix is trivial and consistent with the other CLI. Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "Add an optional revision: str | None field to SourceSpec. In hf_fetch pass revision=spec.revision. Record the revision actually used in the manifest sources entries. Optionally resolve the head sha with HfApi().dataset_info(hf_path).sha once per source when revision is None and write it down, so no sha has to be known up front. Task 15 can then fill in the verified shas.",
+    "fix_size": "small",
+    "id": "F29",
+    "reasoning": "Confirmed: sources.py:92 calls load_dataset(spec.hf_path, spec.hf_config, split=..., streaming=True) with no revision; grep for 'revision' in src/airace_content finds nothing, and the manifest records only hf_path, config, split, license and homepage. No ledger ruling or ADR covers pinning. Spec §4.10 asks for provenance in a manifest, and the license and homepage fields give the minimum. Impact is low: the owner builds once and keeps the data on disk, but a later rebuild or a different machine silently reads a moved head, and the frozen tok-v1, judge and novelty index could not be tied to the exact data. Real but small, so Minor, low urgency.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "In build.py replace the count_tokens line (~341) with count_tokens = estimate_tokens always (tokenizer-independent, as part of the F16 fix, with the same per-source constants), so quotas never depend on the frozen tokenizer. Fix the docstring. Add a test that a second full build with the existing tokenizer gives an identical corpus.",
+    "fix_size": "small",
+    "id": "F30",
+    "reasoning": "Reproduced with a scratch probe (full scale, every dataset target 30,000 tokens, fixture sources, seed 0, same root, built twice). Second run: tokenizer_trained False, generator-sized datasets changed: conversations 761->831, code 836->651, reasoning 271->226, facts 527->604. Cause: build.py:341 uses estimate_tokens when no tokenizer exists (first build) and len(frozen.encode()) afterwards, so quotas, and therefore corpora, differ for the same seed and code. This contradicts the docstring at build.py:23-25. The Task 14 ruling set the estimator-or-tokenizer rule but did not consider this effect. Impact: any rerun or later --datasets rebuild changes the corpus and so the gate's data identity, making an existing judge stale, but only on rebuilds, which are rare. Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   }
+  ]
+ },
+ "verify3:m-content-text": {
+  "verdicts": [
+   {
+    "fix_recommendation": "Add a keyword parameter copy_typo_share (default COPY_TYPO_SHARE) to noise.inject_noise and use it at noise.py:391; in assemble.apply_noise pass 0.0 when dataset_id is a structured dataset (move STRUCTURED_DATASETS from build.py into assemble.py or textproc.py and import it in build.py). Do NOT add a field to NoiseRates (assemble._RATE_KINDS iterates its fields). Add a test that every code duplicate copy equals its source text exactly. Correct the build.py:83-86 comment.",
+    "fix_size": "small",
+    "id": "F26",
+    "reasoning": "Reproduced with the finder's probe at 5% scale: 13,939 code docs, 418 copies, 205 typo'd (1.47% of docs), 101 not clustered with their source, 90 survive dedup. Code path: assemble.py:106 gives code duplicate=0.03, apply_noise (assemble.py:544) sends plain-text code through inject_noise, noise.py:391-392 misspells half of all copies. Output shows 'Proram:' and 'xz[-1]' labelled 'Output: 12' (broken trace). structured_quality (textproc.py:124-134) has no typo factor, so these pass every cleaning level. The Task 14 ruling (progress.md:171) and build.py:83-86 explicitly say code gets duplicates only, no typos, so the premise is false. Impact is small (about 1.5% label noise in the code set, nothing in the gate), hence Minor, but it contradicts a deliberate ruling and is free to fix before the Task 15 build.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "In textproc.quality_score add a furniture factor counted like spam hits: count non-empty lines that contain a '|' separator or a phrase from a short list of page-furniture phrases (e.g. 'privacy policy', 'skip to', 'sign in', 'log in', 'back to top', 'share this', 'read more', 'cookies', 'follow us', 'powered by', 'leave a comment', 'older posts', 'sitemap'; avoid generic 'terms of'), and multiply by 1 - min(1, lines/3). Probe at 40-800 words: boilerplate surviving Thorough falls from ~97% to ~25% while clean stays 100%. Re-run the Task 14 test that checks the 0.2 quality gap and update the docstring.",
+    "fix_size": "small",
+    "id": "F27",
+    "reasoning": "Reproduced with probe_boiler.py (rerun): boilerplate docs surviving Thorough 0.87 at ~40 words, 0.97 at ~150, 0.96 at ~400, 0.98 at ~800; clean 1.0; mean boilerplate score 0.87-0.91. Cause confirmed in code: quality_score factors are whole-document shares (textproc.py:98-121), furniture lines are 1-4 lines, and only 3 of 10 footers hold a SPAM_MARKER (noise.py:175-204). Task 13's own table (task-13-report.md:54, 66% survive Thorough) was measured on short KB paragraphs; the ledger (progress.md:157) says Thorough 0.65 was unmeasured on real-length web text, so this is not a ruling. Spec 4.10 says preparation choices are real filters. Impact: 10% of web docs, so one noise kind is effectively uncleanable. No gate criterion depends on it (G7 uses garbled rate), hence Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "",
+    "fix_size": "none",
+    "id": "F31",
+    "reasoning": "The mismatch is real: probe gives textproc.words 'café' -> 'caf', creativity.words 'café', and garble_rate returns 0.333 on its own text. But the impact is negligible. known_vocab is used only by quality_score (consistent, same words()) and gate.garble_rate (gate.py:1203), and only G7 consumes it. G7 compares light vs thorough on the same web prefixes, so accented words add the same floor to both arms; with accented words at roughly 0.3-0.5% of words against a floor of several percent (vocab excludes web, only 30k words), the ratio test (<=0.8) shifts by about 0.01. The finder's fix (b) is harmful: with textproc.words, mojibake like 'cafÃ©' becomes 'caf' and the garble signal G7 measures would vanish; the Unicode rule in the gate is deliberate (test_gate.py:331). Fix (a) changes a reviewed, tested primitive (test_textproc.py:108 asserts 'caf') for no measurable gain.",
+    "refuted": true,
+    "severity_if_real": "None"
+   },
+   {
+    "fix_recommendation": "Add one test in tests/content/test_build.py that copies the fixture dir to tmp_path, appends a non-ASCII string (accents, emoji, CJK, curly quotes, a literal '<|end|>') to rows of fineweb, tinystories, soda and simplewiki, runs build_corpus('tiny', ...) with fixture_fetch, and asserts the decoded docs contain the strings, the build succeeds, vocab files and manifest/info.json reload via read_vocab/load_manifest. Do not edit the shared fixtures (other tests assert counts).",
+    "fix_size": "small",
+    "id": "F45",
+    "reasoning": "Confirmed: all 13 fixture files have 0 non-ASCII chars; grep of tests shows non-ASCII only in unit-level tests (normalize_text, quality, dedup, write_corpus info, tokenizer, CLI), none feeding adapters, assemble, tag_documents, vocab files, tokenizer training or build_corpus. Reran the finder's probe (nonascii_build.py with accents, emoji, CJK, curly quotes, special-token strings): tiny build succeeds, emoji round-trip in decoded docs, ids in range. All file I/O in airace_content and airace_ml/data/corpus.py passes encoding='utf-8' (manifest.py:26-77, corpus.py:117,147) and vocab is ASCII, so there is no live defect. It stays as a Minor test gap because Review Focus 5 (global-constraints.md:43) names the corpus build and nothing guards it, while real FineWeb/Gutenberg/SODA text is full of non-ASCII.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "In topics.py remove the month and weekday names (and 'calendar') from the 'school' list so they belong to no topic; drop 'addition', 'number', 'place' and 'data' from their topics; add 'marketing' to _NOT_INFLECTED. Re-run tests/content/test_textproc.py (topic tests around lines 232-275 are structural and should still pass).",
+    "fix_size": "small",
+    "id": "F52",
+    "reasoning": "Mechanism confirmed with a probe against the real topics.py: 'Posted on Monday, October 3, 2019. The senator said the bill on financial regulation would pass.' is tagged school; a birth/death-date sentence is tagged school; 'marketing' maps to places, 'addition' and 'number' to school, 'place' to places, 'data' to technology. Calendar words sit in the school list (topics.py:69-70) while 'may' and 'march' were left out, so dates are an accident of the list. I could not re-run the finder's real-text counts (484 FineWeb docs, 7%) without spending Firecrawl, but dates are routine in web text, so the figure is plausible. Impact is small: tags only drive Balanced variety sampling (sampler.py:48-50, not exercised by the gate) and no topic swallows the corpus. Tags are frozen into the corpus at build time, so the 12-word fix is free now and costs a rebuild later; hence Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   }
+  ]
+ },
+ "verify3:m-core-train": {
+  "verdicts": [
+   {
+    "fix_recommendation": "In cli.py _cmd_build_judge (and _cmd_bench/_cmd_chat) print one plain-words line before work starts ('using the GPU (<name>)' / 'no usable GPU found: using the CPU'). In _cmd_build_judge only, if the device resolved to CPU without an explicit --device cpu or AIRACE_DEVICE=cpu, exit 2 saying the judge would take days on the CPU and to pass --device cpu to force it. Leave gate/train as they are.",
+    "fix_size": "small",
+    "id": "F21",
+    "reasoning": "Code path confirmed: device.py:8-13 falls back to CPU silently; cli.py:356-362 only rejects an explicit --device cuda. build-judge (cli.py:782-794) and bench print no device line. Correction to the finding: train already prints 'on {device.type}' in its header (cli.py:589) and the gate prints 'on cpu' as its first line (gate.py:1264), so only build-judge and bench are silent. The judge is 8x384x256 at batch 128 (judge.py:129-134), 3,662 steps; the measured 74 s/step and ~10.7 GB RSS are consistent with the shape, so a CPU fallback means days. Likelihood is low because the owner's CUDA works (ledger Task 8: GPU runs), so Minor, but the one-line fix is cheap.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "In TrainRunConfig.validate() after shape.validate(), raise ValueError('batch_tokens must be at least the attention span (ctx_len)') when batch_tokens < shape.ctx_len. Add a parametrized test in test_train_config.py. Leave steps/batch_size as they are.",
+    "fix_size": "small",
+    "id": "F22",
+    "reasoning": "Reproduced with a probe: ctx 256, batch_tokens 100, token_budget 1000 passes validate(); steps=10, batch_size=1, so 2,560 tokens train (2.56x the budget). config.py:170-176 and validate() (196-204) only require token_budget >= batch_tokens and never compare batch_tokens to ctx_len. Non-dividing spans under the default 16384 train 1.6-6% less (ctx 384: 98.4%), which is honest and harmless. Latent: gate and judge shapes divide their batch_tokens, and no ledger ruling covers it. It matters only once configs arrive from outside, where validate() is the stated gate. Do NOT require divisibility, since default batch_tokens=16384 would then reject valid spans such as 384, 640 and 832.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "In TrainRunConfig.validate(), for each notebook entry, coaching part and probe prompt, try s.encode('utf-8') and on UnicodeEncodeError raise ValueError naming the field and index ('contains a lone surrogate, not valid text'). Add tests for all three fields.",
+    "fix_size": "small",
+    "id": "F23",
+    "reasoning": "Reproduced: Tok.encode('a\\ud800b') raises TypeError ('TextInputSequence must be str'), while from_json plus validate() accept lone surrogates in probe_prompts, notebook and coaching (config.py:229-241 check only isinstance(str)). Notebook/coaching fail in _prepare (_custom_docs, trainer.py:203-211) with a TypeError before out_dir is touched. probe_prompts are first encoded in _evaluate (trainer.py:551-561) at the first eval, after training has started, so a rerun repeats the crash. This breaks validate()'s 'only ValueError escapes' contract. No M1 caller produces such a string (JS JSON.stringify of a half-pasted emoji can in M2), so Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "Add default tests in tests/test_trainer.py using cfg(): (1) resume from a stop inside the finishing phase (finishing_mixture set, stop_after_steps >= decay_start) equals the uninterrupted run's weights and telemetry; (2) NaN at a step that is also a checkpoint step, then resume; (3) monkeypatch Path.rename to raise PermissionError during saves, then resume and compare. Prioritise (1) and (3).",
+    "fix_size": "small",
+    "id": "F47",
+    "reasoning": "Verified with a line-coverage run of tests/test_trainer.py (sys.monitoring plugin): trainer.py:611 (rebuild snapshot when the saved one is None, i.e. a save right at a rollback step) and :618 (re-derive finishing mixture on resume) never execute, and no test monkeypatches Path.rename or raises PermissionError (grep: only test_trainer.py:376/410/429 do plain renames). Code is correct today (finder's probes pass), so this is a regression-guard gap only. The 618 branch matters for future runs with finishing mixtures (the judge has none), and the refused-rename tolerance exists for Windows. Low impact, so Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "",
+    "fix_size": "none",
+    "id": "F48",
+    "reasoning": "Not a defect. I re-ran the default suite here: pytest reports 1247 passed in 114.06 s, wall 1m58s (user 3m44s), against the global constraint of under 3 minutes (global-constraints.md:24). That leaves a margin of about a third, and the ledger already tracks headroom (progress.md:236, 128.7 s at Task 20). The finder's 3m12s wall figure was most likely taken under concurrent load from parallel reviewers. The Windows-Defender slowdown is speculation, and the owner runs the suite rarely. The repeated reference runs in test_trainer.py are a legitimate optimisation, not a bug.",
+    "refuted": true,
+    "severity_if_real": "None"
+   },
+   {
+    "fix_recommendation": "",
+    "fix_size": "none",
+    "id": "F50",
+    "reasoning": "The plan's Task 8 telemetry contract (plan lines ~895-905) is explicit and was implemented exactly: Progress, HeldoutEval over the base datasets, Sample per probe prompt, Instability, Done. The M1 exit criterion (spec §15) is the §4.12 feasibility gate, not a live view. The 'tiny mini-eval for live charts' sentence in spec §4.7 is a client feature (live charts are the M2 UI), and HeldoutEval already provides live loss curves. Running bench items during training would cost wall time on the owner's GPU runs for no M1 consumer. The event stream is extensible, so M2 adds the event when it builds the view. At most a one-line note in docs/progress.md is housekeeping.",
+    "refuted": true,
+    "severity_if_real": "None"
+   }
+  ]
+ },
+ "verify3:m-evals-infer": {
+  "verdicts": [
+   {
+    "fix_recommendation": "No M1 code change. Add two explicit obligations to docs/handoff/README.md (M2/M4 section): (1) the worker must pass the run's notebook and coaching reply tokens to creativity scoring as extra seen windows (add an optional 'known' argument to score_creativity/run_benchmarks, feeding NoveltyIndex.novelty(seen=)); (2) screen notebook/coaching entries against bench-v1 prompts before training once discovery cards can show real prompts.",
+    "fix_size": "small",
+    "id": "F32",
+    "reasoning": "Confirmed by code read. trainer._custom_docs (trainer.py:203-211) trains notebook/coaching entries unfiltered; build_novelty_index (novelty.py:197-209) indexes only DATASET_IDS; score_creativity (creativity.py:105-143) can pass only the story's own prompt as seen=, with no way to add the model's custom text, so a memorized notebook story scores fully novel. Spec 380 calls memorization a genuine trade-off and 4.7 defines novelty against all corpora. Notebook, Coaching and their moderation are M4 features (spec 506); no M1 run, gate or owner build uses them, and bench prompts are not visible to a player yet. So it is a forward-looking obligation, not an M1 defect, and the handoff does not record it today. Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "In _sample (lm.py:115), after computing probs, find rows that are not all finite (bad = ~torch.isfinite(probs).all(-1)) and for those rows return logits.argmax(-1), exactly what temperature 0 already does with NaN; no text is invented (R1). Sample the rest normally (or zero non-finite entries first). Add a test beside test_non_finite_logprobs_give_finite_scores that runs generate(temperature=0.9, top_p=0.9) on a NaN-weight model and scores creativity and the fingerprint without raising.",
+    "fix_size": "small",
+    "id": "F33",
+    "reasoning": "Reproduced with a probe (probes/m-evals-infer/probe_nan.py): a 1-layer model with NaN token-embedding weights returns [0,0,0,0,0] greedily, but generate at temperature 0.8/top_p 0.9 and 0.9/top_p 1.0 raises RuntimeError 'probability tensor contains either inf, nan or element < 0' from torch.multinomial (lm.py:115-126). Creativity (TEMPERATURE 0.9), the fingerprint and chat all sample, so bench-with-creativity, fingerprint and the gate measurements would abort with a traceback, contradicting the finite-score intent of scoring.py:5-6. Likelihood is low: trainer.py:529 treats a non-finite grad norm as a spike and rolls back, so saved weights stay finite; it takes a corrupted file or extreme overflow. Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "Reword the docstrings (creativity.py:77-80, gate.py:554-556) to say G2's is_well_formed uses skills.checkers.words and does not use these letter-run words. Define the 96 once: have creativity.STORY_TOKENS reuse judge.CREATIVE_TOKENS (import at module level only if it does not create a cycle, otherwise move the constant to a small shared module), or add a one-line test asserting the two are equal. No behaviour change.",
+    "fix_size": "small",
+    "id": "F34",
+    "reasoning": "Verified. is_well_formed -> _has_reply_words (judge.py:119-129) uses skills.checkers.words (checkers.py:25: digits count, inner apostrophes kept), while creativity.words (letter runs only) is documented at creativity.py:77-80 as how everything counts a model's words and gate.py:554-556 repeats it. So 'I don't know.' is 3 words for G2 (fails MIN_WORDS) but 4 elsewhere. test_creativity.py:758 asserts digits count, so G2 behaviour is intended and arguably better; the contradiction is in the docstrings. CREATIVE_TOKENS (judge.py:45) and STORY_TOKENS (creativity.py:44) are both 96 with no test tying them. No current wrong result: documentation and maintenance defect only, lowest priority.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "Replace exact greedy-token equality in test_cuda_bf16_path_tracks_the_cpu_path with a tolerance check: teacher-force the CPU greedy sequence through both models (full forward) and assert the per-position logits agree within about 0.5, or only require the GPU argmax to equal the CPU token where the fp32 top-2 margin exceeds 1.0. Keep the seeded-reproducibility and probability-range assertions and the score_continuations rel=0.05 check.",
+    "fix_size": "small",
+    "id": "F43",
+    "reasoning": "Reproduced the fragility (probes/m-evals-infer/probe_bf16.py, rebuilt conftest tokenizer, same sharp model recipe). Seed 1 fp32 top-2 margins on 'Once upon a time' start 0.014, 0.678, 1.15, 0.21 and 'The cat' has 0.116 at step 4. With a CPU bf16-autocast stand-in, seed 1 happens to keep identical greedy tokens, but only 2 of 12 seeds do, so test_infer.py:413-428 passes by luck of the fixed seed/tokenizer rather than by margin. Exact token equality between CPU fp32 and CUDA bf16 can fail after a torch/cuBLAS bump or any tests/fixtures/text edit. Not in the default suite (-m 'not slow and not gpu') and it passes today per the finder, so impact is a confusing false failure later. Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   }
+  ]
+ },
+ "verify3:m-gate-runs": {
+  "verdicts": [
+   {
+    "fix_recommendation": "Add a small retry in both _write_json helpers (judge.py:228 and runs.py:90): around os.replace(tmp, path), retry on PermissionError about 6 times with a growing sleep (0.1 s doubling), then re-raise. Test by monkeypatching os.replace to fail twice then succeed. Optional: shared helper for novelty.py:149,159 too.",
+    "fix_size": "small",
+    "id": "F19",
+    "reasoning": "Confirmed by reading code. judge.py:228-232 and runs.py:90-95 call os.replace with no retry. The trainer deliberately tolerates exactly this Windows refusal for its own renames (trainer.py:569, 600-603), and cli.py:399 turns PermissionError into exit 2. In build_judge, train_run's _finish (trainer.py:687-690) has already deleted every resume state before judge.py:292 writes train_config.json. If that replace is refused, _trained() is False (no record) and can_resume() is False, so the rerun retrains the ~1 h judge from step 0 (judge.py:277-285). In the gate, a refused gate_run.json write (runs.py:211) leaves 'started' with no resume state, so that one run retrains (a few minutes) and the unattended gate stops. Rare (needs a scanner holding the .tmp), but real and hour-scale for the judge. Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "Write out/gate_setup.json ({quick, device type, seeds}) on first use. If it exists and differs, raise GateSetupError (exit 2) telling the user to pick another --out. Also have `gate` refuse a silent CPU fallback unless --device cpu is given (F21). Change CLAUDE.md:39 to show a separate --out for --quick.",
+    "fix_size": "small",
+    "id": "F20",
+    "reasoning": "Confirmed. Run folders are out/runs/<run_id> (gate.py:143, 1267; runs.py:176) and run ids such as 'starter' and 'g3-creative-s1' do not depend on scale, device or first seed (gate.py:997). The reuse key (runs.py:159-170) does include config, device and data, so a mismatch retrains in place, overwriting model, meta, result, telemetry and gate_run.json and removing resume state. CLAUDE.md:39 shows --quick as an option on the same --out runs/gate-1, and nothing warns or refuses. Running gate --quick, or with no CUDA (pick_device falls back to CPU silently when --device is omitted, device.py:11), into the folder of a finished full gate destroys ~45-65 min of GPU runs. Not data loss (reproducible), needs a misstep, so Minor. Overlaps F21 for the silent CPU fallback.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "",
+    "fix_size": "none",
+    "id": "F35",
+    "reasoning": "G2 is a legibility criterion. Spec 4.12.2 defines well-formed as exactly the word-count, distinct-word, 3-gram and judge-perplexity checks (plus the ADR 0001 distinct-word rule) and adds that a sample transcript goes to the report for human review. A constant fluent sentence is legible by that definition. Whether the model responds to the prompt is measured by G3 and the instruction bench, not G2. Prompt echo is also a normal reply style for small chat models, so a near-copy rule would risk false fails and would be a spec change, not a bug. A constant reply across 20 different prompts and seeds at T=0.8 is not a plausible failure. outcome.json keeps all 20 exchanges (cli.py:834-841). The report's first-10 cap (report.py:23, 202) is a design choice that satisfies 'a sample transcript'; showing the help replies too is a cosmetic nicety.",
+    "refuted": true,
+    "severity_if_real": "None"
+   },
+   {
+    "fix_recommendation": "",
+    "fix_size": "none",
+    "id": "F36",
+    "reasoning": "The evaluator hole exists on paper: garble_rate returns 0.0 for no words (gate.py:550-560) and eval_prep passes on clean <= 0.8*dirty. But no mechanism makes the thorough arm degenerate. Both arms train on the same web-heavy mix and budget and are sampled identically (T=0.8, top_p=0.95, 60 seeded completions); only the prep differs, and dedup/cleaning makes looping and early end-of-text less likely, not more. Any such effect hits both arms equally. Empty or looping thorough output would also need all ~60 completions to degrade. The unit-test fixture with ' the the xq' only checks evaluator arithmetic. The real G7(a) risk is what counts as garbled (F13), a separate finding. At worst a cheap hardening, with negligible impact on the owner's run.",
+    "refuted": true,
+    "severity_if_real": "None"
+   },
+   {
+    "fix_recommendation": "",
+    "fix_size": "none",
+    "id": "F37",
+    "reasoning": "Behaviour is real (runs.py:181 reuses only status == 'completed') but deliberate: task-20-dispatch-notes #5 says a run is reused when its record 'says completed', and test_an_unfinished_or_unstable_run_is_trained_again... pins it. It is defensible, since Task 20 I1 makes an unstable run fail every criterion that uses it. For a non-technical owner, a rerun then gives a transient glitch another chance, whereas reusing it would stick the failure until they delete the folder. Gate configs use default settings, so unstable stops are rare, and runs are seeded, so they mostly repeat anyway. Retraining costs minutes. A passing rerun is a genuine completed measurement, not a data-dependent gate bypass. At most the runs.py docstring and CLAUDE.md:39 could say 'completed'.",
+    "refuted": true,
+    "severity_if_real": "None"
+   },
+   {
+    "fix_recommendation": "In write_gate_report, before writing, read the existing target file if present. If it has a '## Iterations' section whose body differs from ITERATIONS_PLACEHOLDER, reuse that body instead of the placeholder. Test: write a report, edit its Iterations text, rewrite, and assert the text survives. Tell the user to keep notes in docs/reports and copy over only the tables if they prefer.",
+    "fix_size": "small",
+    "id": "F41",
+    "reasoning": "Confirmed. write_gate_report always appends '## Iterations' plus ITERATIONS_PLACEHOLDER (report.py:268) and _cmd_gate rewrites out/report.md on every run (cli.py:832-833), reading nothing back. The placeholder text invites recording attempts in that file. Plan Task 20 step 7 says to copy the report to docs/reports/m1-feasibility.md, and step 8 asks for each iteration (hypothesis, change, result) to be recorded in the report's Iterations section across several reruns. Any note written into the generated report, or into the docs copy followed by a re-copy of a fresh report, is silently replaced. Impact is lost prose that can be retyped or recovered from git, so Minor and low value, but the fix is cheap.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "Add default-suite tests on a tmp copy of tiny_data_root: _data_identity is stable across two calls and changes when tags.npz, offsets.npy, the tokenizer, info.json or a tokens.bin size changes. Optionally add a small _growth_sequences ordering test.",
+    "fix_size": "small",
+    "id": "F46",
+    "reasoning": "Test gap only; the code is correct today. I probed _data_identity on a copy of tiny_data_root: it is stable across calls and changes when tags.npz changes. tests/test_gate.py:932-938 monkeypatches _load_inputs with a fixed identity='data-1' in every default test, so _data_identity, _growth_sequences and the real _load_inputs run only in two slow tests, which assert reuse, never invalidation. GateRuns itself is tested with a changed identity string (the 'data-2' case in test_gate.py), so only the function that computes the identity is untested. The identity is the only guard stopping an hour of runs trained on an old corpus from being reused after the planned rebuild-and-rerun (plan step 8), so a regression there would be silent and costly. No present failure, hence Minor.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   }
+  ]
+ },
+ "verify3:s-bench": {
+  "verdicts": [
+   {
+    "fix_recommendation": "Show the model the header without its final newline and keep the full text for the checker: in code.py _bench_functions build CheckItem(prompt=v.prompt.rstrip('\\n'), ..., check_args={'prompt': v.prompt, 'name': v.name, 'tests': fam.test_cases}). function_body already accepts a leading empty line. Leave _Variant.prompt and the training docs unchanged, so no corpus rebuild. Update tests/fakes.py answer_key_lm to reply '\\n' + reference for CheckItems of this kind (or key on the stripped prompt). Add a regression test that no non-chat bench prompt ends in whitespace, plus one where a BPE with a 'ĊĠĠĠ' merge keeps encode(prompt) a prefix of encode(prompt + continuation). Note the deviation from plan line 1176 in ADR 0001, and do it before the first gate run and before bench-v1 freezes.",
+    "fix_size": "small",
+    "id": "F1",
+    "reasoning": "Reproduced end to end. code.py:878 gives prompts ending in a closing docstring plus newline; suite.py:204-210 and _prompt_ids encode them unchanged. With a 4096 BPE trained on the generators' text (the finder's tokA.json), the tail token is bare 'Ċ' while prompt+reference tokenizes it as 'ĊĠĠĠ' (GPT-2 pre-tokenizer), so 50/50 function items are not a token prefix. My own small model (2 layers, 128 wide, 600 steps on code_train_docs) scored 0/50 with the bench prompt (replies start 'print(...)') and 49/50 with the trailing newline removed. The 50 references pass (50/50) with a leading newline. Fakes replay the reference by token tuple, so no test sees it. No ledger or ADR ruling covers this. Impact: 50 of 150 coding items are unreachable, coding is capped near 67, and bench-v1 would freeze with this.",
+    "refuted": false,
+    "severity_if_real": "Critical"
+   },
+   {
+    "fix_recommendation": "Make the answer distribution uniform within each relation before bench-v1 freezes. In facts.py, replace the uniform fact draw used for knowledge_bench_items and consistency_groups with a stratified one: per relation, cycle through the relation's distinct objects (round-robin in a seeded order, skipping objects whose bench-eligible facts are exhausted) and take a random unused fact for each. Distractors from kb.distractors are already uniform over the other objects, so the option set is then exchangeable and a subject-blind picker gets 1/4. Add a regression test that a KB-frequency-prior picker (per-relation most common object) scores 0.25 +/- 0.07 on knowledge MC and no more than about 0.10 on exact items. Regenerate any pinned frozen-draw expectations. Alternative: measure the floor as the instruction category does.",
+    "fix_size": "medium",
+    "id": "F5",
+    "reasoning": "Reproduced. Bench facts are drawn uniformly per relation (facts.py:46-55), so answers follow KB object frequencies while chance is 1/len(options) (suite.py:170) and 0 for exact items. I recomputed on the frozen knowledge draw: a subject-blind per-relation majority-object picker gets 0.37 on the 150 MC items (animal_legs 11/16, animal_class 9/16, baby_animal 7/15, vehicle_travel 7/15) and 0.26 on the 50 exact items, which normalizes to 19.1. Over 40 other draws it averages 0.40 MC and 0.22 exact, so the skew is systematic. The Task 16 ruling (line 201) only tested one global constant reply, and ADR 0001 rule 1's claim that a constant guesser earns exactly 1/N assumes uniform answers; neither covers per-relation priors. Impact is a miscalibrated floor of about 15-19 for models that have learned relation priors but no subject facts. It does not change G3's pass/fail, which compares mixes. Fix before bench-v1 freezes.",
+    "refuted": false,
+    "severity_if_real": "Important"
+   }
+  ]
+ },
+ "verify3:s-build": {
+  "verdicts": [
+   {
+    "fix_recommendation": "Write a provenance sidecar (scale, sample bytes, seed, corpus version) when the tokenizer is promoted at build.py trial.replace, and a scale record beside simple_vocab/known_vocab/false_facts. At --scale full, raise BuildError naming --retrain-tokenizer or another --out if the tokenizer or a reused shared artifact is not recorded as full. Apply the vocab==4096 check to reused tokenizers at full. At --scale tiny, refuse when the root holds a full-scale tokenizer or manifest. Drop 'tiny' from BUILD_DATA_HINT and note --out in CLAUDE.md. Add a tiny-then-full test.",
+    "fix_size": "medium",
+    "id": "F3",
+    "reasoning": "Reproduced: tiny build then build_corpus('full') into the same root gave trained False and an identical tokenizer hash (3c06b03e6f9b). build.py:311 sets train_tok only when the file is missing; :322 loads it as frozen; the VOCAB_SIZE check at :387 runs only for a fresh tokenizer. Nothing records the tokenizer's scale. Not ruled on in the ledger or ADR; the plan only says to train the tokenizer if it is missing. The trigger is easy: BUILD_DATA_HINT (airace_ml/cli.py:94) and CLAUDE.md:37 offer tiny with the same default root, and the full build has no pre-flight (F11), so a tiny run is the natural smoke test. A tiny Hub tokenizer costs only about 1-3% tokens (fixtures: about 50%). It is frozen for every later model, and a tiny build after a full one silently overwrites the full corpora (write_corpus has no guard). Recoverable only via --retrain-tokenizer.",
+    "refuted": false,
+    "severity_if_real": "Important"
+   },
+   {
+    "fix_recommendation": "In hf_fetch, retry load_dataset and iteration on transient errors (ConnectionError, TimeoutError, httpx.TransportError, HfHubHTTPError with status None, 408, 429 or 5xx). Never retry not-found, 401/403/404 or SourceFormatError. Back off 30 s doubling for about 8 attempts, one flushed stderr line per retry. Resume exactly: keep ds.state_dict() after each yielded row and load_state_dict on reopen, or reopen and skip the rows already yielded. In cli.py catch the final transient error as a plain 'network problem, run the same command again'. Before assembling, open every needed source, read a few rows and run row_has_format so config or format errors fail in minutes. Add offline tests with a fake datasets module.",
+    "fix_size": "medium",
+    "id": "F11",
+    "reasoning": "Read hf_fetch (sources.py:82-93): a bare load_dataset plus islice with no retry or resume. Sources open lazily in the assemble loop (assemble.py:355-362), and everything stays in memory until the writes at build.py:385+. cli.py:144 catches only BuildError, SourceFormatError and DatasetsUnavailable. My probe made the last source (cosmo_stories) raise ConnectionError('Server Disconnected'): it escaped main() as a raw traceback and wrote no files. datasets 5.1.0 retries only reads (20 tries; 504 and 429 specially, config.py:256-261, file_utils.py:830-871). Hub tree and info calls at open and 500/502/503 mid-read are not retried. A late config or format error (first real Hub contact for 14 sources) also appears only after most of the hour. No ledger ruling covers it; the cost is up to an hour of lost work and an unreadable traceback for a non-technical owner, but no wrong output.",
+    "refuted": false,
+    "severity_if_real": "Important"
+   }
+  ]
+ },
+ "verify3:s-data": {
+  "verdicts": [
+   {
+    "fix_recommendation": "In _gutenberg (sources.py:334) or at the start of strip_gutenberg_boilerplate, after CRLF->LF, count newline runs; if runs of exactly 2 outnumber all other runs, replace every run of exactly 2 newlines with one newline and every other run with a blank line. This beats the finder's rule on the lone-CRLF-paragraph layout (it merges paragraphs there): mid-sentence breaks drop to 0-4, wraps get joined by _unwrap. The fixture layout is untouched. Add a fixture row in the real layout (both paragraph styles) and a test that no passage has a blank line after a line without an end mark before a lowercase line.",
+    "fix_size": "small",
+    "id": "F12",
+    "reasoning": "Reproduced with the real adapter on 4 real datasets-server rows (Alice, Looking-Glass, plus two fresh mid-dataset rows I fetched, idx 30000/30001) and 8 early rows. Every sampled book wraps lines with CRLF CRLF; paragraphs are CRLF CRLF CRLF (Alice) or a lone CRLF (others). _PARAGRAPH_BREAK (sources.py:131) splits at each wrap and strip_gutenberg_boilerplate (:171) rejoins with blank lines, so _unwrap never sees multi-line paragraphs. Alice: 67 passages, 2476 blank-line breaks (1 per 10.7 words), 1322 mid-sentence. The fixture (classic single-newline wraps) cannot reveal it. books is 100% gutenberg, 15M tokens, silent, and R1 forbids fixing it in output.",
+    "refuted": false,
+    "severity_if_real": "Important"
+   },
+   {
+    "fix_recommendation": "Add a dedicated tinystories adapter in sources.py (replace _text for 'tinystories' in _ADAPTERS; row_to_content is also used by build._simple_vocab). Repair to ASCII, because the 1,117 clean sampled stories are 100% ASCII with straight quotes (the finder's curly-quote mapping would introduce a second quoting style): replace 'â€œ' with '\"', 'â€™' and 'â€˜' with \"'\", 'â€“' and 'â€”' with '-', then any remaining 'â€' with '\"'. Or simply return [] for rows containing 'â€'. Verified: 0 residue on all 83 docs, clean docs unchanged. Add a fixture row.",
+    "fix_size": "small",
+    "id": "F14",
+    "reasoning": "Reproduced from the saved real roneneldan/TinyStories rows (1200 rows over idx 0-90k plus a 400-row block): 83 docs (6.9%) contain cp1252 mojibake ('â€œ', 'â€™', 'â€'); varying 0-16% per 100-row block. Through the real tinystories adapter (_text, sources.py:347) and prepare_content (assemble.py:220) all 83 survive; normalize_text does not touch them. Quality: 55% survive Thorough, 93% survive Light, and they carry noise_kind none (creative noise has no garbling). The same row_to_content feeds simple_vocab (build.py:222). Only TinyStories is affected among real samples (other sources 0-1). The plan's Task 15 'nothing is mojibake' check samples 3 docs per dataset, so it likely misses a 7% rate. The tokenizer would also learn these sequences.",
+    "refuted": false,
+    "severity_if_real": "Important"
+   },
+   {
+    "fix_recommendation": "No code defect. In Task 15, after the build writes simple_vocab.txt, measure the simplicity distribution of the first few thousand rows of fineweb, fineweb_edu, simplewiki and gutenberg with it. Either choose simplicity_min at a chosen keep-quantile (about 0.6 for FineWeb) in assemble.py RECIPES and rebuild with --datasets web,educational,facts,books, or record in the Task 15 notes that the filter is deliberately mild and revisit it only if the gate fails. Optionally add a rejected-rows count to the manifest.",
+    "fix_size": "small",
+    "id": "F15",
+    "reasoning": "Reproduced with the finder's probe (real adapter plus simplicity()): with a 2,931-word vocab from 400 real stories, 96-99% of FineWeb, FineWeb-Edu and Simple Wikipedia rows pass 0.30-0.35. A larger vocab only raises scores, so the 6,000-word build vocab passes even more (99%+ with a padded upper-bound vocab). The filter is effectively a no-op, short of spec 4's wording. But the numbers and formula come verbatim from the plan's Task 14 table, and the ledger defers educational complexity to Task 15. Plan Task 20 lists the simplicity filters as a post-gate debug knob. There is no wrong result or failure; the corpus is simply as complex as FineWeb, and any fix is a product tuning call that needs the real simple_vocab, so it cannot be settled in the cloud.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   }
+  ]
+ },
+ "verify3:s-evals": {
+  "verdicts": [
+   {
+    "fix_recommendation": "Move gate._data_identity to a shared helper. Write it into the judge's record (plus a flag for a non-recipe budget) and into the novelty index's .json at build time. judge._trained must require a match, and build_judge must retrain if a reused checkpoint fails load_checkpoint (SafetensorError/_LOAD_ERRORS). Gate _load_inputs and cli._creativity_tools compare the identity with the current data and raise the existing 'out of date ... Rebuild it with: ...' error, refusing a non-recipe-budget judge as the reference. Add a one-line rebuild rule to CLAUDE.md.",
+    "fix_size": "medium",
+    "id": "F4",
+    "reasoning": "Reproduced the code paths. judge._trained (judge.py:235-243) compares only the recipe config; the tokenizer is copied at :293 even when weights are reused; the novelty record (novelty.py:162-209) and the gate loaders (gate.py:789-852) carry or check no corpus/tokenizer digest. Probe: build-judge on a completed config-matching judge with truncated model.safetensors raises an uncaught SafetensorError, so the advised 'Rebuild it with: build-judge' cannot fix it. Impact is narrower than claimed. The tokenizer is frozen by default, so after a normal corpus rebuild a reused judge still maps ids correctly. The harmful cases (--retrain-tokenizer, a quick --budget-tokens judge replacing the real one, damaged weights) are unlikely. The first pass (build, index, judge, gate) is clean. Task 17 deferred this as minor, and handoff README 5.2 now documents the workaround, contrary to the finding. Still a real provenance gap that fails silently if the step is forgotten.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "",
+    "fix_size": "none",
+    "id": "F6",
+    "reasoning": "Numbers reproduce (probe: constant novel story 52.0, constant corpus story 20.8, 'Once upon a time,' 20.8). But the formula is plan-mandated (Task 17 step 6) and deliberate. The creativity.py docstring says a same-story-for-every-prompt model 'loses up to half'. Ledger lines 211/225 accept copy-level credit (the 0.4 floor, ~27 vs ~46). A constant NOVEL story needs text outside the novelty index repeated at T=0.9 sampling. No M1 model trained only on the indexed corpora can do that, since memorised text is in the index and scores 20.8. It is reachable only via player notebooks (M2, tracked as the notebook-novelty finding). The 'stock sentence beats real stories' claim rests on an unverified real-judge assumption: sampled model text usually gets coherence and novelty above the 0.4 floor. G3/G6 compare arms relatively, and the first real gate will show actual story transcripts.",
+    "refuted": true,
+    "severity_if_real": "Minor"
+   }
+  ]
+ },
+ "verify3:s-gate": {
+  "verdicts": [
+   {
+    "fix_recommendation": "In _Gate.seed_variation (gate.py:1076-1104) also fingerprint each balanced model at MEASURE_SEED+1 (cache under a separate key), take same-model distances against the same population, and pass only if seed_mean > noise_mean (with a stated margin) and seed_mean < mix_mean. Keep 0.05 only as an absolute sanity bound. Guard traits with population std near 0 in the re-measure distances (STD_FLOOR gives 66,666). Show noise_mean in detail and data, and record the rule in an ADR. Optionally average 2-3 measure seeds.",
+    "fix_size": "medium",
+    "id": "F9",
+    "reasoning": "Code confirmed: fingerprint_distance (fingerprint.py:363-375) divides each trait by the population std (ddof 0), so mean squared pairwise distance is fixed at 2Dn/(n-1)=21.4 for n=15 (RMS 4.63); gate.py:436 needs only seed_mean>0.05. Re-ran the finder's k=3 proxy (15 models, 8 measure seeds): same-model re-measure mean 2.0-2.8, balanced-seed pairs 2.3-4.1, mixes 4.0-4.9; noise-only null passes 50%, seed_mean min 2.1. So clause 1 can only fail if the seed models are near-identical (a seed-ignored bug), and never tests 'measurably' above sampling noise. Proxy true seed effect is roughly equal to noise, so a full-scale PASS proves little. No ledger ruling covers 0.05; plan fixed it but never calibrated it. Verdict impact is mostly a false assurance, not a likely wrong outcome.",
+    "refuted": false,
+    "severity_if_real": "Important"
+   },
+   {
+    "fix_recommendation": "Run G2 (starter), G5, G6 and G7 for every seed in self.seeds. G2 and G5 need starters for seeds 2-3; G6 can use the existing g3 creative base for each seed. Suffix run names with the seed. Decide each criterion as G3 does: the effect must hold on every seed, or the mean effect must exceed SPREAD_FACTOR x the seed std. Put per-seed numbers in criterion.data and the report. G1 stays single-seed. If GPU budget is the objection, instead record an ADR and amend spec 4.12 to list the single-seed criteria with the rationale.",
+    "fix_size": "medium",
+    "id": "F10",
+    "reasoning": "Confirmed in gate.py: legibility uses starter_run (seed 1), growth/forgetting/preparation set seed = self.seeds[0] and use zero-margin comparisons; only differentiation and seed_variation loop over self.seeds. Spec 4.12:210 says '3 seeds each'; the plan's Task 20 table and dispatch ruling 4 (model reuse) deliberately narrow G2/G5/G6 to seed 1, but no ADR or spec amendment records the departure, so the plan contradicts the binding spec. Flip evidence is from quick-scale tiny fixtures only (G5 at full scale likely robust: 4x128 to 6x192 should win clearly), but G6's recovery ratio and G7's ratios are noise-prone. The extra cost is about 16-18 runs, roughly 30-40 GPU minutes, so spec compliance is affordable. Not refuted, but the quick-scale flip rate overstates full-scale risk.",
+    "refuted": false,
+    "severity_if_real": "Important"
+   },
+   {
+    "fix_recommendation": "Before the gate run, change the G7(a) measure so clean rare words and names do not count: count only garble-like words (a non-ASCII or mojibake letter, or not in known_vocab but one edit from a known word). Raise GARBLE_SAMPLES (60 to about 200). Calibrate PREP_MAX_RATIO by applying the new measure to the held-out light vs thorough training text from the real build, and keep it only if that data-level ratio is comfortably below the bar (about 0.7 or less). Otherwise strengthen the noise or thorough thresholds. Record the rule in an ADR.",
+    "fix_size": "medium",
+    "id": "F13",
+    "reasoning": "Re-ran p4b_g7pooled.py on the 500 real FineWeb rows with the real apply_noise (web recipe), quality_score, cluster_near_duplicates and the gate's creativity.words/garble rule: pooled over 30 noise seeds, light vs thorough+dedup unknown-word share is 7.06% vs 5.55% (ratio 0.786) with a general 30k vocab, 9.11% vs 7.46% (0.819) with an in-domain 30k vocab. Clean docs supply 52-58% of the unknown words left after thorough cleaning. The thorough filter uses quality_score over the same known_vocab, so the data-level figure is already flattered. gate.py:128/512-560 bar of 0.8 is the plan's number, and garble_rate was ruled (dispatch 7) before any real-text calibration. The model-level outcome is inferred, not simulated, but a perfect copier sits on the bar and the model's own non-words and 60-sample noise push toward FAIL.",
+    "refuted": false,
+    "severity_if_real": "Important"
+   }
+  ]
+ },
+ "verify3:s-train": {
+  "verdicts": [
+   {
+    "fix_recommendation": "In trainer._Run._train_step keep the single sampler draw (x, y = next_batch(cfg.batch_size)) so RNG use and resume are unchanged, then split the rows into micro-batches of at most MICRO_BATCH_TOKENS=8192 tokens (rows = max(1, 8192 // ctx_len)). For each: forward under autocast, loss_i = F.cross_entropy(logits.float().flatten(0,1), y_i.flatten(), reduction='sum') / (batch_size*ctx_len), loss_i.backward(), accumulate loss_i.detach() into a total, del logits. After the loop run after_backward, ONE clip, ONE host sync of (total, norm), one spike check, one optimizer step. A single-chunk batch must stay bit-identical to today. Add a CPU test that micro-batched grads/loss match the full batch (assert_close) and a @pytest.mark.gpu test that runs one step of judge_train_config() on CUDA and asserts torch.cuda.max_memory_allocated() is well under 6 GiB. Stopgap before the owner's build-judge: set batch_tokens=16384 in judge_train_config (about 4 GiB) and check max_memory_allocated on the owner's card.",
+    "fix_size": "medium",
+    "id": "F2",
+    "reasoning": "Confirmed. trainer.py:514-519 sends all cfg.batch_size rows through one forward/backward and `logits` stays referenced through backward; grep finds no micro-batching or accumulation anywhere in ml/src. judge.py:134 (plan line 1617) gives batch_tokens=32768, i.e. 128 rows x 256; the ledger has no VRAM ruling. My saved_tensors_hooks probe on the 8x384x256 shape gives 203 KiB/token = 6.4 GiB at 32768 tokens, plus bf16 logits 0.25 GiB, about 1 GiB of fp32 cross-entropy backward temporaries, 0.23 GiB weights/Adam: about 7.8 GiB peak. A real 128-row step on CPU grew peak RSS by 7.63 GiB. That is at or above what an 8 GB RTX 3050 that also drives the Windows desktop leaves a process: OOM at step 1, or a silent sysmem spill and multi-fold slowdown of the 1 h build. Gate runs (starter ~1.3 GiB) fit. Not GPU-verified here.",
+    "refuted": false,
+    "severity_if_real": "Important"
+   },
+   {
+    "fix_recommendation": "Replay covers base datasets only. In trainer._prepare (line 188), filter the parent's last_mixture to DATASET_IDS before effective_mixture; if the filtered mapping is empty, drop replay for this run and use normalize(mixture). Always renormalize so the recorded stable_mixture/last_mixture sums to 1 (effective_mixture raises when replay>0 and the parent is None, so handle the empty case before calling it). Record the dropped ids in _Run._summary (e.g. replay_dropped). Document the contract in the TrainRunConfig.replay docstring. Add trainer tests: notebook parent then replay child without a notebook passes with no notebook weight, a grandchild of that child, and a child that sends a notebook gets only its own mixture weight for it.",
+    "fix_size": "small",
+    "id": "F7",
+    "reasoning": "Reproduced (probe test_f7.py, tiny_data_root). Parent mix {creative, notebook} gives last_mixture {creative .5, notebook .5}. A child with replay 0.3 and no notebook raises MixtureError \"dataset 'notebook' has weight but no usable documents\" (trainer.py:188 blends the parent's custom ids, :193 load_pools, :203-211 always returns an empty notebook pool, sampler.py:108-109). A child sent a different notebook trains it at 15% under the review share, and its grandchild without a notebook fails again. The plan/spec/ledger do not address custom datasets in replay, so this is an unconsidered edge, not a ruling. But impact is small: Notebook and Coaching ship in M4 (spec milestone table, not M2), neither the judge nor any gate run (G6) uses them, the empty case fails loudly rather than silently, and replaying the current notebook is defensible because last_mixture honestly records the effective mix. A latent contract hole, not Important.",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   },
+   {
+    "fix_recommendation": "In gate.growth() give both continuation arms the same seed that differs from the starter's (e.g. seed + 10_000), so they see identical fresh data and stay paired; the grow() seed follows cfg.seed, which is fine. Add a quick-gate test that the continuation configs share a seed different from the starter's. Optional, for M2 and not required for M1: derive the sampler seed in trainer._prepare from (cfg.seed, parent.tokens_trained_total) so any continuation draws fresh data, and document that continuations must not reuse the parent's stream.",
+    "fix_size": "small",
+    "id": "F8",
+    "reasoning": "Mechanism confirmed. trainer.py:194 seeds MixtureSampler only with cfg.seed and _prepare does not read the parent. gate.growth() (gate.py:1130-1136) trains g5-grown and g5-ungrown with seed=self.seeds[0], the starter's seed, with the same normalized mix, prep, ctx_len 256 and batch size. My probe (test_f8.py) compared a starter's sampler with a grown continuation's: 10/10 identical batches. So G5's extra tokens are a verbatim second epoch. However spec 4.12.5 only requires 'the same extra tokens' for both arms, which is met, and the arms stay paired. Two epochs of 4.2M tokens for 1.4M-4.6M parameter models carries little repetition penalty, and any bias would lean towards failing G5 (the larger model benefits less), not towards a false pass. So this is a measurement-realism flaw with small expected effect, plus a trap for callers that reuse a seed on continuation (an M2 integration point).",
+    "refuted": false,
+    "severity_if_real": "Minor"
+   }
+  ]
+ }
 }
