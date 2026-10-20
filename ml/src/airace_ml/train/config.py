@@ -151,6 +151,16 @@ def _coaching_from_json(value: list) -> list[tuple[str, str]]:
 
 @dataclass
 class TrainRunConfig:
+    """Everything one training run depends on; a resumed run must match it exactly.
+
+    ``replay`` is the share of the run's tokens spent on "Review what it knows": the parent's last
+    data mix, blended into ``mixture``. It covers the parent's *base* datasets only. A run's
+    notebook and coaching text is not kept (R2), so a parent's notebook and coaching shares are
+    left out of the review and the rest is renormalized; if nothing else is left the run trains
+    without replay. This run's own notebook and coaching come in through ``mixture`` alone, at the
+    weight it gives them. The ids left out are listed as ``replay_dropped`` in the run's summary.
+    """
+
     run_id: str
     seed: int
     shape: ModelShape

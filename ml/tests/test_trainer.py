@@ -291,6 +291,109 @@ def test_replay_notebook_and_coaching(tiny_data_root, tmp_path):
     assert not (tmp_path / "c").exists()
 
 
+def _notebook_parent(root, tmp_path, **over):
+    """Run "a": a quarter of its tokens go to the player's notebook, the rest to creative."""
+    return train_run(
+        cfg(
+            run_id="a",
+            token_budget=1024 * 10,
+            mixture={"creative": 3.0, "notebook": 1.0},
+            notebook=["The sky is blue."],
+            **over,
+        ),
+        out_dir=tmp_path / "a",
+        data_root=root,
+    )
+
+
+def test_replay_covers_base_datasets_only_down_a_lineage(tiny_data_root, tmp_path):
+    a = _notebook_parent(tiny_data_root, tmp_path)
+    assert a.meta.last_mixture == pytest.approx({"creative": 0.75, "notebook": 0.25})
+    # The notebook text is not kept (R2), so "review what it knows" cannot replay it: a child that
+    # sends no notebook reviews the parent's base datasets, and the share it asked for stays whole.
+    b = train_run(
+        cfg(
+            run_id="b",
+            token_budget=1024 * 10,
+            mixture={"code": 1.0},
+            replay=0.3,
+            parent_dir=str(tmp_path / "a"),
+        ),
+        out_dir=tmp_path / "b",
+        data_root=tiny_data_root,
+    )
+    assert b.status == "completed"
+    assert b.meta.last_mixture == pytest.approx({"code": 0.7, "creative": 0.3})
+    assert "notebook" not in b.tokens_per_dataset or b.tokens_per_dataset["notebook"] == 0
+    assert b.meta.runs[-1]["replay_dropped"] == ["notebook"]
+    assert b.meta.runs[0]["replay_dropped"] == []  # the first run replayed nothing
+    # ... and the child's own child, which used to inherit the notebook share and fail with it.
+    c = train_run(
+        cfg(
+            run_id="c",
+            token_budget=1024 * 10,
+            mixture={"web": 1.0},
+            replay=0.3,
+            parent_dir=str(tmp_path / "b"),
+        ),
+        out_dir=tmp_path / "c",
+        data_root=tiny_data_root,
+    )
+    assert c.meta.last_mixture == pytest.approx({"web": 0.7, "code": 0.21, "creative": 0.09})
+    assert c.meta.runs[-1]["replay_dropped"] == []
+    assert [run["run_id"] for run in c.meta.runs] == ["a", "b", "c"]
+
+
+def test_a_child_with_a_notebook_gets_only_its_own_share_for_it(tiny_data_root, tmp_path):
+    _notebook_parent(tiny_data_root, tmp_path)
+    r = train_run(
+        cfg(
+            run_id="b",
+            token_budget=1024 * 20,
+            mixture={"code": 3.0, "notebook": 1.0},
+            notebook=["A different note."],
+            replay=0.2,
+            parent_dir=str(tmp_path / "a"),
+        ),
+        out_dir=tmp_path / "b",
+        data_root=tiny_data_root,
+    )
+    # 0.8 of the run is the player's mix (a quarter of it the new notebook); the review share goes
+    # to the parent's base datasets, not on top of the notebook.
+    assert r.meta.last_mixture == pytest.approx({"code": 0.6, "notebook": 0.2, "creative": 0.2})
+    assert r.meta.runs[-1]["replay_dropped"] == ["notebook"]
+    assert r.tokens_per_dataset["notebook"] / sum(r.tokens_per_dataset.values()) < 0.3
+
+
+def test_replay_of_a_parent_with_nothing_but_custom_data_is_dropped(tiny_data_root, tmp_path):
+    train_run(
+        cfg(
+            run_id="a",
+            token_budget=1024 * 10,
+            mixture={"notebook": 1.0, "coaching": 1.0},
+            notebook=["The sky is blue."],
+            coaching=[("What colour is the sky?", "Blue.")],
+        ),
+        out_dir=tmp_path / "a",
+        data_root=tiny_data_root,
+    )
+    r = train_run(
+        cfg(
+            run_id="b",
+            token_budget=1024 * 10,
+            mixture={"code": 1.0, "web": 3.0},
+            replay=0.5,
+            parent_dir=str(tmp_path / "a"),
+        ),
+        out_dir=tmp_path / "b",
+        data_root=tiny_data_root,
+    )
+    assert r.status == "completed"
+    assert r.meta.last_mixture == pytest.approx({"code": 0.25, "web": 0.75})  # all of it, whole
+    assert r.meta.runs[-1]["replay_dropped"] == ["coaching", "notebook"]
+    assert sum(r.meta.last_mixture.values()) == pytest.approx(1.0)
+
+
 def test_attention_span_changes_freely_within_a_lineage(tiny_data_root, tmp_path):
     # Spec 4.3: context length is not a parameter shape, so it may go down as well as up.
     def run(run_id, shape, parent=None):

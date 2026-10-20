@@ -179,6 +179,7 @@ class _Setup:
     parent: CheckpointMeta | None
     model: Transformer  # on the CPU: fresh, the parent, or the parent grown
     heldout: dict[str, tuple[np.ndarray, np.ndarray]]  # fixed eval batch per base dataset
+    replay_dropped: list[str]  # the parent's datasets that replay left out (not base datasets)
 
 
 def _prepare(cfg: TrainRunConfig, root: Path) -> _Setup:
@@ -186,7 +187,7 @@ def _prepare(cfg: TrainRunConfig, root: Path) -> _Setup:
     tok = Tok.load(tokenizer_path(root))
     custom = _custom_docs(cfg, tok)
     parent = _read_meta(Path(cfg.parent_dir)) if cfg.parent_dir is not None else None
-    stable = effective_mixture(cfg.mixture, cfg.replay, parent.last_mixture if parent else None)
+    stable, replay_dropped = _stable_mixture(cfg, parent)
     finishing = dict(cfg.finishing_mixture) if cfg.finishing_mixture is not None else None
     wanted = dict(stable)  # load a pool for every dataset either phase draws from
     for name, w in (finishing or {}).items():
@@ -198,7 +199,33 @@ def _prepare(cfg: TrainRunConfig, root: Path) -> _Setup:
         sampler.set_weights(stable)
     model = _start_model(cfg, tok, parent)
     heldout = _heldout_batches(root, cfg.shape.ctx_len)
-    return _Setup(tok, sampler, stable, finishing, parent, model, heldout)
+    return _Setup(tok, sampler, stable, finishing, parent, model, heldout, replay_dropped)
+
+
+def _stable_mixture(
+    cfg: TrainRunConfig, parent: CheckpointMeta | None
+) -> tuple[dict[str, float], list[str]]:
+    """The mix the run trains on outside its finishing phase, and what replay left out of it.
+
+    Replay reviews the parent's *base* datasets only. A run's notebook and coaching text is not
+    kept (R2), so the parent's share of them cannot be replayed, and the child's own notebook is
+    not what the parent learned. They are left out of the parent's mix before it is blended in,
+    and the rest is renormalized, so the review share stays whole and the child's notebook and
+    coaching get exactly the weight its own ``mixture`` gives them. If nothing is left (the
+    parent trained on notebook and coaching alone) the run trains without replay. The second
+    value lists the ids left out, for the run's summary.
+    """
+    replay = cfg.replay
+    parent_mixture = parent.last_mixture if parent is not None else None
+    dropped: list[str] = []
+    if parent_mixture is not None and replay > 0:
+        base = {name: w for name, w in parent_mixture.items() if name in DATASET_IDS}
+        dropped = sorted(name for name, w in parent_mixture.items() if name not in base and w > 0)
+        if any(w > 0 for w in base.values()):
+            parent_mixture = base
+        else:
+            replay, parent_mixture = 0.0, None
+    return effective_mixture(cfg.mixture, replay, parent_mixture), dropped
 
 
 def _custom_docs(cfg: TrainRunConfig, tok: Tok) -> dict[str, list[list[int]]]:
@@ -675,6 +702,7 @@ class _Run:
             "steps": self.step,
             "tokens": self.tokens,
             "mixture": self.setup.stable_mixture,
+            "replay_dropped": list(self.setup.replay_dropped),
             "prep": self.cfg.prep.to_dict(),
             "shape": self.cfg.shape.to_dict(),
             "status": status,
