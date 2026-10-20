@@ -164,12 +164,12 @@ def test_judge_config_valid():
 
 
 @pytest.mark.slow
-def test_build_judge_smoke(tiny_data_root):
-    from airace_ml.evals.judge import Judge, build_judge
-
-    d = build_judge(tiny_data_root, token_budget=32768 * 4)
+def test_build_judge_smoke(data_root_copy):
+    # On a copy: a judge left in the shared tiny_data_root would end every later test that needs
+    # that root to have none.
+    d = build_judge(data_root_copy, token_budget=32768 * 4)
     j = Judge.load(d)
-    assert math.isfinite(j.calibration.creative_p90)
+    assert d == judge_dir(data_root_copy) and math.isfinite(j.calibration.creative_p90)
 
 
 # -- helpers for the tests below -----------------------------------------------------------------
