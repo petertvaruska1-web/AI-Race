@@ -144,9 +144,41 @@ def test_the_records_say_how_the_files_were_made(built_tiny, built_full):
     assert read_record(tokenizer_record_path(tokenizer_path(built_full)))["vocab_size"] == 4096
 
 
-def test_a_record_of_another_tokenizer_does_not_count(full_root, small_full_targets, tiny_tok_path):
-    """A tokenizer put in place after the record was written (hand-copied, or left by a build
-    that stopped half way) is a tokenizer nothing records."""
+def test_a_full_size_tokenizer_put_there_after_the_record_does_not_count(
+    full_root, small_full_targets
+):
+    """A tokenizer of the full size that replaced the recorded one (hand-copied, or left by a
+    promotion that stopped half way) is a tokenizer nothing records. It has 4096 entries and the
+    record says full, so only the record's digest of the file tells it from the recorded one."""
+    tok_path = tokenizer_path(full_root)
+    recorded = tok_path.read_bytes()
+    # the same 4096 entries in a file of other bytes, as a second full build's tokenizer would be
+    other = json.dumps(json.loads(recorded.decode("utf-8")), indent=1).encode("utf-8")
+    assert other != recorded
+    tok_path.write_bytes(other)
+    assert Tok.load(tok_path).vocab_size == 4096
+    assert read_record(tokenizer_record_path(tok_path))["scale"] == "full"
+    before = _snapshot(full_root)
+    with pytest.raises(BuildError, match="no record") as refused:
+        build_corpus("full", full_root, FETCH, seed=0)
+    assert "--retrain-tokenizer" in str(refused.value)
+    assert _snapshot(full_root) == before
+
+
+def test_a_record_whose_digest_is_not_the_tokenizers_does_not_count(full_root, small_full_targets):
+    """The other way round: the file is the full tokenizer, the record is another one's."""
+    record_path = tokenizer_record_path(tokenizer_path(full_root))
+    record = read_record(record_path)
+    record["sha256"] = hashlib.sha256(b"another tokenizer").hexdigest()
+    write_record(record_path, record)
+    assert Tok.load(tokenizer_path(full_root)).vocab_size == 4096
+    with pytest.raises(BuildError, match="no record"):
+        build_corpus("full", full_root, FETCH, seed=0)
+
+
+def test_a_tiny_tokenizer_put_over_a_full_one_is_refused_at_full(
+    full_root, small_full_targets, tiny_tok_path
+):
     shutil.copyfile(tiny_tok_path, tokenizer_path(full_root))
     with pytest.raises(BuildError, match="--retrain-tokenizer"):
         build_corpus("full", full_root, FETCH, seed=0)
