@@ -7,7 +7,8 @@ G1  Speed            the first model (balanced mix, starter shape and budget) me
                      when asked, in at most 8 minutes on the CPU), its full benchmark takes at
                      most 30 s, its first chat token at most 300 ms at 50 tokens/s or more, and
                      growing it at most 2 s
-G2  Legibility       at least 70% of that model's replies to 20 probe prompts are well-formed
+G2  Legibility       at least 70% of that model's replies to 20 probe prompts are well-formed,
+                     for every seed
 G3  Differentiation  four contrasting mixes (story, code, fact and conversation heavy) at equal
                      compute each lead their benchmark category by more than twice the seed
                      spread
@@ -20,6 +21,13 @@ G6  Forgetting       a code-only continuation of the story-heavy model loses cre
 G7  Preparation      thorough cleaning lowers the garbled-word rate, and fact-checking lowers the
                      false-fact rate, each to at most 80% of the unprepared model's
 ==  ===============  =========================================================================
+
+Every criterion but G1 takes every seed (spec 4.12: "3 seeds each"); G1 is a timing, which does
+not depend on the seed. The verdicts that rest on an effect (G3's lead, G5's gain, G6's drop and
+what replay wins back, G7's falls) also need the mean effect to be more than
+:data:`SPREAD_FACTOR` times its seed spread, so one lucky seed cannot decide them; G2 must hold
+on every seed, and G4 compares the seeds with the noise of measuring one model twice. The quick
+gate has one seed, which then decides alone.
 
 The evaluators (``eval_*``) are pure: they turn measurements into a :class:`GateCriterion` and
 never raise, whatever they are given. Missing, non-finite or degenerate measurements (no seed
@@ -354,16 +362,50 @@ def require_completed(criterion: GateCriterion, runs: Sequence[GateRun]) -> Gate
     )
 
 
-def eval_legibility(flags: Sequence[bool]) -> GateCriterion:
-    """G2: exactly 20 replies were judged, and at least 70% of them are well-formed."""
-    n = len(flags)
-    good = sum(bool(flag) for flag in flags)
-    rate = good / n if n else 0.0
-    data = {"well_formed": good, "replies": n, "rate": rate, "min_rate": LEGIBILITY_MIN_RATE}
-    detail = f"{good} of {n} replies well-formed ({rate:.0%}; needs {LEGIBILITY_MIN_RATE:.0%})"
-    if n != LEGIBILITY_PROBES:
-        return _criterion("G2", False, f"needs {LEGIBILITY_PROBES} replies, got {n}", data)
-    return _criterion("G2", rate >= LEGIBILITY_MIN_RATE, detail, data)
+def _per_seed(values: Sequence[object]) -> list[float | None]:
+    """``values`` (one per seed) as finite numbers, ``None`` for any that is not."""
+    return [_finite(v) for v in values]
+
+
+def _seed_problem(*groups: Sequence[object]) -> str | None:
+    """What is wrong with per-seed measurements ``groups`` that must cover the same seeds, or
+    ``None`` if there is at least one seed and each group has all of them."""
+    sizes = {len(group) for group in groups}
+    if len(sizes) == 1 and sizes != {0}:
+        return None
+    return "needs measurements for the same number of seeds (at least one) in each group"
+
+
+def eval_legibility(flags: Sequence[Sequence[bool]]) -> GateCriterion:
+    """G2: on every seed, exactly 20 replies of that seed's first model were judged, and at
+    least 70% of them are well-formed. ``flags`` holds one list of judgements per seed."""
+    sizes = [len(seed_flags) for seed_flags in flags]
+    good = [sum(bool(flag) for flag in seed_flags) for seed_flags in flags]
+    rates = [g / n if n else 0.0 for g, n in zip(good, sizes, strict=True)]
+    worst = min(range(len(rates)), key=rates.__getitem__) if rates else None
+    data = {
+        "well_formed": 0 if worst is None else good[worst],
+        "replies": 0 if worst is None else sizes[worst],
+        "rate": 0.0 if worst is None else rates[worst],
+        "min_rate": LEGIBILITY_MIN_RATE,
+        "well_formed_by_seed": good,
+        "replies_by_seed": sizes,
+        "rate_by_seed": rates,
+    }
+    if worst is None:
+        return _criterion("G2", False, "no first model was judged", data)
+    if any(n != LEGIBILITY_PROBES for n in sizes):
+        got = ", ".join(map(str, sizes))
+        return _criterion(
+            "G2", False, f"needs {LEGIBILITY_PROBES} replies on every seed, got {got}", data
+        )
+    shown = ", ".join(f"{g} of {n} ({r:.0%})" for g, n, r in zip(good, sizes, rates, strict=True))
+    every = " on every seed" if len(flags) > 1 else ""
+    detail = (
+        f"replies well-formed{f' on {len(flags)} seeds' if every else ''}: {shown}; "
+        f"needs {LEGIBILITY_MIN_RATE:.0%}{every}"
+    )
+    return _criterion("G2", all(r >= LEGIBILITY_MIN_RATE for r in rates), detail, data)
 
 
 def _spread(values: Sequence[float]) -> float:
@@ -469,39 +511,83 @@ def eval_seed_variation(
     return _criterion("G4", not problems, detail, data)
 
 
-def eval_growth(max_logit_diff: float, grown_loss: float, ungrown_loss: float) -> GateCriterion:
-    """G5: growth moves no output logit by more than 1e-4, and the grown model ends with the lower
-    held-out loss."""
-    diff, grown, ungrown = _finite(max_logit_diff), _finite(grown_loss), _finite(ungrown_loss)
-    data = {
-        "max_logit_diff": diff,
+def _seeds_shown(seeds: int) -> str:
+    return f" (means over {seeds} seeds)" if seeds > 1 else ""
+
+
+def eval_growth(
+    max_logit_diffs: Sequence[float],
+    grown_losses: Sequence[float],
+    ungrown_losses: Sequence[float],
+) -> GateCriterion:
+    """G5: growth moves no output logit by more than 1e-4 on any seed, and the grown model ends
+    with the lower held-out loss: its mean gain (ungrown minus grown loss) over the seeds is more
+    than :data:`SPREAD_FACTOR` times the seed spread of the gains, as a lead is in G3 (with one
+    seed, more than 0). One measurement per seed in each argument."""
+    diffs, grown, ungrown = (_per_seed(v) for v in (max_logit_diffs, grown_losses, ungrown_losses))
+    data: dict[str, Any] = {
+        "max_logit_diff": None,
         "max_allowed": GROWTH_MAX_LOGIT_DIFF,
-        "grown_loss": grown,
-        "ungrown_loss": ungrown,
+        "grown_loss": None,
+        "ungrown_loss": None,
+        "gain": None,
+        "gain_spread": None,
+        "needed_gain": None,
+        "max_logit_diff_by_seed": diffs,
+        "grown_loss_by_seed": grown,
+        "ungrown_loss_by_seed": ungrown,
+        "gain_by_seed": [],
     }
-    if diff is None or grown is None or ungrown is None:
+    problem = _seed_problem(diffs, grown, ungrown)
+    if problem:
+        return _criterion("G5", False, problem, data)
+    if None in (*diffs, *grown, *ungrown):
         return _criterion("G5", False, "a growth measurement is not a finite number", data)
-    detail = (
-        f"growing moved no output by more than {diff:.2g} (allowed {GROWTH_MAX_LOGIT_DIFF:g}); "
-        f"after the same extra training the held-out loss is {grown:.3f} grown vs {ungrown:.3f} "
-        f"not grown"
+    gains = [u - g for g, u in zip(grown, ungrown, strict=True)]
+    worst, gain, spread = max(diffs), _mean(gains), _spread(gains)
+    needed = SPREAD_FACTOR * spread
+    data.update(
+        max_logit_diff=worst,
+        grown_loss=_mean(grown),
+        ungrown_loss=_mean(ungrown),
+        gain=gain,
+        gain_spread=spread,
+        needed_gain=needed,
+        gain_by_seed=gains,
     )
-    passed = diff <= GROWTH_MAX_LOGIT_DIFF and grown < ungrown
-    return _criterion("G5", passed, detail, data)
+    detail = (
+        f"growing moved no output by more than {worst:.2g} (allowed {GROWTH_MAX_LOGIT_DIFF:g}); "
+        f"after the same extra training the held-out loss is {data['grown_loss']:.3f} grown vs "
+        f"{data['ungrown_loss']:.3f} not grown{_seeds_shown(len(gains))}"
+    )
+    if len(gains) > 1:
+        per_seed = ", ".join(f"{g:+.3f}" for g in gains)
+        detail += (
+            f"; the grown model gains {per_seed} ({gain:+.3f} on average), which must be more "
+            f"than {needed:.3f}, twice the seed spread"
+        )
+    return _criterion("G5", worst <= GROWTH_MAX_LOGIT_DIFF and gain > needed, detail, data)
 
 
 def eval_forgetting(
-    base: Mapping[str, float], no_replay: Mapping[str, float], replay: Mapping[str, float]
+    base: Sequence[Mapping[str, float]],
+    no_replay: Sequence[Mapping[str, float]],
+    replay: Sequence[Mapping[str, float]],
 ) -> GateCriterion:
     """G6: summed over creativity and language, code-only training drops the story model's score
-    by at least 3 points, and 30% replay wins back at least half of that drop."""
+    by at least 3 points, and 30% replay wins back at least half of that drop. Each argument holds
+    one ``{category: score}`` per seed; the drop and what replay wins back are averaged over the
+    seeds, and each mean must also be more than :data:`SPREAD_FACTOR` times its seed spread."""
     problems = []
 
-    def scores(model: Mapping[str, float], name: str) -> dict[str, float | None]:
-        found = {c: _finite(model.get(c)) for c in FORGETTING_CATEGORIES}
-        missing = [c for c, v in found.items() if v is None]
-        if missing:
-            problems.append(f"the {name} model has no {' or '.join(missing)} score")
+    def scores(models: Sequence[Mapping[str, float]], name: str) -> list[dict[str, float | None]]:
+        found = []
+        for model in models:
+            seed_scores = {c: _finite(model.get(c)) for c in FORGETTING_CATEGORIES}
+            missing = [c for c, v in seed_scores.items() if v is None]
+            if missing:
+                problems.append(f"the {name} model has no {' or '.join(missing)} score")
+            found.append(seed_scores)
         return found
 
     found = {
@@ -509,69 +595,137 @@ def eval_forgetting(
         "no_replay": scores(no_replay, "code-only"),
         "replay": scores(replay, "replay"),
     }
-    total = {name: math.fsum(v or 0.0 for v in s.values()) for name, s in found.items()}
-    drop = total["base"] - total["no_replay"]
-    recovered = total["replay"] - total["no_replay"]
-    recovery = _finite(recovered / drop) if drop > 0 else None
+    if problem := _seed_problem(base, no_replay, replay):
+        problems.append(problem)
+    n = len(base) if not problem else 0
+    totals = {
+        name: [math.fsum(v or 0.0 for v in s.values()) for s in seed_scores][:n]
+        for name, seed_scores in found.items()
+    }
+    drops = [b - c for b, c in zip(totals["base"], totals["no_replay"], strict=True)]
+    won = [r - c for r, c in zip(totals["replay"], totals["no_replay"], strict=True)]
+    drop, drop_spread, back, back_spread = _mean(drops), _spread(drops), _mean(won), _spread(won)
+    recovery = _finite(back / drop) if drop > 0 else None
     data = {
-        **found,
+        **{
+            name: {c: [s[c] for s in seed_scores[:n]] for c in FORGETTING_CATEGORIES}
+            for name, seed_scores in found.items()
+        },
         "drop": drop,
-        "recovered": recovered,
+        "drop_by_seed": drops,
+        "drop_spread": drop_spread,
+        "recovered": back,
+        "recovered_by_seed": won,
+        "recovered_spread": back_spread,
         "recovery": recovery or 0.0,
         "min_drop": FORGETTING_MIN_DROP,
         "min_recovery": FORGETTING_MIN_RECOVERY,
     }
+    mean = f" on average over {n} seeds" if n > 1 else ""
+    mean_total = {name: _mean(values) for name, values in totals.items()}
     detail = (
-        f"creativity + language {total['base']:.1f} for the story-heavy model, "
-        f"{total['no_replay']:.1f} after code-only training (a drop of {drop:.1f}; needs "
-        f"{FORGETTING_MIN_DROP:g} or more), {total['replay']:.1f} with {REPLAY_SHARE:.0%} replay"
+        f"creativity + language {mean_total['base']:.1f} for the story-heavy model, "
+        f"{mean_total['no_replay']:.1f} after code-only training (a drop of {drop:.1f}{mean}; "
+        f"needs {FORGETTING_MIN_DROP:g} or more"
     )
+    if n > 1:
+        detail += f" and more than {SPREAD_FACTOR * drop_spread:.1f}, twice the seed spread"
+    detail += f"), {mean_total['replay']:.1f} with {REPLAY_SHARE:.0%} replay"
     if recovery is None:
         detail += " (no drop to win back)"
     else:
-        detail += f" (won back {recovery:.0%} of the drop; needs {FORGETTING_MIN_RECOVERY:.0%})"
+        detail += f" (won back {recovery:.0%} of the drop; needs {FORGETTING_MIN_RECOVERY:.0%}"
+        if n > 1:
+            detail += f" and more than {SPREAD_FACTOR * back_spread:.1f} points, twice the spread"
+        detail += ")"
     if problems:
-        detail = "; ".join(problems) + ". " + detail
+        detail = "; ".join(dict.fromkeys(problems)) + ". " + detail
     passed = (
         not problems
         and drop >= FORGETTING_MIN_DROP
+        and drop > SPREAD_FACTOR * drop_spread
         and recovery is not None
         and recovery >= FORGETTING_MIN_RECOVERY
+        and back > SPREAD_FACTOR * back_spread
     )
     return _criterion("G6", passed, detail, data)
 
 
 def eval_prep(
-    garble_dirty: float, garble_clean: float, false_unchecked: float, false_checked: float
+    garble_dirty: Sequence[float],
+    garble_clean: Sequence[float],
+    false_unchecked: Sequence[float],
+    false_checked: Sequence[float],
 ) -> GateCriterion:
     """G7: thorough cleaning brings the garbled-word rate to at most 80% of light cleaning's, and
-    fact-checking brings the false-fact rate to at most 80% of no checking's. A rate of 0 without
-    the preparation leaves nothing to lower, so nothing is shown and the criterion fails."""
-    dirty, clean = _finite(garble_dirty), _finite(garble_clean)
-    unchecked, checked = _finite(false_unchecked), _finite(false_checked)
-    data = {
-        "garble_light": dirty,
-        "garble_thorough": clean,
-        "false_unchecked": unchecked,
-        "false_checked": checked,
+    fact-checking brings the false-fact rate to at most 80% of no checking's, each averaged over
+    the seeds (one rate per seed in each argument); each fall must also be more than
+    :data:`SPREAD_FACTOR` times its seed spread. A mean rate of 0 without the preparation leaves
+    nothing to lower, so nothing is shown and the criterion fails."""
+    dirty, clean, unchecked, checked = (
+        _per_seed(v) for v in (garble_dirty, garble_clean, false_unchecked, false_checked)
+    )
+    data: dict[str, Any] = {
+        "garble_light": None,
+        "garble_thorough": None,
+        "false_unchecked": None,
+        "false_checked": None,
         "max_ratio": PREP_MAX_RATIO,
+        "garble_light_by_seed": dirty,
+        "garble_thorough_by_seed": clean,
+        "false_unchecked_by_seed": unchecked,
+        "false_checked_by_seed": checked,
+        "garble_fall": None,
+        "garble_fall_spread": None,
+        "false_fall": None,
+        "false_fall_spread": None,
     }
-    if None in (dirty, clean, unchecked, checked):
+    if problem := _seed_problem(dirty, clean, unchecked, checked):
+        return _criterion("G7", False, problem, data)
+    if None in (*dirty, *clean, *unchecked, *checked):
         return _criterion("G7", False, "a preparation measurement is not a finite number", data)
+    garble_falls = [d - c for d, c in zip(dirty, clean, strict=True)]
+    false_falls = [u - c for u, c in zip(unchecked, checked, strict=True)]
+    means = {
+        "garble_light": _mean(dirty),
+        "garble_thorough": _mean(clean),
+        "false_unchecked": _mean(unchecked),
+        "false_checked": _mean(checked),
+        "garble_fall": _mean(garble_falls),
+        "garble_fall_spread": _spread(garble_falls),
+        "false_fall": _mean(false_falls),
+        "false_fall_spread": _spread(false_falls),
+    }
+    data.update(means)
     problems = []
-    if dirty <= 0:
+    if means["garble_light"] <= 0:
         problems.append("the lightly cleaned model wrote no garbled word, so nothing could fall")
-    if unchecked <= 0:
+    if means["false_unchecked"] <= 0:
         problems.append("the unchecked model preferred no false fact, so nothing could fall")
+    n = len(dirty)
+    rule = f"each must fall to {PREP_MAX_RATIO:.0%} or less"
+    if n > 1:
+        garble_bar = SPREAD_FACTOR * means["garble_fall_spread"]
+        false_bar = SPREAD_FACTOR * means["false_fall_spread"]
+        rule = (
+            f"means over {n} seeds; {rule}, and by more than twice its seed spread: garbled "
+            f"words {means['garble_fall']:.1%} against {garble_bar:.1%}, false facts "
+            f"{means['false_fall']:.1%} against {false_bar:.1%}"
+        )
     detail = (
-        f"garbled words {clean:.1%} after thorough cleaning vs {dirty:.1%} after light cleaning; "
-        f"false facts preferred {checked:.1%} with fact-checking vs {unchecked:.1%} without "
-        f"(each must fall to {PREP_MAX_RATIO:.0%} or less)"
+        f"garbled words {means['garble_thorough']:.1%} after thorough cleaning vs "
+        f"{means['garble_light']:.1%} after light cleaning; false facts preferred "
+        f"{means['false_checked']:.1%} with fact-checking vs {means['false_unchecked']:.1%} "
+        f"without ({rule})"
     )
     if problems:
         detail = "; ".join(problems) + ". " + detail
     passed = (
-        not problems and clean <= PREP_MAX_RATIO * dirty and checked <= PREP_MAX_RATIO * unchecked
+        not problems
+        and means["garble_thorough"] <= PREP_MAX_RATIO * means["garble_light"]
+        and means["garble_fall"] > SPREAD_FACTOR * means["garble_fall_spread"]
+        and means["false_checked"] <= PREP_MAX_RATIO * means["false_unchecked"]
+        and means["false_fall"] > SPREAD_FACTOR * means["false_fall_spread"]
     )
     return _criterion("G7", passed, detail, data)
 
@@ -906,9 +1060,9 @@ class _Gate:
     on_progress: Callable[[str], None]
     raw: dict = field(default_factory=dict)
     transcripts: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
-    starter_run: GateRun | None = None
+    starter_runs: dict[int, GateRun] = field(default_factory=dict)
     g3_runs: dict[str, list[GateRun]] = field(default_factory=dict)
-    growth_diff: float = math.inf
+    growth_diffs: dict[int, float] = field(default_factory=dict)
     growth_seconds: float | None = None
     _loaded: tuple[str, TorchLM] | None = None
     _suite: Any = None
@@ -1033,19 +1187,42 @@ class _Gate:
 
     # -- experiments ------------------------------------------------------------------------
 
-    def speed(self) -> tuple[GateCriterion, list[GateRun]]:
-        """G1: train the first model, then time everything spec 4.11 sets a first-model target
-        for: training, the full benchmark, chat, and growing it (kept for G5)."""
-        self.announce("G1", "training the first model (balanced mix)")
+    def starter_config(self, seed: int) -> TrainRunConfig:
+        """The first model of ``seed``: the balanced mix on the starter shape and budget. The
+        first seed's is G1's own, named ``starter``."""
         s = self.scale
-        cfg = self.config(
-            "starter",
+        name = "starter" if seed == self.seeds[0] else f"starter-s{seed}"
+        return self.config(
+            name,
             shape=s.starter_shape,
             budget=s.starter_budget,
             mixture=BALANCED_MIX,
-            seed=self.seeds[0],
+            seed=seed,
         )
-        run = self.starter_run = self.train(cfg)
+
+    def starter(self, seed: int) -> GateRun:
+        """The (trained) first model of ``seed``; G2 and G5 take one per seed."""
+        if seed not in self.starter_runs:
+            self.starter_runs[seed] = self.train(self.starter_config(seed))
+        return self.starter_runs[seed]
+
+    def growth_diff(self, seed: int) -> float:
+        """The largest logit difference growing the first model of ``seed`` to the grown shape
+        makes (G1 measured the first seed's while timing the growth)."""
+        if seed not in self.growth_diffs:
+            model, _ = load_checkpoint(self.starter(seed).dir, self.device)
+            grown, _ = time_growth(model, self.scale.grown_shape, seed=seed)
+            self.growth_diffs[seed] = max_logit_diff(model, grown, self.inputs.growth_sequences)
+        return self.growth_diffs[seed]
+
+    def speed(self) -> tuple[GateCriterion, list[GateRun]]:
+        """G1: train the first model, then time everything spec 4.11 sets a first-model target
+        for: training, the full benchmark, chat, and growing it (kept for G5). A timing does not
+        depend on the seed, so G1 uses the first seed's model alone."""
+        self.announce("G1", "training the first model (balanced mix)")
+        s, seed = self.scale, self.seeds[0]
+        cfg = self.starter_config(seed)
+        run = self.starter(seed)
         used = [run]
         cpu_seconds = None
         if self.include_cpu_speed:
@@ -1062,8 +1239,8 @@ class _Gate:
         grown_to = f"{s.grown_shape.n_layer} layers x {s.grown_shape.d_model} wide"
         self.on_progress(f"  starter: timing its growth to {grown_to}")
         model, _ = load_checkpoint(run.dir, self.device)
-        grown, self.growth_seconds = time_growth(model, s.grown_shape, seed=self.seeds[0])
-        self.growth_diff = max_logit_diff(model, grown, self.inputs.growth_sequences)
+        grown, self.growth_seconds = time_growth(model, s.grown_shape, seed=seed)
+        self.growth_diffs[seed] = max_logit_diff(model, grown, self.inputs.growth_sequences)
         del model, grown
         criterion = speed_criterion(
             run.device,
@@ -1077,26 +1254,40 @@ class _Gate:
         return criterion, used
 
     def legibility(self) -> tuple[GateCriterion, list[GateRun]]:
-        self.announce("G2", "the first model answers 20 probe prompts")
+        """G2: the first model of every seed answers the 20 probe prompts; the transcript and
+        the per-reply judgements in the report are the first seed's."""
+        self.announce("G2", "the first model of each seed answers 20 probe prompts")
         probes = load_probes()
         chosen = [p for p in probes if p.kind == "open"][:10] + [
             p for p in probes if p.kind == "help"
         ][:10]
-        lm = self.lm(self.starter_run)
-        replies = [
-            lm.chat_reply(
-                [("user", probe.text)],
-                max_new_tokens=LEGIBILITY_REPLY_TOKENS,
-                temperature=SAMPLE_TEMPERATURE,
-                top_p=SAMPLE_TOP_P,
-                seed=i,
-            )
-            for i, probe in enumerate(chosen)
-        ]
-        flags = [is_well_formed(reply, self.inputs.judge) for reply in replies]
-        self.transcripts["G2"] = [(p.text, r) for p, r in zip(chosen, replies, strict=True)]
-        self.raw["legibility_flags"] = flags
-        return eval_legibility(flags), [self.starter_run]
+        flags_by_seed: list[list[bool]] = []
+        used = []
+        for seed in self.seeds:
+            run = self.starter(seed)
+            used.append(run)
+            lm = self.lm(run)
+            replies = [
+                lm.chat_reply(
+                    [("user", probe.text)],
+                    max_new_tokens=LEGIBILITY_REPLY_TOKENS,
+                    temperature=SAMPLE_TEMPERATURE,
+                    top_p=SAMPLE_TOP_P,
+                    seed=i,
+                )
+                for i, probe in enumerate(chosen)
+            ]
+            flags = [is_well_formed(reply, self.inputs.judge) for reply in replies]
+            flags_by_seed.append(flags)
+            if seed == self.seeds[0]:
+                self.transcripts["G2"] = [(p.text, r) for p, r in zip(chosen, replies, strict=True)]
+                self.raw["legibility_flags"] = flags
+        self.raw["legibility_flags_by_seed"] = {
+            str(seed): flags for seed, flags in zip(self.seeds, flags_by_seed, strict=True)
+        }
+        criterion = eval_legibility(flags_by_seed)
+        criterion.data["seeds"] = list(self.seeds)
+        return criterion, used
 
     def differentiation(self) -> tuple[GateCriterion, list[GateRun]]:
         self.announce("G3", "four contrasting mixes at equal compute")
@@ -1175,57 +1366,72 @@ class _Gate:
         return exchanges
 
     def growth(self) -> tuple[GateCriterion, list[GateRun]]:
-        """G5: the growth measured on the first model (by G1), and the grown and ungrown
-        continuations of it."""
-        self.announce("G5", "continuing the first model, grown and not grown")
-        s, starter = self.scale, self.starter_run
-        # Both arms share one seed, so they train on the same tokens in the same order, and it is
-        # not the first model's, so those tokens are new to it.
-        seed = self.seeds[0] + CONTINUATION_SEED_OFFSET
-        continued = {}
-        for name, shape in (("g5-grown", s.grown_shape), ("g5-ungrown", s.starter_shape)):
-            cfg = self.config(
-                name, shape=shape, budget=s.starter_budget, mixture=BALANCED_MIX, seed=seed
-            )
-            continued[name] = self.train(cfg, parent=starter)
-        criterion = eval_growth(
-            self.growth_diff,
-            continued["g5-grown"].heldout_mean,
-            continued["g5-ungrown"].heldout_mean,
-        )
+        """G5: for every seed, the growth measured on that seed's first model, and the grown and
+        ungrown continuations of it."""
+        self.announce("G5", "continuing each first model, grown and not grown")
+        s = self.scale
+        diffs, grown_losses, ungrown_losses, used = [], [], [], []
+        for seed in self.seeds:
+            starter = self.starter(seed)
+            # Both arms share one seed, so they train on the same tokens in the same order, and
+            # it is not the first model's, so those tokens are new to it.
+            fresh = seed + CONTINUATION_SEED_OFFSET
+            arms = {}
+            for arm, shape in (("grown", s.grown_shape), ("ungrown", s.starter_shape)):
+                cfg = self.config(
+                    f"g5-{arm}-s{seed}",
+                    shape=shape,
+                    budget=s.starter_budget,
+                    mixture=BALANCED_MIX,
+                    seed=fresh,
+                )
+                arms[arm] = self.train(cfg, parent=starter)
+            used += [starter, *arms.values()]
+            diffs.append(self.growth_diff(seed))
+            grown_losses.append(arms["grown"].heldout_mean)
+            ungrown_losses.append(arms["ungrown"].heldout_mean)
+        criterion = eval_growth(diffs, grown_losses, ungrown_losses)
         criterion.data["growth_seconds"] = self.growth_seconds
-        return criterion, [starter, *continued.values()]
+        criterion.data["seeds"] = list(self.seeds)
+        return criterion, used
 
     def forgetting(self) -> tuple[GateCriterion, list[GateRun]]:
-        self.announce("G6", "code-only continuations of the story-heavy model")
-        s, seed = self.scale, self.seeds[0]
-        base = self.g3_runs["creative"][0]
-        children, used = {}, [base]
-        for name, replay in (("g6-code-replay0", 0.0), ("g6-code-replay30", REPLAY_SHARE)):
-            cfg = self.config(
-                name,
-                shape=s.early_shape,
-                budget=s.starter_budget,
-                mixture={"code": 1.0},
-                seed=seed,
-                replay=replay,
-            )
-            run = self.train(cfg, parent=base)
-            used.append(run)
-            children[name] = self.bench(run, FORGETTING_CATEGORIES)
-        criterion = eval_forgetting(
-            self.bench(base), children["g6-code-replay0"], children["g6-code-replay30"]
-        )
+        """G6: for every seed, code-only continuations of that seed's story-heavy model (G3's)."""
+        self.announce("G6", "code-only continuations of the story-heavy models")
+        s = self.scale
+        used: list[GateRun] = []
+        scores: dict[str, list[dict[str, float]]] = {"base": [], "none": [], "replay": []}
+        for seed, base in zip(self.seeds, self.g3_runs["creative"], strict=True):
+            used.append(base)
+            scores["base"].append(self.bench(base))
+            for key, name, replay in (
+                ("none", f"g6-code-replay0-s{seed}", 0.0),
+                ("replay", f"g6-code-replay30-s{seed}", REPLAY_SHARE),
+            ):
+                cfg = self.config(
+                    name,
+                    shape=s.early_shape,
+                    budget=s.starter_budget,
+                    mixture={"code": 1.0},
+                    seed=seed,
+                    replay=replay,
+                )
+                run = self.train(cfg, parent=base)
+                used.append(run)
+                scores[key].append(self.bench(run, FORGETTING_CATEGORIES))
+        criterion = eval_forgetting(scores["base"], scores["none"], scores["replay"])
+        criterion.data["seeds"] = list(self.seeds)
         return criterion, used
 
     def preparation(self) -> tuple[GateCriterion, list[GateRun]]:
+        """G7: for every seed, light vs thorough cleaning and no vs thorough fact-checking."""
         self.announce("G7", "light vs thorough cleaning, and fact-checking")
-        s, seed = self.scale, self.seeds[0]
+        s = self.scale
         used: list[GateRun] = []
 
-        def prep_run(name: str, mixture: Mapping[str, float], prep: PrepConfig) -> GateRun:
+        def prep_run(name: str, seed: int, mixture: Mapping[str, float], prep: PrepConfig):
             cfg = self.config(
-                name,
+                f"{name}-s{seed}",
                 shape=s.starter_shape,
                 budget=s.prep_budget,
                 mixture=mixture,
@@ -1237,28 +1443,33 @@ class _Gate:
             return run
 
         web = mix_heavy("web", WEB_HEAVY_SHARE)
-        garble = {}
-        for name, prep in (
-            ("g7-web-light", PrepConfig("light")),
-            ("g7-web-thorough", PrepConfig("thorough", dedup=True)),
-        ):
-            lm = self.lm(prep_run(name, web, prep))
-            self.on_progress(f"  {name}: {GARBLE_SAMPLES} completions of held-out web text")
-            completions = [
-                lm.complete(
-                    prefix,
-                    max_new_tokens=GARBLE_NEW_TOKENS,
-                    temperature=SAMPLE_TEMPERATURE,
-                    top_p=SAMPLE_TOP_P,
-                    seed=i,
+        garble: dict[str, list[float]] = {"g7-web-light": [], "g7-web-thorough": []}
+        false: dict[str, list[float]] = {"g7-facts-unchecked": [], "g7-facts-checked": []}
+        for seed in self.seeds:
+            for name, prep in (
+                ("g7-web-light", PrepConfig("light")),
+                ("g7-web-thorough", PrepConfig("thorough", dedup=True)),
+            ):
+                lm = self.lm(prep_run(name, seed, web, prep))
+                self.on_progress(
+                    f"  {name}-s{seed}: {GARBLE_SAMPLES} completions of held-out web text"
                 )
-                for i, prefix in enumerate(self.inputs.web_prefixes)
-            ]
-            garble[name] = garble_rate(completions, self.inputs.known_vocab)
-        false = {}
-        for name, checked in (("g7-facts-unchecked", False), ("g7-facts-checked", True)):
-            lm = self.lm(prep_run(name, FACTS_MIX, PrepConfig(fact_check=checked)))
-            false[name] = false_fact_rate(lm, self.inputs.tok, self.inputs.kb, self.inputs.plan)
+                completions = [
+                    lm.complete(
+                        prefix,
+                        max_new_tokens=GARBLE_NEW_TOKENS,
+                        temperature=SAMPLE_TEMPERATURE,
+                        top_p=SAMPLE_TOP_P,
+                        seed=i,
+                    )
+                    for i, prefix in enumerate(self.inputs.web_prefixes)
+                ]
+                garble[name].append(garble_rate(completions, self.inputs.known_vocab))
+            for name, checked in (("g7-facts-unchecked", False), ("g7-facts-checked", True)):
+                lm = self.lm(prep_run(name, seed, FACTS_MIX, PrepConfig(fact_check=checked)))
+                false[name].append(
+                    false_fact_rate(lm, self.inputs.tok, self.inputs.kb, self.inputs.plan)
+                )
         criterion = eval_prep(
             garble["g7-web-light"],
             garble["g7-web-thorough"],
@@ -1268,6 +1479,7 @@ class _Gate:
         probes, skipped = false_fact_probes(self.inputs.kb, self.inputs.plan)
         criterion.data.update(
             {
+                "seeds": list(self.seeds),
                 "completions": len(self.inputs.web_prefixes),
                 "distinct_prompts": len(set(self.inputs.web_prefixes)),
                 "fact_pairs": len(probes),
@@ -1299,11 +1511,19 @@ def run_gate(
     """Run the gate's experiments on ``data_root`` into ``out_dir/runs`` and measure its seven
     criteria (see the module docstring).
 
-    The first seed plays "seed 1": the first model, the growth, forgetting and preparation runs
-    use it, and so does each mix's model in the seed-variation and transcript comparisons.
-    ``quick`` swaps in :data:`~airace_ml.experiments.configs.QUICK_SCALE` and keeps only the
-    first seed. ``device=None`` picks one with :func:`~airace_ml.device.pick_device`. Raises
-    :class:`GateSetupError` before training anything if an input is missing or damaged.
+    Every criterion but G1 runs every seed (spec 4.12: "3 seeds each"), so one lucky seed cannot
+    decide a verdict: G2 needs each seed's first model to answer well; G3, G5, G6 and G7 decide
+    on the mean effect over the seeds beating twice the seed spread (G3: a lead; G5: the grown
+    model's gain; G6: the drop and what replay wins back; G7: each fall); G4 compares the
+    seeds' distances with the noise of measuring one model twice. G1 is a timing and does not
+    depend on the seed: it times the first seed's first model alone. With three seeds the gate
+    trains 43 runs (25 if only G3 and G4 took every seed), about 75 to 105 minutes on an RTX 3050.
+    The first seed's models also stand for each mix in the comparison of different mixes in G4
+    and in the transcript. ``quick`` swaps in
+    :data:`~airace_ml.experiments.configs.QUICK_SCALE` and keeps only the first seed, which then
+    decides every criterion alone. ``device=None`` picks one with
+    :func:`~airace_ml.device.pick_device`. Raises :class:`GateSetupError` before training
+    anything if an input is missing or damaged.
     """
     seeds = _check_seeds(seeds)
     if quick:

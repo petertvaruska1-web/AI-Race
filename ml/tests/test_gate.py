@@ -75,15 +75,17 @@ def test_simple_evaluators():
         and not eval_speed(60, 900).passed
     )
     assert (
-        eval_legibility([True] * 14 + [False] * 6).passed
-        and not eval_legibility([True] * 13 + [False] * 7).passed
+        eval_legibility([[True] * 14 + [False] * 6]).passed
+        and not eval_legibility([[True] * 13 + [False] * 7]).passed
     )
-    assert eval_growth(1e-5, 2.0, 2.2).passed and not eval_growth(1e-3, 2.0, 2.2).passed
+    assert eval_growth([1e-5], [2.0], [2.2]).passed
+    assert not eval_growth([1e-3], [2.0], [2.2]).passed
     assert (
         eval_seed_variation([0.3, 0.4], [1.0, 1.2], [0.1, 0.2]).passed
         and not eval_seed_variation([0.0, 0.01], [1.0], [0.0]).passed
     )
-    assert eval_prep(0.10, 0.05, 0.4, 0.1).passed and not eval_prep(0.10, 0.095, 0.4, 0.1).passed
+    assert eval_prep([0.10], [0.05], [0.4], [0.1]).passed
+    assert not eval_prep([0.10], [0.095], [0.4], [0.1]).passed
 
 
 def test_differentiation():
@@ -101,15 +103,15 @@ def test_differentiation():
 
 
 def test_forgetting():
-    base = {"creativity": 40, "language": 60}
+    base = [{"creativity": 40, "language": 60}]
     assert eval_forgetting(
-        base, {"creativity": 20, "language": 50}, {"creativity": 32, "language": 56}
+        base, [{"creativity": 20, "language": 50}], [{"creativity": 32, "language": 56}]
     ).passed
     assert not eval_forgetting(
-        base, {"creativity": 20, "language": 50}, {"creativity": 22, "language": 51}
+        base, [{"creativity": 20, "language": 50}], [{"creativity": 22, "language": 51}]
     ).passed
     assert not eval_forgetting(
-        base, {"creativity": 39, "language": 60}, {"creativity": 40, "language": 60}
+        base, [{"creativity": 39, "language": 60}], [{"creativity": 40, "language": 60}]
     ).passed
 
 
@@ -208,11 +210,26 @@ def test_speed_never_passes_a_cpu_time_off_as_a_gpu_time():
 
 
 def test_legibility_needs_exactly_twenty_replies():
-    assert eval_legibility([True] * 14 + [False] * 6).data["rate"] == 0.7
-    assert not eval_legibility([True] * 21).passed  # 21 replies were not the protocol
-    assert not eval_legibility([True] * 19).passed
-    empty = eval_legibility([])
+    assert eval_legibility([[True] * 14 + [False] * 6]).data["rate"] == 0.7
+    assert not eval_legibility([[True] * 21]).passed  # 21 replies were not the protocol
+    assert not eval_legibility([[True] * 19]).passed
+    empty = eval_legibility([[]])
     assert not empty.passed and empty.data["rate"] == 0.0 and "got 0" in empty.detail
+    nobody = eval_legibility([])
+    assert not nobody.passed and "no first model" in nobody.detail and _finite_data(nobody.data)
+
+
+def test_legibility_must_hold_on_every_seed():
+    good, thin = [True] * 14 + [False] * 6, [True] * 13 + [False] * 7
+    c = eval_legibility([good, [True] * 20, good])
+    assert c.passed and c.data["rate"] == 0.7 and c.data["rate_by_seed"] == [0.7, 1.0, 0.7]
+    assert c.data["well_formed_by_seed"] == [14, 20, 14]
+    assert "14 of 20" in c.detail and "20 of 20" in c.detail and "every seed" in c.detail
+    one_short = eval_legibility([[True] * 20, good, thin])
+    assert not one_short.passed and one_short.data["rate"] == 0.65  # the worst seed
+    assert one_short.data["well_formed"] == 13 and _finite_data(one_short.data)
+    wrong_count = eval_legibility([good, good[:19], good])
+    assert not wrong_count.passed and "20, 19, 20" in wrong_count.detail
 
 
 def _mix_scores(means: dict[str, dict[str, float]], offsets=(-1, 0, 1)):
@@ -311,39 +328,129 @@ def test_seed_variation_must_beat_the_noise_of_measuring_the_same_model_again():
 
 
 def test_growth_edges():
-    assert eval_growth(1e-4, 2.0, 2.1).passed
-    assert not eval_growth(0.0, 2.0, 2.0).passed  # no lower loss
-    for bad in ((math.inf, 2.0, 2.1), (0.0, None, 2.1), (0.0, 2.0, math.nan)):
+    assert eval_growth([1e-4], [2.0], [2.1]).passed
+    assert not eval_growth([0.0], [2.0], [2.0]).passed  # no lower loss
+    for bad in (
+        ([math.inf], [2.0], [2.1]),
+        ([0.0], [None], [2.1]),
+        ([0.0], [2.0], [math.nan]),
+        ([0.0, 0.0], [2.0, math.nan], [2.1, 2.1]),
+    ):
         c = eval_growth(*bad)
-        assert not c.passed and _finite_data(c.data)
+        assert not c.passed and _finite_data(c.data) and "not a finite number" in c.detail
+    for bad in (([], [], []), ([0.0], [2.0, 2.0], [2.1])):
+        c = eval_growth(*bad)
+        assert not c.passed and _finite_data(c.data) and "same number of seeds" in c.detail
+
+
+def test_growth_must_beat_the_seed_spread_and_hold_on_every_seed():
+    # A gain of 0.1 on every seed, give or take 0.02: well above twice the spread.
+    steady = eval_growth([1e-5, 2e-5, 1e-5], [2.0, 2.1, 1.9], [2.1, 2.22, 2.02])
+    assert steady.passed and steady.data["gain"] == pytest.approx(0.1133333)
+    assert steady.data["gain_by_seed"] == pytest.approx([0.1, 0.12, 0.12])
+    assert steady.data["gain_spread"] == pytest.approx(0.0115470, rel=1e-4)
+    assert steady.data["needed_gain"] == pytest.approx(0.0230940, rel=1e-4)
+    assert steady.data["max_logit_diff"] == 2e-5 and _finite_data(steady.data)
+    assert "3 seeds" in steady.detail
+    # Gains of +0.1, +0.1 and -0.1 average 0.033, which two seed spreads (0.23) swamp: one lucky
+    # pair of seeds is not growth working.
+    lucky = eval_growth([0.0] * 3, [2.0, 2.0, 2.2], [2.1, 2.1, 2.1])
+    assert not lucky.passed and lucky.data["gain"] < lucky.data["needed_gain"]
+    # ... and a growth that moves an output on any one seed fails whatever the gains are.
+    moved = eval_growth([0.0, 1e-3, 0.0], [2.0] * 3, [2.1] * 3)
+    assert not moved.passed and moved.data["max_logit_diff"] == 1e-3
+    # A mean gain of exactly twice the spread is not more than twice the spread (the numbers are
+    # exact in binary: gains of 1/16, 1/8 and 3/16 average 1/8, which spread by 1/16).
+    edge = eval_growth([0.0] * 3, [2.0] * 3, [2.0625, 2.125, 2.1875])
+    assert edge.data["gain"] == 0.125 and edge.data["gain_spread"] == 0.0625
+    assert not edge.passed
+    one_seed = eval_growth([0.0], [2.0], [2.0001])  # one seed: the gain just has to be above 0
+    assert one_seed.passed and one_seed.data["gain_spread"] == 0.0
 
 
 def test_forgetting_edges():
-    base = {"creativity": 40, "language": 60}
+    base = [{"creativity": 40, "language": 60}]
     c = eval_forgetting(
-        base, {"creativity": 37, "language": 60}, {"creativity": 38.5, "language": 60}
+        base, [{"creativity": 37, "language": 60}], [{"creativity": 38.5, "language": 60}]
     )
     assert c.passed and c.data["drop"] == 3 and c.data["recovery"] == 0.5  # both at the minimum
     flat = eval_forgetting(base, base, base)
     assert not flat.passed and flat.data["recovery"] == 0.0 and _finite_data(flat.data)
     assert "no drop to win back" in flat.detail
-    better = eval_forgetting(base, {"creativity": 50, "language": 60}, base)  # code training helped
+    # code training helped
+    better = eval_forgetting(base, [{"creativity": 50, "language": 60}], base)
     assert not better.passed and better.data["drop"] == -10 and _finite_data(better.data)
-    missing = eval_forgetting(base, {"language": 10}, {"creativity": math.nan, "language": 60})
+    missing = eval_forgetting(base, [{"language": 10}], [{"creativity": math.nan, "language": 60}])
     assert not missing.passed and _finite_data(missing.data)
     assert "code-only model has no creativity score" in missing.detail
     assert "replay model has no creativity score" in missing.detail
+    for bad in (([], [], []), (base, base, base * 2)):
+        c = eval_forgetting(*bad)
+        assert not c.passed and _finite_data(c.data) and "same number of seeds" in c.detail
+
+
+def _forgetting_seeds(drops, recovered):
+    """Per-seed score dicts: a story model at 100 in creativity + language, then ``drops`` below
+    it after code-only training, and ``recovered`` above that with replay."""
+    base = [{"creativity": 60, "language": 40} for _ in drops]
+    nothing = [{"creativity": 60 - d, "language": 40} for d in drops]
+    replay = [{"creativity": 60 - d + r, "language": 40} for d, r in zip(drops, recovered)]
+    return base, nothing, replay
+
+
+def test_forgetting_must_beat_the_seed_spread_on_the_drop_and_on_the_recovery():
+    steady = eval_forgetting(*_forgetting_seeds([8, 10, 12], [5, 6, 7]))
+    assert steady.passed and steady.data["drop"] == 10 and steady.data["recovery"] == 0.6
+    assert steady.data["drop_by_seed"] == [8, 10, 12] and steady.data["drop_spread"] == 2
+    assert steady.data["recovered_by_seed"] == [5, 6, 7] and steady.data["recovered"] == 6
+    assert steady.data["base"] == {"creativity": [60, 60, 60], "language": [40, 40, 40]}
+    assert _finite_data(steady.data) and "3 seeds" in steady.detail
+    # The drop averages 4 (above the 3 points needed) but the seeds spread by 4: two spreads
+    # (8) swamp it, as they would a lead in G3.
+    wobbly_drop = eval_forgetting(*_forgetting_seeds([0, 4, 8], [3, 3, 3]))
+    assert not wobbly_drop.passed and wobbly_drop.data["drop"] == 4
+    assert wobbly_drop.data["drop_spread"] == 4
+    # Winning back 60% on average, but by 0, 6 and 12 points: the recovery is not reliable.
+    wobbly_recovery = eval_forgetting(*_forgetting_seeds([10, 10, 10], [0, 6, 12]))
+    assert not wobbly_recovery.passed and wobbly_recovery.data["recovery"] == 0.6
+    assert wobbly_recovery.data["drop"] == 10 and wobbly_recovery.data["recovered_spread"] == 6
+    # A drop and a recovery that are steady still have to clear the points and the share.
+    small = eval_forgetting(*_forgetting_seeds([2, 2, 2], [2, 2, 2]))
+    assert not small.passed
+    weak = eval_forgetting(*_forgetting_seeds([10, 10, 10], [4, 4, 4]))
+    assert not weak.passed and weak.data["recovery"] == 0.4
 
 
 def test_prep_edges():
-    assert eval_prep(0.10, 0.08, 0.5, 0.4).passed  # exactly 80% of each
-    assert not eval_prep(0.10, 0.05, 0.5, 0.45).passed  # fact-checking alone falls short
-    nothing_garbled = eval_prep(0.0, 0.0, 0.5, 0.1)
+    assert eval_prep([0.10], [0.08], [0.5], [0.4]).passed  # exactly 80% of each
+    assert not eval_prep([0.10], [0.05], [0.5], [0.45]).passed  # fact-checking alone falls short
+    nothing_garbled = eval_prep([0.0], [0.0], [0.5], [0.1])
     assert not nothing_garbled.passed and "nothing could fall" in nothing_garbled.detail
-    nothing_false = eval_prep(0.1, 0.05, 0.0, 0.0)
+    nothing_false = eval_prep([0.1], [0.05], [0.0], [0.0])
     assert not nothing_false.passed and "no false fact" in nothing_false.detail
-    bad = eval_prep(math.nan, 0.05, 0.5, 0.1)
+    bad = eval_prep([math.nan], [0.05], [0.5], [0.1])
     assert not bad.passed and _finite_data(bad.data)
+    for lists in (([], [], [], []), ([0.1], [0.05, 0.05], [0.5], [0.1])):
+        c = eval_prep(*lists)
+        assert not c.passed and _finite_data(c.data) and "same number of seeds" in c.detail
+
+
+def test_prep_must_beat_the_seed_spread_on_each_fall():
+    steady = eval_prep([0.10, 0.12, 0.11], [0.05, 0.06, 0.05], [0.4, 0.5, 0.45], [0.1, 0.2, 0.1])
+    assert steady.passed and steady.data["garble_light"] == pytest.approx(0.11)
+    assert steady.data["garble_thorough"] == pytest.approx(0.16 / 3)
+    assert steady.data["garble_light_by_seed"] == [0.10, 0.12, 0.11]
+    assert steady.data["false_checked_by_seed"] == [0.1, 0.2, 0.1] and _finite_data(steady.data)
+    assert "3 seeds" in steady.detail
+    # Cleaning cut garbling by 0.04 on average (down to 63% of light's, under the 80% bar) but
+    # by -0.02, 0.04 and 0.10 on the three seeds: twice that spread (0.12) swamps the fall.
+    noisy_garble = eval_prep([0.10] * 3, [0.12, 0.06, 0.0], [0.4] * 3, [0.1] * 3)
+    assert not noisy_garble.passed and noisy_garble.data["garble_fall_spread"] > 0.05
+    noisy_facts = eval_prep([0.10] * 3, [0.05] * 3, [0.4] * 3, [0.46, 0.2, 0.0])
+    assert not noisy_facts.passed and noisy_facts.data["false_fall_spread"] > 0.2
+    # A steady fall that is too small is still too small.
+    small = eval_prep([0.10] * 3, [0.09] * 3, [0.4] * 3, [0.1] * 3)
+    assert not small.passed
 
 
 # -- beyond the brief: measurements ----------------------------------------------------------------
@@ -890,11 +997,17 @@ class _FakeLM:
         return "Hello there, my good friend."
 
     def complete(self, text, **options):
-        return {"g7-web-light": " xq zz the", "g7-web-thorough": " the the xq"}.get(self.name, "")
+        replies = {"g7-web-light": " xq zz the", "g7-web-thorough": " the the xq"}
+        return replies.get(_without_seed(self.name), "")
 
     def generate(self, prompts, *, max_new_tokens, temperature, top_p, seed, stop_ids=None):
         n = max_new_tokens
         return [Generation([20] * n, [0.5] * n, [0.5] * n, False) for _ in prompts]
+
+
+def _without_seed(name: str) -> str:
+    """A run name without its ``-s<seed>`` suffix."""
+    return name.rsplit("-s", 1)[0]
 
 
 def _fake_score(name: str, category: str) -> float:
@@ -902,8 +1015,8 @@ def _fake_score(name: str, category: str) -> float:
         _, target, seed = name.split("-")
         return (60.0 if TARGET_CATEGORY[target] == category else 30.0) + int(seed[1:]) / 2
     children = {"g6-code-replay0": (40.0, 25.0), "g6-code-replay30": (55.0, 30.0)}
-    if name in children:
-        return children[name][0 if category == "creativity" else 1]
+    if _without_seed(name) in children:
+        return children[_without_seed(name)][0 if category == "creativity" else 1]
     return 10.0
 
 
@@ -918,6 +1031,7 @@ def fake_gate(tmp_path, monkeypatch, tiny_tok):
         statuses={},
         configs={},
         fingerprint_seeds={},
+        losses={},  # held-out loss by run name, where a test wants another
         noise=0.1,  # how far measuring a model at the next seed moves each of its traits
     )
     log.digests = {"training": "train-1", "measuring": "measure-1"}
@@ -929,7 +1043,8 @@ def fake_gate(tmp_path, monkeypatch, tiny_tok):
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / WEIGHTS_NAME).write_bytes(b"w")
         (out_dir / META_NAME).write_text("{}", encoding="utf-8")
-        loss = {"g5-grown": 2.0, "g5-ungrown": 2.2}.get(cfg.run_id, 3.0)
+        default = {"g5-grown": 2.0, "g5-ungrown": 2.2}.get(_without_seed(cfg.run_id), 3.0)
+        loss = log.losses.get(cfg.run_id, default)
         steps = cfg.steps if status == "completed" else cfg.steps // 2
         return SimpleNamespace(
             status=status,
@@ -989,7 +1104,7 @@ def fake_gate(tmp_path, monkeypatch, tiny_tok):
     monkeypatch.setattr(
         gate,
         "false_fact_rate",
-        lambda lm, tok, kb, plan: 0.4 if lm.name == "g7-facts-unchecked" else 0.1,
+        lambda lm, tok, kb, plan: 0.4 if lm.name.startswith("g7-facts-unchecked") else 0.1,
     )
 
     def run(device="cuda", **options):
@@ -1014,9 +1129,9 @@ def test_fake_gate_passes_when_every_run_and_measurement_is_good(fake_gate):
     assert g1["gpu_seconds"] == 1.0 and g1["cpu_seconds"] == 1.0 and g1["bench_seconds"] == 1.0
     assert g1["first_token_ms"] < 300 and g1["tokens_per_second"] > 50
     assert 0 < g1["growth_seconds"] < 2 and _finite_data(g1)
-    assert len(fake_gate.trained) == 25 and len(outcome.raw["runs"]) == 25
+    assert len(fake_gate.trained) == 43 and len(outcome.raw["runs"]) == 43
     assert fake_gate.benched.count("starter") == 1  # the first model's full bench, timed
-    assert len(fake_gate.benched) == 15 and len(fake_gate.fingerprinted) == 18
+    assert len(fake_gate.benched) == 19 and len(fake_gate.fingerprinted) == 18
     assert outcome.raw["runs"]["starter"]["planned_steps"] == 4
 
 
@@ -1024,11 +1139,19 @@ def test_fake_gate_passes_when_every_run_and_measurement_is_good(fake_gate):
     "stopped, failing",
     [
         (
-            ("starter-cpu", "g3-code-s2", "g5-grown", "g6-code-replay30", "g7-facts-checked"),
+            (
+                "starter-cpu",
+                "g3-code-s2",
+                "g5-grown-s1",
+                "g6-code-replay30-s1",
+                "g7-facts-checked-s1",
+            ),
             {"G1", "G3", "G4", "G5", "G6", "G7"},
         ),
         (("starter",), {"G1", "G2", "G5"}),
-        (("g3-creative-s1", "g4-balanced-s3", "g7-web-light"), {"G3", "G4", "G6", "G7"}),
+        (("g3-creative-s1", "g4-balanced-s3", "g7-web-light-s1"), {"G3", "G4", "G6", "G7"}),
+        (("starter-s3",), {"G2", "G5"}),  # another seed's first model, which G1 does not use
+        (("g6-code-replay0-s3", "g7-web-thorough-s2"), {"G6", "G7"}),
     ],
 )
 def test_a_run_that_stopped_early_fails_every_criterion_that_uses_it(fake_gate, stopped, failing):
@@ -1038,13 +1161,16 @@ def test_a_run_that_stopped_early_fails_every_criterion_that_uses_it(fake_gate, 
     users = {
         "starter": {"G1", "G2", "G5"},
         "starter-cpu": {"G1"},
+        "starter-s3": {"G2", "G5"},
         "g3-code-s2": {"G3", "G4"},
         "g3-creative-s1": {"G3", "G4", "G6"},
         "g4-balanced-s3": {"G4"},
-        "g5-grown": {"G5"},
-        "g6-code-replay30": {"G6"},
-        "g7-facts-checked": {"G7"},
-        "g7-web-light": {"G7"},
+        "g5-grown-s1": {"G5"},
+        "g6-code-replay30-s1": {"G6"},
+        "g6-code-replay0-s3": {"G6"},
+        "g7-facts-checked-s1": {"G7"},
+        "g7-web-light-s1": {"G7"},
+        "g7-web-thorough-s2": {"G7"},
     }
     for c in outcome.criteria:
         assert c.detail.startswith("stopped early: ") == (c.id in failing)
@@ -1123,16 +1249,98 @@ def test_g5_continuations_share_a_seed_that_is_not_the_first_models(fake_gate):
     """Both arms of G5 continue the first model on the same fresh tokens: a continuation that
     reused its parent's seed would replay the parent's exact batches (a second epoch)."""
     fake_gate.run()
-    starter = fake_gate.configs["starter"]
-    grown, ungrown = fake_gate.configs["g5-grown"], fake_gate.configs["g5-ungrown"]
-    assert grown.seed == ungrown.seed  # paired: the same tokens in the same order
-    assert grown.seed != starter.seed  # and not the ones the first model trained on
-    assert grown.mixture == ungrown.mixture == starter.mixture
+    for seed, starter_name in ((1, "starter"), (2, "starter-s2"), (3, "starter-s3")):
+        starter = fake_gate.configs[starter_name]
+        grown = fake_gate.configs[f"g5-grown-s{seed}"]
+        ungrown = fake_gate.configs[f"g5-ungrown-s{seed}"]
+        assert starter.seed == seed
+        assert grown.seed == ungrown.seed  # paired: the same tokens in the same order
+        assert grown.seed != starter.seed  # and not the ones the first model trained on
+        assert grown.mixture == ungrown.mixture == starter.mixture
+        assert grown.parent_dir.endswith(starter_name)
+    assert len({fake_gate.configs[f"g5-grown-s{seed}"].seed for seed in (1, 2, 3)}) == 3
+
+
+def test_g2_g5_g6_and_g7_run_every_seed_and_g1_one(fake_gate):
+    outcome = fake_gate.run()
+    seeds = (1, 2, 3)
+    expected = {"starter", "starter-cpu"} | {f"starter-s{s}" for s in seeds[1:]}
+    for s in seeds:
+        expected |= {f"g3-{t}-s{s}" for t in TARGET_CATEGORY}
+        expected |= {f"g4-balanced-s{s}", f"g5-grown-s{s}", f"g5-ungrown-s{s}"}
+        expected |= {f"g6-code-replay0-s{s}", f"g6-code-replay30-s{s}"}
+        expected |= {f"g7-web-light-s{s}", f"g7-web-thorough-s{s}"}
+        expected |= {f"g7-facts-unchecked-s{s}", f"g7-facts-checked-s{s}"}
+    assert set(fake_gate.trained) == expected and len(fake_gate.trained) == len(expected) == 43
+    # Each seed's runs train with that seed, and G6 continues that seed's story-heavy model.
+    for s in seeds:
+        for name in ("g3-creative", "g6-code-replay0", "g7-web-light", "g7-facts-checked"):
+            assert fake_gate.configs[f"{name}-s{s}"].seed == s
+        parent = fake_gate.configs[f"g6-code-replay30-s{s}"].parent_dir
+        assert parent.endswith(f"g3-creative-s{s}")
+    g2, g5, g6, g7 = (outcome.criteria[i] for i in (1, 4, 5, 6))
+    for criterion in (g2, g5, g6, g7):
+        assert criterion.passed and criterion.data["seeds"] == [1, 2, 3], criterion.id
+        assert _finite_data(criterion.data)
+    assert g2.data["rate_by_seed"] == [1.0, 1.0, 1.0]
+    assert len(g5.data["gain_by_seed"]) == len(g6.data["drop_by_seed"]) == 3
+    assert len(g7.data["garble_light_by_seed"]) == len(g7.data["false_checked_by_seed"]) == 3
+    # G1 times the first seed's model alone.
+    assert outcome.criteria[0].data["gpu_seconds"] == 1.0
+
+
+def test_g2_g5_g6_and_g7_use_the_gates_own_seeds(fake_gate):
+    fake_gate.run(seeds=(4, 7))
+    assert {n for n in fake_gate.trained if n.startswith("starter")} == {
+        "starter",
+        "starter-cpu",
+        "starter-s7",
+    }
+    assert fake_gate.configs["starter"].seed == 4 and fake_gate.configs["starter-s7"].seed == 7
+    for name in ("g5-grown-s4", "g5-grown-s7", "g6-code-replay0-s7", "g7-web-light-s4"):
+        assert name in fake_gate.trained
+
+
+def test_a_quick_gate_runs_one_seed_and_decides_on_it_alone(fake_gate):
+    outcome = fake_gate.run(quick=True)
+    assert outcome.raw["seeds"] == [1] and len(fake_gate.trained) == 15  # 14 runs and the CPU's
+    assert {n for n in fake_gate.trained if n.startswith("starter")} == {"starter", "starter-cpu"}
+    assert "g5-grown-s1" in fake_gate.trained and "g5-grown-s2" not in fake_gate.trained
+    verdicts = {c.id: c.passed for c in outcome.criteria}
+    # G3 and G4 compare seeds and cannot with one; the rest decide on the one seed.
+    assert verdicts == {
+        "G1": True,
+        "G2": True,
+        "G3": False,
+        "G4": False,
+        "G5": True,
+        "G6": True,
+        "G7": True,
+    }
+
+
+def test_g5_fails_when_the_gain_of_growing_is_swamped_by_the_seed_spread(fake_gate):
+    # Gains of +0.2, +0.2 and -0.2 average 0.07, under twice their spread (0.46): no growth gain.
+    fake_gate.losses["g5-grown-s3"] = 2.4
+    outcome = fake_gate.run()
+    assert {c.id for c in outcome.criteria if not c.passed} == {"G5"}
+    g5 = outcome.criteria[4]
+    assert g5.data["gain_by_seed"] == pytest.approx([0.2, 0.2, -0.2])
+    assert g5.data["gain"] < g5.data["needed_gain"]
+
+
+def test_g2_fails_when_one_seeds_first_model_does_not_answer_well(fake_gate, monkeypatch):
+    replies = iter([True] * 20 + [True] * 20 + [True] * 13 + [False] * 7)
+    monkeypatch.setattr(gate, "is_well_formed", lambda reply, judge: next(replies))
+    outcome = fake_gate.run()
+    g2 = outcome.criteria[1]
+    assert not g2.passed and g2.data["well_formed_by_seed"] == [20, 20, 13]
+    assert {c.id for c in outcome.criteria if not c.passed} == {"G2"}
 
 
 def test_reuse_follows_the_data_the_runs_were_trained_on(fake_gate):
     first = fake_gate.run()
-    assert (len(fake_gate.trained), len(fake_gate.benched)) == (25, 15)
+    assert (len(fake_gate.trained), len(fake_gate.benched)) == (43, 19)
     assert not any(r["reused"] for r in first.raw["runs"].values())
     assert len(fake_gate.fingerprinted) == 18
 
@@ -1144,7 +1352,7 @@ def test_reuse_follows_the_data_the_runs_were_trained_on(fake_gate):
     assert counts() == before  # the data is as it was: everything is reused
     fake_gate.inputs.identity = "data-2"  # airace-content build ran again, into the same --out
     rebuilt = fake_gate.run()
-    assert tuple(a - b for a, b in zip(counts(), before, strict=True)) == (25, 15, 18)
+    assert tuple(a - b for a, b in zip(counts(), before, strict=True)) == (43, 19, 18)
     assert not any(r["reused"] for r in rebuilt.raw["runs"].values())  # trained again, all of them
     assert [c.passed for c in rebuilt.criteria] == [c.passed for c in first.criteria]
     before = counts()
@@ -1155,7 +1363,7 @@ def test_reuse_follows_the_data_the_runs_were_trained_on(fake_gate):
 def test_reuse_follows_the_code_that_trains_and_the_code_that_measures(fake_gate):
     first = fake_gate.run()
     counts = (len(fake_gate.trained), len(fake_gate.benched), len(fake_gate.fingerprinted))
-    assert counts == (25, 15, 18)
+    assert counts == (43, 19, 18)
 
     def again() -> tuple[int, int, int]:
         before = (len(fake_gate.trained), len(fake_gate.benched), len(fake_gate.fingerprinted))
@@ -1166,9 +1374,9 @@ def test_reuse_follows_the_code_that_trains_and_the_code_that_measures(fake_gate
 
     assert again() == (0, 0, 0)  # nothing changed: everything is reused
     fake_gate.digests["measuring"] = "measure-2"  # the benchmarks or fingerprint changed
-    assert again() == (0, 15, 18)
+    assert again() == (0, 19, 18)
     fake_gate.digests["training"] = "train-2"  # the trainer changed: train and measure again
-    assert again() == (25, 15, 18)
+    assert again() == (43, 19, 18)
 
 
 def test_timings_wait_for_queued_gpu_work(monkeypatch):
