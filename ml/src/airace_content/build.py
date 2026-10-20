@@ -38,8 +38,8 @@ import hashlib
 import math
 import time
 from collections import Counter
-from collections.abc import Iterable, Sequence
-from dataclasses import asdict, dataclass
+from collections.abc import Callable, Iterable, Sequence
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Literal
 
@@ -80,6 +80,7 @@ from airace_content.sources import (
     DatasetsUnavailable,
     Fetch,
     SourceFormatError,
+    SourceSpec,
     format_error,
     is_transient_error,
     row_has_format,
@@ -322,6 +323,17 @@ def sources_needed(datasets: Iterable[str], *, simple_vocab: bool) -> list[str]:
     return [source_id for source_id in SOURCES if source_id in ids]
 
 
+def pinned(fetch: Fetch, revisions: dict[str, str]) -> Fetch:
+    """``fetch`` reading each source of ``revisions`` at the revision given there."""
+
+    def fetch_at_revision(spec: SourceSpec, max_rows: int):
+        if spec.id in revisions:
+            spec = replace(spec, revision=revisions[spec.id])
+        return fetch(spec, max_rows)
+
+    return fetch_at_revision
+
+
 def check_sources(source_ids: Iterable[str], fetch: Fetch, progress: Progress = silent) -> None:
     """Open each source and read rows until one has the format its adapter reads (at most
     ``FORMAT_CHECK_ROWS``), so a config, access or format problem in any source stops the build
@@ -433,6 +445,7 @@ def build_corpus(
     datasets: Sequence[str] = DATASET_IDS,
     retrain_tokenizer: bool = False,
     progress: Progress = silent,
+    pin: Callable[[SourceSpec], str | None] | None = None,
 ) -> BuildSummary:
     """Build the corpora of ``datasets`` under ``corpus_dir(out_root)`` (see the module docstring).
 
@@ -441,7 +454,10 @@ def build_corpus(
     the same falsehoods and are scored like the others, and merges its datasets into the existing
     manifest. The tokenizer is trained on every dataset's text, so a build that has to train it
     must build every dataset. ``progress`` is told, one line at a time, what the build is doing
-    (see ``airace_content.progress``); it never changes what is built.
+    (see ``airace_content.progress``); it never changes what is built. ``pin``, when given, names
+    the revision each source the build reads is read at (``sources.resolve_revision`` for the
+    hub): it is asked once per source, every read of the source in this build uses the answer, and
+    the manifest records it.
     """
     started = time.perf_counter()
     if scale not in SCALES:
@@ -478,11 +494,18 @@ def build_corpus(
 
     # Datasets the known vocabulary needs are assembled even when they are not written.
     needed = set(selected) | (set() if known_path else set(KNOWN_VOCAB_DATASETS))
-    check_sources(
-        sources_needed([ds for ds in DATASET_IDS if ds in needed], simple_vocab=not simple_path),
-        fetch,
-        progress,
+    source_ids = sources_needed(
+        [ds for ds in DATASET_IDS if ds in needed], simple_vocab=not simple_path
     )
+    revisions: dict[str, str] = {}
+    if pin is not None:
+        for source_id in source_ids:
+            revision = pin(SOURCES[source_id])
+            if revision is not None:
+                revisions[source_id] = revision
+                progress(f"pinning {source_id} at {revision[:12]}")
+    fetch = pinned(fetch, revisions)
+    check_sources(source_ids, fetch, progress)
 
     kb = load_kb()
     simple_vocab = read_vocab(simple_path) if simple_path else _simple_vocab(scale, fetch, progress)
@@ -586,5 +609,7 @@ def build_corpus(
         earlier_shared if reused and earlier_shared else shared_record(scale, seed),
     )
     progress("writing the manifest")
-    write_manifest(root, make_manifest(entries, read_manifest(root) if partial else None))
+    write_manifest(
+        root, make_manifest(entries, read_manifest(root) if partial else None, revisions)
+    )
     return BuildSummary(entries, train_tok, time.perf_counter() - started)

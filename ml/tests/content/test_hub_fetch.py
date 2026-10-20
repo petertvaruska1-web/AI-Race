@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import httpx
+import huggingface_hub
 import pytest
 from huggingface_hub.errors import HfHubHTTPError, OfflineModeIsEnabled
 
@@ -89,6 +90,12 @@ def install(monkeypatch, hub: FakeHub) -> FakeHub:
     fake = types.ModuleType("datasets")
     fake.load_dataset = hub.load_dataset
     monkeypatch.setitem(sys.modules, "datasets", fake)
+
+    class FakeApi:  # the lookup of the head commit, which a read does before it opens the source
+        def dataset_info(self, repo_id, **kwargs):
+            return types.SimpleNamespace(sha="0" * 40)
+
+    monkeypatch.setattr(huggingface_hub, "HfApi", FakeApi)
     return hub
 
 
@@ -238,6 +245,7 @@ def test_the_cli_also_turns_a_bare_connection_error_into_that_message(
         yield
 
     monkeypatch.setattr(cli_module, "hf_fetch", fetch)
+    monkeypatch.setattr(cli_module, "resolve_revision", lambda spec: None)  # no hub to ask
     assert main(["build", "--scale", "tiny", "--out", str(tmp_path)]) == 1
     assert "run the same command again" in capsys.readouterr().err
 

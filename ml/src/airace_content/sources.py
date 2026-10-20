@@ -10,10 +10,12 @@ never write text of their own beyond the fixed frames the recipes call for (``Qu
 so nothing else needs the library. It rides out a flaky connection: a network error (or a 408, 429
 or 5xx from the hub) at any point is waited out and the stream reopened and brought back to the
 row where it broke, so the same seed still gives the same corpus; an error that waiting cannot fix
-is raised as it is. ``fixture_fetch`` reads the same rows from local JSONL files, which keeps
-every test offline. ``row_has_format`` says whether a row has the fields its adapter
-reads, so a build can stop early when a dataset's format is not what the adapter expects (instead
-of filtering out every row of a whole dataset).
+is raised as it is. A source is read at one commit of its repository (``resolve_revision``: the
+spec's ``revision``, else the head, looked up once), so a re-upload in the middle of a build cannot
+change the rows, and the manifest can say which commit was read. ``fixture_fetch`` reads the same
+rows from local JSONL files, which keeps every test offline. ``row_has_format`` says whether a row
+has the fields its adapter reads, so a build can stop early when a dataset's format is not what the
+adapter expects (instead of filtering out every row of a whole dataset).
 """
 
 import itertools
@@ -39,6 +41,7 @@ class SourceSpec:
     split: str
     license: str
     homepage: str
+    revision: str | None = None  # the commit of the repo to read; None: its head, pinned per build
 
 
 def _spec(id: str, hf_path: str, hf_config: str | None, split: str, license: str) -> SourceSpec:
@@ -90,6 +93,7 @@ class SourceFormatError(ValueError):
 RETRY_ATTEMPTS = 8
 RETRY_FIRST_WAIT_S = 30.0
 RETRY_MAX_WAIT_S = 300.0
+INFO_TIMEOUT_S = 60.0  # the hub's answer to "what is the head commit of this repository"
 _TRANSIENT_STATUSES = frozenset({408, 429})  # and every 5xx
 
 
@@ -143,16 +147,40 @@ def _one_line(error: BaseException, limit: int = 160) -> str:
     return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
-def hf_fetch(spec: SourceSpec, max_rows: int) -> Iterator[dict]:
-    """Stream up to ``max_rows`` rows of ``spec`` from the Hugging Face hub (needs the network and
-    the ``content`` extra, which provides ``datasets``).
+class _Retries:
+    """The failures in a row of one job on one source (opening it, looking up its version,
+    reading it), and what to do about the next one."""
 
-    A transient error (``is_transient_error``), whether the source is being opened or a row read,
-    is waited out (``RETRY_FIRST_WAIT_S``, doubling up to ``RETRY_MAX_WAIT_S``, one line on stderr
-    each time) and the source opened again and read past the rows already given, so none is lost or
-    repeated. After ``RETRY_ATTEMPTS`` failures in a row (a row given in between starts the count
-    again) it raises ``SourceUnavailable``. Any other error is raised as it is, at once.
-    """
+    def __init__(self, spec: SourceSpec) -> None:
+        self.spec = spec
+        self.failures = 0
+
+    def succeeded(self) -> None:
+        self.failures = 0
+
+    def wait(self, error: BaseException, doing: str, where: str = "") -> None:
+        """Wait out ``error``, a transient one, and return; raise ``SourceUnavailable`` when the
+        failures in a row reach ``RETRY_ATTEMPTS``. ``doing`` and ``where`` say what was going on
+        ("reading", " after 40 rows")."""
+        self.failures += 1
+        spec = self.spec
+        if self.failures >= RETRY_ATTEMPTS:
+            raise SourceUnavailable(
+                f"network problem while {doing} source {spec.id!r} ({spec.hf_path}){where}: "
+                f"{_one_line(error)}"
+            ) from error
+        wait = min(RETRY_FIRST_WAIT_S * 2 ** (self.failures - 1), RETRY_MAX_WAIT_S)
+        print(
+            f"network problem while {doing} {spec.id}{where} ({_one_line(error)}); waiting "
+            f"{wait:.0f} s, then trying again (try {self.failures + 1} of {RETRY_ATTEMPTS})",
+            file=sys.stderr,
+            flush=True,
+        )
+        _pause(wait)
+
+
+def _datasets_loader():
+    """``datasets.load_dataset``, imported only now, so nothing else needs the library."""
     try:
         from datasets import load_dataset
     except ImportError as e:
@@ -160,13 +188,55 @@ def hf_fetch(spec: SourceSpec, max_rows: int) -> Iterator[dict]:
             "fetching sources needs the 'datasets' package; install the content extra "
             "(python -m uv sync --extra content)"
         ) from e
-    given, failures = 0, 0
+    return load_dataset
+
+
+def resolve_revision(spec: SourceSpec) -> str | None:
+    """The commit of the source's repository to read: the spec's ``revision`` when it has one,
+    else the head as the hub reports it now (a transient error is waited out as in ``hf_fetch``).
+    None when the hub names no commit, which reads the head."""
+    if spec.revision is not None:
+        return spec.revision
+    _datasets_loader()  # without the content extra the build cannot go on: say so before the network
+    from huggingface_hub import HfApi
+
+    retries = _Retries(spec)
+    while True:
+        try:
+            return HfApi().dataset_info(spec.hf_path, timeout=INFO_TIMEOUT_S).sha
+        except Exception as e:
+            if not is_transient_error(e):
+                raise
+            retries.wait(e, "looking up the current version of")
+
+
+def hf_fetch(spec: SourceSpec, max_rows: int) -> Iterator[dict]:
+    """Stream up to ``max_rows`` rows of ``spec`` from the Hugging Face hub (needs the network and
+    the ``content`` extra, which provides ``datasets``), at the commit ``resolve_revision`` names,
+    looked up once for the whole read.
+
+    A transient error (``is_transient_error``), whether the source is being opened or a row read,
+    is waited out (``RETRY_FIRST_WAIT_S``, doubling up to ``RETRY_MAX_WAIT_S``, one line on stderr
+    each time) and the source opened again and read past the rows already given, so none is lost or
+    repeated. After ``RETRY_ATTEMPTS`` failures in a row (a row given in between starts the count
+    again) it raises ``SourceUnavailable``. Any other error is raised as it is, at once.
+    """
+    load_dataset = _datasets_loader()
+    revision = resolve_revision(spec)
+    retries = _Retries(spec)
+    given = 0
     rows: Iterator[dict] | None = None
     while given < max_rows:
         try:
             if rows is None:
                 reopened = iter(
-                    load_dataset(spec.hf_path, spec.hf_config, split=spec.split, streaming=True)
+                    load_dataset(
+                        spec.hf_path,
+                        spec.hf_config,
+                        split=spec.split,
+                        streaming=True,
+                        revision=revision,
+                    )
                 )
                 for _ in itertools.islice(reopened, given):  # read past what was already given
                     pass
@@ -176,25 +246,11 @@ def hf_fetch(spec: SourceSpec, max_rows: int) -> Iterator[dict]:
             rows = None
             if not is_transient_error(e):
                 raise
-            failures += 1
-            if failures >= RETRY_ATTEMPTS:
-                raise SourceUnavailable(
-                    f"network problem while reading source {spec.id!r} ({spec.hf_path}): "
-                    f"{_one_line(e)}"
-                ) from e
-            wait = min(RETRY_FIRST_WAIT_S * 2 ** (failures - 1), RETRY_MAX_WAIT_S)
-            print(
-                f"network problem reading {spec.id} after {given:,} rows ({_one_line(e)}); "
-                f"waiting {wait:.0f} s, then trying again (try {failures + 1} of "
-                f"{RETRY_ATTEMPTS})",
-                file=sys.stderr,
-                flush=True,
-            )
-            _pause(wait)
+            retries.wait(e, "reading", f" after {given:,} rows")
             continue
         if row is None:
             return
-        failures = 0
+        retries.succeeded()
         given += 1
         yield row
 

@@ -1,7 +1,8 @@
 """The corpus manifest and the shared build artifacts next to it.
 
-``manifest.json`` records provenance: every source that feeds a built dataset, with its license
-and homepage, and per dataset what went into it (components, noise, counts). The shared artifacts
+``manifest.json`` records provenance: every source that feeds a built dataset, with its license,
+homepage and the revision (commit) it was read at, and per dataset what went into it (components,
+noise, counts). The shared artifacts
 (``false_facts.json``, ``simple_vocab.txt``, ``known_vocab.txt``) are what every dataset of one
 corpus is built against, so a partial rebuild reads them back instead of recomputing them.
 
@@ -13,10 +14,11 @@ a record of another tokenizer does not count) and the one beside the shared arti
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import asdict
 from pathlib import Path
 
-from airace_content.sources import SOURCES
+from airace_content.sources import SOURCES, SourceSpec
 from airace_ml.data.corpus import DATASET_IDS
 from airace_ml.paths import CORPUS_VERSION, TOKENIZER_VERSION
 from airace_ml.skills.facts import FalseFactPlan
@@ -111,10 +113,16 @@ def read_shared_record(corpus_root: Path) -> dict | None:
     return read_record(Path(corpus_root) / SHARED_RECORD_FILE)
 
 
-def make_manifest(datasets: dict[str, dict], previous: dict | None = None) -> dict:
+def make_manifest(
+    datasets: dict[str, dict],
+    previous: dict | None = None,
+    revisions: Mapping[str, str] | None = None,
+) -> dict:
     """The manifest for ``datasets`` (one entry per built dataset), merged into ``previous``:
     entries of datasets that were not rebuilt are kept. ``sources`` lists every source that feeds
-    one of the datasets, with the datasets it feeds."""
+    one of the datasets, with the datasets it feeds and its ``revision``: the one this build read
+    it at (``revisions[id]``, else the one its spec declares, else None), and for a source that
+    feeds only datasets that were not rebuilt, the revision ``previous`` recorded."""
     merged = {
         ds: entry
         for ds, entry in (previous or {}).get("datasets", {}).items()
@@ -127,8 +135,18 @@ def make_manifest(datasets: dict[str, dict], previous: dict | None = None) -> di
         for comp in entry.get("components", []):
             if comp["kind"] == "source" and ds not in feeds.setdefault(comp["name"], []):
                 feeds[comp["name"]].append(ds)
+    revisions = revisions or {}
+    kept = {src["id"]: src.get("revision") for src in (previous or {}).get("sources", [])}
+
+    def revision_of(spec: SourceSpec) -> str | None:
+        if any(ds in datasets for ds in feeds[spec.id]):  # read by this build
+            return revisions.get(spec.id) or spec.revision
+        return kept.get(spec.id) or spec.revision
+
     sources = [
-        {**asdict(spec), "feeds": feeds[spec.id]} for spec in SOURCES.values() if spec.id in feeds
+        {**asdict(spec), "revision": revision_of(spec), "feeds": feeds[spec.id]}
+        for spec in SOURCES.values()
+        if spec.id in feeds
     ]
     return {
         "corpus_version": CORPUS_VERSION,

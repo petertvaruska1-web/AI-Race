@@ -12,6 +12,7 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
+import huggingface_hub
 import numpy as np
 import pytest
 
@@ -194,17 +195,22 @@ def test_sources_are_the_designed_ones():
 def test_hf_fetch_imports_datasets_only_when_it_runs(monkeypatch):
     calls = []
 
-    def load_dataset(path, config, *, split, streaming):
-        calls.append((path, config, split, streaming))
+    def load_dataset(path, config, *, split, streaming, revision):
+        calls.append((path, config, split, streaming, revision))
         return iter([{"question": "Q1"}, {"question": "Q2"}, {"question": "Q3"}])
+
+    class HfApi:  # the head commit the rows are read at, looked up once
+        def dataset_info(self, repo_id, **kwargs):
+            return types.SimpleNamespace(sha="0123abcd")
 
     fake = types.ModuleType("datasets")
     fake.load_dataset = load_dataset
     monkeypatch.setitem(sys.modules, "datasets", fake)  # installed or not, this is what loads
+    monkeypatch.setattr(huggingface_hub, "HfApi", HfApi)
     rows = hf_fetch(SOURCES["gsm8k"], 2)
     assert calls == []  # a generator: nothing runs until it is iterated
     assert list(rows) == [{"question": "Q1"}, {"question": "Q2"}]
-    assert calls == [("openai/gsm8k", "main", "train", True)]
+    assert calls == [("openai/gsm8k", "main", "train", True, "0123abcd")]
 
 
 def _module_level_imports(tree: ast.Module):

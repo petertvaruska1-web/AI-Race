@@ -26,6 +26,7 @@ from airace_content.sources import (
     fixture_fetch,
     hf_fetch,
     is_transient_error,
+    resolve_revision,
 )
 from airace_ml.console import use_utf8_output
 from airace_ml.data.corpus import DATASET_IDS
@@ -168,6 +169,7 @@ def main(argv: list[str] | None = None) -> int:
             datasets=datasets,
             retrain_tokenizer=args.retrain_tokenizer,
             progress=_progress,
+            pin=None if args.fixtures is not None else resolve_revision,
         )
     except (BuildError, SourceFormatError, DatasetsUnavailable) as e:
         print(f"error: {e}", file=sys.stderr)
