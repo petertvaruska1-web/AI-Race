@@ -29,12 +29,14 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 
 ## Commands
 - On the owner's Windows PC, `uv` is not on PATH, so run it as `python -m uv`. Where `uv` is on PATH (e.g. cloud Linux), plain `uv` works.
-- ML setup (installs Python 3.13 and CUDA torch): `cd ml && python -m uv sync`
+- ML setup (installs Python 3.13, CUDA torch and the `datasets` package the corpus build needs): `cd ml && python -m uv sync --extra content`. Keep `--extra content` on every later `sync`: a plain `sync` removes `datasets` again.
 - ML tests: `cd ml && python -m uv run pytest`
 - ML lint: `cd ml && python -m uv run ruff check .`
 - Cloud Linux (no GPU): `cd ml && uv run --no-sync pytest`. Always `--no-sync` there; never `uv sync`.
 - Slow tests (incl. the quick feasibility gate): `cd ml && python -m uv run pytest -m slow`
-- Build corpora + tokenizer: `cd ml && python -m uv run airace-content build --scale {tiny,full}`. A tiny build (a quick check of the setup) needs its own `--out` (e.g. `--out ../data/tiny`): the tokenizer is frozen as tok-v1, so a full build refuses a tokenizer or shared files that a tiny build left, and a tiny build refuses a root that holds a full one.
+- GPU tests (need CUDA): `cd ml && python -m uv run pytest -m gpu`
+- Build corpora + tokenizer: `cd ml && python -m uv run --extra content airace-content build --scale {tiny,full}`. It prints progress on stderr and, if the connection drops, waits and carries on; if it still ends with a network problem, run the same command again. A tiny build (a quick check of the setup) needs its own `--out` (e.g. `--out ../data/tiny`): the tokenizer is frozen as tok-v1, so a full build refuses a tokenizer or shared files that a tiny build left, and a tiny build refuses a root that holds a full one.
+- Optional, before the full build (the Hugging Face hub allows more when logged in): `cd ml && python -m uv run --extra content hf auth login`
 - ML CLI (`--help` on each): `cd ml && python -m uv run airace-ml train|chat|bench|fingerprint|build-novelty-index|build-judge|gate`
 - Feasibility gate: `airace-ml gate --out runs/gate-1 [--cpu-speed] [--quick]` (needs `build-novelty-index` and `build-judge` first). Rerunning it reuses every run and measurement whose data and code are unchanged, and redoes the rest.
 - (More commands are added here as they come to exist.)

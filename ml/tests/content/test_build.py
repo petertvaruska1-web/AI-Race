@@ -1331,7 +1331,10 @@ def test_cli_reports_a_source_in_an_unexpected_format(tiny_build, tmp_path, caps
 def test_cli_reports_a_missing_datasets_package(tmp_path, monkeypatch, capsys):
     monkeypatch.setitem(sys.modules, "datasets", None)  # importing it fails, installed or not
     assert main(["build", "--scale", "tiny", "--out", str(tmp_path)]) == 1
-    assert "content extra" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "content extra" in err
+    # the command that fixes it, as the owner's PC runs it (uv is not on its PATH)
+    assert "python -m uv sync --extra content" in err
 
 
 def test_cli_lets_other_import_errors_through(tmp_path, monkeypatch):

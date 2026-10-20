@@ -158,7 +158,7 @@ def hf_fetch(spec: SourceSpec, max_rows: int) -> Iterator[dict]:
     except ImportError as e:
         raise DatasetsUnavailable(
             "fetching sources needs the 'datasets' package; install the content extra "
-            "(uv sync --extra content)"
+            "(python -m uv sync --extra content)"
         ) from e
     given, failures = 0, 0
     rows: Iterator[dict] | None = None
