@@ -3,7 +3,9 @@
 A document's topic is the topic with the most keyword hits (the earlier topic wins a tie); a
 document with no hits is "other". Keywords are lowercase words; a word also matches through its
 possessive, plural and verb endings ("cat's", "foxes", "berries", "smiled", "baking"). Every
-keyword belongs to exactly one topic.
+keyword belongs to exactly one topic. Words that say nothing about a text's topic, however often
+they occur, are no keywords: the names of the months and weekdays, "calendar", "addition",
+"number", "place" and "data" ("on Monday", "in addition", "take place", "a number of").
 """
 
 from airace_content.textproc import words
@@ -62,13 +64,11 @@ TOPIC_KEYWORDS: dict[str, frozenset[str]] = {
         """
         school teacher class classroom student pupil lesson homework book read reading write
         writing pencil pen paper desk backpack notebook test exam quiz grade learn learning study
-        spelling alphabet letter math maths count counting number subtract subtraction addition
-        multiply divide history geography library recess principal college university lecture
-        chalk blackboard whiteboard ruler eraser crayon draw drawing paint painting education
-        textbook essay word sentence grammar vocabulary question answer calendar monday tuesday
-        wednesday thursday friday saturday sunday january february april june july august
-        september october november december shape triangle square circle rectangle pentagon
-        hexagon octagon oval opposite antonym
+        spelling alphabet letter math maths count counting subtract subtraction multiply divide
+        history geography library recess principal college university lecture chalk blackboard
+        whiteboard ruler eraser crayon draw drawing paint painting education textbook essay word
+        sentence grammar vocabulary question answer shape triangle square circle rectangle
+        pentagon hexagon octagon oval opposite antonym
         """
     ),
     "science": _keywords(
@@ -96,7 +96,7 @@ TOPIC_KEYWORDS: dict[str, frozenset[str]] = {
     "technology": _keywords(
         """
         technology computer laptop tablet phone smartphone internet website web online email app
-        software hardware program programming code coding data database network server
+        software hardware program programming code coding database network server
         screen keyboard monitor printer camera video robot robotic machine engine motor device
         digital electronic battery charger wire cable circuit chip processor memory algorithm
         artificial intelligence drone satellite television tv radio headphones speaker password
@@ -108,7 +108,7 @@ TOPIC_KEYWORDS: dict[str, frozenset[str]] = {
     ),
     "places": _keywords(
         """
-        place city town village country capital continent europe asia africa america north south
+        city town village country capital continent europe asia africa america north south
         east west map travel trip journey street road avenue highway bridge tunnel house home
         building castle palace tower church temple mosque cathedral museum hospital airport
         station market store shop mall restaurant cafe hotel office factory bank park farm barn
@@ -151,7 +151,9 @@ _MIN_STEM = 3  # a stem left by stripping an ending must be at least this long
 # After "ed" or "ing" the stem must be longer, or "being" would be "bee" and "cared" would be "car".
 _MIN_VERB_STEM = 4
 _ES_AFTER = ("s", "x", "z", "ch", "sh", "o")  # "foxes", "lunches", "potatoes", but not "cares"
-_NOT_INFLECTED = frozenset({"bearing"})  # looks like the verb form of the keyword "bear"
+# Words that look like the verb form of a keyword but are not: "bearing" (bear), "marketing"
+# (market).
+_NOT_INFLECTED = frozenset({"bearing", "marketing"})
 
 
 def _forms(word: str) -> list[str]:

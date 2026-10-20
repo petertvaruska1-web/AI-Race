@@ -262,7 +262,9 @@ def test_furniture_lines_counts_menus_share_buttons_and_footers():
 
 def test_furniture_lines_does_not_count_prose_or_special_token_text():
     # "design in" and "catalog in" end in the letters of "sign in" and "log in", but are not them
-    assert furniture_lines("They had to design in a hurry, and the catalog in the hall was old.") == 0
+    assert (
+        furniture_lines("They had to design in a hurry, and the catalog in the hall was old.") == 0
+    )
     assert furniture_lines("Please login at the desk, or the blogin.") == 0
     assert furniture_lines("Models end a reply with <|end|> and start one with <|ai|>.") == 0
     assert furniture_lines("Home <|end|> | About") == 1  # a real separator beside a token
@@ -296,9 +298,7 @@ def test_quality_loses_a_third_for_each_furniture_line():
 
 
 def test_structured_quality_ignores_furniture_because_a_pipe_is_code():
-    program = (
-        "def either(a, b):\n    return a | b\n\nprint(either(1, 2) | 4)\nx = [1, 2] if 1 | 2 else []"
-    )
+    program = "def either(a, b):\n    return a | b\n\nprint(either(1, 2) | 4)\nx = [1, 2] if 1 | 2 else []"
     assert furniture_lines(program) >= 2
     assert structured_quality(program) == 1.0
     assert structured_quality(program) == structured_quality(program.replace("|", "+"))
@@ -366,6 +366,41 @@ def test_topic_of_text_without_keywords_or_letters_is_other():
     other = TOPICS.index("other")
     for text in ("", "   ", "zzz qqq", "12345 !!!", "今日はいい天気", "\U0001f600"):
         assert tag_topic(text) == other
+
+
+CALENDAR_WORDS = (
+    ("january", "february", "march", "april", "may", "june")
+    + ("july", "august", "september", "october", "november", "december")
+    + ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+    + ("calendar",)
+)
+
+
+def test_dates_and_false_friends_are_no_topic_keywords():
+    # Dates are everywhere in real text and say nothing about its topic: "born on 5 January" is
+    # not a school text. Nor are "in addition", "take place", "a number of" or "data" (every
+    # kind of report has them).
+    other = TOPICS.index("other")
+    every_keyword = set().union(*TOPIC_KEYWORDS.values())
+    for word in (*CALENDAR_WORDS, "addition", "number", "place", "data"):
+        assert word not in every_keyword, word
+        assert tag_topic(word) == other, word
+    news = "On Monday 5 January the council said the meeting will take place in March or May."
+    assert tag_topic(news) == other
+    assert tag_topic("Born on Friday, 3 June 1960, he died on Sunday in December.") == other
+    # the words around them still count
+    assert (
+        TOPICS[tag_topic("The teacher wrote the date, Monday 5 January, on the board.")] == "school"
+    )
+    assert TOPICS[tag_topic("The data are kept in a database on the computer.")] == "technology"
+
+
+def test_marketing_is_not_the_market():
+    # "marketing" ends in "ing", so its stem "market" would make a sales text a text about places
+    other = TOPICS.index("other")
+    assert tag_topic("Marketing marketing marketing") == other
+    assert tag_topic("Our marketing plan and the new marketing budget.") == other
+    assert TOPICS[tag_topic("market")] == "places" and TOPICS[tag_topic("The markets")] == "places"
 
 
 def test_topic_agrees_with_the_topic_of_knowledge_base_paragraphs():
