@@ -288,6 +288,58 @@ def test_train_refuses_a_folder_holding_another_configs_unfinished_progress(
     assert _saved_files(out_dir) == saved  # nothing was lost
 
 
+def _snapshot(folder: Path) -> dict[str, bytes]:
+    return {p.name: p.read_bytes() for p in sorted(folder.iterdir()) if p.is_file()}
+
+
+def test_train_resume_on_a_finished_run_says_the_model_is_ready_and_leaves_it_alone(
+    trained, tiny_data_root, tmp_path
+):
+    finished = tmp_path / "finished"
+    shutil.copytree(trained.dir, finished)  # a completed run: no resume state, a model, a result
+    before = _snapshot(finished)
+    argv = ["train", "--config", str(trained.config), "--out", str(finished), "--resume"]
+    code, out, err = _run([*argv, *_common(tiny_data_root)])
+    assert code == 2 and out == "" and err.startswith("error: ") and "Traceback" not in err
+    assert "shared already finished" in err and "ready to use" in err
+    assert f"airace-ml chat --model {finished}" in err
+    assert "delete that folder or use another --out" in err
+    assert "without --resume" not in err and "nothing saved" not in err  # the advice that hurts
+    assert _snapshot(finished) == before  # the finished model was not touched
+
+
+def test_train_resume_on_a_trained_model_of_no_known_run_does_not_claim_it_finished(
+    trained, tiny_data_root, tmp_path
+):
+    # The model is there but no result.json says which run made it (or another run's does): it
+    # is still not trained over on the advice of a message, but nothing says it is this config's.
+    for name in ("no-result", "another-result"):
+        folder = tmp_path / name
+        folder.mkdir()
+        for file in ("model.safetensors", "meta.json"):
+            shutil.copyfile(trained.dir / file, folder / file)
+    shutil.copyfile(trained.dir / "result.json", tmp_path / "another-result" / "result.json")
+    other = _write_config(tmp_path, _small_config("another-run", steps=6), "other.json")
+    for name, config in (("no-result", trained.config), ("another-result", other)):
+        argv = ["train", "--config", str(config), "--out", str(tmp_path / name), "--resume"]
+        code, out, err = _run([*argv, *_common(tiny_data_root)])
+        assert code == 2 and out == "" and err.startswith("error: ")
+        assert "already holds a trained model" in err and "ready to use" in err
+        assert "delete that folder or use another --out" in err
+        assert "already finished" not in err and "without --resume" not in err
+
+
+def test_train_resume_with_weights_alone_still_says_there_is_nothing_to_resume(
+    trained, tiny_data_root, tmp_path
+):
+    folder = tmp_path / "weights-only"
+    folder.mkdir()
+    shutil.copyfile(trained.dir / "model.safetensors", folder / "model.safetensors")
+    argv = ["train", "--config", str(trained.config), "--out", str(folder), "--resume"]
+    code, _, err = _run([*argv, *_common(tiny_data_root)])
+    assert code == 2 and "nothing saved to resume" in err and "without --resume" in err
+
+
 def test_train_protects_a_resume_state_it_cannot_read(tiny_data_root, tmp_path):
     out_dir = tmp_path / "run"
     (out_dir / "resume").mkdir(parents=True)

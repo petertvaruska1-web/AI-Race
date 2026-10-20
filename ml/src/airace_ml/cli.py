@@ -75,6 +75,7 @@ from airace_ml.train.events import (
 )
 from airace_ml.train.trainer import (
     CHECKPOINT_EVERY,
+    RESULT_NAME,
     TrainResult,
     can_resume,
     has_resume_state,
@@ -590,6 +591,31 @@ def _saved_progress(out: Path, cfg: TrainRunConfig) -> bool:
         return False
 
 
+def _finished_run_problem(out: Path, cfg: TrainRunConfig) -> str | None:
+    """What to say if ``out`` already holds a trained model, so that ``--resume`` has nothing to
+    resume and the way out of it must not be to train over the model; ``None`` if it holds none.
+    A ``result.json`` of a completed run of ``cfg.run_id`` says the run finished; weights with
+    their ``meta.json`` alone say only that there is a model."""
+    leave = (
+        f"it is ready to use (airace-ml chat --model {out}). To train again, delete that "
+        f"folder or use another --out."
+    )
+    try:
+        result = json.loads((out / RESULT_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        result = None
+    if (
+        isinstance(result, dict)
+        and result.get("run_id") == cfg.run_id
+        and result.get("status") == "completed"
+    ):
+        done = f"the run {cfg.run_id} already finished in {out}"
+        return f"{done}, so there is nothing to resume; {leave}"
+    if (out / WEIGHTS_NAME).is_file() and (out / META_NAME).is_file():
+        return f"{out} already holds a trained model, so there is nothing to resume; {leave}"
+    return None
+
+
 def _interrupted_train_hint(out: Path, cfg: TrainRunConfig) -> str:
     if _saved_progress(out, cfg):
         return (
@@ -623,6 +649,8 @@ def _cmd_train(args: argparse.Namespace) -> int:
                 f"start over."
             )
         if args.resume and not saved:
+            if finished := _finished_run_problem(args.out, cfg):
+                raise _UsageError(finished)
             raise _UsageError(
                 f"there is nothing saved to resume in {args.out} for this config (a run saves "
                 f"its progress every {CHECKPOINT_EVERY} steps, so one stopped sooner has "
