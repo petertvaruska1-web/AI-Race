@@ -3,11 +3,13 @@ import re
 import numpy as np
 import pytest
 
-from airace_content.noise import garble, make_spam
+from airace_content.noise import _PAGE_FOOTERS, _PAGE_HEADERS, add_boilerplate, garble, make_spam
 from airace_content.textproc import (
+    FURNITURE_PHRASES,
     MOJIBAKE_CHARS,
     SPAM_MARKERS,
     build_vocab,
+    furniture_lines,
     normalize_text,
     quality_score,
     simplicity,
@@ -221,6 +223,104 @@ def test_quality_unknown_vocabulary_lowers_the_score():
     narrow = np.mean([quality_score(p, vocab) for p in paragraphs[half:]])
     full = np.mean([quality_score(p, build_vocab(paragraphs, 5000)) for p in paragraphs[half:]])
     assert narrow < full
+
+
+def _web_document(paragraphs: list[str], n_words: int, rng: np.random.Generator) -> str:
+    """Whole fixture paragraphs, picked at random, until they hold ``n_words`` words."""
+    picked: list[str] = []
+    while sum(len(p.split()) for p in picked) < n_words:
+        picked.append(paragraphs[int(rng.integers(len(paragraphs)))])
+    return "\n\n".join(picked)
+
+
+def test_furniture_lines_counts_menus_share_buttons_and_footers():
+    assert furniture_lines("") == 0 and furniture_lines(CLEAN) == 0
+    for line in (
+        "Home | About | Contact",  # a separator
+        "Home|About",
+        "Posted by admin on March 3, 2019 | 4 comments",
+        "Menu Search Skip to content",  # a phrase, in any case
+        "SHARE THIS: Facebook Twitter Email Print",
+        "Follow us on Twitter and Facebook. Powered by WordPress.",
+        "This website uses cookies to give you the best experience. Accept all cookies",
+    ):
+        assert furniture_lines(line) == 1, line
+    assert furniture_lines("The cat sat.\nHome | About\n\nLeave a comment | Back to top\n") == 2
+    assert FURNITURE_PHRASES and all(p == p.lower() for p in FURNITURE_PHRASES)
+    assert "terms of" not in " ".join(FURNITURE_PHRASES)
+    assert furniture_lines("In terms of cost, the plan is fine.") == 0
+    # The furniture add_boilerplate writes: all but four of its seventeen lines are found.
+    missed = {
+        "You are here: Home > Blog > Archive",
+        "Copyright (c) 2019 All rights reserved.",
+        "Subscribe to our newsletter for updates.",  # spam, which has its own factor
+        "Visit our online store at https://example.com/shop",
+    }
+    for line in (*_PAGE_HEADERS, *_PAGE_FOOTERS):
+        assert furniture_lines(line) == (line not in missed), line
+
+
+def test_furniture_lines_does_not_count_prose_or_special_token_text():
+    # "design in" and "catalog in" end in the letters of "sign in" and "log in", but are not them
+    assert furniture_lines("They had to design in a hurry, and the catalog in the hall was old.") == 0
+    assert furniture_lines("Please login at the desk, or the blogin.") == 0
+    assert furniture_lines("Models end a reply with <|end|> and start one with <|ai|>.") == 0
+    assert furniture_lines("Home <|end|> | About") == 1  # a real separator beside a token
+    story = (
+        "Mia loved to bake with her grandma. One morning, they made cookies in the kitchen. Mia put "
+        "the flour in the bowl and her grandma added the sugar and the eggs, and then they stirred "
+        "and stirred until the dough was smooth and soft and ready for the oven."
+    )
+    assert len(story.split()) > 20 and furniture_lines(story) == 0  # a long line is prose
+    assert furniture_lines("I love cookies.") == 1  # a short one is not told apart
+
+
+def test_quality_loses_a_third_for_each_furniture_line():
+    # the same text with its separators turned into commas has no furniture and every other
+    # factor the same, so the two scores differ by the furniture factor alone
+    menus = ["Home | About | Contact", "News | Blog | Shop", "Help | Jobs | Press"]
+    vocab = build_vocab([CLEAN, *menus], 5000)
+    for count, factor in ((0, 1.0), (1, 2 / 3), (2, 1 / 3), (3, 0.0), (4, 0.0)):
+        text = "\n".join([CLEAN, *(menus * 2)[:count]])
+        unmarked = text.replace("|", ",")
+        assert furniture_lines(text) == count and furniture_lines(unmarked) == 0
+        assert quality_score(unmarked, vocab) > 0.7
+        assert quality_score(text, vocab) == pytest.approx(factor * quality_score(unmarked, vocab))
+    # spam and furniture are separate factors, and a line can be both
+    both = CLEAN + "\nClick here to read more articles."
+    spam_only = CLEAN + "\nClick here to see more articles."
+    vocab = build_vocab([both, spam_only], 5000)
+    assert furniture_lines(both) == 1 and furniture_lines(spam_only) == 0
+    assert quality_score(both, vocab) == pytest.approx(quality_score(spam_only, vocab) * 2 / 3)
+    assert quality_score(spam_only, vocab) < 0.7  # one spam hit: p = 2/3
+
+
+def test_structured_quality_ignores_furniture_because_a_pipe_is_code():
+    program = (
+        "def either(a, b):\n    return a | b\n\nprint(either(1, 2) | 4)\nx = [1, 2] if 1 | 2 else []"
+    )
+    assert furniture_lines(program) >= 2
+    assert structured_quality(program) == 1.0
+    assert structured_quality(program) == structured_quality(program.replace("|", "+"))
+
+
+@pytest.mark.parametrize("n_words", [40, 150, 400, 800])
+def test_boilerplate_is_found_by_cleaning_at_realistic_document_lengths(n_words):
+    # The furniture add_boilerplate puts round a document is a handful of lines, which every
+    # other factor (shares over the whole text) barely feels on a real-length web document.
+    paragraphs = _fixture_paragraphs()
+    vocab = build_vocab(paragraphs, top_n=5000)
+    rng = np.random.default_rng(n_words)
+    clean = [_web_document(paragraphs, n_words, rng) for _ in range(200)]
+    boilerplate = np.array([quality_score(add_boilerplate(t, rng), vocab) for t in clean])
+    clean_scores = np.array([quality_score(t, vocab) for t in clean])
+    thorough = CLEANING_THRESHOLDS["thorough"]
+    assert (clean_scores >= thorough).all() and clean_scores.mean() > 0.9  # clean keeps its score
+    assert np.mean(boilerplate >= thorough) < 0.5  # most boilerplate falls below Thorough
+    # light, standard, thorough: each level removes more of it
+    light, standard, strict = (np.mean(boilerplate >= t) for t in CLEANING_THRESHOLDS.values())
+    assert light > standard > strict
+    assert boilerplate.mean() < clean_scores.mean() - 0.25
 
 
 # ---------------------------------------------------------------------------------------------

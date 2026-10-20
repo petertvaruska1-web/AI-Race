@@ -2,7 +2,8 @@
 
 ``quality_score`` is a measurement, not a judgement: it is the number the player's "cleaning"
 level filters on, so each part of it looks for one thing that really is wrong with a document
-(too few letters, unknown words, repeated lines, mojibake, spam) and nothing else.
+(too few letters, unknown words, repeated lines, mojibake, spam, web-page furniture) and nothing
+else.
 """
 
 import re
@@ -24,6 +25,27 @@ SPAM_MARKERS: tuple[str, ...] = (
     "act now",
 )
 
+# Phrases of the navigation, share and footer lines of a web page. A line holding one is page
+# furniture, like any line with a "|" separator ("Home | About | Contact"). Not the generic
+# "terms of" (it is in "in terms of").
+FURNITURE_PHRASES: tuple[str, ...] = (
+    "privacy policy",
+    "skip to",
+    "sign in",
+    "log in",
+    "back to top",
+    "share this",
+    "read more",
+    "cookies",
+    "follow us",
+    "powered by",
+    "leave a comment",
+    "older posts",
+    "sitemap",
+)
+_FURNITURE_PHRASE = re.compile(r"\b(?:" + "|".join(FURNITURE_PHRASES) + r")\b")
+_SPECIAL_TOKEN_LITERAL = re.compile(r"<\|[^|\s>]*\|>")  # "<|end|>" is text, not a separator
+
 _CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")  # category Cc, except tab and newline
 # A line's leading spaces and tabs (its indentation), or else a run of spaces; the indentation is
 # matched first, and kept, so code survives normalization.
@@ -38,6 +60,8 @@ _LETTER_SHARE_RANGE = (0.6, 0.9)  # alpha_ratio at which `a` is 0 and 1
 _KNOWN_SHARE_RANGE = (0.5, 0.9)  # known_ratio at which `k` is 0 and 1
 _GARBLE_WEIGHT = 20.0  # a document with 5% mojibake characters scores 0
 _SPAM_LIMIT = 3  # this many spam hits score 0
+_FURNITURE_LIMIT = 3  # this many furniture lines score 0
+_FURNITURE_MAX_WORDS = 20  # a longer line that holds a furniture phrase is prose ("bake cookies")
 _SIMPLE_SENTENCE_WORDS = 18  # sentences longer than this lower `simplicity`
 
 
@@ -95,16 +119,35 @@ def simplicity(text: str, simple_vocab: set[str]) -> float:
     return in_vocab * min(1.0, _SIMPLE_SENTENCE_WORDS / mean_sentence_words)
 
 
+def furniture_lines(text: str) -> int:
+    """How many lines of ``text`` look like the furniture of a web page (menus, share buttons,
+    footers): a non-empty line with a ``|`` separator, or a short one (at most 20 words) with a
+    ``FURNITURE_PHRASES`` entry in it. A literal special token such as ``<|end|>`` is no separator,
+    and a long line with a phrase in it is prose ("they made cookies in the kitchen ...")."""
+    return sum(map(_is_furniture, text.split("\n")))
+
+
+def _is_furniture(line: str) -> bool:
+    if "|" in _SPECIAL_TOKEN_LITERAL.sub("", line):
+        return True
+    short = len(line.split()) <= _FURNITURE_MAX_WORDS
+    return short and _FURNITURE_PHRASE.search(line.lower()) is not None
+
+
 def quality_score(text: str, known_vocab: set[str]) -> float:
     """How clean a document is, from 0 to 1 (0 for empty text).
 
-    ``k * g * p * (0.5 + 0.5 a) * (0.5 + 0.5 r)`` where
+    ``k * f * g * p * (0.5 + 0.5 a) * (0.5 + 0.5 r)`` where
 
     * ``a`` rises from 0 to 1 as the share of letters among non-space characters goes 0.6 to 0.9,
     * ``k`` rises from 0 to 1 as the share of known words (length 2 or more) goes 0.5 to 0.9,
     * ``r`` is the share of non-empty lines that do not repeat an earlier line,
     * ``g`` falls to 0 once 5% of the characters are mojibake (``MOJIBAKE_CHARS``),
-    * ``p`` falls to 0 at three spam hits: every occurrence of a ``SPAM_MARKERS`` entry counts.
+    * ``p`` falls to 0 at three spam hits: every occurrence of a ``SPAM_MARKERS`` entry counts,
+    * ``f`` falls to 0 at three lines of web-page furniture (``furniture_lines``), counted like
+      spam hits. The other factors are shares of the whole text, which a few lines of furniture
+      move by under 1% on a web document of a few hundred words; ``f`` counts the lines instead.
+      Only prose has it: a ``|`` is ordinary code, so ``structured_quality`` has no ``f``.
     """
     compact = "".join(text.split())
     if not compact:
@@ -118,7 +161,9 @@ def quality_score(text: str, known_vocab: set[str]) -> float:
     lo, hi = _KNOWN_SHARE_RANGE
     k = _clip((known_ratio - lo) / (hi - lo))
 
-    return float(k * (0.5 + 0.5 * a) * _language_free_quality(text))
+    f = 1 - min(1.0, furniture_lines(text) / _FURNITURE_LIMIT)
+
+    return float(k * f * (0.5 + 0.5 * a) * _language_free_quality(text))
 
 
 def structured_quality(text: str) -> float:
