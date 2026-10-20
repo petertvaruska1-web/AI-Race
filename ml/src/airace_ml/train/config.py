@@ -205,6 +205,13 @@ class TrainRunConfig:
         self.shape.validate()  # ShapeError is a ValueError
         if not _is_int(self.batch_tokens) or self.batch_tokens < 1:
             raise ValueError(f"batch_tokens must be an integer >= 1, got {self.batch_tokens!r}")
+        if self.batch_tokens < self.shape.ctx_len:
+            # A step trains whole rows of ctx_len tokens (at least one), so a smaller batch_tokens
+            # would train more tokens than the budget pays for.
+            raise ValueError(
+                f"batch_tokens must be at least the attention span (ctx_len), got "
+                f"{self.batch_tokens} for a span of {self.shape.ctx_len}"
+            )
         if not _is_int(self.token_budget):
             raise ValueError(f"token_budget must be an integer, got {self.token_budget!r}")
         if self.token_budget < self.batch_tokens:

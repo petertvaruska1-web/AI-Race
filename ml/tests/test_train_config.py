@@ -1,5 +1,6 @@
 import json
 import math
+import re
 
 import pytest
 
@@ -379,6 +380,30 @@ def test_config_defaults_are_not_shared_between_instances():
     a.notebook.append("x")
     a.purchases["web"] = 0.5
     assert b.notebook == [] and b.purchases == {}
+
+
+@pytest.mark.parametrize(
+    ("ctx_len", "batch_tokens"),
+    [(256, 100), (256, 255), (1024, 512), (64, 63), (64, 1)],
+)
+def test_validate_rejects_a_batch_smaller_than_the_attention_span(ctx_len, batch_tokens):
+    # Every step trains whole rows of ctx_len tokens, so a smaller batch_tokens would train
+    # more tokens than the budget pays for (ctx 256, batch_tokens 100: 2.56x).
+    c = _cfg(shape=ModelShape(1, 64, ctx_len), batch_tokens=batch_tokens, token_budget=10_000)
+    with pytest.raises(
+        ValueError, match=re.escape("batch_tokens must be at least the attention span (ctx_len)")
+    ):
+        c.validate()
+
+
+@pytest.mark.parametrize(
+    ("ctx_len", "batch_tokens"),
+    [(256, 256), (256, 257), (384, 16384), (640, 16384), (1024, 1024)],  # whole rows or not
+)
+def test_validate_accepts_a_batch_of_at_least_one_row(ctx_len, batch_tokens):
+    _cfg(
+        shape=ModelShape(1, 64, ctx_len), batch_tokens=batch_tokens, token_budget=batch_tokens * 2
+    ).validate()
 
 
 def test_config_from_json_rejects_unknown_and_missing_fields():
