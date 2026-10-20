@@ -11,8 +11,8 @@ G2  Legibility       at least 70% of that model's replies to 20 probe prompts ar
 G3  Differentiation  four contrasting mixes (story, code, fact and conversation heavy) at equal
                      compute each lead their benchmark category by more than twice the seed
                      spread
-G4  Seed variation   different seeds of one mix give measurably different personalities, but
-                     less different than different mixes do
+G4  Seed variation   different seeds of one mix give personalities that differ by more than the
+                     noise of measuring one model twice, but less than different mixes do
 G5  Growth           growing the first model changes none of its outputs, and the grown model
                      then learns to a lower held-out loss than the ungrown one on the same tokens
 G6  Forgetting       a code-only continuation of the story-heavy model loses creativity and
@@ -102,9 +102,10 @@ from airace_ml.model.shape import ModelShape
 from airace_ml.model.transformer import Transformer
 from airace_ml.paths import corpus_dir, judge_dir, novelty_path, tokenizer_path
 from airace_ml.personality.fingerprint import (
+    STD_FLOOR,
+    TRAITS,
     Fingerprint,
     describe,
-    fingerprint_distance,
     load_probes,
     measure_fingerprint,
 )
@@ -129,7 +130,7 @@ NO_CUDA_DETAIL = "no CUDA device; GPU speed target not measured"
 LEGIBILITY_PROBES = 20
 LEGIBILITY_MIN_RATE = 0.7
 SPREAD_FACTOR = 2.0  # a mix must lead its category by more than this many seed spreads
-SEED_MIN_DISTANCE = 0.05
+SEED_MIN_DISTANCE = 0.05  # an absolute sanity bound; the bar G4 really sets is the noise floor
 GROWTH_MAX_LOGIT_DIFF = 1e-4
 FORGETTING_CATEGORIES: tuple[str, ...] = ("creativity", "language")
 FORGETTING_MIN_DROP = 3.0
@@ -147,6 +148,7 @@ GARBLE_PREFIX_TOKENS = 32
 GARBLE_NEW_TOKENS = 48
 GROWTH_SEQUENCES = 4
 MEASURE_SEED = 0  # benchmarks, fingerprints and the choice of held-out prompts
+NOISE_MEASURE_SEED = MEASURE_SEED + 1  # G4 fingerprints its balanced models again at this seed
 # G5's continuations draw their batches from a stream of their own: the trainer seeds its data
 # sampler with the run's seed alone, so a continuation that kept its parent's seed would replay
 # the parent's exact batches (a second epoch, not "the same extra tokens" of new text).
@@ -156,6 +158,7 @@ G3_TRANSCRIPT_PROBES: tuple[str, ...] = ("creative-10", "factual-01")
 RUNS_DIR = "runs"
 BENCH_FILE = "gate_bench.json"
 FINGERPRINT_FILE = "gate_fingerprint.json"
+NOISE_FINGERPRINT_FILE = "gate_fingerprint_again.json"
 KNOWN_VOCAB_FILE = "known_vocab.txt"
 FALSE_FACTS_FILE = "false_facts.json"
 # A file that cannot be read or does not parse. Only these blame (and ask to rebuild) a file;
@@ -420,34 +423,50 @@ def eval_differentiation(scores: Mapping[str, Sequence[Mapping[str, float]]]) ->
     return _criterion("G3", passed, detail, per_mix)
 
 
-def eval_seed_variation(seed_dists: Sequence[float], mix_dists: Sequence[float]) -> GateCriterion:
-    """G4: the mean fingerprint distance between seeds of one mix is above 0.05 and below the
-    mean distance between different mixes."""
+def eval_seed_variation(
+    seed_dists: Sequence[float], mix_dists: Sequence[float], noise_dists: Sequence[float]
+) -> GateCriterion:
+    """G4: the mean fingerprint distance between seeds of one mix is more than the mean distance
+    between two measurements of the same model (``noise_dists``: the gate's own measuring noise),
+    more than :data:`SEED_MIN_DISTANCE` (an absolute sanity bound), and less than the mean
+    distance between different mixes."""
     seed = [v for v in map(_finite, seed_dists) if v is not None]
     mix = [v for v in map(_finite, mix_dists) if v is not None]
+    noise = [v for v in map(_finite, noise_dists) if v is not None]
     problems = []
     if not seed_dists:
         problems.append("no pairs of seeds to compare (needs at least 2 seeds)")
     if not mix_dists:
         problems.append("no pairs of mixes to compare")
-    if len(seed) < len(seed_dists) or len(mix) < len(mix_dists):
+    if not noise_dists:
+        problems.append("no model was measured twice, so the measuring noise is unknown")
+    if len(seed) < len(seed_dists) or len(mix) < len(mix_dists) or len(noise) < len(noise_dists):
         problems.append("a distance is not a finite number")
-    seed_mean, mix_mean = _mean(seed), _mean(mix)
+    seed_mean, mix_mean, noise_mean = _mean(seed), _mean(mix), _mean(noise)
     data = {
+        "noise_mean": noise_mean,
         "seed_mean": seed_mean,
         "mix_mean": mix_mean,
         "min_seed_mean": SEED_MIN_DISTANCE,
+        "noise_distances": noise,
         "seed_distances": seed,
         "mix_distances": mix,
     }
     detail = (
-        f"same mix, different seeds: mean distance {seed_mean:.3f} (needs more than "
+        f"the same model measured twice: mean distance {noise_mean:.3f} (the measuring noise); "
+        f"same mix, different seeds: {seed_mean:.3f} (needs more than the noise and more than "
         f"{SEED_MIN_DISTANCE:g}); different mixes: {mix_mean:.3f} (seeds must differ less)"
     )
+    if not problems:
+        if seed_mean <= noise_mean:
+            problems.append("different seeds differ no more than the noise of measuring one model")
+        elif seed_mean <= SEED_MIN_DISTANCE:
+            problems.append(f"different seeds differ by no more than {SEED_MIN_DISTANCE:g}")
+        if seed_mean >= mix_mean:
+            problems.append("different seeds differ as much as different mixes do")
     if problems:
         detail = "; ".join(problems) + ". " + detail
-    passed = not problems and seed_mean > SEED_MIN_DISTANCE and seed_mean < mix_mean
-    return _criterion("G4", passed, detail, data)
+    return _criterion("G4", not problems, detail, data)
 
 
 def eval_growth(max_logit_diff: float, grown_loss: float, ungrown_loss: float) -> GateCriterion:
@@ -558,6 +577,21 @@ def eval_prep(
 
 
 # -- measurements -------------------------------------------------------------------------------
+
+
+def population_distance(a: Fingerprint, b: Fingerprint, population: Sequence[Fingerprint]) -> float:
+    """The Euclidean distance between two fingerprints, each trait in units of the standard
+    deviation (``ddof=0``) it has over ``population``. A trait that varies by less than
+    :data:`~airace_ml.personality.fingerprint.STD_FLOOR` over the whole population is left out of
+    every distance: it tells no model from another, and dividing by a floor would turn the
+    smallest difference in it into a huge one. Symmetric, and 0 for identical fingerprints."""
+    total = 0.0
+    for trait in TRAITS:
+        std = float(np.std([p.traits[trait] for p in population])) if population else 0.0
+        if std < STD_FLOOR:
+            continue
+        total += ((a.traits[trait] - b.traits[trait]) / std) ** 2
+    return math.sqrt(total)
 
 
 def garble_rate(texts: Sequence[str], known_vocab: set[str]) -> float:
@@ -968,23 +1002,30 @@ class _Gate:
         report = self.bench_report(run, categories)
         return {c: s["score"] for c, s in report["scores"].items()}
 
-    def fingerprint(self, run: GateRun) -> Fingerprint:
+    def fingerprint(self, run: GateRun, seed: int = MEASURE_SEED) -> Fingerprint:
+        """The (cached) personality fingerprint of ``run``, measured at ``seed``. The second
+        measurement of a model (``seed`` other than :data:`MEASURE_SEED`) is cached and recorded
+        apart from the first, so both are reused."""
+        again = seed != MEASURE_SEED
         key = {
             "run": run.token,
             "code": self.measuring_code,
             "k": self.scale.fingerprint_k,
-            "seed": MEASURE_SEED,
+            "seed": seed,
         }
 
         def compute() -> dict:
-            self.on_progress(f"  {run.name}: personality fingerprint")
+            what = "personality fingerprint, measured again" if again else "personality fingerprint"
+            self.on_progress(f"  {run.name}: {what}")
             fp = measure_fingerprint(
-                self.lm(run), self.inputs.tok, k=self.scale.fingerprint_k, seed=MEASURE_SEED
+                self.lm(run), self.inputs.tok, k=self.scale.fingerprint_k, seed=seed
             )
             return fp.to_dict()
 
-        fp = Fingerprint.from_dict(_cached(run.dir / FINGERPRINT_FILE, key, compute))
-        self.raw.setdefault("fingerprints", {})[run.name] = dict(fp.traits)
+        path = run.dir / (NOISE_FINGERPRINT_FILE if again else FINGERPRINT_FILE)
+        fp = Fingerprint.from_dict(_cached(path, key, compute))
+        group = "fingerprints_remeasured" if again else "fingerprints"
+        self.raw.setdefault(group, {})[run.name] = dict(fp.traits)
         return fp
 
     def announce(self, gid: str, what: str) -> None:
@@ -1078,6 +1119,10 @@ class _Gate:
         return eval_differentiation(scores), used
 
     def seed_variation(self) -> tuple[GateCriterion, list[GateRun]]:
+        """G4: different seeds of the balanced mix differ more than measuring one model twice
+        does (each balanced model is fingerprinted again, at :data:`NOISE_MEASURE_SEED`), and
+        less than different mixes do. Every distance is measured against one population: all
+        the first measurements and the second ones."""
         self.announce("G4", "one balanced mix, different seeds")
         s, g3 = self.scale, self.g3_runs
         balanced = [
@@ -1094,18 +1139,20 @@ class _Gate:
         ]
         models = [run for rs in g3.values() for run in rs] + balanced
         fps = {run.name: self.fingerprint(run) for run in models}
-        population = list(fps.values())
-        self.raw["describe"] = {name: describe(fp, population) for name, fp in fps.items()}
+        again = {run.name: self.fingerprint(run, NOISE_MEASURE_SEED) for run in balanced}
+        self.raw["describe"] = {name: describe(fp, list(fps.values())) for name, fp in fps.items()}
         self.transcripts["G3"] = self._g3_transcript(g3, fps)
+        population = [*fps.values(), *again.values()]
 
         def distances(group: Sequence[GateRun]) -> list[float]:
             return [
-                fingerprint_distance(fps[a.name], fps[b.name], population)
+                population_distance(fps[a.name], fps[b.name], population)
                 for a, b in combinations(group, 2)
             ]
 
         firsts = [rs[0] for rs in g3.values()]
-        return eval_seed_variation(distances(balanced), distances(firsts)), models
+        noise = [population_distance(fps[r.name], again[r.name], population) for r in balanced]
+        return eval_seed_variation(distances(balanced), distances(firsts), noise), models
 
     @staticmethod
     def _g3_transcript(

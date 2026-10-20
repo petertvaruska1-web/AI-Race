@@ -80,8 +80,8 @@ def test_simple_evaluators():
     )
     assert eval_growth(1e-5, 2.0, 2.2).passed and not eval_growth(1e-3, 2.0, 2.2).passed
     assert (
-        eval_seed_variation([0.3, 0.4], [1.0, 1.2]).passed
-        and not eval_seed_variation([0.0, 0.01], [1.0]).passed
+        eval_seed_variation([0.3, 0.4], [1.0, 1.2], [0.1, 0.2]).passed
+        and not eval_seed_variation([0.0, 0.01], [1.0], [0.0]).passed
     )
     assert eval_prep(0.10, 0.05, 0.4, 0.1).passed and not eval_prep(0.10, 0.095, 0.4, 0.1).passed
 
@@ -273,15 +273,41 @@ def test_differentiation_fails_plainly_on_degenerate_input():
 
 
 def test_seed_variation_edges():
-    assert not eval_seed_variation([0.05, 0.05], [1.0]).passed  # must be more than 0.05
-    assert not eval_seed_variation([1.0, 1.0], [1.0]).passed  # must be less than between mixes
-    for seeds, mixes, words in (
-        ([], [1.0], "no pairs of seeds"),
-        ([0.3], [], "no pairs of mixes"),
-        ([0.3, math.nan], [1.0], "not a finite number"),
+    # must be more than 0.05 (even where there is no noise to beat) ...
+    assert not eval_seed_variation([0.05, 0.05], [1.0], [0.0]).passed
+    assert eval_seed_variation([0.06, 0.06], [1.0], [0.0]).passed
+    # ... and less than between mixes
+    assert not eval_seed_variation([1.0, 1.0], [1.0], [0.1]).passed
+    for seeds, mixes, noise, words in (
+        ([], [1.0], [0.1], "no pairs of seeds"),
+        ([0.3], [], [0.1], "no pairs of mixes"),
+        ([0.3], [1.0], [], "no model was measured twice"),
+        ([0.3, math.nan], [1.0], [0.1], "not a finite number"),
+        ([0.3], [1.0], [math.inf], "not a finite number"),
     ):
-        c = eval_seed_variation(seeds, mixes)
+        c = eval_seed_variation(seeds, mixes, noise)
         assert not c.passed and words in c.detail and _finite_data(c.data)
+
+
+def test_seed_variation_must_beat_the_noise_of_measuring_the_same_model_again():
+    # The fingerprint of one model measured twice differs by about 2 in units of the population's
+    # spread; seeds that differ by no more than that are not "measurably different".
+    noisy = eval_seed_variation([2.2, 2.4, 2.0], [4.5, 4.4], [2.3, 2.1, 2.4])
+    assert not noisy.passed
+    assert noisy.data["seed_mean"] == pytest.approx(2.2)
+    assert noisy.data["noise_mean"] == pytest.approx(2.2666666)
+    assert noisy.data["mix_mean"] == pytest.approx(4.45)
+    assert "no more than the noise" in noisy.detail
+    clear = eval_seed_variation([3.2, 3.4, 3.0], [4.5, 4.4], [2.3, 2.1, 2.4])
+    assert clear.passed and "no more than the noise" not in clear.detail
+    # All three numbers are shown, in the detail and in the data.
+    for number in ("2.267", "3.200", "4.450"):
+        assert number in clear.detail
+    assert clear.data["noise_distances"] == [2.3, 2.1, 2.4] and _finite_data(clear.data)
+    # Seeds that differ more than the mixes do are not "different seeds of one mix" either.
+    assert not eval_seed_variation([4.6, 4.8], [4.5, 4.4], [2.3]).passed
+    # Equal to the noise is not more than the noise.
+    assert not eval_seed_variation([2.0, 2.0], [4.0], [2.0]).passed
 
 
 def test_growth_edges():
@@ -885,7 +911,15 @@ def _fake_score(name: str, category: str) -> float:
 def fake_gate(tmp_path, monkeypatch, tiny_tok):
     """``run_gate`` with every run, model and measurement faked: good enough to pass every
     criterion on a CUDA device, so a test can break one thing and see what follows."""
-    log = SimpleNamespace(trained=[], benched=[], fingerprinted=[], statuses={}, configs={})
+    log = SimpleNamespace(
+        trained=[],
+        benched=[],
+        fingerprinted=[],
+        statuses={},
+        configs={},
+        fingerprint_seeds={},
+        noise=0.1,  # how far measuring a model at the next seed moves each of its traits
+    )
     log.digests = {"training": "train-1", "measuring": "measure-1"}
 
     def fake_train(cfg, *, out_dir, data_root, device, on_event, resume):
@@ -912,8 +946,9 @@ def fake_gate(tmp_path, monkeypatch, tiny_tok):
 
     def fake_fingerprint(lm, tok, *, k, seed):
         log.fingerprinted.append(lm.name)
+        log.fingerprint_seeds.setdefault(lm.name, []).append(seed)
         _, mix, s = lm.name.split("-")
-        traits = {t: 10.0 * _MIXES[mix] + int(s[1:]) for t in TRAITS}
+        traits = {t: 10.0 * _MIXES[mix] + int(s[1:]) + log.noise * seed for t in TRAITS}
         samples = [
             {"probe": p.id, "kind": p.kind, "sample": 0, "text": f"{lm.name} says hi"}
             for p in load_probes()
@@ -981,7 +1016,7 @@ def test_fake_gate_passes_when_every_run_and_measurement_is_good(fake_gate):
     assert 0 < g1["growth_seconds"] < 2 and _finite_data(g1)
     assert len(fake_gate.trained) == 25 and len(outcome.raw["runs"]) == 25
     assert fake_gate.benched.count("starter") == 1  # the first model's full bench, timed
-    assert len(fake_gate.benched) == 15 and len(fake_gate.fingerprinted) == 15
+    assert len(fake_gate.benched) == 15 and len(fake_gate.fingerprinted) == 18
     assert outcome.raw["runs"]["starter"]["planned_steps"] == 4
 
 
@@ -1021,6 +1056,69 @@ def test_a_run_that_stopped_early_fails_every_criterion_that_uses_it(fake_gate, 
         assert outcome.raw["runs"][name]["status"] == "unstable_stopped"
 
 
+def test_g4_measures_its_own_noise_by_fingerprinting_each_balanced_model_again(fake_gate):
+    outcome = fake_gate.run()
+    g4 = outcome.criteria[3]
+    assert g4.id == "G4" and g4.passed
+    seeds = fake_gate.fingerprint_seeds
+    for balanced in ("g4-balanced-s1", "g4-balanced-s2", "g4-balanced-s3"):
+        assert seeds[balanced] == [gate.MEASURE_SEED, gate.NOISE_MEASURE_SEED]
+    assert all(v == [gate.MEASURE_SEED] for k, v in seeds.items() if not k.startswith("g4-"))
+    # One population holds every model and each balanced model's second measurement; the traits
+    # of the fake are all alike, so each distance is sqrt(10) x (a difference) / (their spread).
+    first = [10.0 * m + s for m in range(4) for s in (1, 2, 3)] + [50.0 + s for s in (1, 2, 3)]
+    again = [50.0 + s + fake_gate.noise * gate.NOISE_MEASURE_SEED for s in (1, 2, 3)]
+    unit = math.sqrt(len(TRAITS)) / float(np.std(first + again))
+    assert g4.data["seed_distances"] == pytest.approx([1 * unit, 2 * unit, 1 * unit])
+    assert g4.data["noise_distances"] == pytest.approx([0.1 * unit] * 3)
+    assert g4.data["noise_mean"] < g4.data["seed_mean"] < g4.data["mix_mean"]
+    for name in ("noise_mean", "seed_mean", "mix_mean"):
+        assert f"{g4.data[name]:.3f}" in g4.detail
+    # The second measurements are in the raw record, apart from the first ones.
+    assert set(outcome.raw["fingerprints_remeasured"]) == set(seeds) & {
+        "g4-balanced-s1",
+        "g4-balanced-s2",
+        "g4-balanced-s3",
+    }
+    assert len(outcome.raw["fingerprints"]) == 15
+
+
+def test_g4_fails_when_measuring_noise_is_as_big_as_the_difference_between_seeds(fake_gate):
+    fake_gate.noise = 50.0  # measuring a model again moves it further than another seed does
+    outcome = fake_gate.run()
+    g4 = outcome.criteria[3]
+    assert not g4.passed and g4.data["noise_mean"] > g4.data["seed_mean"] > 0.05
+    assert "no more than the noise" in g4.detail
+    assert {c.id for c in outcome.criteria if not c.passed} == {"G4"}
+
+
+def test_the_noise_measurements_are_cached_apart_from_the_first_ones(fake_gate):
+    fake_gate.run()
+    assert len(fake_gate.fingerprinted) == 18
+    fake_gate.run()
+    assert len(fake_gate.fingerprinted) == 18  # both measurements of each model are reused
+
+
+def _fingerprint(**traits: float) -> Fingerprint:
+    return Fingerprint({**{t: 0.0 for t in TRAITS}, **traits}, [])
+
+
+def test_a_trait_nobody_varies_in_is_left_out_of_every_distance():
+    population = [_fingerprint(verbosity=v) for v in (1.0, 2.0, 3.0)]
+    spread = float(np.std([1.0, 2.0, 3.0]))
+    assert gate.population_distance(population[0], population[2], population) == pytest.approx(
+        2.0 / spread
+    )
+    assert gate.population_distance(population[1], population[1], population) == 0.0
+    # Not one of the population, and different in a trait that never varies there: that trait
+    # says nothing (it must not read as a difference of 0.07 / 1e-6 = 66,666 spreads).
+    outside = _fingerprint(verbosity=2.0, precision=0.0667)
+    assert gate.population_distance(population[1], outside, population) == pytest.approx(0.0)
+    nobody_varies = [_fingerprint(), _fingerprint()]
+    assert gate.population_distance(*nobody_varies, nobody_varies) == 0.0
+    assert gate.population_distance(population[0], population[1], []) == 0.0
+
+
 def test_g5_continuations_share_a_seed_that_is_not_the_first_models(fake_gate):
     """Both arms of G5 continue the first model on the same fresh tokens: a continuation that
     reused its parent's seed would replay the parent's exact batches (a second epoch)."""
@@ -1036,6 +1134,7 @@ def test_reuse_follows_the_data_the_runs_were_trained_on(fake_gate):
     first = fake_gate.run()
     assert (len(fake_gate.trained), len(fake_gate.benched)) == (25, 15)
     assert not any(r["reused"] for r in first.raw["runs"].values())
+    assert len(fake_gate.fingerprinted) == 18
 
     def counts() -> tuple[int, int, int]:
         return len(fake_gate.trained), len(fake_gate.benched), len(fake_gate.fingerprinted)
@@ -1045,7 +1144,7 @@ def test_reuse_follows_the_data_the_runs_were_trained_on(fake_gate):
     assert counts() == before  # the data is as it was: everything is reused
     fake_gate.inputs.identity = "data-2"  # airace-content build ran again, into the same --out
     rebuilt = fake_gate.run()
-    assert tuple(a - b for a, b in zip(counts(), before, strict=True)) == (25, 15, 15)
+    assert tuple(a - b for a, b in zip(counts(), before, strict=True)) == (25, 15, 18)
     assert not any(r["reused"] for r in rebuilt.raw["runs"].values())  # trained again, all of them
     assert [c.passed for c in rebuilt.criteria] == [c.passed for c in first.criteria]
     before = counts()
@@ -1056,7 +1155,7 @@ def test_reuse_follows_the_data_the_runs_were_trained_on(fake_gate):
 def test_reuse_follows_the_code_that_trains_and_the_code_that_measures(fake_gate):
     first = fake_gate.run()
     counts = (len(fake_gate.trained), len(fake_gate.benched), len(fake_gate.fingerprinted))
-    assert counts == (25, 15, 15)
+    assert counts == (25, 15, 18)
 
     def again() -> tuple[int, int, int]:
         before = (len(fake_gate.trained), len(fake_gate.benched), len(fake_gate.fingerprinted))
@@ -1067,9 +1166,9 @@ def test_reuse_follows_the_code_that_trains_and_the_code_that_measures(fake_gate
 
     assert again() == (0, 0, 0)  # nothing changed: everything is reused
     fake_gate.digests["measuring"] = "measure-2"  # the benchmarks or fingerprint changed
-    assert again() == (0, 15, 15)
+    assert again() == (0, 15, 18)
     fake_gate.digests["training"] = "train-2"  # the trainer changed: train and measure again
-    assert again() == (25, 15, 15)
+    assert again() == (25, 15, 18)
 
 
 def test_timings_wait_for_queued_gpu_work(monkeypatch):
