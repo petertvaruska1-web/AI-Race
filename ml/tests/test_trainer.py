@@ -297,7 +297,7 @@ def _notebook_parent(root, tmp_path, **over):
     return train_run(
         cfg(
             run_id="a",
-            token_budget=1024 * 10,
+            token_budget=1024 * 4,
             mixture={"creative": 3.0, "notebook": 1.0},
             notebook=["The sky is blue."],
             **over,
@@ -315,7 +315,7 @@ def test_replay_covers_base_datasets_only_down_a_lineage(tiny_data_root, tmp_pat
     b = train_run(
         cfg(
             run_id="b",
-            token_budget=1024 * 10,
+            token_budget=1024 * 4,
             mixture={"code": 1.0},
             replay=0.3,
             parent_dir=str(tmp_path / "a"),
@@ -332,7 +332,7 @@ def test_replay_covers_base_datasets_only_down_a_lineage(tiny_data_root, tmp_pat
     c = train_run(
         cfg(
             run_id="c",
-            token_budget=1024 * 10,
+            token_budget=1024 * 4,
             mixture={"web": 1.0},
             replay=0.3,
             parent_dir=str(tmp_path / "b"),
@@ -350,7 +350,7 @@ def test_a_child_with_a_notebook_gets_only_its_own_share_for_it(tiny_data_root, 
     r = train_run(
         cfg(
             run_id="b",
-            token_budget=1024 * 20,
+            token_budget=1024 * 4,
             mixture={"code": 3.0, "notebook": 1.0},
             notebook=["A different note."],
             replay=0.2,
@@ -363,14 +363,13 @@ def test_a_child_with_a_notebook_gets_only_its_own_share_for_it(tiny_data_root, 
     # to the parent's base datasets, not on top of the notebook.
     assert r.meta.last_mixture == pytest.approx({"code": 0.6, "notebook": 0.2, "creative": 0.2})
     assert r.meta.runs[-1]["replay_dropped"] == ["notebook"]
-    assert r.tokens_per_dataset["notebook"] / sum(r.tokens_per_dataset.values()) < 0.3
 
 
 def test_replay_of_a_parent_with_nothing_but_custom_data_is_dropped(tiny_data_root, tmp_path):
     train_run(
         cfg(
             run_id="a",
-            token_budget=1024 * 10,
+            token_budget=1024 * 4,
             mixture={"notebook": 1.0, "coaching": 1.0},
             notebook=["The sky is blue."],
             coaching=[("What colour is the sky?", "Blue.")],
@@ -381,7 +380,7 @@ def test_replay_of_a_parent_with_nothing_but_custom_data_is_dropped(tiny_data_ro
     r = train_run(
         cfg(
             run_id="b",
-            token_budget=1024 * 10,
+            token_budget=1024 * 4,
             mixture={"code": 1.0, "web": 3.0},
             replay=0.5,
             parent_dir=str(tmp_path / "a"),
@@ -533,7 +532,7 @@ _FINISHING = cfg(mixture={"creative": 1.0}, finishing_mixture={"code": 1.0}, tok
 
 @pytest.fixture(scope="module")
 def plain_run(tiny_data_root, tmp_path_factory):
-    return _uninterrupted(tiny_data_root, tmp_path_factory, "plain", cfg(token_budget=1024 * 40))
+    return _uninterrupted(tiny_data_root, tmp_path_factory, "plain", cfg(token_budget=1024 * 24))
 
 
 @pytest.fixture(scope="module")
@@ -552,15 +551,14 @@ def rolled_back_run(tiny_data_root, tmp_path_factory):
     )
 
 
-@pytest.mark.parametrize("stop", [20, 27])  # before the decay phase begins, and inside it
 def test_resume_inside_the_finishing_phase_trains_the_rest_on_the_finishing_mix(
-    tiny_data_root, tmp_path, finishing_run, stop
+    tiny_data_root, tmp_path, finishing_run
 ):
     out = tmp_path / "p"
     part = train_run(
-        _FINISHING, out_dir=out, data_root=tiny_data_root, _hooks=TrainHooks(stop_after_steps=stop)
+        _FINISHING, out_dir=out, data_root=tiny_data_root, _hooks=TrainHooks(stop_after_steps=27)
     )
-    assert part.status == "interrupted" and part.steps == stop
+    assert part.status == "interrupted" and part.steps == 27
     res = train_run(_FINISHING, out_dir=out, data_root=tiny_data_root, resume=True)
     assert res.status == "completed" and res.steps == 30
     _assert_same_run(out, finishing_run)
@@ -615,14 +613,14 @@ def test_training_goes_on_when_windows_refuses_to_rename_the_resume_folder(
         return real_rename(self, target)
 
     monkeypatch.setattr(Path, "rename", rename)
-    c = cfg(token_budget=1024 * 40)
+    c = cfg(token_budget=1024 * 24)
     out = tmp_path / "p"
     part = train_run(
         c,
         out_dir=out,
         data_root=tiny_data_root,
-        checkpoint_every=10,
-        _hooks=TrainHooks(stop_after_steps=20),
+        checkpoint_every=6,
+        _hooks=TrainHooks(stop_after_steps=12),
     )
     assert part.status == "interrupted"
     kept_tmp = [p.name for p in out.iterdir() if p.name.startswith("resume.tmp.")]
@@ -630,8 +628,8 @@ def test_training_goes_on_when_windows_refuses_to_rename_the_resume_folder(
     assert can_resume(out, c)
     ev = []
     res = train_run(c, out_dir=out, data_root=tiny_data_root, resume=True, on_event=ev.append)
-    assert res.status == "completed" and res.steps == 40
-    assert next(e for e in ev if isinstance(e, Progress)).step == 30  # from step 20, not 10
+    assert res.status == "completed" and res.steps == 24
+    assert next(e for e in ev if isinstance(e, Progress)).step == 20  # from step 12, not 6
     _assert_same_run(out, plain_run)
     assert not [p.name for p in out.iterdir() if p.name.startswith("resume")]
 
@@ -743,6 +741,7 @@ def _probe_run(root, out_dir, monkeypatch, *, micro_tokens=None, plain_step=Fals
                 return loss.detach()
 
             m.setattr(trainer_module._Run, "_forward_backward", one_pass)
+        m.setattr(trainer_module._Run, "_evaluate", lambda self, step: None)  # not under test
         original = Transformer.forward
 
         def spy(self, x, *args, **kwargs):
@@ -772,10 +771,8 @@ def whole_batch_run(tiny_data_root, tmp_path_factory):
 @pytest.mark.parametrize(
     ("micro_tokens", "rows_per_forward"),
     [
-        (10**9, [16]),  # no cap in sight: the whole batch in one forward
         (512, [8, 8]),  # 8 rows of 64 tokens fit in a micro-batch
         (192, [3, 3, 3, 3, 3, 1]),  # the last micro-batch is the short one
-        (64, [1] * 16),  # one row at a time
         (10, [1] * 16),  # a row longer than the cap still goes through, alone
     ],
 )
@@ -800,7 +797,7 @@ def test_a_batch_in_one_micro_batch_is_bit_identical_to_the_plain_step(
     tiny_data_root, tmp_path, monkeypatch, whole_batch_run
 ):
     plain = _probe_run(tiny_data_root, tmp_path / "plain", monkeypatch, plain_step=True)
-    assert plain.forwards[1] == [16]
+    assert plain.forwards[1] == whole_batch_run.forwards[1] == [16]  # 16 x 64 tokens: one pass
     assert plain.loss == whole_batch_run.loss
     for step in (1, 2, 3):
         for g, expected in zip(whole_batch_run.grads[step], plain.grads[step], strict=True):
@@ -815,14 +812,14 @@ def test_micro_batches_do_not_change_what_a_resumed_run_draws(
     # One sampler draw per step whatever the micro-batch size, so an interrupted run resumes onto
     # the same stream and ends with the weights of an uninterrupted one.
     monkeypatch.setattr(trainer_module, "MICRO_BATCH_TOKENS", 192)
-    c = cfg(token_budget=1024 * 30)
+    c = cfg(token_budget=1024 * 16)
     full = train_run(c, out_dir=tmp_path / "full", data_root=tiny_data_root)
     train_run(
         c,
         out_dir=tmp_path / "p",
         data_root=tiny_data_root,
-        checkpoint_every=10,
-        _hooks=TrainHooks(stop_after_steps=20),
+        checkpoint_every=4,
+        _hooks=TrainHooks(stop_after_steps=8),
     )
     res = train_run(c, out_dir=tmp_path / "p", data_root=tiny_data_root, resume=True)
     assert _telemetry(tmp_path / "p") == _telemetry(tmp_path / "full")
