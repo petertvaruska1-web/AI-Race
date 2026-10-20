@@ -406,6 +406,35 @@ def test_validate_accepts_a_batch_of_at_least_one_row(ctx_len, batch_tokens):
     ).validate()
 
 
+@pytest.mark.parametrize(
+    ("over", "where"),
+    [
+        ({"notebook": ["fine", "a \ud800 b"]}, r"notebook\[1\]"),
+        ({"notebook": ["\udfff"]}, r"notebook\[0\]"),
+        ({"coaching": [("fine", "fine"), ("a \ud83d", "reply")]}, r"coaching\[1\]\[0\]"),
+        ({"coaching": [("prompt", "reply \ude00")]}, r"coaching\[0\]\[1\]"),
+        ({"probe_prompts": ["ok", "also ok", "hi \ud83d"]}, r"probe_prompts\[2\]"),
+    ],
+)
+def test_validate_rejects_a_lone_surrogate_in_the_players_text(over, where):
+    # Valid JSON (a half-pasted emoji), but not text: the tokenizer would die on it with a
+    # TypeError, a probe prompt only at the first eval of a run that has already started.
+    with pytest.raises(ValueError, match=where + r".*lone surrogate, not valid text"):
+        _cfg(**over).validate()
+    # It arrives like this from outside Python, so check the real route too.
+    c = TrainRunConfig.from_json(json.dumps({**json.loads(_cfg().to_json()), **over}))
+    with pytest.raises(ValueError, match=where):
+        c.validate()
+
+
+def test_validate_accepts_real_emoji_and_other_non_ascii_text():
+    _cfg(
+        notebook=["caf\u00e9 \U0001f600 \u4e2d\u6587"],
+        coaching=[("\u00bfqu\u00e9?", "\U0001f44d")],
+        probe_prompts=["hi \U0001f600"],
+    ).validate()
+
+
 def test_config_from_json_rejects_unknown_and_missing_fields():
     good = _cfg().to_json()
     with pytest.raises(ValueError, match="unknown"):

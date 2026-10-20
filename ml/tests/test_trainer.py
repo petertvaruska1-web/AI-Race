@@ -394,6 +394,20 @@ def test_replay_of_a_parent_with_nothing_but_custom_data_is_dropped(tiny_data_ro
     assert sum(r.meta.last_mixture.values()) == pytest.approx(1.0)
 
 
+@pytest.mark.parametrize(
+    "over",
+    [
+        {"notebook": ["a \ud800 b"], "mixture": {"notebook": 1.0}},
+        {"coaching": [("prompt", "reply \ude00")], "mixture": {"coaching": 1.0}},
+        {"probe_prompts": ["hi \ud83d"]},  # used to die at the first eval, 25 steps in
+    ],
+)
+def test_a_lone_surrogate_in_the_players_text_fails_before_training(tiny_data_root, tmp_path, over):
+    with pytest.raises(ValueError, match="lone surrogate"):
+        train_run(cfg(**over), out_dir=tmp_path / "x", data_root=tiny_data_root)
+    assert not (tmp_path / "x").exists()
+
+
 def test_attention_span_changes_freely_within_a_lineage(tiny_data_root, tmp_path):
     # Spec 4.3: context length is not a parameter shape, so it may go down as well as up.
     def run(run_id, shape, parent=None):

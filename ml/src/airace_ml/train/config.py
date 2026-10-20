@@ -38,6 +38,15 @@ def _expect(value: object, kind: type | tuple[type, ...], message: str) -> None:
     raise ValueError(f"{message}, got {value!r}")
 
 
+def _check_text(where: str, text: str) -> None:
+    """Raise ValueError unless ``text`` is real text. JSON can carry a lone UTF-16 surrogate (a
+    half-pasted emoji); it is not text, and the tokenizer dies on it with a TypeError."""
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        raise ValueError(f"{where} contains a lone surrogate, not valid text") from None
+
+
 def _lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
 
@@ -245,6 +254,8 @@ class TrainRunConfig:
             _expect(getattr(self.prep, flag), bool, f"prep.{flag} must be true or false")
         if not all(isinstance(entry, str) for entry in self.notebook):
             raise ValueError(f"notebook entries must all be strings, got {self.notebook!r}")
+        for i, entry in enumerate(self.notebook):
+            _check_text(f"notebook[{i}]", entry)
         for i, pair in enumerate(self.coaching):
             if (
                 not isinstance(pair, (tuple, list))
@@ -254,8 +265,12 @@ class TrainRunConfig:
                 raise ValueError(
                     f"coaching[{i}] must be a (prompt, reply) pair of strings, got {pair!r}"
                 )
+            for j, part in enumerate(pair):
+                _check_text(f"coaching[{i}][{j}]", part)
         if not all(isinstance(prompt, str) for prompt in self.probe_prompts):
             raise ValueError(f"probe_prompts must all be strings, got {self.probe_prompts!r}")
+        for i, prompt in enumerate(self.probe_prompts):
+            _check_text(f"probe_prompts[{i}]", prompt)
 
     def to_json(self) -> str:
         d = {f.name: getattr(self, f.name) for f in fields(self)}
