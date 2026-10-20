@@ -885,11 +885,12 @@ def _fake_score(name: str, category: str) -> float:
 def fake_gate(tmp_path, monkeypatch, tiny_tok):
     """``run_gate`` with every run, model and measurement faked: good enough to pass every
     criterion on a CUDA device, so a test can break one thing and see what follows."""
-    log = SimpleNamespace(trained=[], benched=[], fingerprinted=[], statuses={})
+    log = SimpleNamespace(trained=[], benched=[], fingerprinted=[], statuses={}, configs={})
     log.digests = {"training": "train-1", "measuring": "measure-1"}
 
     def fake_train(cfg, *, out_dir, data_root, device, on_event, resume):
         log.trained.append(cfg.run_id)
+        log.configs[cfg.run_id] = cfg
         status = log.statuses.get(cfg.run_id, "completed")
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / WEIGHTS_NAME).write_bytes(b"w")
@@ -1018,6 +1019,17 @@ def test_a_run_that_stopped_early_fails_every_criterion_that_uses_it(fake_gate, 
             assert named == (c.id in users[name]), (c.id, name, c.detail)
     for name in stopped:
         assert outcome.raw["runs"][name]["status"] == "unstable_stopped"
+
+
+def test_g5_continuations_share_a_seed_that_is_not_the_first_models(fake_gate):
+    """Both arms of G5 continue the first model on the same fresh tokens: a continuation that
+    reused its parent's seed would replay the parent's exact batches (a second epoch)."""
+    fake_gate.run()
+    starter = fake_gate.configs["starter"]
+    grown, ungrown = fake_gate.configs["g5-grown"], fake_gate.configs["g5-ungrown"]
+    assert grown.seed == ungrown.seed  # paired: the same tokens in the same order
+    assert grown.seed != starter.seed  # and not the ones the first model trained on
+    assert grown.mixture == ungrown.mixture == starter.mixture
 
 
 def test_reuse_follows_the_data_the_runs_were_trained_on(fake_gate):

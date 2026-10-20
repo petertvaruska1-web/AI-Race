@@ -147,6 +147,10 @@ GARBLE_PREFIX_TOKENS = 32
 GARBLE_NEW_TOKENS = 48
 GROWTH_SEQUENCES = 4
 MEASURE_SEED = 0  # benchmarks, fingerprints and the choice of held-out prompts
+# G5's continuations draw their batches from a stream of their own: the trainer seeds its data
+# sampler with the run's seed alone, so a continuation that kept its parent's seed would replay
+# the parent's exact batches (a second epoch, not "the same extra tokens" of new text).
+CONTINUATION_SEED_OFFSET = 10_000
 G3_TRANSCRIPT_PROBES: tuple[str, ...] = ("creative-10", "factual-01")
 
 RUNS_DIR = "runs"
@@ -1127,7 +1131,10 @@ class _Gate:
         """G5: the growth measured on the first model (by G1), and the grown and ungrown
         continuations of it."""
         self.announce("G5", "continuing the first model, grown and not grown")
-        s, seed, starter = self.scale, self.seeds[0], self.starter_run
+        s, starter = self.scale, self.starter_run
+        # Both arms share one seed, so they train on the same tokens in the same order, and it is
+        # not the first model's, so those tokens are new to it.
+        seed = self.seeds[0] + CONTINUATION_SEED_OFFSET
         continued = {}
         for name, shape in (("g5-grown", s.grown_shape), ("g5-ungrown", s.starter_shape)):
             cfg = self.config(
