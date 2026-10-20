@@ -43,6 +43,12 @@ from airace_content.build import (
     tokenizer_texts,
 )
 from airace_content.cli import main
+from airace_content.manifest import (
+    KNOWN_VOCAB_FILE,
+    SIMPLE_VOCAB_FILE,
+    read_manifest,
+    read_vocab,
+)
 from airace_content.noise import _PAGE_FOOTERS, _PAGE_HEADERS, inject_noise
 from airace_content.sources import (
     FORMAT_CHECK_ROWS,
@@ -909,6 +915,75 @@ def test_manifest_and_shared_artifacts(tiny_build):
     assert simple == sorted(build_vocab(stories, 6000))
     known = (root / "known_vocab.txt").read_text(encoding="utf-8").split("\n")[:-1]
     assert known == sorted(known) and "the" in known and len(known) <= 30_000
+
+
+def test_non_ascii_text_goes_through_the_whole_build(tmp_path):
+    # Every fixture source is pure ASCII, but real web, story, dialogue and wiki text is full of
+    # accents, curly quotes, emoji and CJK (Review Focus 5), and a dataset may hold special-token
+    # strings (Review Focus 1). The shared fixtures stay as they are: this uses a modified copy.
+    marks = {  # one string per source, each with a literal special token
+        "fineweb": "Caf\u00e9 na\u00efve fa\u00e7ade \u2014 \u201cquoted\u201d, it\u2019s <|end|> ok.",
+        "tinystories": "She smiled \U0001f600\U0001f680 and said \u2018hola\u2019 <|ai|> again.",
+        "soda": "\u4eca\u65e5\u306f\u3044\u3044\u5929\u6c17 \u00fcber \u00f1and\u00fa <|end|><|user|> yes.",
+        "simplewiki": "Z\u00fcrich (\u82cf\u9ece\u4e16) is \u201cnice\u201d \u00bd <|sep|> \U0001f30d.",
+    }
+    fixtures = tmp_path / "sources"
+    shutil.copytree(FIX, fixtures)
+    for source, mark in marks.items():
+        path = fixtures / f"{source}.jsonl"
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+        for row in rows:
+            if source == "soda":
+                row["dialogue"] = [f"{turn} {mark}" for turn in row["dialogue"]]
+            elif source == "simplewiki":
+                first, *rest = row["text"].split("\n")
+                row["text"] = "\n".join([f"{first} {mark}", *rest])
+            else:
+                row["text"] = f"{row['text']} {mark}"
+        path.write_text(
+            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8"
+        )
+    assert all(not mark.isascii() for mark in marks.values())
+
+    fetch = fixture_fetch(fixtures)
+    summary = build_corpus("tiny", tmp_path / "data", fetch, seed=0)
+    assert summary.tokenizer_trained
+    tok = Tok.load(tokenizer_path(tmp_path / "data"))
+    for dataset, source in (
+        ("web", "fineweb"),
+        ("creative", "tinystories"),
+        ("conversations", "soda"),
+        ("facts", "simplewiki"),
+    ):
+        corpus, texts = _texts(tmp_path / "data", dataset)
+        clean = [t for t, kind in zip(texts, corpus.tags.noise_kind) if kind == _NONE]
+        with_mark = [t for t in clean if marks[source] in t]  # decoded without special tokens
+        assert with_mark, dataset
+        if dataset == "web":  # fineweb is the whole recipe: every untouched doc has its string
+            assert len(with_mark) == len(clean)
+        for i in range(corpus.n_docs):  # a special-token string in the text stays plain text
+            ids = corpus.doc(i)
+            assert ids[0] == tok.bos_id
+            if dataset != "conversations":
+                assert (ids[1:] >= 16).all(), (dataset, i)
+            else:
+                specials = [t for t in ids[1:].tolist() if t < 16]
+                assert specials[1::2] == [tok.end_id] * (len(specials) // 2), (dataset, i)
+                assert set(specials[0::2]) <= {tok.user_id, tok.ai_id}, (dataset, i)
+
+    # the shared artifacts and the manifest reload, and the vocabularies are the words of the text
+    root = corpus_dir(tmp_path / "data")
+    stories = [row["text"] for row in fetch(SOURCES["tinystories"], 100)]
+    simple = read_vocab(root / SIMPLE_VOCAB_FILE)
+    assert simple == build_vocab(stories, 6000) and "she" in simple
+    known = read_vocab(root / KNOWN_VOCAB_FILE)
+    assert known and all(re.fullmatch(r"[a-z']+", word) for word in known | simple)
+    manifest = read_manifest(root)
+    assert manifest is not None and manifest["datasets"] == summary.datasets
+    for dataset in DATASET_IDS:
+        info = json.loads((root / dataset / "info.json").read_text(encoding="utf-8"))
+        corpus = Corpus.open(root / dataset)
+        assert info == corpus.info and info["dataset"] == dataset
 
 
 def test_same_seed_same_corpus(tiny_build, tmp_path):
