@@ -10,9 +10,10 @@ import numpy as np
 import pytest
 import torch
 
+from airace_content.noise import garble
 from airace_ml.data.corpus import DATASET_IDS, Corpus
 from airace_ml.data.identity import data_identity
-from airace_ml.data.prep import heldout_docs
+from airace_ml.data.prep import eligible_docs, heldout_docs
 from airace_ml.evals.judge import JudgeCalibration, build_judge
 from airace_ml.evals.novelty import NoveltyIndex, build_novelty_index
 from airace_ml.evals.scoring import BenchReport, CategoryScore
@@ -116,10 +117,9 @@ def test_forgetting():
 
 
 def test_garble_rate():
-    assert (
-        garble_rate(["the cat sat"], {"the", "cat", "sat"}) == 0
-        and garble_rate(["xq zz"], {"the"}) == 1
-    )
+    assert garble_rate(["the cat sat"], {"the", "cat", "sat"}) == 0
+    assert garble_rate(["xq zz"], {"the"}) == 0  # unknown, but not garble-like
+    assert garble_rate(["xq caf\u00c3\u00a9"], {"the"}) == 0.5
     assert garble_rate([""], {"a"}) == 0
 
 
@@ -155,6 +155,7 @@ def test_configs_are_the_designed_ones():
     }
     assert FULL_SCALE.prep_budget == 2 * STARTER_BUDGET and FULL_SCALE.grown_shape == EARLY_SHAPE
     assert FULL_SCALE.batch_tokens is None and FULL_SCALE.fingerprint_k == 3
+    assert FULL_SCALE.garble_samples == 200 and QUICK_SCALE.garble_samples == 60
     q = QUICK_SCALE
     assert q.starter_shape == q.early_shape == ModelShape(2, 64, 64)
     assert q.grown_shape == ModelShape(3, 96, 64)
@@ -459,10 +460,43 @@ def test_prep_must_beat_the_seed_spread_on_each_fall():
 def test_garble_rate_counts_words_as_model_text_is_counted():
     vocab = {"the", "cat", "sat"}
     assert garble_rate(["The CAT, sat!", "42 -- 7"], vocab) == 0  # case, punctuation, digits
-    assert garble_rate(["the cat", "xq zz wv yy"], vocab) == pytest.approx(4 / 6)  # pooled
+    assert garble_rate(["the cat", "xq zz wv yy"], vocab) == 0  # unknown words are not garbled
+    assert garble_rate(["the cat", "caf\u00c3\u00a9 zz wv yy"], vocab) == pytest.approx(1 / 6)
     assert garble_rate([], vocab) == 0 and garble_rate(["   "], set()) == 0
     assert garble_rate(["don't", "Paris"], {"don't", "Paris"}) == 0  # vocab read the same way
-    assert garble_rate(["café naïve"], {"café"}) == pytest.approx(0.5)
+    assert garble_rate(["caf\u00e9 na\u00efve"], {"caf\u00e9"}) == 0  # rare, not garbled
+
+
+def test_a_word_with_a_mojibake_character_is_garble_like():
+    vocab = {"the", "cafe", "cat"}
+    # "cafÃ©" (the UTF-8 bytes of "café" read as Windows-1252): one word, whatever the junk is.
+    assert garble_rate(["the caf\u00c3\u00a9"], vocab) == pytest.approx(0.5)
+    assert garble_rate(["the \u00b0\u00b4\u00b7 cat"], vocab) == pytest.approx(1 / 3)  # junk alone
+    assert garble_rate(["the \ufffd cat"], vocab) == pytest.approx(1 / 3)
+    # Only the characters of the noise module's mojibake set count: "\u00e3" is a letter.
+    assert garble_rate(["m\u00e3e"], {"m\u00e3e"}) == 0
+    # Everything the noise module's garble() writes is caught, at any strength.
+    known = {"the", "cat", "sat", "on", "mat", "it's", "a", "nice", "day", "time"}
+    for seed in range(20):
+        rng = np.random.default_rng(seed)
+        text = garble('the cat sat on the mat; it\'s a "nice" day-time', rng, rate=0.05 * seed)
+        assert garble_rate([text], known) > 0, text
+
+
+def test_a_word_one_edit_from_a_known_word_is_a_learned_typo():
+    vocab = {"hello", "world", "there", "fine", "cat"}
+    # a dropped letter, a wrong letter, a doubled letter, a missing letter, an extra letter
+    for word in ("helo", "hellp", "helllo", "fino", "wold", "wmorld"):
+        assert garble_rate([word], vocab) == 1.0, word
+    assert garble_rate(["hello world helo hellp helllo"], vocab) == pytest.approx(3 / 5)
+    # two edits are not a typo of the word (a swapped pair, wrold, takes two)
+    for word in ("wrold", "hxllp", "helloxx", "xhelloy"):
+        assert garble_rate([word], vocab) == 0.0, word
+    # a short word is never called a typo ("cot" is one edit from "cat"); four letters are enough
+    assert garble_rate(["cot cut ca"], vocab) == 0.0
+    assert garble_rate(["fina"], vocab) == 1.0
+    # a word of the vocabulary is not a typo of another one
+    assert garble_rate(["hello fine fin"], {"hello", "fine", "fin"}) == 0.0
 
 
 def test_false_fact_rate_compares_mean_log_prob_per_token(tiny_tok):
@@ -840,8 +874,10 @@ def test_prompts_are_cut_back_to_a_whole_word():
 
 
 def test_web_prefixes_end_on_a_word_boundary(tiny_data_root, tiny_tok):
-    prefixes = gate._web_prefixes(tiny_data_root, tiny_tok)
-    assert len(prefixes) == gate.GARBLE_SAMPLES
+    prefixes = gate._web_prefixes(tiny_data_root, tiny_tok, 60)
+    assert len(prefixes) == 60
+    assert len(gate._web_prefixes(tiny_data_root, tiny_tok, 7)) == 7
+    assert len(gate._web_prefixes(tiny_data_root, tiny_tok, 200)) == 200  # documents are reused
     web = Corpus.open(corpus_dir(tiny_data_root) / "web")
     texts = [tiny_tok.decode(web.doc(int(i)).tolist()) for i in heldout_docs(web)]
     for prefix in set(prefixes):
@@ -997,7 +1033,10 @@ class _FakeLM:
         return "Hello there, my good friend."
 
     def complete(self, text, **options):
-        replies = {"g7-web-light": " xq zz the", "g7-web-thorough": " the the xq"}
+        replies = {
+            "g7-web-light": " caf\u00c3\u00a9 \u00b0\u00b4 the",  # 2 of 3 words garbled
+            "g7-web-thorough": " the the caf\u00c3\u00a9",  # 1 of 3
+        }
         return replies.get(_without_seed(self.name), "")
 
     def generate(self, prompts, *, max_new_tokens, temperature, top_p, seed, stop_ids=None):
@@ -1032,6 +1071,10 @@ def fake_gate(tmp_path, monkeypatch, tiny_tok):
         configs={},
         fingerprint_seeds={},
         losses={},  # held-out loss by run name, where a test wants another
+        web_text={  # the prepared web training text of each cleaning level (3 and 1 of 8 words)
+            "light": ["the cat caf\u00c3\u00a9 sat", "\u00b0\u00b4 \u00c3\u00a9 dog sat"],
+            "thorough": ["the cat sat dog", "the \u00b0\u00b4 dog sat"],
+        },
         noise=0.1,  # how far measuring a model at the next seed moves each of its traits
     )
     log.digests = {"training": "train-1", "measuring": "measure-1"}
@@ -1082,12 +1125,12 @@ def fake_gate(tmp_path, monkeypatch, tiny_tok):
         plan=FalseFactPlan({}),
         kb=load_kb(),
         identity="data-1",
-        web_prefixes=["the cat"] * gate.GARBLE_SAMPLES,
+        web_prefixes=["the cat"] * _TINY_SCALE.garble_samples,
         growth_sequences=[[1, 5, 9, 33]] * gate.GROWTH_SEQUENCES,
     )
     monkeypatch.setattr(gate_runs, "train_run", fake_train)
     monkeypatch.setattr(gate, "FULL_SCALE", _TINY_SCALE)
-    monkeypatch.setattr(gate, "_load_inputs", lambda root, device, length: inputs)
+    monkeypatch.setattr(gate, "_load_inputs", lambda root, device, scale: inputs)
     monkeypatch.setattr(
         gate,
         "source_digest",
@@ -1101,6 +1144,9 @@ def fake_gate(tmp_path, monkeypatch, tiny_tok):
     monkeypatch.setattr(gate, "measure_fingerprint", fake_fingerprint)
     monkeypatch.setattr(gate, "load_checkpoint", fake_checkpoint)
     monkeypatch.setattr(gate, "is_well_formed", lambda reply, judge: True)
+    monkeypatch.setattr(
+        gate, "prepared_web_text", lambda root, tok, prep, n: log.web_text[prep.cleaning]
+    )
     monkeypatch.setattr(
         gate,
         "false_fact_rate",
@@ -1243,6 +1289,48 @@ def test_a_trait_nobody_varies_in_is_left_out_of_every_distance():
     nobody_varies = [_fingerprint(), _fingerprint()]
     assert gate.population_distance(*nobody_varies, nobody_varies) == 0.0
     assert gate.population_distance(population[0], population[1], []) == 0.0
+
+
+def test_prepared_web_text_is_a_seeded_sample_of_what_an_arm_trains_on(tiny_data_root, tiny_tok):
+    web = Corpus.open(corpus_dir(tiny_data_root) / "web")
+    light = gate.prepared_web_text(tiny_data_root, tiny_tok, gate.LIGHT_CLEANING, 1000)
+    thorough = gate.prepared_web_text(tiny_data_root, tiny_tok, gate.THOROUGH_CLEANING, 1000)
+    # every document the arm may train on, none held out; thorough cleaning and dedup keep fewer
+    assert len(light) == len(eligible_docs(web, gate.LIGHT_CLEANING))
+    assert len(thorough) == len(eligible_docs(web, gate.THOROUGH_CLEANING))
+    assert 0 < len(thorough) < len(light) and set(thorough) <= set(light)
+    assert all(text and "<|" not in text for text in light)
+    # a smaller sample is the first part of the same seeded order, and it repeats exactly
+    assert gate.prepared_web_text(tiny_data_root, tiny_tok, gate.LIGHT_CLEANING, 5) == light[:5]
+    assert gate.prepared_web_text(tiny_data_root, tiny_tok, gate.LIGHT_CLEANING, 1000) == light
+    assert gate.DATA_SAMPLE_DOCS == 2000
+
+
+def test_g7_reports_the_garble_ratio_of_the_prepared_training_text(fake_gate):
+    outcome = fake_gate.run()
+    g7 = outcome.criteria[6]
+    assert g7.passed
+    # 3 of 8 words garble-like with light cleaning, 1 of 8 with thorough: a ratio of a third
+    assert g7.data["data_garble_light"] == 0.375 and g7.data["data_garble_thorough"] == 0.125
+    assert g7.data["data_ratio"] == pytest.approx(1 / 3)
+    assert g7.data["data_docs_light"] == g7.data["data_docs_thorough"] == 2
+    assert "training text" in g7.detail and "0.33" in g7.detail
+    assert "strengthen" not in g7.detail and _finite_data(g7.data)
+
+
+def test_g7_says_when_cleaning_barely_changes_the_training_text(fake_gate):
+    fake_gate.web_text["thorough"] = list(fake_gate.web_text["light"])  # cleaning removed nothing
+    g7 = fake_gate.run().criteria[6]
+    assert g7.data["data_ratio"] == 1.0
+    assert "above about 0.7" in g7.detail and "strengthen the web noise" in g7.detail
+    assert g7.passed  # the verdict is the models', the ratio is information beside it
+
+
+def test_g7_has_no_ratio_where_the_light_text_has_nothing_garbled(fake_gate):
+    fake_gate.web_text["light"] = ["the cat sat"]
+    g7 = fake_gate.run().criteria[6]
+    assert g7.data["data_garble_light"] == 0.0 and g7.data["data_ratio"] is None
+    assert _finite_data(g7.data) and "nothing garble-like" in g7.detail
 
 
 def test_g5_continuations_share_a_seed_that_is_not_the_first_models(fake_gate):
@@ -1606,11 +1694,12 @@ def test_the_gates_real_input_loading_takes_instruments_of_this_data_and_no_othe
     stub_judge_training(monkeypatch, tiny_tok)
     build_judge(root, device="cpu")
 
-    inputs = gate._load_inputs(root, CPU, 64)
+    scale = replace(QUICK_SCALE, garble_samples=30)
+    inputs = gate._load_inputs(root, CPU, scale)
     assert inputs.identity == data_identity(root)
     assert inputs.tok.vocab_size == tiny_tok.vocab_size and len(inputs.novelty) > 0
     assert inputs.known_vocab == {"the", "cat", "sat"} and inputs.plan.mapping == {}
-    assert len(inputs.web_prefixes) == gate.GARBLE_SAMPLES
+    assert len(inputs.web_prefixes) == 30
     assert len(inputs.growth_sequences) == gate.GROWTH_SEQUENCES
     assert all(0 < len(seq) <= 64 for seq in inputs.growth_sequences)
 
@@ -1619,13 +1708,13 @@ def test_the_gates_real_input_loading_takes_instruments_of_this_data_and_no_othe
     info.write_text(json.dumps({"dataset": "web", "source": "another build"}), encoding="utf-8")
     assert data_identity(root) != inputs.identity
     with pytest.raises(gate.GateSetupError, match="reference judge.*other training data"):
-        gate._load_inputs(root, CPU, 64)
+        gate._load_inputs(root, CPU, scale)
     build_judge(root, device="cpu")  # the judge is rebuilt; the index is not yet
     with pytest.raises(gate.GateSetupError, match="novelty index.*other training data") as e:
-        gate._load_inputs(root, CPU, 64)
+        gate._load_inputs(root, CPU, scale)
     assert "Rebuild it with: airace-ml build-novelty-index" in str(e.value)
     build_novelty_index(root)
-    assert gate._load_inputs(root, CPU, 64).identity == data_identity(root) != inputs.identity
+    assert gate._load_inputs(root, CPU, scale).identity == data_identity(root) != inputs.identity
 
 
 def test_growth_sequences_take_one_held_out_document_of_each_dataset_in_turn(tiny_data_root):

@@ -33,6 +33,9 @@ QUICK_GROWN_SHAPE = ModelShape(3, 96, 64)  # a quick child that grows still exer
 QUICK_BATCH_TOKENS = 1024
 QUICK_BUDGET = QUICK_BATCH_TOKENS * 20  # 20 steps
 
+GARBLE_SAMPLES = 200  # held-out web prompts each G7 model completes in the real gate
+QUICK_GARBLE_SAMPLES = 60  # a quick run stays small
+
 
 def mix_heavy(target: str, share: float = 0.6) -> dict[str, float]:
     """A mix of all eight datasets that puts ``share`` on ``target`` and splits the rest evenly
@@ -52,7 +55,8 @@ class GateScale:
     ``grown_shape`` is the shape G5 grows the first model to. A continuation run (G5, G6) adds
     ``starter_budget`` tokens to its parent; G7's runs train on ``prep_budget``. ``batch_tokens``
     of ``None`` keeps the trainer's default. ``fingerprint_k`` is how many replies per probe a
-    personality fingerprint samples.
+    personality fingerprint samples. ``garble_samples`` is how many held-out web prompts each of
+    G7's cleaning models completes.
     """
 
     starter_shape: ModelShape
@@ -63,6 +67,7 @@ class GateScale:
     prep_budget: int
     batch_tokens: int | None
     fingerprint_k: int
+    garble_samples: int = QUICK_GARBLE_SAMPLES
 
 
 FULL_SCALE = GateScale(
@@ -74,6 +79,7 @@ FULL_SCALE = GateScale(
     prep_budget=2 * STARTER_BUDGET,
     batch_tokens=None,
     fingerprint_k=3,
+    garble_samples=GARBLE_SAMPLES,
 )
 
 QUICK_SCALE = GateScale(
@@ -85,4 +91,5 @@ QUICK_SCALE = GateScale(
     prep_budget=QUICK_BUDGET,
     batch_tokens=QUICK_BATCH_TOKENS,
     fingerprint_k=1,
+    garble_samples=QUICK_GARBLE_SAMPLES,
 )

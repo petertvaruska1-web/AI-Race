@@ -18,7 +18,7 @@ G5  Growth           growing the first model changes none of its outputs, and th
                      then learns to a lower held-out loss than the ungrown one on the same tokens
 G6  Forgetting       a code-only continuation of the story-heavy model loses creativity and
                      language, and a 30% replay of the old mix wins back at least half of it
-G7  Preparation      thorough cleaning lowers the garbled-word rate, and fact-checking lowers the
+G7  Preparation      thorough cleaning lowers the garble-like-word rate, and fact-checking lowers the
                      false-fact rate, each to at most 80% of the unprepared model's
 ==  ===============  =========================================================================
 
@@ -52,6 +52,7 @@ from __future__ import annotations
 import json
 import math
 import numbers
+import re
 import statistics
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -64,6 +65,7 @@ import numpy as np
 import torch
 from safetensors import SafetensorError
 
+from airace_content.textproc import MOJIBAKE_CHARS
 from airace_ml.data.corpus import (
     DATASET_IDS,
     INFO_FILE,
@@ -73,7 +75,7 @@ from airace_ml.data.corpus import (
     Corpus,
 )
 from airace_ml.data.identity import data_identity
-from airace_ml.data.prep import PrepConfig, heldout_docs
+from airace_ml.data.prep import PrepConfig, eligible_docs, heldout_docs
 from airace_ml.device import pick_device
 from airace_ml.evals.creativity import words
 from airace_ml.evals.judge import (
@@ -151,10 +153,14 @@ FACTS_MIX: dict[str, float] = {"web": 0.5, "facts": 0.5}
 SAMPLE_TEMPERATURE = 0.8
 SAMPLE_TOP_P = 0.95
 LEGIBILITY_REPLY_TOKENS = 64
-GARBLE_SAMPLES = 60
 GARBLE_PREFIX_TOKENS = 32
 GARBLE_NEW_TOKENS = 48
 GROWTH_SEQUENCES = 4
+GARBLE_MIN_TYPO_LENGTH = 4  # a shorter unknown word is a name or an abbreviation, never a typo
+DATA_SAMPLE_DOCS = 2000  # documents of each arm's web training text that G7 measures
+DATA_RATIO_WARNING = 0.7  # above this the data itself barely differs between the two arms
+LIGHT_CLEANING = PrepConfig("light")
+THOROUGH_CLEANING = PrepConfig("thorough", dedup=True)
 MEASURE_SEED = 0  # benchmarks, fingerprints and the choice of held-out prompts
 NOISE_MEASURE_SEED = MEASURE_SEED + 1  # G4 fingerprints its balanced models again at this seed
 # G5's continuations draw their batches from a stream of their own: the trainer seeds its data
@@ -657,7 +663,7 @@ def eval_prep(
     false_unchecked: Sequence[float],
     false_checked: Sequence[float],
 ) -> GateCriterion:
-    """G7: thorough cleaning brings the garbled-word rate to at most 80% of light cleaning's, and
+    """G7: thorough cleaning brings the garble-like-word rate to at most 80% of light cleaning's, and
     fact-checking brings the false-fact rate to at most 80% of no checking's, each averaged over
     the seeds (one rate per seed in each argument); each fall must also be more than
     :data:`SPREAD_FACTOR` times its seed spread. A mean rate of 0 without the preparation leaves
@@ -699,7 +705,9 @@ def eval_prep(
     data.update(means)
     problems = []
     if means["garble_light"] <= 0:
-        problems.append("the lightly cleaned model wrote no garbled word, so nothing could fall")
+        problems.append(
+            "the lightly cleaned model wrote no garble-like word, so nothing could fall"
+        )
     if means["false_unchecked"] <= 0:
         problems.append("the unchecked model preferred no false fact, so nothing could fall")
     n = len(dirty)
@@ -708,12 +716,12 @@ def eval_prep(
         garble_bar = SPREAD_FACTOR * means["garble_fall_spread"]
         false_bar = SPREAD_FACTOR * means["false_fall_spread"]
         rule = (
-            f"means over {n} seeds; {rule}, and by more than twice its seed spread: garbled "
+            f"means over {n} seeds; {rule}, and by more than twice its seed spread: garble-like "
             f"words {means['garble_fall']:.1%} against {garble_bar:.1%}, false facts "
             f"{means['false_fall']:.1%} against {false_bar:.1%}"
         )
     detail = (
-        f"garbled words {means['garble_thorough']:.1%} after thorough cleaning vs "
+        f"garble-like words {means['garble_thorough']:.1%} after thorough cleaning vs "
         f"{means['garble_light']:.1%} after light cleaning; false facts preferred "
         f"{means['false_checked']:.1%} with fact-checking vs {means['false_unchecked']:.1%} "
         f"without ({rule})"
@@ -748,18 +756,56 @@ def population_distance(a: Fingerprint, b: Fingerprint, population: Sequence[Fin
     return math.sqrt(total)
 
 
-def garble_rate(texts: Sequence[str], known_vocab: set[str]) -> float:
-    """The fraction of the words of ``texts`` (all pooled) that are not in ``known_vocab``; 0.0
-    when there are no words.
+# A word for the garble measure: a run of letters and mojibake characters, so the junk that the
+# noise module writes ("cafÃ©", "°´") stays in one word whether or not it is a letter.
+_GARBLE_WORD = re.compile("(?:[^\\W\\d_]|[" + re.escape("".join(sorted(MOJIBAKE_CHARS))) + "])+")
 
-    Words are counted as creativity and the fingerprint count them
-    (:func:`~airace_ml.evals.creativity.words`: lowercase runs of letters), not as G2's
-    ``is_well_formed`` does (it uses ``skills.checkers.words``). The vocabulary is read with the
-    same rule, so an entry with an apostrophe (``don't``) vouches for both of its parts.
+
+def _one_edit_from_known(word: str, known: set[str], alphabet: str) -> bool:
+    """Whether ``word`` is one insertion, deletion or substitution away from a word of ``known``
+    (whose letters are ``alphabet``)."""
+    for i in range(len(word)):
+        if word[:i] + word[i + 1 :] in known:
+            return True
+        if any(word[:i] + c + word[i + 1 :] in known for c in alphabet if c != word[i]):
+            return True
+    return any(word[:i] + c + word[i:] in known for i in range(len(word) + 1) for c in alphabet)
+
+
+def garble_rate(texts: Sequence[str], known_vocab: set[str]) -> float:
+    """The fraction of the words of ``texts`` (all pooled) that are garble-like; 0.0 when there
+    are no words.
+
+    A word is garble-like if it holds a character of the noise module's mojibake set
+    (:data:`~airace_content.textproc.MOJIBAKE_CHARS`, which everything ``garble()`` writes holds),
+    or if it is not in ``known_vocab``, has at least :data:`GARBLE_MIN_TYPO_LENGTH` letters and is
+    one insertion, deletion or substitution away from a word that is (a learned typo). A rare
+    word or a name that is nowhere near a known word is not garbled, which is what separates
+    garbling from the unknown-word share of real web text (names, brands, rare words), which
+    cleaning does not lower.
+
+    Words are runs of letters (and mojibake characters), as creativity and the fingerprint count
+    them (:func:`~airace_ml.evals.creativity.words`) but not lowercased before they are checked
+    for mojibake, whose first character is an uppercase letter; not as G2's ``is_well_formed``
+    does (it uses ``skills.checkers.words``). The vocabulary is read with the same rule as
+    ``words``, so an entry with an apostrophe (``don't``) vouches for both of its parts.
     """
     known = {w for entry in known_vocab for w in words(entry)}
-    said = [w for text in texts for w in words(text)]
-    return sum(w not in known for w in said) / len(said) if said else 0.0
+    alphabet = "".join(sorted({c for w in known for c in w}))
+    verdicts: dict[str, bool] = {}
+    garbled = total = 0
+    for text in texts:
+        for raw in _GARBLE_WORD.findall(text):
+            total += 1
+            if raw not in verdicts:
+                word = raw.lower()
+                verdicts[raw] = any(c in MOJIBAKE_CHARS for c in raw) or (
+                    word not in known
+                    and len(word) >= GARBLE_MIN_TYPO_LENGTH
+                    and _one_edit_from_known(word, known, alphabet)
+                )
+            garbled += verdicts[raw]
+    return garbled / total if total else 0.0
 
 
 def _object_context(template: str, subject: str) -> str | None:
@@ -930,20 +976,34 @@ def trim_to_word(text: str) -> str:
     return text
 
 
-def _web_prefixes(root: Path, tok: Tok) -> list[str]:
-    """:data:`GARBLE_SAMPLES` prompts: the first :data:`GARBLE_PREFIX_TOKENS` tokens (after
-    ``<|bos|>``) of held-out web documents in a seeded order, as text cut back to a whole word
+def _web_prefixes(root: Path, tok: Tok, samples: int) -> list[str]:
+    """``samples`` prompts: the first :data:`GARBLE_PREFIX_TOKENS` tokens (after ``<|bos|>``) of
+    held-out web documents in a seeded order, as text cut back to a whole word
     (:func:`trim_to_word`). With fewer held-out documents than samples, the documents are used
     again in the same order."""
     corpus = Corpus.open(corpus_dir(root) / "web")
     order = np.random.default_rng(MEASURE_SEED).permutation(heldout_docs(corpus))
     texts = []
-    for i in order[:GARBLE_SAMPLES]:
+    for i in order[:samples]:
         doc = corpus.doc(int(i))
         start = 1 if len(doc) and doc[0] == tok.bos_id else 0
         prefix = tok.decode(doc[start : start + GARBLE_PREFIX_TOKENS].tolist())
         texts.append(trim_to_word(prefix))
-    return [texts[k % len(texts)] for k in range(GARBLE_SAMPLES)] if texts else []
+    return [texts[k % len(texts)] for k in range(samples)] if texts else []
+
+
+def prepared_web_text(root: Path, tok: Tok, prep: PrepConfig, n: int) -> list[str]:
+    """The text of up to ``n`` of the web documents a model trained under ``prep`` may train on
+    (:func:`~airace_ml.data.prep.eligible_docs`), in a seeded order, so the same sample every
+    time. The ``<|bos|>`` that starts a document is left out."""
+    corpus = Corpus.open(corpus_dir(root) / "web")
+    order = np.random.default_rng(MEASURE_SEED).permutation(eligible_docs(corpus, prep))
+    texts = []
+    for i in order[:n]:
+        doc = corpus.doc(int(i))
+        start = 1 if len(doc) and doc[0] == tok.bos_id else 0
+        texts.append(tok.decode(doc[start:].tolist()))
+    return texts
 
 
 def _growth_sequences(root: Path, n: int, length: int) -> list[list[int]]:
@@ -1019,7 +1079,7 @@ def _load_novelty(root: Path, identity: str) -> NoveltyIndex:
         raise _rebuild("the novelty index", index, e, command) from e
 
 
-def _load_inputs(root: Path, device: torch.device, length: int) -> _Inputs:
+def _load_inputs(root: Path, device: torch.device, scale: GateScale) -> _Inputs:
     """Everything the gate reads besides its own runs, checked before any training starts."""
     missing = _missing_inputs(root)
     if missing:
@@ -1032,8 +1092,8 @@ def _load_inputs(root: Path, device: torch.device, length: int) -> _Inputs:
         plan = FalseFactPlan.from_json(
             (corpus_dir(root) / FALSE_FACTS_FILE).read_text(encoding="utf-8")
         )
-        prefixes = _web_prefixes(root, tok)
-        sequences = _growth_sequences(root, GROWTH_SEQUENCES, length)
+        prefixes = _web_prefixes(root, tok, scale.garble_samples)
+        sequences = _growth_sequences(root, GROWTH_SEQUENCES, scale.starter_shape.ctx_len)
     except _LOAD_ERRORS as e:
         raise GateSetupError(f"the training data cannot be read ({e}); {data_hint}") from e
     if not prefixes or len(sequences) < GROWTH_SEQUENCES:
@@ -1423,6 +1483,43 @@ class _Gate:
         criterion.data["seeds"] = list(self.seeds)
         return criterion, used
 
+    def prepared_text_garble(self) -> tuple[dict, str]:
+        """Information beside G7(a)'s verdict: :func:`garble_rate` of the prepared web training
+        text of each cleaning arm (:data:`DATA_SAMPLE_DOCS` documents of its pool), and the
+        ratio of the two. The data, and a sentence for the criterion's detail. A ratio above
+        :data:`DATA_RATIO_WARNING` means the training text of the two arms hardly differs, so
+        no model could be expected to tell them apart."""
+        rates, docs = {}, {}
+        for arm, prep in (("light", LIGHT_CLEANING), ("thorough", THOROUGH_CLEANING)):
+            self.on_progress(f"  G7: garble-like words in the web training text, {arm} cleaning")
+            texts = prepared_web_text(self.runs.data_root, self.inputs.tok, prep, DATA_SAMPLE_DOCS)
+            rates[arm], docs[arm] = garble_rate(texts, self.inputs.known_vocab), len(texts)
+        light, thorough = rates["light"], rates["thorough"]
+        ratio = thorough / light if light > 0 else None
+        data = {
+            "data_garble_light": light,
+            "data_garble_thorough": thorough,
+            "data_ratio": ratio,
+            "data_docs_light": docs["light"],
+            "data_docs_thorough": docs["thorough"],
+        }
+        if ratio is None:
+            note = (
+                "In the prepared web training text itself, light cleaning leaves nothing "
+                "garble-like, so there is no ratio."
+            )
+        else:
+            note = (
+                f"In the prepared web training text itself, thorough cleaning leaves {ratio:.2f} "
+                f"of light cleaning's garble-like words ({thorough:.1%} vs {light:.1%})."
+            )
+            if ratio > DATA_RATIO_WARNING:
+                note += (
+                    f" That is above about {DATA_RATIO_WARNING:g}: strengthen the web noise or "
+                    f"the cleaning thresholds before trusting this verdict."
+                )
+        return data, note
+
     def preparation(self) -> tuple[GateCriterion, list[GateRun]]:
         """G7: for every seed, light vs thorough cleaning and no vs thorough fact-checking."""
         self.announce("G7", "light vs thorough cleaning, and fact-checking")
@@ -1447,12 +1544,12 @@ class _Gate:
         false: dict[str, list[float]] = {"g7-facts-unchecked": [], "g7-facts-checked": []}
         for seed in self.seeds:
             for name, prep in (
-                ("g7-web-light", PrepConfig("light")),
-                ("g7-web-thorough", PrepConfig("thorough", dedup=True)),
+                ("g7-web-light", LIGHT_CLEANING),
+                ("g7-web-thorough", THOROUGH_CLEANING),
             ):
                 lm = self.lm(prep_run(name, seed, web, prep))
                 self.on_progress(
-                    f"  {name}-s{seed}: {GARBLE_SAMPLES} completions of held-out web text"
+                    f"  {name}-s{seed}: {len(self.inputs.web_prefixes)} completions of held-out web text"
                 )
                 completions = [
                     lm.complete(
@@ -1476,9 +1573,12 @@ class _Gate:
             false["g7-facts-unchecked"],
             false["g7-facts-checked"],
         )
+        data_level, note = self.prepared_text_garble()
+        criterion.detail += " " + note
         probes, skipped = false_fact_probes(self.inputs.kb, self.inputs.plan)
         criterion.data.update(
             {
+                **data_level,
                 "seeds": list(self.seeds),
                 "completions": len(self.inputs.web_prefixes),
                 "distinct_prompts": len(set(self.inputs.web_prefixes)),
@@ -1532,7 +1632,7 @@ def run_gate(
     device = torch.device(device) if device is not None else pick_device()
     root = Path(data_root)
     out = Path(out_dir).resolve()
-    inputs = _load_inputs(root, device, scale.starter_shape.ctx_len)
+    inputs = _load_inputs(root, device, scale)
     training_code = source_digest(TRAINING_SOURCES)
     mode = "quick (tiny models: a check of the setup, not of feasibility)" if quick else "full"
     on_progress(f"gate: {mode}; seeds {', '.join(map(str, seeds))}; on {device.type}; into {out}")
