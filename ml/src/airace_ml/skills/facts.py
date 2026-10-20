@@ -55,6 +55,42 @@ def _sample_facts(
     return [chosen[int(i)] for i in rng.permutation(len(chosen))]
 
 
+def _balanced_facts(rng: np.random.Generator, n: int, pool: list[Fact]) -> list[Fact]:
+    """``n`` distinct facts of one relation whose answers (objects) are as even as the pool allows.
+
+    The objects take turns in a seeded order, one fact each, a random unused fact of that object;
+    an object with no fact left is skipped. So the answer to a benchmark question is no more likely
+    to be one object than another, however unevenly the knowledge base holds them (four legs for
+    most animals, mammals for most animals): a model that knows only the relation's habits gets no
+    more than chance. ``ValueError`` if ``n`` is more than the pool.
+    """
+    if n > len(pool):
+        raise ValueError(f"cannot take {n} from {len(pool)} available")
+    left: dict[str, list[Fact]] = {}
+    for fact in pool:
+        left.setdefault(fact.obj, []).append(fact)
+    objects = sorted(left)
+    order = [objects[int(i)] for i in rng.permutation(len(objects))]
+    chosen: list[Fact] = []
+    while len(chosen) < n:
+        for obj in order:
+            if len(chosen) < n and left[obj]:
+                chosen.append(left[obj].pop(int(rng.integers(len(left[obj])))))
+    return chosen
+
+
+def _sample_bench_facts(
+    rng: np.random.Generator, total: int, pools: Mapping[str, list[Fact]]
+) -> list[Fact]:
+    """:func:`_sample_facts` for benchmarks: ``total`` distinct facts spread evenly over the pools,
+    and within each pool as evenly over its objects as :func:`_balanced_facts` makes them."""
+    quota = fair_quota({name: len(pool) for name, pool in pools.items()}, total)
+    chosen: list[Fact] = []
+    for name in sorted(pools):
+        chosen.extend(_balanced_facts(rng, quota[name], pools[name]))
+    return [chosen[int(i)] for i in rng.permutation(len(chosen))]
+
+
 def _gives_away_answer(fact: Fact) -> bool:
     """Whether the subject contains the answer or the answer contains the subject.
 
@@ -136,17 +172,19 @@ def knowledge_bench_items(kb: KB, rng: np.random.Generator) -> list[MCItem | Exa
     """200 knowledge items: 150 four-option multiple choice and 50 free answer.
 
     Each item asks about a different fact, spread evenly over the relations that are safe for
-    multiple choice (``Relation.mc_safe``; free answers also need ``exact_safe``), in the frame
-    ``Question: ...\\nAnswer:``. The question is a question template, or (about 40% of the time)
-    a bench template with the object blanked out. Free answers accept the true object and its listed forms (``KB.accepted_answers``). The
-    multiple-choice items come first (``knowledge-0000`` to ``knowledge-0149``).
+    multiple choice (``Relation.mc_safe``; free answers also need ``exact_safe``), and within a
+    relation evenly over its objects (:func:`_balanced_facts`), so the answers do not follow the
+    knowledge base's base rates. The frame is ``Question: ...\\nAnswer:``. The question is a question
+    template, or (about 40% of the time) a bench template with the object blanked out. Free answers
+    accept the true object and its listed forms (``KB.accepted_answers``). The multiple-choice items
+    come first (``knowledge-0000`` to ``knowledge-0149``).
     """
-    exact_facts = _sample_facts(rng, N_KNOWLEDGE_EXACT, _bench_pools(kb, exact=True))
+    exact_facts = _sample_bench_facts(rng, N_KNOWLEDGE_EXACT, _bench_pools(kb, exact=True))
     taken = set(exact_facts)
     mc_pools = {
         name: [f for f in pool if f not in taken] for name, pool in _bench_pools(kb).items()
     }
-    facts = _sample_facts(rng, N_KNOWLEDGE_MC, mc_pools) + exact_facts
+    facts = _sample_bench_facts(rng, N_KNOWLEDGE_MC, mc_pools) + exact_facts
     items: list[MCItem | ExactItem] = []
     for i, fact in enumerate(facts):
         relation = kb.relations[fact.relation]
@@ -170,9 +208,9 @@ def consistency_groups(kb: KB, rng: np.random.Generator, n_groups: int = 40) -> 
 
     A group asks about one fact with 3 different question templates; the 4 options are the same
     in each paraphrase but shuffled independently. Facts come from the same pools as the
-    knowledge items.
+    knowledge items, and are drawn as evenly over each relation's objects.
     """
-    facts = _sample_facts(rng, n_groups, _bench_pools(kb))
+    facts = _sample_bench_facts(rng, n_groups, _bench_pools(kb))
     items: list[MCItem] = []
     for g, fact in enumerate(facts):
         relation = kb.relations[fact.relation]

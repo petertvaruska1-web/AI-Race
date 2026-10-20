@@ -12,6 +12,7 @@ from airace_ml.data.corpus import TOPICS
 from airace_ml.skills.facts import (
     BLANK,
     FalseFactPlan,
+    _balanced_facts,
     consistency_groups,
     fact_chat_docs,
     fact_prose_docs,
@@ -490,6 +491,59 @@ def test_mc_answer_positions_are_shuffled():
     ]
     assert {i.answer_index for i in items} == {0, 1, 2, 3}
     assert max(Counter(i.answer_index for i in items).values()) < 70
+
+
+def _answer_counts(items) -> dict[str, Counter]:
+    """For each relation, how often each object is the answer of its items."""
+    counts: dict[str, Counter] = {}
+    for it in items:
+        rel = next(t for t in it.tags if t.startswith("rel:")).removeprefix("rel:")
+        answer = it.options[it.answer_index] if isinstance(it, MCItem) else it.answers[0]
+        counts.setdefault(rel, Counter())[answer] += 1
+    return counts
+
+
+def test_balanced_facts_take_the_objects_in_turn_and_skip_the_used_up():
+    pool = [Fact(f"a{k}", "r", "A") for k in range(10)]
+    pool += [Fact("b0", "r", "B"), Fact("c0", "r", "C")]
+    pool += [Fact(f"d{k}", "r", "D") for k in range(3)]
+    for seed in range(5):
+        taken = _balanced_facts(np.random.default_rng(seed), 8, pool)
+        assert len(set(taken)) == 8 and set(taken) <= set(pool)
+        assert Counter(f.obj for f in taken) == {"A": 3, "D": 3, "B": 1, "C": 1}
+    plenty = [Fact(f"{o}{k}", "r", o) for o in "ABCD" for k in range(10)]
+    for seed in range(5):
+        counts = Counter(f.obj for f in _balanced_facts(np.random.default_rng(seed), 10, plenty))
+        assert sorted(counts.values()) == [2, 2, 3, 3]
+    assert len(_balanced_facts(np.random.default_rng(0), len(pool), pool)) == len(pool)
+    assert _balanced_facts(np.random.default_rng(0), 0, pool) == []
+    with pytest.raises(ValueError, match="cannot take"):
+        _balanced_facts(np.random.default_rng(0), len(pool) + 1, pool)
+
+
+def test_balanced_facts_are_deterministic_and_seed_sensitive():
+    pool = load_kb().facts_for("animal_legs")
+    a = _balanced_facts(np.random.default_rng(3), 12, pool)
+    assert a == _balanced_facts(np.random.default_rng(3), 12, pool)
+    assert any(a != _balanced_facts(np.random.default_rng(seed), 12, pool) for seed in range(4, 9))
+
+
+def test_knowledge_answers_do_not_follow_the_knowledge_base_base_rates():
+    # 'four' was the answer to 11 of 16 leg-count items and 'mammal' to 9 of 16 animal-class items
+    # (the objects most facts have), so a model that ignored the subject scored well above chance
+    counts = _answer_counts(knowledge_bench_items(load_kb(), skill_rng("knowledge", "bench")))
+    for rel in ("animal_legs", "animal_class", "baby_animal", "vehicle_travel"):
+        assert sum(counts[rel].values()) >= 15
+        assert max(counts[rel].values()) <= 0.3 * sum(counts[rel].values()), (rel, counts[rel])
+
+
+def test_every_seed_spreads_the_answers_of_the_relations_that_have_many_objects():
+    kb = load_kb()
+    for seed in range(20):
+        items = knowledge_bench_items(kb, np.random.default_rng(seed))
+        for rel, counts in _answer_counts(items).items():
+            if len(kb.objects_for(rel)) >= 10 and rel != "capital_of":  # most objects have 1 fact
+                assert max(counts.values()) <= 0.4 * sum(counts.values()), (seed, rel, counts)
 
 
 # --- consistency -------------------------------------------------------------------------------

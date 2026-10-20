@@ -8,6 +8,7 @@ diverged model) always yields a finite score, never NaN or a division by zero.
 
 import math
 import re
+from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from statistics import fmean
@@ -15,7 +16,7 @@ from typing import Any, Literal
 
 from airace_ml.infer.lm import ContinuationScore
 from airace_ml.skills.checkers import CHECKERS
-from airace_ml.skills.types import CheckItem
+from airace_ml.skills.types import CheckItem, ExactItem
 
 MIN_TAG_ITEMS = 10
 """A tag needs at least this many items in a category before :meth:`BenchReport.tag_breakdown`
@@ -90,6 +91,26 @@ def constant_reply_floor(items: Sequence[CheckItem], replies: Iterable[str]) -> 
     for reply in dict.fromkeys(replies):
         best = max(best, sum(CHECKERS[item.check](reply, item.check_args) for item in items))
     return best / len(items)
+
+
+def relation_prior_floor(items: Sequence[ExactItem]) -> float:
+    """The best pass rate over ``items`` of one fixed reply per relation.
+
+    A relation's items carry its ``rel:<name>`` tag (items with none share one group). For each
+    relation the best reply is the answer most of its items accept (any listed form, compared as
+    :func:`exact_match` does), so the floor is the sum over relations of the count of that answer,
+    over the number of items. It is the chance level of free answers that a model can get by
+    knowing which kind of thing a relation answers with, without reading the subject. 0.0 when
+    there are no items.
+    """
+    if not items:
+        return 0.0
+    accepted: dict[str, Counter[str]] = {}
+    for item in items:
+        relation = next((tag for tag in item.tags if tag.startswith("rel:")), "")
+        forms = {normalize_answer(answer) for answer in item.answers} - {""}
+        accepted.setdefault(relation, Counter()).update(forms)
+    return sum(max(counts.values(), default=0) for counts in accepted.values()) / len(items)
 
 
 # -- log-probability comparisons -------------------------------------------------------------

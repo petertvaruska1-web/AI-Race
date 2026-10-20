@@ -11,7 +11,8 @@ Item                      Asked as                                             C
                           right if the good one is strictly higher
 ``MCItem``                mean log-prob per token of each option after the     1 / options
                           prompt; the best one is the answer (first on ties)
-``ExactItem``             greedy reply; the extracted answer must match        0
+``ExactItem``             greedy reply; the extracted answer must match        0; knowledge: the
+                                                                               floor below
 ``CheckItem``             greedy reply; the item's checker must pass it        0; instruction:
                                                                                the floor below
 consistency group         its members' multiple-choice answers (as for         mean 1 / options
@@ -34,7 +35,16 @@ one-word item. The instruction category's chance is therefore a measured **floor
 rate, over the instruction items scored in the run (so it follows ``max_items_per_category``), of
 any one constant reply from :data:`CONSTANT_REPLIES` or any scored item's own reference given to
 every item. A model that gives every item the same reply scores 0 with any of those replies, and
-about 0 with any other. Coding's checked items and every exact item keep chance 0.
+about 0 with any other. Coding's checked items keep chance 0.
+
+Knowledge draws the answers of each relation evenly over its objects (see
+:func:`airace_ml.skills.facts.knowledge_bench_items`), so a multiple-choice question is as likely to
+be answered by one object as another and a model that ignores the subject gets ``1 / options``. A
+free answer has no options, so the knowledge category's chance for those items is also a measured
+**floor**: the best pass rate, over the free-answer items scored in the run, of one fixed reply per
+relation (:func:`airace_ml.evals.scoring.relation_prior_floor`). A model that answers every question
+of a relation with the same object, whichever object that is, scores 0 on them. Coding's output
+items keep chance 0.
 
 Each category asks the model in as few calls as possible: one scoring call, and one generation
 call per reply length.
@@ -61,6 +71,7 @@ from airace_ml.evals.scoring import (
     exact_match,
     mc_choice,
     pair_correct,
+    relation_prior_floor,
 )
 from airace_ml.infer.lm import ContinuationScore, LanguageModel
 from airace_ml.skills.checkers import CHECKERS
@@ -271,6 +282,11 @@ def _run_category(
         floor = constant_reply_floor(checked, [*CONSTANT_REPLIES, *(i.reference for i in checked)])
         chances = [
             floor if isinstance(i, CheckItem) else c for i, c in zip(items, chances, strict=True)
+        ]
+    if category == "knowledge":
+        floor = relation_prior_floor([item for item in items if isinstance(item, ExactItem)])
+        chances = [
+            floor if isinstance(i, ExactItem) else c for i, c in zip(items, chances, strict=True)
         ]
     return category_score([o.score for o in outcomes], chances), results
 

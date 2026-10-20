@@ -20,6 +20,7 @@ from airace_ml.evals.scoring import (
     normalize,
     normalize_answer,
     pair_correct,
+    relation_prior_floor,
 )
 from airace_ml.evals.suite import (
     CATEGORIES,
@@ -797,6 +798,117 @@ def test_answer_key_replies_to_a_function_prompt_with_a_newline_and_the_body(tin
             seed=0,
         )
         assert tiny_tok.decode(reply.tokens) == "\n" + item.reference, item.id
+
+
+# -- Fix wave A (F5): the answers do not lean on the KB's base rates ------------------------------
+
+
+def _relation_prior_lm(tok: Tok, suite: Suite) -> ScriptedLM:
+    """A model that knows no subject, only each relation's object frequencies in the KB.
+
+    Multiple choice: it prefers the option that is the most common object of the item's relation.
+    Free answer: it replies that relation's most common object. (The ties of ``Counter`` and of
+    ``mc_choice`` are fixed, so it is deterministic.)
+    """
+    kb = load_kb()
+    counts = {name: Counter(f.obj for f in kb.facts_for(name)) for name in kb.relations}
+
+    def relation_of(item) -> str:
+        return next(t for t in item.tags if t.startswith("rel:")).removeprefix("rel:")
+
+    relation_at, mode_at = {}, {}
+    for category in ("knowledge", "consistency"):
+        for item in suite.items[category]:
+            key = tuple(encode_doc(tok, item.prompt))
+            relation_at[key] = relation_of(item)
+            mode_at[key] = counts[relation_of(item)].most_common(1)[0][0]
+
+    def score(ctx, cont):  # the mean per token is the option's frequency
+        return counts[relation_at[tuple(ctx)]][tok.decode(cont).strip()] * len(cont)
+
+    return ScriptedLM(tok, reply=lambda prompt: mode_at[tuple(prompt)], score=score)
+
+
+def test_a_model_that_only_knows_relation_priors_scores_about_zero(tiny_tok):
+    suite = build_suite()
+    rep = run_benchmarks(
+        _relation_prior_lm(tiny_tok, suite),
+        tiny_tok,
+        suite=suite,
+        categories=["knowledge", "consistency"],
+    )
+    # the old suite's answers were the KB's base rates ('four' for 11 of 16 leg counts, ...):
+    # this model scored 19 on knowledge. Now every object of a relation is as likely an answer.
+    assert rep.scores["knowledge"].score <= 7, rep.scores["knowledge"]
+    assert rep.scores["consistency"].score <= 7, rep.scores["consistency"]
+    assert rep.scores["knowledge"].n == 200 and rep.scores["consistency"].n == 40
+
+
+def _exact(k, relation, *answers):
+    return ExactItem(f"knowledge-{k}", "knowledge", f"Question {k}?", list(answers), (relation,))
+
+
+def test_relation_prior_floor_arithmetic():
+    items = [
+        _exact(0, "rel:legs", "four"),
+        _exact(1, "rel:legs", "four", "4"),
+        _exact(2, "rel:legs", "two"),
+        _exact(3, "rel:class", "mammal"),
+        _exact(4, "rel:class", "bird"),
+    ]
+    # 'four' (2 of 3 leg questions) and either class (1 of 2): 3 of 5
+    assert relation_prior_floor(items) == pytest.approx(3 / 5)
+    assert relation_prior_floor(items[:3]) == pytest.approx(2 / 3)
+    assert relation_prior_floor([_exact(0, "rel:a", "x"), _exact(1, "rel:b", "x")]) == 1.0
+    assert relation_prior_floor([_exact(k, "rel:a", f"w{k}") for k in range(4)]) == 0.25
+    # a listed form counts for its item, and answers compare as free answers do
+    forms = [_exact(0, "rel:a", "Pup", "puppy"), _exact(1, "rel:a", "puppy.")]
+    assert relation_prior_floor(forms) == 1.0
+    # items with no relation tag share one group; nothing at all is a floor of 0
+    assert relation_prior_floor([_exact(0, "other", "x"), _exact(1, "tag", "x")]) == 1.0
+    assert relation_prior_floor([]) == 0.0
+
+
+def test_knowledge_free_answers_have_the_relation_prior_floor_as_chance(tiny_tok):
+    items = [
+        _exact(0, "rel:legs", "four"),
+        _exact(1, "rel:legs", "four"),
+        _exact(2, "rel:legs", "two"),
+        _exact(3, "rel:class", "mammal"),
+        _exact(4, "rel:class", "bird"),
+    ]  # floor 3/5: say 'four' and 'mammal' to every question of the relation
+    said = {
+        tuple(encode_doc(tiny_tok, i.prompt)): reply
+        for i, reply in zip(items, ["four", "four", "four", "mammal", "mammal"], strict=True)
+    }
+    suite = Suite("t", {"knowledge": items, "coding": items})
+    lm = ScriptedLM(tiny_tok, reply=lambda p: said[tuple(p)])
+    rep = run_benchmarks(lm, tiny_tok, suite=suite, categories=["knowledge", "coding"])
+    assert rep.scores["knowledge"] == CategoryScore(0.0, 3 / 5, 5)  # the floor is chance
+    assert rep.scores["coding"] == CategoryScore(60.0, 3 / 5, 5)  # other exact items: chance 0
+    known = {tuple(encode_doc(tiny_tok, i.prompt)): i.answers[0] for i in items}
+    rep = run_benchmarks(
+        ScriptedLM(tiny_tok, reply=lambda p: known[tuple(p)]),
+        tiny_tok,
+        suite=suite,
+        categories=["knowledge"],
+    )
+    assert rep.scores["knowledge"] == CategoryScore(100.0, 1.0, 5)
+
+
+def test_the_knowledge_floor_follows_the_items_run(tiny_tok):
+    suite = build_suite()
+    exact = [i for i in suite.items["knowledge"] if isinstance(i, ExactItem)]
+    assert len(exact) == 50 and 0.1 < relation_prior_floor(exact) < 0.4
+    # a run that scores only multiple choice (the first 150 items) has no free answers to floor
+    rep = run_benchmarks(
+        answer_key_lm(tiny_tok, suite),
+        tiny_tok,
+        suite=suite,
+        categories=["knowledge"],
+        max_items_per_category=150,
+    )
+    assert rep.scores["knowledge"] == CategoryScore(100.0, 1.0, 150)
 
 
 # -- Fix round 1: the instruction floor (I1) ------------------------------------------------------
