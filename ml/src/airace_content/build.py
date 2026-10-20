@@ -2,6 +2,9 @@
 
 ``build_corpus`` runs the pipeline once per corpus version:
 
+0. before anything is read: every source the build needs is opened and its first rows checked
+   (``check_sources``), so a hub, config or format problem in any of them stops the build in
+   minutes instead of after an hour of reading the others;
 1. ``simple_vocab``: the 6,000 most frequent words of TinyStories text;
 2. a plan of 300 false facts, told the same way in every dataset;
 3. each dataset assembled from its recipe (``assemble.assemble_dataset``);
@@ -70,7 +73,17 @@ from airace_content.manifest import (
     write_record,
     write_vocab,
 )
-from airace_content.sources import SOURCES, Fetch, row_to_content
+from airace_content.sources import (
+    FORMAT_CHECK_ROWS,
+    SOURCES,
+    DatasetsUnavailable,
+    Fetch,
+    SourceFormatError,
+    format_error,
+    is_transient_error,
+    row_has_format,
+    row_to_content,
+)
 from airace_content.textproc import (
     build_vocab,
     normalize_text,
@@ -293,6 +306,48 @@ def _refuse_other_scale(
         )
 
 
+def sources_needed(datasets: Iterable[str], *, simple_vocab: bool) -> list[str]:
+    """The ids of the sources the recipes of ``datasets`` read, plus TinyStories when the simple
+    vocabulary is to be built, in the order of ``SOURCES``."""
+    ids = {comp.name for ds in datasets for comp in RECIPES[ds].components if comp.kind == "source"}
+    if simple_vocab:
+        ids.add("tinystories")
+    return [source_id for source_id in SOURCES if source_id in ids]
+
+
+def check_sources(source_ids: Iterable[str], fetch: Fetch) -> None:
+    """Open each source and read rows until one has the format its adapter reads (at most
+    ``FORMAT_CHECK_ROWS``), so a config, access or format problem in any source stops the build
+    before it reads the first one for real. A source with no rows at all passes: the build
+    reports one that runs dry. A network error is passed on as it is (the command line words it);
+    any other error from opening a source becomes a ``BuildError`` that names the source."""
+    for source_id in source_ids:
+        spec = SOURCES[source_id]
+        rows_read = 0
+        rows = None
+        try:
+            rows = fetch(spec, FORMAT_CHECK_ROWS)
+            for row in rows:
+                rows_read += 1
+                if row_has_format(source_id, row):
+                    break
+            else:
+                if rows_read:
+                    raise format_error(spec, rows_read)
+        except (SourceFormatError, DatasetsUnavailable):
+            raise
+        except Exception as e:
+            if is_transient_error(e):
+                raise
+            raise BuildError(
+                f"source {source_id!r} ({spec.hf_path}) cannot be read: {type(e).__name__}: {e}"
+            ) from e
+        finally:
+            close = getattr(rows, "close", None)
+            if close is not None:
+                close()
+
+
 def _simple_vocab(scale: str, fetch: Fetch) -> set[str]:
     spec = SOURCES["tinystories"]
     texts = [
@@ -406,6 +461,13 @@ def build_corpus(
     _refuse_other_scale(scale, out_root, root, tok_path, frozen=frozen, reused=reused)
     earlier_shared = read_shared_record(root)
 
+    # Datasets the known vocabulary needs are assembled even when they are not written.
+    needed = set(selected) | (set() if known_path else set(KNOWN_VOCAB_DATASETS))
+    check_sources(
+        sources_needed([ds for ds in DATASET_IDS if ds in needed], simple_vocab=not simple_path),
+        fetch,
+    )
+
     kb = load_kb()
     simple_vocab = read_vocab(simple_path) if simple_path else _simple_vocab(scale, fetch)
     plan = (
@@ -414,8 +476,6 @@ def build_corpus(
         else plan_false_facts(kb, stream(seed, "false_facts"), N_FALSE_FACTS)
     )
 
-    # Datasets the known vocabulary needs are assembled even when they are not written.
-    needed = set(selected) | (set() if known_path else set(KNOWN_VOCAB_DATASETS))
     assembled: dict[str, list[AssembledDoc]] = {}
     stats: dict[str, dict] = {}
     for ds in (ds for ds in DATASET_IDS if ds in needed):

@@ -7,8 +7,11 @@ never write text of their own beyond the fixed frames the recipes call for (``Qu
 ``Answer:`` for GSM8K, a ``#`` comment line for MBPP, the title line for Simple Wikipedia).
 
 ``hf_fetch`` streams rows from the Hugging Face hub and imports ``datasets`` only when it runs,
-so nothing else needs the library. ``fixture_fetch`` reads the same rows from local JSONL files,
-which keeps every test offline. ``row_has_format`` says whether a row has the fields its adapter
+so nothing else needs the library. It rides out a flaky connection: a network error (or a 408, 429
+or 5xx from the hub) at any point is waited out and the stream reopened and brought back to the
+row where it broke, so the same seed still gives the same corpus; an error that waiting cannot fix
+is raised as it is. ``fixture_fetch`` reads the same rows from local JSONL files, which keeps
+every test offline. ``row_has_format`` says whether a row has the fields its adapter
 reads, so a build can stop early when a dataset's format is not what the adapter expects (instead
 of filtering out every row of a whole dataset).
 """
@@ -16,6 +19,8 @@ of filtering out every row of a whole dataset).
 import itertools
 import json
 import re
+import sys
+import time
 from collections import Counter
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -80,9 +85,74 @@ class SourceFormatError(ValueError):
     format."""
 
 
+# A source that cannot be read gets this many tries in a row (a row read in between starts the
+# count again); the waits between them double from the first to the longest.
+RETRY_ATTEMPTS = 8
+RETRY_FIRST_WAIT_S = 30.0
+RETRY_MAX_WAIT_S = 300.0
+_TRANSIENT_STATUSES = frozenset({408, 429})  # and every 5xx
+
+
+class SourceUnavailable(ConnectionError):
+    """A source could not be read, after the retries: a network problem, not a problem with the
+    data."""
+
+
+def _verdict(error: BaseException) -> bool | None:
+    """True when waiting may fix ``error``, False when it cannot, None when it has no opinion."""
+    if isinstance(error, (ConnectionError, TimeoutError)):
+        try:
+            from huggingface_hub.errors import OfflineModeIsEnabled
+        except ImportError:  # pragma: no cover - the hub client always comes with ``datasets``
+            return True
+        return not isinstance(error, OfflineModeIsEnabled)  # offline mode is asked for
+    try:
+        import httpx
+        from huggingface_hub.errors import HfHubHTTPError
+    except ImportError:  # pragma: no cover
+        return None
+    if isinstance(error, httpx.TransportError):
+        return True
+    if isinstance(error, (HfHubHTTPError, httpx.HTTPStatusError)):
+        status = getattr(getattr(error, "response", None), "status_code", None)
+        return status is None or status in _TRANSIENT_STATUSES or 500 <= status <= 599
+    return None
+
+
+def is_transient_error(error: BaseException) -> bool:
+    """Whether waiting and trying again may fix ``error``: a dropped connection or timeout, or an
+    HTTP error from the hub with no status, 408, 429 or 5xx. Not-found, 401/403/404, a config or
+    format problem and every other error are not. A wrapped error is judged by its first cause
+    that says."""
+    for _ in range(8):
+        verdict = _verdict(error)
+        if verdict is not None:
+            return verdict
+        if error.__cause__ is None:
+            return False
+        error = error.__cause__
+    return False
+
+
+def _pause(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+def _one_line(error: BaseException, limit: int = 160) -> str:
+    text = " ".join(f"{type(error).__name__}: {error}".split())
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
 def hf_fetch(spec: SourceSpec, max_rows: int) -> Iterator[dict]:
     """Stream up to ``max_rows`` rows of ``spec`` from the Hugging Face hub (needs the network and
-    the ``content`` extra, which provides ``datasets``)."""
+    the ``content`` extra, which provides ``datasets``).
+
+    A transient error (``is_transient_error``), whether the source is being opened or a row read,
+    is waited out (``RETRY_FIRST_WAIT_S``, doubling up to ``RETRY_MAX_WAIT_S``, one line on stderr
+    each time) and the source opened again and read past the rows already given, so none is lost or
+    repeated. After ``RETRY_ATTEMPTS`` failures in a row (a row given in between starts the count
+    again) it raises ``SourceUnavailable``. Any other error is raised as it is, at once.
+    """
     try:
         from datasets import load_dataset
     except ImportError as e:
@@ -90,8 +160,43 @@ def hf_fetch(spec: SourceSpec, max_rows: int) -> Iterator[dict]:
             "fetching sources needs the 'datasets' package; install the content extra "
             "(uv sync --extra content)"
         ) from e
-    rows = load_dataset(spec.hf_path, spec.hf_config, split=spec.split, streaming=True)
-    yield from itertools.islice(rows, max_rows)
+    given, failures = 0, 0
+    rows: Iterator[dict] | None = None
+    while given < max_rows:
+        try:
+            if rows is None:
+                reopened = iter(
+                    load_dataset(spec.hf_path, spec.hf_config, split=spec.split, streaming=True)
+                )
+                for _ in itertools.islice(reopened, given):  # read past what was already given
+                    pass
+                rows = reopened
+            row = next(rows, None)
+        except Exception as e:
+            rows = None
+            if not is_transient_error(e):
+                raise
+            failures += 1
+            if failures >= RETRY_ATTEMPTS:
+                raise SourceUnavailable(
+                    f"network problem while reading source {spec.id!r} ({spec.hf_path}): "
+                    f"{_one_line(e)}"
+                ) from e
+            wait = min(RETRY_FIRST_WAIT_S * 2 ** (failures - 1), RETRY_MAX_WAIT_S)
+            print(
+                f"network problem reading {spec.id} after {given:,} rows ({_one_line(e)}); "
+                f"waiting {wait:.0f} s, then trying again (try {failures + 1} of "
+                f"{RETRY_ATTEMPTS})",
+                file=sys.stderr,
+                flush=True,
+            )
+            _pause(wait)
+            continue
+        if row is None:
+            return
+        failures = 0
+        given += 1
+        yield row
 
 
 def fixture_fetch(fixture_dir: Path) -> Fetch:

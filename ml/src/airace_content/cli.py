@@ -6,8 +6,9 @@
 Sources are streamed from the Hugging Face hub, except that ``--fixtures DIR`` (tiny scale only)
 reads them from local ``<source id>.jsonl`` files, so a tiny build can run offline. Exit codes:
 0 on success, 2 for a bad argument, 1 when the build cannot run as asked (a partial build that
-would need a new tokenizer, a source in an unexpected format, or no ``datasets`` package). A
-source that runs out before its quota is met gets one ``warning:`` line on stderr.
+would need a new tokenizer, a source in an unexpected format, no ``datasets`` package, or a network
+problem that waiting did not get past: run the same command again). A source that runs out before
+its quota is met gets one ``warning:`` line on stderr.
 """
 
 import argparse
@@ -18,8 +19,10 @@ from airace_content.build import BuildError, BuildSummary, build_corpus
 from airace_content.sources import (
     DatasetsUnavailable,
     SourceFormatError,
+    SourceUnavailable,
     fixture_fetch,
     hf_fetch,
+    is_transient_error,
 )
 from airace_ml.data.corpus import DATASET_IDS
 from airace_ml.paths import corpus_dir, data_root
@@ -153,6 +156,16 @@ def main(argv: list[str] | None = None) -> int:
         )
     except (BuildError, SourceFormatError, DatasetsUnavailable) as e:
         print(f"error: {e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        if not is_transient_error(e):
+            raise
+        # a network problem that the retries could not get past (or one a fetch let through)
+        reason = str(e) if isinstance(e, SourceUnavailable) else f"network problem: {e}"
+        print(
+            f"error: {reason}. Check the internet connection, then run the same command again.",
+            file=sys.stderr,
+        )
         return 1
     print(format_summary(summary, out_root))
     for line in format_warnings(summary):
