@@ -12,7 +12,7 @@ import pytest
 from huggingface_hub.errors import HfHubHTTPError
 
 from airace_content import sources
-from airace_content.build import build_corpus
+from airace_content.build import BuildError, build_corpus
 from airace_content.cli import main
 from airace_content.manifest import make_manifest, read_manifest
 from airace_content.sources import (
@@ -267,3 +267,20 @@ def test_the_command_line_pins_every_source_and_records_it(monkeypatch, tmp_path
         used[s.id] == f"sha-of-{s.hf_path.replace('/', '-')}" for s in SOURCES.values()
     )
     assert set(manifest["datasets"]) == set(DATASET_IDS)
+
+
+def test_a_source_that_cannot_be_looked_up_fails_in_plain_words(tmp_path):
+    def pin(spec):
+        raise _http_error(401)
+
+    with pytest.raises(BuildError, match="'tinystories'.*cannot be read.*HTTP 401"):
+        build_corpus("tiny", tmp_path / "data", fixture_fetch(FIX), seed=0, pin=pin)
+    assert not (tmp_path / "data").exists()
+
+
+def test_a_lookup_that_hits_a_network_problem_is_left_for_the_command_line(tmp_path):
+    def pin(spec):
+        raise SourceUnavailable("network problem while looking up the current version of x")
+
+    with pytest.raises(SourceUnavailable):
+        build_corpus("tiny", tmp_path / "data", fixture_fetch(FIX), seed=0, pin=pin)

@@ -334,6 +334,17 @@ def pinned(fetch: Fetch, revisions: dict[str, str]) -> Fetch:
     return fetch_at_revision
 
 
+def _source_problem(spec: SourceSpec, error: Exception) -> Exception:
+    """What to raise for ``error``, met while a source was looked up or opened: a network problem
+    and the errors the command line words itself are passed on, any other becomes a
+    ``BuildError`` that names the source."""
+    if isinstance(error, (SourceFormatError, DatasetsUnavailable)) or is_transient_error(error):
+        return error
+    return BuildError(
+        f"source {spec.id!r} ({spec.hf_path}) cannot be read: {type(error).__name__}: {error}"
+    )
+
+
 def check_sources(source_ids: Iterable[str], fetch: Fetch, progress: Progress = silent) -> None:
     """Open each source and read rows until one has the format its adapter reads (at most
     ``FORMAT_CHECK_ROWS``), so a config, access or format problem in any source stops the build
@@ -354,14 +365,11 @@ def check_sources(source_ids: Iterable[str], fetch: Fetch, progress: Progress = 
             else:
                 if rows_read:
                     raise format_error(spec, rows_read)
-        except (SourceFormatError, DatasetsUnavailable):
-            raise
         except Exception as e:
-            if is_transient_error(e):
+            problem = _source_problem(spec, e)
+            if problem is e:
                 raise
-            raise BuildError(
-                f"source {source_id!r} ({spec.hf_path}) cannot be read: {type(e).__name__}: {e}"
-            ) from e
+            raise problem from e
         finally:
             close = getattr(rows, "close", None)
             if close is not None:
@@ -500,7 +508,13 @@ def build_corpus(
     revisions: dict[str, str] = {}
     if pin is not None:
         for source_id in source_ids:
-            revision = pin(SOURCES[source_id])
+            try:
+                revision = pin(SOURCES[source_id])
+            except Exception as e:
+                problem = _source_problem(SOURCES[source_id], e)
+                if problem is e:
+                    raise
+                raise problem from e
             if revision is not None:
                 revisions[source_id] = revision
                 progress(f"pinning {source_id} at {revision[:12]}")
