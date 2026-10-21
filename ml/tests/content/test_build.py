@@ -180,13 +180,12 @@ def test_sources_are_the_designed_ones():
         "gutenberg": ("sedthh/gutenberg_english", None, "train"),
         "gsm8k": ("openai/gsm8k", "main", "train"),
         "mbpp": ("google-research-datasets/mbpp", "full", "train"),
-        "simplewiki": ("wikimedia/wikipedia", "20231101.simple", "train"),
     }
     licenses = {s.id: s.license for s in SOURCES.values()}
     assert licenses["tinystories"] == "cdla-sharing-1.0" and licenses["gutenberg"] == "mit"
     assert licenses["fineweb"] == licenses["fineweb_edu"] == "odc-by"
     assert licenses["soda"] == licenses["mbpp"] == "cc-by-4.0"
-    assert licenses["simplewiki"] == "cc-by-sa-3.0" and licenses["gsm8k"] == "mit"
+    assert licenses["gsm8k"] == "mit"
     assert all(
         s.homepage == f"https://huggingface.co/datasets/{s.hf_path}" for s in SOURCES.values()
     )
@@ -248,7 +247,6 @@ def test_fixtures_exercise_every_adapter_rule():
     assert any("<<" in r["answer"] and "####" in r["answer"] for r in rows["gsm8k"])
     assert any("\t" in r["code"] for r in rows["mbpp"])
     assert any("\r\n" in r["code"] for r in rows["mbpp"])
-    assert any("\nRelated pages" in r["text"] for r in rows["simplewiki"])
 
 
 def test_gutenberg_keeps_childrens_books_without_boilerplate():
@@ -406,36 +404,6 @@ def test_text_adapters():
     assert row_to_content("mbpp", code) == [
         "# Add one.\ndef f(x):\n    if x:\n        return x + 1"
     ]
-    lead = " ".join(["Cats are small animals."] * 40)  # 160 words: cut at a sentence end
-    [wiki] = row_to_content("simplewiki", {"title": "Cat", "text": f"{lead}\nMore text."})
-    title, body = wiki.split("\n", 1)
-    assert title == "Cat" and body.endswith("animals.") and len(body.split()) <= 150
-    short = {"title": "Dog", "text": "Dogs bark.\nDogs run.\n" + " ".join(["word"] * 200)}
-    assert row_to_content("simplewiki", short) == ["Dog\nDogs bark.\nDogs run."]
-    # the lead section only: it ends at the first heading (a short line without a sentence end)
-    stub = (
-        "Bucy is a commune. It is in the Aisne department in northern France.\n\n"
-        "Related pages \n Communes of the Aisne department\n\nReferences \n\n"
-        "Other websites \n Official website"
-    )
-    assert row_to_content("simplewiki", {"title": "Bucy", "text": stub}) == [
-        "Bucy\nBucy is a commune. It is in the Aisne department in northern France."
-    ]
-    wiki = {row["title"]: row for row in FETCH(SOURCES["simplewiki"], 100)}
-    cat = (
-        "Cat\nThe cat is a small animal that many people keep as a pet. Cats have soft fur, "
-        "sharp claws and a long tail.\nCats like to sleep a lot. They can see well at night. "
-        "A young cat is called a kitten."
-    )
-    assert row_to_content("simplewiki", wiki["Cat"]) == [cat]  # stops before "History"
-    marville = (
-        "Marville\nMarville is a small town in the north of the country. About two thousand "
-        "people live there. It has a school, a market and an old stone bridge."
-    )
-    assert row_to_content("simplewiki", wiki["Marville"]) == [marville]
-    quoted = {"title": "Ann", "text": 'Ann said "hello."\nShe left.\nLife\nMore.'}
-    assert row_to_content("simplewiki", quoted) == ['Ann\nAnn said "hello."\nShe left.']
-    assert row_to_content("simplewiki", {"title": "X", "text": "History\nIt began."}) == []
     assert row_to_content("fineweb_edu", {"text": "Kept.", "int_score": 3}) == ["Kept."]
     assert row_to_content("tinystories", {"text": "  "}) == []
     with pytest.raises(ValueError, match="unknown source"):
@@ -472,7 +440,7 @@ def test_recipes_match_the_design():
             (gen, "patterns", 0.30, None),
             (src, "gsm8k", 0.10, None),
         ],
-        "facts": [(gen, "fact_prose", 0.60, None), (src, "simplewiki", 0.40, 0.30)],
+        "facts": [(gen, "fact_prose", 1.0, None)],
         "creative": [(src, "tinystories", 0.85, None), (src, "cosmo_stories", 0.15, None)],
     }
     noise = {ds: recipe.noise for ds, recipe in RECIPES.items()}
@@ -621,7 +589,7 @@ def test_token_estimates_use_a_constant_per_kind_of_text():
     assert BYTES_PER_TOKEN_ESTIMATE == 3.2
     prose = [
         *("fineweb", "fineweb_edu", "cosmo_khan", "cosmo_wikihow", "cosmo_openstax", "gutenberg"),
-        *("simplewiki", "soda", "everyday_conv", "gsm8k"),
+        *("soda", "everyday_conv", "gsm8k"),
         *("fact_prose", "fact_chat", "instructions", "reasoning"),
     ]
     assert {c: component_bytes_per_token(c) for c in prose} == dict.fromkeys(prose, 3.2)
@@ -1058,14 +1026,14 @@ def test_manifest_and_shared_artifacts(tiny_build):
 
 
 def test_non_ascii_text_goes_through_the_whole_build(tmp_path):
-    # Every fixture source is pure ASCII, but real web, story, dialogue and wiki text is full of
+    # Every fixture source is pure ASCII, but real web, story, dialogue and lesson text is full of
     # accents, curly quotes, emoji and CJK (Review Focus 5), and a dataset may hold special-token
     # strings (Review Focus 1). The shared fixtures stay as they are: this uses a modified copy.
     marks = {  # one string per source, each with a literal special token
         "fineweb": "Caf\u00e9 na\u00efve fa\u00e7ade \u2014 \u201cquoted\u201d, it\u2019s <|end|> ok.",
         "tinystories": "She smiled \U0001f600\U0001f680 and said \u2018hola\u2019 <|ai|> again.",
         "soda": "\u4eca\u65e5\u306f\u3044\u3044\u5929\u6c17 \u00fcber \u00f1and\u00fa <|end|><|user|> yes.",
-        "simplewiki": "Z\u00fcrich (\u82cf\u9ece\u4e16) is \u201cnice\u201d \u00bd <|sep|> \U0001f30d.",
+        "cosmo_khan": "Z\u00fcrich (\u82cf\u9ece\u4e16) is \u201cnice\u201d \u00bd <|sep|> \U0001f30d.",
     }
     fixtures = tmp_path / "sources"
     shutil.copytree(FIX, fixtures)
@@ -1075,9 +1043,6 @@ def test_non_ascii_text_goes_through_the_whole_build(tmp_path):
         for row in rows:
             if source == "soda":
                 row["dialogue"] = [f"{turn} {mark}" for turn in row["dialogue"]]
-            elif source == "simplewiki":
-                first, *rest = row["text"].split("\n")
-                row["text"] = "\n".join([f"{first} {mark}", *rest])
             else:
                 row["text"] = f"{row['text']} {mark}"
         path.write_text(
@@ -1093,7 +1058,7 @@ def test_non_ascii_text_goes_through_the_whole_build(tmp_path):
         ("web", "fineweb"),
         ("creative", "tinystories"),
         ("conversations", "soda"),
-        ("facts", "simplewiki"),
+        ("educational", "cosmo_khan"),
     ):
         corpus, texts = _texts(tmp_path / "data", dataset)
         clean = [t for t, kind in zip(texts, corpus.tags.noise_kind) if kind == _NONE]

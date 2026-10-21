@@ -4,7 +4,7 @@ into documents.
 A source row becomes zero or more pieces of content (``row_to_content``): a plain text, or a chat
 as ``(role, text)`` turns. The adapters only select, cut and lay out what the dataset says; they
 never write text of their own beyond the fixed frames the recipes call for (``Question:`` /
-``Answer:`` for GSM8K, a ``#`` comment line for MBPP, the title line for Simple Wikipedia).
+``Answer:`` for GSM8K, a ``#`` comment line for MBPP).
 
 ``hf_fetch`` streams rows from the Hugging Face hub and imports ``datasets`` only when it runs,
 so nothing else needs the library. It rides out a flaky connection: a network error (or a 408, 429
@@ -72,7 +72,6 @@ SOURCES: dict[str, SourceSpec] = {
         _spec("gutenberg", "sedthh/gutenberg_english", None, "train", "mit"),
         _spec("gsm8k", "openai/gsm8k", "main", "train", "mit"),
         _spec("mbpp", "google-research-datasets/mbpp", "full", "train", "cc-by-4.0"),
-        _spec("simplewiki", "wikimedia/wikipedia", "20231101.simple", "train", "cc-by-sa-3.0"),
     )
 }
 
@@ -414,55 +413,8 @@ def chunk_passages(text: str, max_words: int = PASSAGE_MAX_WORDS) -> list[str]:
 
 # --- the other adapters ------------------------------------------------------------------------
 
-SIMPLEWIKI_MAX_WORDS = 150
-SIMPLEWIKI_HEADING_MAX_WORDS = 8  # a line this short without a sentence end is a heading
 MIN_CHAT_TURNS = 2
-_CLOSING_MARKS = "\"'\u201d\u2019)]\u00bb "  # may follow a sentence's final punctuation
 _CALCULATOR = re.compile(r"<<[^<>\n]*>>")  # GSM8K's calculator annotations, "<<48/2=24>>"
-
-
-def _first_words(text: str, max_words: int) -> str:
-    """At most ``max_words`` words of ``text``, ending at a sentence end when there is one."""
-    kept = " ".join(text.split()[:max_words])
-    ends = [m.start() for m in re.finditer(r"[.!?](?=\s|$)", kept)]
-    return kept[: ends[-1] + 1] if ends else kept
-
-
-def _is_heading(line: str) -> bool:
-    """A short line that does not end a sentence: a section heading ("Related pages", "History")."""
-    return len(line.split()) <= SIMPLEWIKI_HEADING_MAX_WORDS and not line.rstrip(
-        _CLOSING_MARKS
-    ).endswith((".", "!", "?"))
-
-
-def _lead_section(text: str) -> list[str]:
-    """The paragraphs before the article's first section heading."""
-    lead: list[str] = []
-    for line in (line.strip() for line in text.split("\n")):
-        if not line:
-            continue
-        if _is_heading(line):
-            break
-        lead.append(line)
-    return lead
-
-
-def _simplewiki(row: dict) -> list[Content]:
-    title = str(row.get("title") or "").strip()
-    paragraphs = _lead_section(str(row.get("text") or ""))
-    chosen: list[str] = []
-    n = 0
-    for paragraph in paragraphs:
-        k = len(paragraph.split())
-        if n + k > SIMPLEWIKI_MAX_WORDS:
-            if not chosen:
-                chosen.append(_first_words(paragraph, SIMPLEWIKI_MAX_WORDS))
-            break
-        chosen.append(paragraph)
-        n += k
-    if not title or not chosen:
-        return []
-    return [title + "\n" + "\n".join(chosen)]
 
 
 def _gsm8k(row: dict) -> list[Content]:
@@ -571,7 +523,6 @@ _ADAPTERS: dict[str, Callable[[dict], list[Content]]] = {
     "gutenberg": _gutenberg,
     "gsm8k": _gsm8k,
     "mbpp": _mbpp,
-    "simplewiki": _simplewiki,
 }
 assert set(_ADAPTERS) == set(SOURCES)
 
@@ -620,7 +571,6 @@ _ROW_FORMATS: dict[str, tuple[Callable[[dict], bool], str]] = {
     "gutenberg": (_book, "'TEXT' as a string and 'METADATA' as JSON with 'subjects'"),
     "gsm8k": (_strings("question", "answer"), "'question' and 'answer' as strings"),
     "mbpp": (_strings("text", "code"), "'text' and 'code' as strings"),
-    "simplewiki": (_strings("title", "text"), "'title' and 'text' as strings"),
 }
 assert set(_ROW_FORMATS) == set(SOURCES)
 
@@ -651,8 +601,6 @@ def row_to_content(source_id: str, row: dict) -> list[Content]:
     * gsm8k: ``Question: {q}\\nAnswer: {reasoning} The answer is {final}.`` without the
       calculator annotations;
     * mbpp: ``# {text}\\n{code}`` with tabs as 4 spaces and LF line endings;
-    * simplewiki: the title, then the first paragraphs of the lead section (before the first
-      heading), up to 150 words;
     * tinystories: its ``text`` with the misdecoded quotes, apostrophes and dashes of the hub's
       rows repaired to ASCII (``repair_tinystories_mojibake``);
     * the rest: their ``text``.

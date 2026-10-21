@@ -117,11 +117,9 @@ RECIPES: dict[str, Recipe] = {
             [_generator("reasoning", 0.60), _generator("patterns", 0.30), _source("gsm8k", 0.10)],
             NoiseRates(),
         ),
-        Recipe(
-            "facts",
-            [_generator("fact_prose", 0.60), _source("simplewiki", 0.40, 0.30)],
-            NoiseRates(duplicate=0.02),
-        ),
+        # Simple Wikipedia (CC-BY-SA, share-alike) left this recipe: sources must be permissive
+        # (ADR 0004), and its share went to the other component, as the plan prescribes.
+        Recipe("facts", [_generator("fact_prose", 1.0)], NoiseRates(duplicate=0.02)),
         Recipe(
             "creative",
             [_source("tinystories", 0.85), _source("cosmo_stories", 0.15)],

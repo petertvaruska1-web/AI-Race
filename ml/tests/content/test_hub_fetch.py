@@ -295,7 +295,7 @@ def test_a_late_source_that_cannot_be_opened_fails_in_plain_words(tmp_path):
 
 
 def test_a_late_network_failure_still_reads_as_a_network_problem(tmp_path):
-    fetch = Recording("simplewiki", error=ConnectionError("Server Disconnected"))
+    fetch = Recording("cosmo_stories", error=ConnectionError("Server Disconnected"))
     with pytest.raises(ConnectionError):  # passed on as it is, for the command line to word
         build_corpus("tiny", tmp_path / "data", fetch, seed=0)
 
