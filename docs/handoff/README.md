@@ -21,7 +21,7 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
   - **Fix wave:** six sequential Sonnet groups A–F (`docs/handoff/fix-wave/`), each with an adversarial review; all 43 fixes landed, and nothing blocking remains.
   - **Controller follow-ups:** `ceee83f` (G7 also counts swapped-letter typos, and its data warning leads the detail) and `a2837b4` (the GPU memory test runs on the real vocabulary with a 4 GiB bound).
   - **New decision records:** `docs/decisions/0002-feasibility-gate-measurement-rules.md`, `docs/decisions/0003-corpus-build-rules.md`, and an addendum to ADR 0001.
-  - **Tests:** default suite {SUITE}; slow suite (including the quick feasibility gate) {SLOW}; ruff {RUFF}.
+  - **Tests:** default suite **1561 passed, 1 skipped** (166–232 s on cloud CPUs, depending on the machine); slow suite (including the quick feasibility gate) 5 passed (280 s); ruff clean.
 - **Next: the local GPU session (§5).** It covers Task 15, the evaluator builds and Task 20 steps 6–9. Nothing else is left in the cloud.
 - **Model tiers** (the owner's suggestion; a ledger ruling):
   - the top model for rulings and measurement-rule decisions only
@@ -66,6 +66,12 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
    - Run `cd ml && python -m uv sync --extra content`, then `python -m uv run pytest`, then `python -m uv run pytest -m gpu`.
    - The GPU memory test (`test_a_judge_recipe_step_fits_the_8gb_reference_card`, below 4 GiB on the real vocabulary) and the bf16 parity test (`test_cuda_bf16_path_tracks_the_cpu_path`, run with tolerances) have never run on CUDA. They must pass before the 1-hour judge build.
    - Optionally run `python -m uv run --extra content hf auth login`, because the Hub allows more traffic when logged in.
+   - **Time the default suite.** If it takes more than about 170 s, mark the four heaviest audits `@pytest.mark.slow`, which saves about 20 s:
+     - `test_code_instr_grammar.py::test_training_replies_are_right_as_well_as_well_formed`
+     - `test_code_instr_grammar.py::test_every_body_style_of_every_header_is_right`
+     - `test_kb_facts.py::test_no_benchmark_phrasing_contains_or_is_contained_in_a_training_phrasing`
+     - `test_kb_facts.py::test_no_option_set_offers_two_confusable_objects_across_300_seeds`
+     They then run with `-m slow`. The suite was 166–232 s on cloud CPUs.
 1. **Task 15: the real dataset build.** It needs huggingface.co, which is blocked in the cloud.
    - Re-verify every source license. simplewiki is cc-by-sa-3.0, which is outside the plan's permissive list: decide, and record the decision.
    - **Calibrate the simplicity thresholds on real data before the full build (F15).** The current thresholds keep about 97–100% of real web, educational and Wikipedia text.
