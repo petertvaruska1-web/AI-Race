@@ -3,6 +3,7 @@ import inspect
 import io
 import json
 import math
+import os
 import re
 import shutil
 import sys
@@ -598,7 +599,8 @@ def test_reconfiguring_stops_a_cp1252_console_from_crashing(monkeypatch):
     monkeypatch.setattr(sys, "stdout", stream)
     cli._use_utf8_output()
     print(TRICKY, flush=True)
-    assert raw.getvalue().decode("utf-8").endswith("café 🙂 日本語 ?\n")
+    # The stream ends lines the platform's way, as the real console does (\r\n on Windows).
+    assert raw.getvalue().decode("utf-8").endswith("café 🙂 日本語 ?" + os.linesep)
 
 
 def test_model_text_that_cp1252_cannot_show_does_not_crash_the_cli(
