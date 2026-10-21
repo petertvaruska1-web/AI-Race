@@ -182,7 +182,7 @@ class TrainRunConfig:
     boldness: float = 0.5
     notebook: list[str] = field(default_factory=list)
     coaching: list[tuple[str, str]] = field(default_factory=list)
-    batch_tokens: int = 16384
+    batch_tokens: int = 8192  # learns more per token than 16384 at the early budgets (ADR 0005)
     probe_prompts: list[str] = field(default_factory=list)
     parent_dir: str | None = None
 

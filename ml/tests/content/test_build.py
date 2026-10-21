@@ -63,6 +63,8 @@ from airace_content.sources import (
     FORMAT_CHECK_ROWS,
     PASSAGE_MIN_WORDS,
     SOURCES,
+    STORY_REQUESTS,
+    STORY_REQUESTS_ABOUT,
     SourceFormatError,
     chunk_passages,
     fixture_fetch,
@@ -71,6 +73,7 @@ from airace_content.sources import (
     repair_tinystories_mojibake,
     restore_plain_layout,
     row_to_content,
+    story_subject,
 )
 from airace_content.textproc import MOJIBAKE_CHARS, SPAM_MARKERS, build_vocab
 from airace_ml.data.corpus import DATASET_IDS, NOISE_KINDS, TOPICS, Corpus
@@ -170,6 +173,7 @@ def test_sources_are_the_designed_ones():
     table = {s.id: (s.hf_path, s.hf_config, s.split) for s in SOURCES.values()}
     assert table == {
         "tinystories": ("roneneldan/TinyStories", None, "train"),
+        "tinystories_requests": ("roneneldan/TinyStories", None, "validation"),
         "fineweb": ("HuggingFaceFW/fineweb", "sample-10BT", "train"),
         "fineweb_edu": ("HuggingFaceFW/fineweb-edu", "sample-10BT", "train"),
         "cosmo_khan": ("HuggingFaceTB/cosmopedia", "khanacademy", "train"),
@@ -184,6 +188,7 @@ def test_sources_are_the_designed_ones():
     }
     licenses = {s.id: s.license for s in SOURCES.values()}
     assert licenses["tinystories"] == "cdla-sharing-1.0" and licenses["gutenberg"] == "mit"
+    assert licenses["tinystories_requests"] == "cdla-sharing-1.0"
     assert licenses["fineweb"] == licenses["fineweb_edu"] == "odc-by"
     assert licenses["soda"] == licenses["mbpp"] == "cc-by-4.0"
     assert licenses["gsm8k"] == "mit"
@@ -381,8 +386,7 @@ def test_tinystories_misdecoded_ellipses_and_letters_are_repaired():
         return text.encode("utf-8").decode("cp1252")
 
     story = (
-        "And then… he fell. They went to the café. "
-        "¡Mira mi muñeca! «Do you want jam?» Élise said."
+        "And then… he fell. They went to the café. ¡Mira mi muñeca! «Do you want jam?» Élise said."
     )
     [repaired] = row_to_content("tinystories", {"text": misdecoded(story)})
     assert repaired == (
@@ -390,6 +394,32 @@ def test_tinystories_misdecoded_ellipses_and_letters_are_repaired():
         "¡Mira mi muñeca! «Do you want jam?» Élise said."
     )
     assert repair_tinystories_mojibake("Ã Â plain") == "Ã Â plain"
+
+
+def test_story_requests_ask_for_the_story_that_answers_them():
+    # A TinyStories story as the reply to a request for it, so a model learns to tell a story
+    # when asked. The request names the story's main character when its first sentence does.
+    bird = "Once upon a time, there was a little bird named Pip. Pip could not sing. One day..."
+    [chat] = row_to_content("tinystories_requests", {"text": bird})
+    (user_role, request), (ai_role, story) = chat
+    assert (user_role, ai_role, story) == ("user", "ai", bird)
+    assert request in {frame.format("a little bird") for frame in STORY_REQUESTS_ABOUT}
+    assert story_subject("Once upon a time, there was a big, red barn. It was old.") == (
+        "a big, red barn"
+    )
+    assert story_subject("There lived a princess who lived in a castle.") == "a princess"
+    assert story_subject("Once upon a time, there was a big, sunny day.") is None  # no one
+    plain = 'Spot saw the shiny car and said, "Wow!"'
+    [[(_, request), (_, story)]] = row_to_content("tinystories_requests", {"text": plain})
+    assert request in STORY_REQUESTS and story == plain
+    misdecoded = "He said â€œhi.â€"  # repaired like the stories
+    assert row_to_content("tinystories_requests", {"text": misdecoded})[0][1] == (
+        "ai",
+        'He said "hi."',
+    )
+    assert row_to_content("tinystories_requests", {"text": "  "}) == []
+    # the same story always gets the same request
+    assert row_to_content("tinystories_requests", {"text": bird}) == [chat]
 
 
 def test_chat_adapters():
@@ -460,12 +490,16 @@ def test_recipes_match_the_design():
             (src, "gsm8k", 0.10, None),
         ],
         "facts": [(gen, "fact_prose", 1.0, None)],
-        "creative": [(src, "tinystories", 0.85, None), (src, "cosmo_stories", 0.15, None)],
+        "creative": [
+            (src, "tinystories", 0.70, None),
+            (src, "tinystories_requests", 0.15, None),
+            (src, "cosmo_stories", 0.15, None),
+        ],
     }
     noise = {ds: recipe.noise for ds, recipe in RECIPES.items()}
     assert noise == {
         "web": NoiseRates(
-            typo=0.15, spam=0.06, boilerplate=0.10, garbled=0.05, duplicate=0.08, false_fact=0.06
+            typo=0.15, spam=0.06, boilerplate=0.10, garbled=0.05, duplicate=0.08, false_fact=0.12
         ),
         "books": NoiseRates(typo=0.02, garbled=0.01, duplicate=0.02),
         "educational": NoiseRates(duplicate=0.02, false_fact=0.01),
@@ -473,7 +507,7 @@ def test_recipes_match_the_design():
         "code": NoiseRates(duplicate=0.03),
         "reasoning": NoiseRates(),
         "facts": NoiseRates(duplicate=0.02),
-        "creative": NoiseRates(typo=0.02, duplicate=0.03),
+        "creative": NoiseRates(typo=0.02),
     }
     assert SCALES["tiny"] == {"docs_per_dataset": 150}
     assert SCALES["full"]["target_tokens"] == {
@@ -543,6 +577,8 @@ def test_cycling_stops_when_a_pass_accepts_nothing(build_inputs):
 
 def test_full_scale_collects_to_the_token_target(build_inputs, monkeypatch):
     monkeypatch.setitem(SCALES["full"]["target_tokens"], "creative", 60_000)
+    two = [Component("source", "tinystories", 0.85), Component("source", "cosmo_stories", 0.15)]
+    monkeypatch.setitem(RECIPES, "creative", replace(RECIPES["creative"], components=two))
     stories = [row["text"] for row in FETCH(SOURCES["tinystories"], 100)]
 
     def fetch(spec, max_rows):
@@ -614,7 +650,7 @@ def test_token_estimates_use_a_constant_per_kind_of_text():
     assert {c: component_bytes_per_token(c) for c in prose} == dict.fromkeys(prose, 3.2)
     for name in ("code", "patterns", "mbpp"):
         assert component_bytes_per_token(name) == 2.7
-    for name in ("tinystories", "cosmo_stories"):
+    for name in ("tinystories", "tinystories_requests", "cosmo_stories"):
         assert component_bytes_per_token(name) == 3.6
     measured = {"fact_prose": 3.7, "soda": 3.7, "fact_chat": 3.6, "instructions": 3.3}
     assert {c: component_bytes_per_token(c) for c in measured} == measured
@@ -1092,7 +1128,7 @@ def test_non_ascii_text_goes_through_the_whole_build(tmp_path):
         for i in range(corpus.n_docs):  # a special-token string in the text stays plain text
             ids = corpus.doc(i)
             assert ids[0] == tok.bos_id
-            if dataset != "conversations":
+            if ids[1] not in (tok.user_id, tok.ai_id):  # a plain document
                 assert (ids[1:] >= 16).all(), (dataset, i)
             else:
                 specials = [t for t in ids[1:].tolist() if t < 16]

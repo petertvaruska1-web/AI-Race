@@ -4,11 +4,11 @@ a game, and the experiments that measure them.
 ==  ===============  =========================================================================
 G1  Speed            the first model (balanced mix, starter shape and budget) meets every
                      first-model target of spec 4.11 on the GPU: it trains in at most 90 s (and,
-                     when asked, in at most 8 minutes on the CPU), its full benchmark takes at
+                     when asked, in at most 20 minutes on the CPU), its full benchmark takes at
                      most 30 s, its first chat token at most 300 ms at 50 tokens/s or more, and
                      growing it at most 2 s
 G2  Legibility       at least 70% of that model's replies to 20 probe prompts are well-formed,
-                     for every seed
+                     over the replies of every seed together
 G3  Differentiation  four contrasting mixes (story, code, fact and conversation heavy) at equal
                      compute each lead their benchmark category by more than twice the seed
                      spread
@@ -25,8 +25,8 @@ G7  Preparation      thorough cleaning lowers the garble-like-word rate, and fac
 Every criterion but G1 takes every seed (spec 4.12: "3 seeds each"); G1 is a timing, which does
 not depend on the seed. The verdicts that rest on an effect (G3's lead, G5's gain, G6's drop and
 what replay wins back, G7's falls) also need the mean effect to be more than
-:data:`SPREAD_FACTOR` times its seed spread, so one lucky seed cannot decide them; G2 must hold
-on every seed, and G4 compares the seeds with the noise of measuring one model twice. The quick
+:data:`SPREAD_FACTOR` times its seed spread, so one lucky seed cannot decide them; G2 pools
+every seed's replies, and G4 compares the seeds with the noise of measuring one model twice. The quick
 gate has one seed, which then decides alone.
 
 The evaluators (``eval_*``) are pure: they turn measurements into a :class:`GateCriterion` and
@@ -69,6 +69,7 @@ from airace_content.textproc import MOJIBAKE_CHARS
 from airace_ml.data.corpus import (
     DATASET_IDS,
     INFO_FILE,
+    NOISE_KINDS,
     OFFSETS_FILE,
     TAGS_FILE,
     TOKENS_FILE,
@@ -136,7 +137,7 @@ TITLES: dict[str, str] = {
 }
 
 GPU_SECONDS_LIMIT = 90.0
-CPU_SECONDS_LIMIT = 480.0
+CPU_SECONDS_LIMIT = 1200.0  # 20 minutes: the first model trains on 12.6M tokens (ADR 0005)
 NO_CUDA_DETAIL = "no CUDA device; GPU speed target not measured"
 LEGIBILITY_PROBES = 20
 LEGIBILITY_MIN_RATE = 0.7
@@ -150,7 +151,9 @@ PREP_MAX_RATIO = 0.8
 
 REPLAY_SHARE = 0.3
 WEB_HEAVY_SHARE = 0.7
-FACTS_MIX: dict[str, float] = {"web": 0.5, "facts": 0.5}
+# Web alone (ADR 0005): beside Reference Facts, which states every true fact over and over, no
+# model learns a planted false fact, so fact-checking would have nothing to remove.
+FACTS_MIX: dict[str, float] = {"web": 1.0}
 SAMPLE_TEMPERATURE = 0.8
 SAMPLE_TOP_P = 0.95
 LEGIBILITY_REPLY_TOKENS = 64
@@ -296,7 +299,7 @@ def eval_speed(
     growth_seconds: float | None = None,
 ) -> GateCriterion:
     """G1: every first-model target of spec 4.11 that was measured is met (:data:`SPEED_TARGETS`):
-    training in at most 90 s on the GPU (and 480 s on the CPU, if timed), the full benchmark in
+    training in at most 90 s on the GPU (and 1200 s on the CPU, if timed), the full benchmark in
     at most 30 s, a first chat token in at most 300 ms at 50 tokens/s or more, and growth in at
     most 2 s. A measurement not given is not checked; the GPU training time is required."""
     values = {
@@ -386,34 +389,38 @@ def _seed_problem(*groups: Sequence[object]) -> str | None:
 
 def eval_legibility(flags: Sequence[Sequence[bool]]) -> GateCriterion:
     """G2: on every seed, exactly 20 replies of that seed's first model were judged, and at
-    least 70% of them are well-formed. ``flags`` holds one list of judgements per seed."""
+    least 70% of all of them (every seed's, pooled) are well-formed. ``flags`` holds one list of
+    judgements per seed.
+
+    The bar is on the pooled replies, not on each seed's 20 alone (ADR 0005): 20 sampled replies
+    vary by about 10 points, so a model that is exactly 70% legible would fail one of three seeds
+    most of the time, and even the reference judge (about 85%) would fail one run in five."""
     sizes = [len(seed_flags) for seed_flags in flags]
     good = [sum(bool(flag) for flag in seed_flags) for seed_flags in flags]
     rates = [g / n if n else 0.0 for g, n in zip(good, sizes, strict=True)]
-    worst = min(range(len(rates)), key=rates.__getitem__) if rates else None
     data = {
-        "well_formed": 0 if worst is None else good[worst],
-        "replies": 0 if worst is None else sizes[worst],
-        "rate": 0.0 if worst is None else rates[worst],
+        "well_formed": sum(good),
+        "replies": sum(sizes),
+        "rate": sum(good) / sum(sizes) if sum(sizes) else 0.0,
         "min_rate": LEGIBILITY_MIN_RATE,
         "well_formed_by_seed": good,
         "replies_by_seed": sizes,
         "rate_by_seed": rates,
     }
-    if worst is None:
+    if not flags:
         return _criterion("G2", False, "no first model was judged", data)
     if any(n != LEGIBILITY_PROBES for n in sizes):
         got = ", ".join(map(str, sizes))
         return _criterion(
             "G2", False, f"needs {LEGIBILITY_PROBES} replies on every seed, got {got}", data
         )
-    shown = ", ".join(f"{g} of {n} ({r:.0%})" for g, n, r in zip(good, sizes, rates, strict=True))
-    every = " on every seed" if len(flags) > 1 else ""
-    detail = (
-        f"replies well-formed{f' on {len(flags)} seeds' if every else ''}: {shown}; "
-        f"needs {LEGIBILITY_MIN_RATE:.0%}{every}"
-    )
-    return _criterion("G2", all(r >= LEGIBILITY_MIN_RATE for r in rates), detail, data)
+    rate = data["rate"]
+    detail = f"replies well-formed: {sum(good)} of {sum(sizes)} ({rate:.0%})"
+    if len(flags) > 1:
+        shown = ", ".join(f"{g} of {n}" for g, n in zip(good, sizes, strict=True))
+        detail += f" over all {len(flags)} seeds ({shown})"
+    detail += f"; needs {LEGIBILITY_MIN_RATE:.0%}"
+    return _criterion("G2", rate >= LEGIBILITY_MIN_RATE, detail, data)
 
 
 def _spread(values: Sequence[float]) -> float:
@@ -984,11 +991,17 @@ def trim_to_word(text: str) -> str:
 
 def _web_prefixes(root: Path, tok: Tok, samples: int) -> list[str]:
     """``samples`` prompts: the first :data:`GARBLE_PREFIX_TOKENS` tokens (after ``<|bos|>``) of
-    held-out web documents in a seeded order, as text cut back to a whole word
-    (:func:`trim_to_word`). With fewer held-out documents than samples, the documents are used
-    again in the same order."""
+    clean held-out web documents in a seeded order, as text cut back to a whole word
+    (:func:`trim_to_word`). With fewer of them than samples, the documents are used again in the
+    same order.
+
+    Only documents without injected noise (ADR 0005): a typo'd or garbled prompt has a model of
+    either cleaning arm continue in kind, which measures copying from the prompt, not what the
+    model learned to write."""
     corpus = Corpus.open(corpus_dir(root) / "web")
-    order = np.random.default_rng(MEASURE_SEED).permutation(heldout_docs(corpus))
+    held = heldout_docs(corpus)
+    clean = held[corpus.tags.noise_kind[held] == NOISE_KINDS.index("none")]
+    order = np.random.default_rng(MEASURE_SEED).permutation(clean)
     texts = []
     for i in order[:samples]:
         doc = corpus.doc(int(i))

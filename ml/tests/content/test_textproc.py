@@ -156,8 +156,17 @@ def test_quality_alpha_ratio():
 def test_quality_known_words():
     vocab = {"aaa", "bbb", "ccc", "ddd", "eee", "fff"}
     text = "aaa bbb ccc ddd eee fff ggg hhh"  # 6 of 8 known
-    assert quality_score(text, vocab) == pytest.approx((0.75 - 0.5) / 0.4)
-    assert quality_score(text + " x y z", vocab) == pytest.approx((0.75 - 0.5) / 0.4)  # 1-letter
+    assert quality_score(text, vocab) == pytest.approx((0.75 - 0.7) / 0.25)
+    assert quality_score(text + " x y z", vocab) == pytest.approx((0.75 - 0.7) / 0.25)  # 1-letter
+    # calibrated on the real web (ADR 0004): clean pages have 90% or more known words, so they
+    # keep their score, and a page whose typos leave 82% known (the typo pages' median) drops
+    # below thorough cleaning's bar
+    known = [a + b + "x" for a in "abcdefghij" for b in "abcdefghij"]  # 100 words
+    assert quality_score(" ".join(known[:95] + ["zz"] * 5), set(known)) == 1.0
+    assert (
+        quality_score(" ".join(known[:82] + ["zz"] * 18), set(known))
+        < CLEANING_THRESHOLDS["thorough"]
+    )
     assert quality_score("ggg hhh", vocab) == 0.0  # nothing known
     assert quality_score("1 2 3 !!!", vocab) == 0.0  # no words at all
 

@@ -15,7 +15,7 @@ from airace_ml.model.shape import ModelShape
 
 STARTER_SHAPE = ModelShape(4, 128, 256)
 EARLY_SHAPE = ModelShape(6, 192, 256)
-STARTER_BUDGET = 4_194_304
+STARTER_BUDGET = 12_582_912  # 4.2M left the first model illegible (ADR 0005)
 EARLY_BUDGET = 8_388_608
 
 BALANCED_MIX: dict[str, float] = {ds: 1.0 for ds in DATASET_IDS}

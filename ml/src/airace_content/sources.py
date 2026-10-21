@@ -4,7 +4,8 @@ into documents.
 A source row becomes zero or more pieces of content (``row_to_content``): a plain text, or a chat
 as ``(role, text)`` turns. The adapters only select, cut and lay out what the dataset says; they
 never write text of their own beyond the fixed frames the recipes call for (``Question:`` /
-``Answer:`` for GSM8K, a ``#`` comment line for MBPP).
+``Answer:`` for GSM8K, a ``#`` comment line for MBPP, a request for the story that a TinyStories
+story answers).
 
 ``hf_fetch`` streams rows from the Hugging Face hub and imports ``datasets`` only when it runs,
 so nothing else needs the library. It rides out a flaky connection: a network error (or a 408, 429
@@ -23,6 +24,7 @@ import json
 import re
 import sys
 import time
+import zlib
 from collections import Counter
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
@@ -53,6 +55,7 @@ def _spec(id: str, hf_path: str, hf_config: str | None, split: str, license: str
 # The commits the first full build read (2026-10-21), so every later build reads the same rows.
 _PINNED: dict[str, str] = {
     "tinystories": "f54c09fd23315a6f9c86f9dc80f725de7d8f9c64",
+    "tinystories_requests": "f54c09fd23315a6f9c86f9dc80f725de7d8f9c64",
     "fineweb": "9bb295ddab0e05d785b879661af7260fed5140fc",
     "fineweb_edu": "87f09149ef4734204d70ed1d046ddc9ca3f2b8f9",
     "cosmo_khan": "0ae6ec63f91742bd2d1eaef4f02232c55d719385",
@@ -71,6 +74,14 @@ SOURCES: dict[str, SourceSpec] = {
     spec.id: replace(spec, revision=_PINNED[spec.id])
     for spec in (
         _spec("tinystories", "roneneldan/TinyStories", None, "train", "cdla-sharing-1.0"),
+        # the validation split: other stories than the ones the train split gives
+        _spec(
+            "tinystories_requests",
+            "roneneldan/TinyStories",
+            None,
+            "validation",
+            "cdla-sharing-1.0",
+        ),
         _spec("fineweb", "HuggingFaceFW/fineweb", "sample-10BT", "train", "odc-by"),
         _spec("fineweb_edu", "HuggingFaceFW/fineweb-edu", "sample-10BT", "train", "odc-by"),
         _spec("cosmo_khan", "HuggingFaceTB/cosmopedia", "khanacademy", "train", "apache-2.0"),
@@ -538,8 +549,65 @@ def _tinystories(row: dict) -> list[Content]:
     return _text({"text": repair_tinystories_mojibake(str(row.get("text") or ""))})
 
 
+# A story told when asked for, so a model learns to tell one on request. The request is a fixed
+# frame: it names the story's main character when the first sentence introduces one ("there was
+# a little bird named Pip"), and asks for any story otherwise, so it never asks for what the
+# story does not give. Which frame a story gets follows from its text alone.
+STORY_REQUESTS_ABOUT: tuple[str, ...] = (
+    "Write a short story about {}.",
+    "Tell me a story about {}.",
+    "Can you write a short story about {}?",
+)
+STORY_REQUESTS: tuple[str, ...] = (
+    "Write a short story.",
+    "Tell me a short story.",
+    "Can you tell me a story?",
+    "Please write a story for kids.",
+)
+_FIRST_SENTENCE = re.compile(r"[^.!?]*[.!?]")
+_NOT_A_NOUN = r"(?!(?:who|that|which|named|called|with|in|on|at|from|of)\b)"
+_STORY_SUBJECT = re.compile(
+    r"\b[Tt]here (?:was|lived) (an? "
+    + _NOT_A_NOUN
+    + r"[a-z]+(?:,? "
+    + _NOT_A_NOUN
+    + r"[a-z]+){0,3})"
+    r"(?= named\b| called\b| who\b| that\b| with\b| in\b| on\b| at\b|[.!?,])"
+)
+# a phrase that ends on one of these is a description cut short ("a big, sunny day" is no one)
+_DANGLING = frozenset(
+    {"big", "small", "little", "old", "young", "happy", "sad", "good", "nice", "kind", "pretty"}
+    | {"tiny", "great", "sunny", "day", "time"}
+)
+
+
+def story_subject(story: str) -> str | None:
+    """The main character a story's first sentence introduces (\"there was a little bird named
+    Pip\" gives ``a little bird``), in lower case; None when it introduces no one."""
+    first = _FIRST_SENTENCE.match(story)
+    found = _STORY_SUBJECT.search(first.group() if first else story)
+    if found is None:
+        return None
+    subject = found.group(1).lower()
+    return None if subject.split()[-1] in _DANGLING else subject
+
+
+def _tinystories_requests(row: dict) -> list[Content]:
+    story = repair_tinystories_mojibake(str(row.get("text") or "")).strip()
+    if not story:
+        return []
+    pick = zlib.crc32(story.encode("utf-8"))
+    subject = story_subject(story)
+    if subject is None:
+        request = STORY_REQUESTS[pick % len(STORY_REQUESTS)]
+    else:
+        request = STORY_REQUESTS_ABOUT[pick % len(STORY_REQUESTS_ABOUT)].format(subject)
+    return [[("user", request), ("ai", story)]]
+
+
 _ADAPTERS: dict[str, Callable[[dict], list[Content]]] = {
     "tinystories": _tinystories,
+    "tinystories_requests": _tinystories_requests,
     "fineweb": _text,
     "fineweb_edu": _fineweb_edu,
     "cosmo_khan": _text,
@@ -588,6 +656,7 @@ def _book(row: dict) -> bool:
 
 _ROW_FORMATS: dict[str, tuple[Callable[[dict], bool], str]] = {
     "tinystories": (_strings("text"), "'text' as a string"),
+    "tinystories_requests": (_strings("text"), "'text' as a string"),
     "fineweb": (_strings("text"), "'text' as a string"),
     "fineweb_edu": (_scored, "'text' as a string and 'int_score' as a number"),
     "cosmo_khan": (_strings("text"), "'text' as a string"),
@@ -631,6 +700,8 @@ def row_to_content(source_id: str, row: dict) -> list[Content]:
     * mbpp: ``# {text}\\n{code}`` with tabs as 4 spaces and LF line endings;
     * tinystories: its ``text`` with the misdecoded quotes, apostrophes and dashes of the hub's
       rows repaired to ASCII (``repair_tinystories_mojibake``);
+    * tinystories_requests: the same repaired story, as the AI's reply to a request for it
+      (``STORY_REQUESTS_ABOUT`` with its ``story_subject``, else ``STORY_REQUESTS``);
     * the rest: their ``text``.
     """
     if source_id not in _ADAPTERS:

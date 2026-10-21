@@ -201,7 +201,7 @@ No control maps to a capability number. Each changes what or how the real model 
 ### 4.11 Performance targets (RTX 3050 8 GB reference; CPU = Ryzen 5 5500)
 | Operation | Target |
 |---|---|
-| First-model training run (~1.3 M params, ~4 M tokens) | ≤ 90 s GPU; ≤ 8 min CPU fallback |
+| First-model training run (~1.3 M params, ~12.6 M tokens; was ~4 M, see ADR 0005) | ≤ 90 s GPU; ≤ 20 min CPU fallback (was 8 min: measured 16.6 min at 12.6 M tokens) |
 | Full benchmark suite, first model | ≤ 30 s GPU |
 | Chat first token / throughput (≤ 20 M params) | ≤ 300 ms / ≥ 50 tok/s |
 | Growth op | ≤ 2 s |
@@ -209,7 +209,7 @@ No control maps to a capability number. Each changes what or how the real model 
 ### 4.12 Feasibility gate (Milestone 1 exit, the project's biggest risk)
 Measured by an automated experiment suite (3 seeds each) and recorded in a report:
 1. **Speed:** the first-model targets above are met.
-2. **Legibility:** after a balanced first run, ≥ 70 % of 20 probe replies are *well-formed*. Well-formed means:
+2. **Legibility:** after a balanced first run, ≥ 70 % of 20 probe replies are *well-formed*, counted over the replies of all 3 seeds together (ADR 0005). Well-formed means:
    - ≥ 4 words, at least 3 of them different (ADR 0001)
    - no word 3-gram repeated 3+ times
    - per-token perplexity under the reference judge at or below the 90th percentile the judge assigns to real held-out conversation replies

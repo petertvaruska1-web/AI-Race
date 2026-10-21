@@ -81,7 +81,7 @@ RECIPES: dict[str, Recipe] = {
                 boilerplate=0.10,
                 garbled=0.05,
                 duplicate=0.08,
-                false_fact=0.06,
+                false_fact=0.12,
             ),
         ),
         Recipe(
@@ -122,8 +122,12 @@ RECIPES: dict[str, Recipe] = {
         Recipe("facts", [_generator("fact_prose", 1.0)], NoiseRates(duplicate=0.02)),
         Recipe(
             "creative",
-            [_source("tinystories", 0.85), _source("cosmo_stories", 0.15)],
-            NoiseRates(typo=0.02, duplicate=0.03),
+            [
+                _source("tinystories", 0.70),
+                _source("tinystories_requests", 0.15),  # stories told on request
+                _source("cosmo_stories", 0.15),
+            ],
+            NoiseRates(typo=0.02),  # chats (stories told on request) take typo noise only
         ),
     )
 }
@@ -156,6 +160,7 @@ BYTES_PER_TOKEN_BY_COMPONENT: dict[str, float] = {
     "patterns": 2.7,
     "mbpp": 2.7,
     "tinystories": 3.6,  # simple stories into fewer, longer ones
+    "tinystories_requests": 3.6,
     "cosmo_stories": 3.6,
     # measured on the first full build with tok-v1, where 3.2 left these 4-14% short (ADR 0004)
     "fact_prose": 3.7,

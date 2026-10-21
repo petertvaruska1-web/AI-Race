@@ -57,7 +57,7 @@ _STRAIGHT_APOSTROPHES = str.maketrans({"\u2018": "'", "\u2019": "'"})  # curly s
 _SENTENCE_END = re.compile(r"[.!?]+")
 
 _LETTER_SHARE_RANGE = (0.6, 0.9)  # alpha_ratio at which `a` is 0 and 1
-_KNOWN_SHARE_RANGE = (0.5, 0.9)  # known_ratio at which `k` is 0 and 1
+_KNOWN_SHARE_RANGE = (0.7, 0.95)  # known_ratio at which `k` is 0 and 1 (calibrated: ADR 0004)
 _GARBLE_WEIGHT = 20.0  # a document with 5% mojibake characters scores 0
 _SPAM_LIMIT = 3  # this many spam hits score 0
 _FURNITURE_LIMIT = 3  # this many furniture lines score 0
@@ -140,7 +140,7 @@ def quality_score(text: str, known_vocab: set[str]) -> float:
     ``k * f * g * p * (0.5 + 0.5 a) * (0.5 + 0.5 r)`` where
 
     * ``a`` rises from 0 to 1 as the share of letters among non-space characters goes 0.6 to 0.9,
-    * ``k`` rises from 0 to 1 as the share of known words (length 2 or more) goes 0.5 to 0.9,
+    * ``k`` rises from 0 to 1 as the share of known words (length 2 or more) goes 0.7 to 0.95,
     * ``r`` is the share of non-empty lines that do not repeat an earlier line,
     * ``g`` falls to 0 once 5% of the characters are mojibake (``MOJIBAKE_CHARS``),
     * ``p`` falls to 0 at three spam hits: every occurrence of a ``SPAM_MARKERS`` entry counts,

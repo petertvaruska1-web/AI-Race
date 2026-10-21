@@ -81,7 +81,7 @@ def test_simple_evaluators():
     assert (
         eval_speed(60, None).passed
         and not eval_speed(120, None).passed
-        and not eval_speed(60, 900).passed
+        and not eval_speed(60, 1500).passed
     )
     assert (
         eval_legibility([[True] * 14 + [False] * 6]).passed
@@ -153,7 +153,7 @@ def test_run_gate_quick(gate_data_root, tmp_path):
 
 def test_configs_are_the_designed_ones():
     assert STARTER_SHAPE == ModelShape(4, 128, 256) and EARLY_SHAPE == ModelShape(6, 192, 256)
-    assert STARTER_BUDGET == 4_194_304 and EARLY_BUDGET == 8_388_608
+    assert STARTER_BUDGET == 12_582_912 and EARLY_BUDGET == 8_388_608  # ADR 0005
     assert BALANCED_MIX == {ds: 1.0 for ds in DATASET_IDS} and len(BALANCED_MIX) == 8
     assert TARGET_CATEGORY == {
         "creative": "creativity",
@@ -199,8 +199,8 @@ def _finite_data(value) -> bool:
 
 
 def test_speed_boundaries_and_bad_times():
-    assert eval_speed(90, 480).passed and eval_speed(90, None).passed
-    assert not eval_speed(90.01, None).passed and not eval_speed(60, 480.01).passed
+    assert eval_speed(90, 1200).passed and eval_speed(90, None).passed
+    assert not eval_speed(90.01, None).passed and not eval_speed(60, 1200.01).passed
     for bad in ((math.nan, None), (60, math.inf), (math.inf, 100)):
         c = eval_speed(*bad)
         assert not c.passed and _finite_data(c.data) and "finite" in c.detail
@@ -228,15 +228,22 @@ def test_legibility_needs_exactly_twenty_replies():
     assert not nobody.passed and "no first model" in nobody.detail and _finite_data(nobody.data)
 
 
-def test_legibility_must_hold_on_every_seed():
+def test_legibility_pools_the_replies_of_every_seed():
+    # 70% of all the seeds' replies (ADR 0005): one seed's 20 replies are too few to hold to the
+    # bar alone (a model that is exactly 70% legible fails one of three seeds most of the time)
     good, thin = [True] * 14 + [False] * 6, [True] * 13 + [False] * 7
-    c = eval_legibility([good, [True] * 20, good])
-    assert c.passed and c.data["rate"] == 0.7 and c.data["rate_by_seed"] == [0.7, 1.0, 0.7]
-    assert c.data["well_formed_by_seed"] == [14, 20, 14]
-    assert "14 of 20" in c.detail and "20 of 20" in c.detail and "every seed" in c.detail
-    one_short = eval_legibility([[True] * 20, good, thin])
-    assert not one_short.passed and one_short.data["rate"] == 0.65  # the worst seed
-    assert one_short.data["well_formed"] == 13 and _finite_data(one_short.data)
+    c = eval_legibility([good, [True] * 20, thin])
+    assert c.passed and c.data["rate"] == pytest.approx(47 / 60)
+    assert c.data["well_formed"] == 47 and c.data["replies"] == 60
+    assert c.data["rate_by_seed"] == [0.7, 1.0, 0.65] and c.data["well_formed_by_seed"] == [
+        14,
+        20,
+        13,
+    ]
+    assert "47 of 60" in c.detail and "13 of 20" in c.detail and "all 3 seeds" in c.detail
+    short = eval_legibility([good, thin, thin])
+    assert not short.passed and short.data["rate"] == pytest.approx(40 / 60)
+    assert _finite_data(short.data)
     wrong_count = eval_legibility([good, good[:19], good])
     assert not wrong_count.passed and "20, 19, 20" in wrong_count.detail
 
@@ -926,7 +933,7 @@ def test_speed_checks_every_first_model_target():
         "tokens_per_second": 50,
         "growth_seconds": 2,
     }
-    c = eval_speed(90, 480, **at_limits)
+    c = eval_speed(90, 1200, **at_limits)
     assert c.passed and _finite_data(c.data)
     assert c.data["bench_seconds"] == 30 and c.data["bench_seconds_target"] == 30
     for key, worse, words in (
@@ -992,7 +999,10 @@ def test_web_prefixes_end_on_a_word_boundary(tiny_data_root, tiny_tok):
     assert len(gate._web_prefixes(tiny_data_root, tiny_tok, 7)) == 7
     assert len(gate._web_prefixes(tiny_data_root, tiny_tok, 200)) == 200  # documents are reused
     web = Corpus.open(corpus_dir(tiny_data_root) / "web")
-    texts = [tiny_tok.decode(web.doc(int(i)).tolist()) for i in heldout_docs(web)]
+    # only clean documents (ADR 0005): a noisy prompt has any model continue in kind
+    held = heldout_docs(web)
+    assert (web.tags.noise_kind[held] != 0).any()  # the tiny build holds noisy ones out too
+    texts = [tiny_tok.decode(web.doc(int(i)).tolist()) for i in held if web.tags.noise_kind[i] == 0]
     for prefix in set(prefixes):
         assert prefix and not prefix[-1].isspace()
         # It is the start of a held-out document, cut where a word ends.
@@ -1580,12 +1590,13 @@ def test_g5_fails_when_the_gain_of_growing_is_swamped_by_the_seed_spread(fake_ga
     assert g5.data["gain"] < g5.data["needed_gain"]
 
 
-def test_g2_fails_when_one_seeds_first_model_does_not_answer_well(fake_gate, monkeypatch):
-    replies = iter([True] * 20 + [True] * 20 + [True] * 13 + [False] * 7)
+def test_g2_fails_when_the_first_models_answer_too_few_replies_well(fake_gate, monkeypatch):
+    seed_flags = [[True] * 14 + [False] * 6] + [[True] * 13 + [False] * 7] * 2  # 40 of 60
+    replies = iter([flag for flags in seed_flags for flag in flags])
     monkeypatch.setattr(gate, "is_well_formed", lambda reply, judge: next(replies))
     outcome = fake_gate.run()
     g2 = outcome.criteria[1]
-    assert not g2.passed and g2.data["well_formed_by_seed"] == [20, 20, 13]
+    assert not g2.passed and g2.data["well_formed_by_seed"] == [14, 13, 13]
     assert {c.id for c in outcome.criteria if not c.passed} == {"G2"}
 
 
@@ -1990,7 +2001,7 @@ def test_a_just_missed_target_shows_the_digits_that_miss_it():
     c = eval_speed(90.04, None)
     assert not c.passed and "trained on the GPU in 90.04 s (at most 90 s)" in c.detail
     assert c.detail.startswith("missed: GPU training. ")
-    assert eval_speed(60, 480.5).detail.startswith("missed: CPU training. ")
+    assert eval_speed(60, 1200.5).detail.startswith("missed: CPU training. ")
     met = eval_speed(90, None, first_token_ms=300, tokens_per_second=50, growth_seconds=1.996)
     assert met.passed and "chat first token 300 ms" in met.detail  # met values keep their form
     assert "growth op 2.00 s" in met.detail
@@ -2047,7 +2058,7 @@ def test_speed_off_cuda_shows_the_digits_that_miss_a_target():
     c = speed_criterion(
         "cpu",
         3.0,
-        480.04,
+        1200.04,
         bench_seconds=30.04,
         first_token_ms=300.4,
         tokens_per_second=49.96,
@@ -2055,7 +2066,7 @@ def test_speed_off_cuda_shows_the_digits_that_miss_a_target():
     )
     assert not c.passed and c.detail.startswith(NO_CUDA_DETAIL)
     for shown in (
-        "trained on the CPU in 480.04 s (at most 480 s)",
+        "trained on the CPU in 1200.04 s (at most 1200 s)",
         "full benchmark suite 30.04 s (at most 30 s)",
         "chat first token 300.4 ms (at most 300 ms)",
         "chat throughput 49.96 tokens/s (at least 50 tokens/s)",
@@ -2063,7 +2074,7 @@ def test_speed_off_cuda_shows_the_digits_that_miss_a_target():
     ):
         assert shown in c.detail, c.detail
     met = speed_criterion("cpu", 3.0, 12.34, first_token_ms=12.0)
-    assert "trained on the CPU in 12.3 s (at most 480 s)" in met.detail
+    assert "trained on the CPU in 12.3 s (at most 1200 s)" in met.detail
     assert "chat first token 12 ms (at most 300 ms)" in met.detail
 
 

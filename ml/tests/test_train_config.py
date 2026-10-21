@@ -55,7 +55,7 @@ def test_config_roundtrip_and_validation():
     c = TrainRunConfig(
         run_id="r1", seed=1, shape=ModelShape(2, 64, 64), token_budget=32768, mixture={"web": 1.0}
     )
-    assert TrainRunConfig.from_json(c.to_json()) == c and c.steps == 2 and c.batch_size == 256
+    assert TrainRunConfig.from_json(c.to_json()) == c and c.steps == 4 and c.batch_size == 128
     for bad in [
         {"token_budget": 10},
         {"mixture": {"nope": 1.0}},
@@ -373,6 +373,13 @@ def test_config_json_roundtrip_restores_tuples_and_nested_objects():
     assert back == c
     assert all(isinstance(pair, tuple) for pair in back.coaching)
     assert isinstance(back.shape, ModelShape) and isinstance(back.prep, PrepConfig)
+
+
+def test_the_default_batch_is_8192_tokens():
+    # Measured on the real corpus (ADR 0005): at the budgets of the game's early models, 8,192-
+    # token steps learn far more per token than 16,384-token ones (the first model's held-out
+    # conversation loss 2.98 against 3.40 on the same 4.2M tokens).
+    assert TrainRunConfig.__dataclass_fields__["batch_tokens"].default == 8192
 
 
 def test_config_defaults_are_not_shared_between_instances():
