@@ -2,6 +2,7 @@ import ast
 import json
 import math
 import os
+import re
 from collections.abc import Sequence
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -51,6 +52,7 @@ from airace_ml.experiments.gate import (
     speed_criterion,
 )
 from airace_ml.experiments.report import (
+    CELL_CHARS,
     ITERATIONS_PLACEHOLDER,
     TRANSCRIPT_CHARS,
     write_gate_report,
@@ -473,6 +475,14 @@ def test_garble_rate_counts_words_as_model_text_is_counted():
     assert garble_rate(["caf\u00e9 na\u00efve"], {"caf\u00e9"}) == 0  # rare, not garbled
 
 
+def test_a_swap_of_two_neighbouring_letters_is_a_learned_typo():
+    # The noise module's typos swap a letter with the next one as often as they drop, double or
+    # replace one; a swap is one edit, not two substitutions.
+    assert garble_rate(["the hlelo"], {"the", "hello"}) == pytest.approx(0.5)
+    assert garble_rate(["the hello"], {"the", "hello"}) == 0
+    assert garble_rate(["the olleh"], {"the", "hello"}) == 0  # far from any known word
+
+
 def test_a_word_with_a_mojibake_character_is_garble_like():
     vocab = {"the", "cafe", "cat"}
     # "cafÃ©" (the UTF-8 bytes of "café" read as Windows-1252): one word, whatever the junk is.
@@ -491,12 +501,13 @@ def test_a_word_with_a_mojibake_character_is_garble_like():
 
 def test_a_word_one_edit_from_a_known_word_is_a_learned_typo():
     vocab = {"hello", "world", "there", "fine", "cat"}
-    # a dropped letter, a wrong letter, a doubled letter, a missing letter, an extra letter
-    for word in ("helo", "hellp", "helllo", "fino", "wold", "wmorld"):
+    # a dropped letter, a wrong letter, a doubled letter, a missing letter, an extra letter, and
+    # two neighbouring letters swapped (the noise module's swap typo is one edit, not two)
+    for word in ("helo", "hellp", "helllo", "fino", "wold", "wmorld", "wrold"):
         assert garble_rate([word], vocab) == 1.0, word
     assert garble_rate(["hello world helo hellp helllo"], vocab) == pytest.approx(3 / 5)
-    # two edits are not a typo of the word (a swapped pair, wrold, takes two)
-    for word in ("wrold", "hxllp", "helloxx", "xhelloy"):
+    # two edits are not a typo of the word
+    for word in ("hxllp", "helloxx", "xhelloy", "wrodl"):
         assert garble_rate([word], vocab) == 0.0, word
     # a short word is never called a typo ("cot" is one edit from "cat"); four letters are enough
     assert garble_rate(["cot cut ca"], vocab) == 0.0
@@ -1418,6 +1429,7 @@ def test_g7_reports_the_garble_ratio_of_the_prepared_training_text(fake_gate):
     assert g7.data["data_ratio"] == pytest.approx(1 / 3)
     assert g7.data["data_docs_light"] == g7.data["data_docs_thorough"] == 2
     assert "training text" in g7.detail and "0.33" in g7.detail
+    assert re.search(r"[.!?] In the prepared web training text", g7.detail), g7.detail
     assert "strengthen" not in g7.detail and _finite_data(g7.data)
 
 
@@ -1426,6 +1438,8 @@ def test_g7_says_when_cleaning_barely_changes_the_training_text(fake_gate):
     g7 = fake_gate.run().criteria[6]
     assert g7.data["data_ratio"] == 1.0
     assert "above about 0.7" in g7.detail and "strengthen the web noise" in g7.detail
+    # The warning is read in the report's summary table, whose cells are cut after CELL_CHARS.
+    assert g7.detail.index("strengthen the web noise") < CELL_CHARS - 40
     assert g7.passed  # the verdict is the models', the ratio is information beside it
 
 

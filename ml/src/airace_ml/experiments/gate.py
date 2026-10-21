@@ -764,12 +764,15 @@ _GARBLE_WORD = re.compile("(?:[^\\W\\d_]|[" + re.escape("".join(sorted(MOJIBAKE_
 
 
 def _one_edit_from_known(word: str, known: set[str], alphabet: str) -> bool:
-    """Whether ``word`` is one insertion, deletion or substitution away from a word of ``known``
-    (whose letters are ``alphabet``)."""
+    """Whether ``word`` is one insertion, deletion, substitution or swap of two neighbouring
+    letters away from a word of ``known`` (whose letters are ``alphabet``): the four kinds of
+    typo the noise module writes."""
     for i in range(len(word)):
         if word[:i] + word[i + 1 :] in known:
             return True
         if any(word[:i] + c + word[i + 1 :] in known for c in alphabet if c != word[i]):
+            return True
+        if i + 1 < len(word) and word[:i] + word[i + 1] + word[i] + word[i + 2 :] in known:
             return True
     return any(word[:i] + c + word[i:] in known for i in range(len(word) + 1) for c in alphabet)
 
@@ -781,7 +784,8 @@ def garble_rate(texts: Sequence[str], known_vocab: set[str]) -> float:
     A word is garble-like if it holds a character of the noise module's mojibake set
     (:data:`~airace_content.textproc.MOJIBAKE_CHARS`, which everything ``garble()`` writes holds),
     or if it is not in ``known_vocab``, has at least :data:`GARBLE_MIN_TYPO_LENGTH` letters and is
-    one insertion, deletion or substitution away from a word that is (a learned typo). A rare
+    one insertion, deletion, substitution or swap of two neighbouring letters away from a word that
+    is (a learned typo). A rare
     word or a name that is nowhere near a known word is not garbled, which is what separates
     garbling from the unknown-word share of real web text (names, brands, rare words), which
     cleaning does not lower.
@@ -1515,11 +1519,6 @@ class _Gate:
                 f"In the prepared web training text itself, thorough cleaning leaves {ratio:.2f} "
                 f"of light cleaning's garble-like words ({thorough:.1%} vs {light:.1%})."
             )
-            if ratio > DATA_RATIO_WARNING:
-                note += (
-                    f" That is above about {DATA_RATIO_WARNING:g}: strengthen the web noise or "
-                    f"the cleaning thresholds before trusting this verdict."
-                )
         return data, note
 
     def preparation(self) -> tuple[GateCriterion, list[GateRun]]:
@@ -1576,7 +1575,19 @@ class _Gate:
             false["g7-facts-checked"],
         )
         data_level, note = self.prepared_text_garble()
-        criterion.detail += " " + note
+        detail = criterion.detail.rstrip()
+        if detail and detail[-1] not in ".!?":
+            detail += "."
+        ratio = data_level["data_ratio"]
+        if ratio is not None and ratio > DATA_RATIO_WARNING:
+            # First, so that the report's summary table (cells cut after CELL_CHARS) shows it.
+            detail = (
+                f"Check the training data first: in the web training text itself, thorough "
+                f"cleaning leaves {ratio:.2f} of light cleaning's garble-like words, above about "
+                f"{DATA_RATIO_WARNING:g}: strengthen the web noise or the cleaning thresholds "
+                f"before trusting this verdict. " + detail
+            )
+        criterion.detail = detail + " " + note
         probes, skipped = false_fact_probes(self.inputs.kb, self.inputs.plan)
         criterion.data.update(
             {
