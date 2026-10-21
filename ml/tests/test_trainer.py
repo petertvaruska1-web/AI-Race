@@ -13,6 +13,8 @@ from airace_ml.model.checkpoint import load_checkpoint
 from airace_ml.model.growth import GrowthError
 from airace_ml.model.shape import ModelShape
 from airace_ml.model.transformer import Transformer
+from airace_ml.paths import tokenizer_path
+from airace_ml.tokenizer import Tok
 from airace_ml.train import trainer as trainer_module
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.train.events import Done, HeldoutEval, Instability, Progress, Sample
@@ -831,14 +833,17 @@ def test_micro_batches_do_not_change_what_a_resumed_run_draws(
 
 @pytest.mark.gpu
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
-def test_a_judge_recipe_step_fits_the_8gb_reference_card(tiny_data_root, tmp_path):
-    # 128 rows x 256 tokens per step, 8 layers x 384 wide: it needs ~7 GiB in one piece (the
-    # card also drives the desktop). In micro-batches of 8192 tokens it needs about a third of that.
+def test_a_judge_recipe_step_fits_the_8gb_reference_card(gate_data_root, tmp_path):
+    # 128 rows x 256 tokens per step, 8 layers x 384 wide, on the real 4096-entry vocabulary (a
+    # real tiny build, not the 512-entry test tokenizer): in one piece a step needs about 7 GiB on
+    # a card that also drives the desktop. In micro-batches of 8192 tokens it needs about 2 GiB, so
+    # a 4 GiB bound tells the two apart.
+    assert Tok.load(tokenizer_path(gate_data_root)).vocab_size == 4096
     judge = judge_train_config()
     c = dataclasses.replace(judge, run_id="judge-memory", token_budget=judge.batch_tokens)
     assert c.steps == 1 and c.batch_size * c.shape.ctx_len == 32768
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
-    r = train_run(c, out_dir=tmp_path / "j", data_root=tiny_data_root, device=torch.device("cuda"))
+    r = train_run(c, out_dir=tmp_path / "j", data_root=gate_data_root, device=torch.device("cuda"))
     assert r.status == "completed" and r.steps == 1 and r.tokens == 32768
-    assert torch.cuda.max_memory_allocated() < 6 * 1024**3
+    assert torch.cuda.max_memory_allocated() < 4 * 1024**3
