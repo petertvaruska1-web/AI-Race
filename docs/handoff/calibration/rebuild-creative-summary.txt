@@ -1,0 +1,4 @@
+corpus written to C:\Users\petko\Desktop\AI Race\data\corpus\v1
+  creative         74,325 docs   20,512,797 tokens (103% of target)  held out 744  noise: typo 1487, duplicate 2230
+tokenizer: frozen, reused
+done in 102.8 s

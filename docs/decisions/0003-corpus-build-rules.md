@@ -29,4 +29,4 @@
 8. **Kept as it was (refuted in review): the ASCII word rule of `textproc.words` (F31).** The gate deliberately reads model text as Unicode letter runs, and changing either would hide the mojibake signal G7 measures.
 
 ## Pending on the owner's machine
-- **The simplicity thresholds (F15).** They keep about 97–100% of real documents. They are calibrated on real data with the real simple_vocab before the full build; see the handoff README §5.
+- **The simplicity thresholds (F15).** They kept about 97–100% of real documents. *Done 2026-10-21:* calibrated on real data with the real simple_vocab (ADR 0004).

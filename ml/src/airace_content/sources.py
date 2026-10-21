@@ -25,7 +25,7 @@ import sys
 import time
 from collections import Counter
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from airace_ml.tokenizer import Role
@@ -50,9 +50,25 @@ def _spec(id: str, hf_path: str, hf_config: str | None, split: str, license: str
     )
 
 
-# Licenses as the dataset cards state them; Task 15 re-verifies each one against the hub.
+# The commits the first full build read (2026-10-21), so every later build reads the same rows.
+_PINNED: dict[str, str] = {
+    "tinystories": "f54c09fd23315a6f9c86f9dc80f725de7d8f9c64",
+    "fineweb": "9bb295ddab0e05d785b879661af7260fed5140fc",
+    "fineweb_edu": "87f09149ef4734204d70ed1d046ddc9ca3f2b8f9",
+    "cosmo_khan": "0ae6ec63f91742bd2d1eaef4f02232c55d719385",
+    "cosmo_wikihow": "0ae6ec63f91742bd2d1eaef4f02232c55d719385",
+    "cosmo_openstax": "0ae6ec63f91742bd2d1eaef4f02232c55d719385",
+    "cosmo_stories": "0ae6ec63f91742bd2d1eaef4f02232c55d719385",
+    "soda": "fdc848ab0183208ea7808206c91c724414d0a071",
+    "everyday_conv": "14f543216b9ba42b6b951dc5bd199460d193b162",
+    "gutenberg": "28973b04f28fd7be4a6186a042bc26159d4366ca",
+    "gsm8k": "740312add88f781978c0658806c59bc2815b9866",
+    "mbpp": "4bb6404fdc6cacfda99d4ac4205087b89d32030c",
+}
+
+# Licenses as the dataset cards state them, re-verified against the hub on 2026-10-21 (ADR 0004).
 SOURCES: dict[str, SourceSpec] = {
-    spec.id: spec
+    spec.id: replace(spec, revision=_PINNED[spec.id])
     for spec in (
         _spec("tinystories", "roneneldan/TinyStories", None, "train", "cdla-sharing-1.0"),
         _spec("fineweb", "HuggingFaceFW/fineweb", "sample-10BT", "train", "odc-by"),
@@ -487,23 +503,35 @@ def _text(row: dict) -> list[Content]:
 # read as Windows-1252. A curly quote or dash is E2 80 xx, which shows as "a-circumflex, euro,
 # <xx as cp1252>"; a closing double quote (E2 80 9D) has lost its last byte, which cp1252 has no
 # character for, and is left as just the first two characters. The clean stories use straight
-# ASCII quotes, so the repair gives those.
-_TINYSTORIES_MOJIBAKE = re.compile("\u00e2\u20ac[\u0153\u2122\u02dc\u201c\u201d]?")
+# ASCII quotes, so the repair gives those. A letter or mark from Latin-1 (C2 or C3, then one
+# byte) shows as "A-circumflex" or "A-tilde" and one more character; it gets its letter back.
+_TINYSTORIES_MOJIBAKE = re.compile("\u00e2\u20ac[\u0153\u2122\u02dc\u201c\u201d\u00a6]?")
 _TINYSTORIES_REPAIRS = {
     "\u00e2\u20ac\u0153": '"',  # left double quote
     "\u00e2\u20ac\u2122": "'",  # right single quote, the apostrophe
     "\u00e2\u20ac\u02dc": "'",  # left single quote
     "\u00e2\u20ac\u201c": "-",  # en dash
     "\u00e2\u20ac\u201d": "-",  # em dash
+    "\u00e2\u20ac\u00a6": "...",  # ellipsis
 }
+_TINYSTORIES_LATIN1 = re.compile("[\u00c2\u00c3].")
+
+
+def _latin1_letter(m: re.Match) -> str:
+    try:
+        return m.group().encode("cp1252").decode("utf-8")
+    except UnicodeError:  # not a misdecoded pair after all: leave it
+        return m.group()
 
 
 def repair_tinystories_mojibake(text: str) -> str:
     """``text`` with the misdecoded punctuation of the TinyStories rows turned into ASCII: the
     left double quote into ``"``, the apostrophe and the left single quote into ``'``, the dashes
-    into ``-``, and the closing double quote (the two characters left of it) into ``"``. Text
-    without them is returned as it is."""
-    return _TINYSTORIES_MOJIBAKE.sub(lambda m: _TINYSTORIES_REPAIRS.get(m.group(), '"'), text)
+    into ``-``, the ellipsis into ``...``, and the closing double quote (the two characters left
+    of it) into ``"``; and misdecoded Latin-1 letters and marks ("caf\u00c3\u00a9") back into
+    what they were ("caf\u00e9"). Text without them is returned as it is."""
+    text = _TINYSTORIES_MOJIBAKE.sub(lambda m: _TINYSTORIES_REPAIRS.get(m.group(), '"'), text)
+    return _TINYSTORIES_LATIN1.sub(_latin1_letter, text)
 
 
 def _tinystories(row: dict) -> list[Content]:

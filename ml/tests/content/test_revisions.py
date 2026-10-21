@@ -1,6 +1,7 @@
 """F29: every source is read at one commit of its Hub repository, and the manifest says which."""
 
 import json
+import re
 import sys
 import types
 from dataclasses import dataclass, field, replace
@@ -30,6 +31,8 @@ from airace_ml.paths import corpus_dir
 FIX = Path(__file__).parents[1] / "fixtures" / "sources"
 HEAD = "1f2e3d4c5b6a79880011223344556677deadbeef"
 ROWS = [{"question": f"Q{i}", "answer": f"a {i}\n#### {i}"} for i in range(6)]
+# The sources are pinned (ADR 0004); the lookup of a head is tested on an unpinned copy.
+GSM8K = replace(SOURCES["gsm8k"], revision=None)
 
 
 def _http_error(status: int) -> HfHubHTTPError:
@@ -92,8 +95,9 @@ def install(monkeypatch, hub: FakeHub) -> FakeHub:
 # --- the spec, the fetch ---------------------------------------------------------------------
 
 
-def test_a_spec_may_declare_a_revision_and_none_does_by_default():
-    assert all(spec.revision is None for spec in SOURCES.values())
+def test_every_source_is_pinned_and_a_spec_declares_none_by_default():
+    assert all(re.fullmatch("[0-9a-f]{40}", spec.revision or "") for spec in SOURCES.values())
+    assert SourceSpec("x", "o/x", None, "train", "mit", "h").revision is None
     spec = SourceSpec(
         "x", "o/x", None, "train", "mit", "https://huggingface.co/datasets/o/x", "abc"
     )
@@ -102,35 +106,35 @@ def test_a_spec_may_declare_a_revision_and_none_does_by_default():
 
 def test_a_declared_revision_is_passed_on_and_nothing_is_looked_up(monkeypatch, waits):
     hub = install(monkeypatch, FakeHub())
-    pinned = replace(SOURCES["gsm8k"], revision="cafe1234")
+    pinned = replace(GSM8K, revision="cafe1234")
     assert list(hf_fetch(pinned, 3)) == ROWS[:3]
     assert [call["revision"] for call in hub.loads] == ["cafe1234"] and hub.infos == []
 
 
 def test_the_head_is_looked_up_once_and_used_for_the_whole_read(monkeypatch, waits):
     hub = install(monkeypatch, FakeHub(stream_errors=[1, 2]))
-    assert list(hf_fetch(SOURCES["gsm8k"], 6)) == ROWS  # dropped twice, resumed twice
+    assert list(hf_fetch(GSM8K, 6)) == ROWS  # dropped twice, resumed twice
     assert hub.infos == ["openai/gsm8k"]
     assert [call["revision"] for call in hub.loads] == [HEAD, HEAD, HEAD]
 
 
 def test_resolve_revision(monkeypatch, waits):
     hub = install(monkeypatch, FakeHub())
-    assert resolve_revision(SOURCES["gsm8k"]) == HEAD
-    assert resolve_revision(replace(SOURCES["gsm8k"], revision="abc")) == "abc"
+    assert resolve_revision(GSM8K) == HEAD
+    assert resolve_revision(replace(GSM8K, revision="abc")) == "abc"
     assert hub.infos == ["openai/gsm8k"]
     install(monkeypatch, FakeHub(head=None))
-    assert resolve_revision(SOURCES["gsm8k"]) is None  # no commit to name: the head, as before
+    assert resolve_revision(GSM8K) is None  # no commit to name: the head, as before
 
 
 def test_the_head_lookup_cannot_hang_for_ever(monkeypatch, waits):
     """The hub's metadata call has no timeout of its own: the lookup passes one, every time."""
     assert 0 < sources.INFO_TIMEOUT_S <= 300
     hub = install(monkeypatch, FakeHub(info_errors=[httpx.ConnectError("no route")]))
-    assert resolve_revision(SOURCES["gsm8k"]) == HEAD  # the second try, after a failed one
+    assert resolve_revision(GSM8K) == HEAD  # the second try, after a failed one
     assert hub.info_kwargs == [{"timeout": sources.INFO_TIMEOUT_S}] * 2
     hub = install(monkeypatch, FakeHub())
-    assert list(hf_fetch(SOURCES["gsm8k"], 2)) == ROWS[:2]  # the lookup a read makes
+    assert list(hf_fetch(GSM8K, 2)) == ROWS[:2]  # the lookup a read makes
     assert hub.info_kwargs == [{"timeout": sources.INFO_TIMEOUT_S}]
 
 
@@ -144,7 +148,7 @@ def test_a_lookup_without_the_content_extra_fails_before_the_network(monkeypatch
 
     monkeypatch.setattr(huggingface_hub, "HfApi", FakeApi)
     with pytest.raises(DatasetsUnavailable, match="python -m uv sync --extra content"):
-        resolve_revision(SOURCES["gsm8k"])
+        resolve_revision(GSM8K)
     assert asked == []
 
 
@@ -152,7 +156,7 @@ def test_a_lookup_that_fails_for_a_moment_is_retried(monkeypatch, waits, capsys)
     hub = install(
         monkeypatch, FakeHub(info_errors=[_http_error(503), httpx.ConnectError("no route")])
     )
-    assert resolve_revision(SOURCES["gsm8k"]) == HEAD
+    assert resolve_revision(GSM8K) == HEAD
     assert len(hub.infos) == 3 and waits == [30, 60]
     assert len(capsys.readouterr().err.splitlines()) == 2
 
@@ -160,14 +164,14 @@ def test_a_lookup_that_fails_for_a_moment_is_retried(monkeypatch, waits, capsys)
 def test_a_lookup_that_cannot_work_is_not_retried(monkeypatch, waits):
     hub = install(monkeypatch, FakeHub(info_errors=[_http_error(404)]))
     with pytest.raises(HfHubHTTPError):
-        resolve_revision(SOURCES["gsm8k"])
+        resolve_revision(GSM8K)
     assert len(hub.infos) == 1 and waits == []
 
 
 def test_a_lookup_that_never_works_gives_up(monkeypatch, waits):
     install(monkeypatch, FakeHub(info_errors=[_http_error(502)] * 20))
     with pytest.raises(SourceUnavailable, match="gsm8k"):
-        resolve_revision(SOURCES["gsm8k"])
+        resolve_revision(GSM8K)
     assert len(waits) == sources.RETRY_ATTEMPTS - 1
 
 
@@ -186,6 +190,13 @@ class Spy:
         return self.inner(spec, max_rows)
 
 
+@pytest.fixture
+def unpinned(monkeypatch):
+    """The sources as they were before they were pinned: a build looks each head up."""
+    for sid, spec in list(SOURCES.items()):
+        monkeypatch.setitem(SOURCES, sid, replace(spec, revision=None))
+
+
 def _pin(looked_up: list[str] | None = None):
     def pin(spec):
         if looked_up is not None:
@@ -195,7 +206,7 @@ def _pin(looked_up: list[str] | None = None):
     return pin
 
 
-def test_a_build_reads_every_source_at_its_pinned_revision_and_records_it(tmp_path):
+def test_a_build_reads_every_source_at_its_pinned_revision_and_records_it(tmp_path, unpinned):
     spy, looked_up = Spy(), []
     root = tmp_path / "data"
     lines: list[str] = []
@@ -209,7 +220,7 @@ def test_a_build_reads_every_source_at_its_pinned_revision_and_records_it(tmp_pa
     }
 
 
-def test_a_build_without_pins_records_no_revision(tmp_path):
+def test_a_build_without_pins_records_no_revision(tmp_path, unpinned):
     spy = Spy()
     build_corpus("tiny", tmp_path / "data", spy, seed=0)
     assert all(revision is None for _, revision in spy.seen)
@@ -226,7 +237,7 @@ def test_a_declared_revision_is_read_and_recorded_without_a_pin(tmp_path, monkey
     assert {s["id"]: s["revision"] for s in manifest["sources"]}["gsm8k"] == "declared"
 
 
-def test_a_partial_rebuild_keeps_the_revisions_of_the_sources_it_does_not_read(tmp_path):
+def test_a_partial_rebuild_keeps_the_revisions_of_the_sources_it_does_not_read(tmp_path, unpinned):
     root = tmp_path / "data"
     build_corpus("tiny", root, fixture_fetch(FIX), seed=0, pin=_pin())
     build_corpus(
@@ -237,7 +248,7 @@ def test_a_partial_rebuild_keeps_the_revisions_of_the_sources_it_does_not_read(t
     assert all(rev == f"{sid}-rev" for sid, rev in revisions.items() if sid != "mbpp")
 
 
-def test_make_manifest_takes_the_revision_actually_used():
+def test_make_manifest_takes_the_revision_actually_used(unpinned):
     entries = {"code": {"components": [{"kind": "source", "name": "mbpp"}]}}
     sources_ = make_manifest(entries, None, {"mbpp": "abc"})["sources"]
     assert sources_[0]["id"] == "mbpp" and sources_[0]["revision"] == "abc"
@@ -247,7 +258,7 @@ def test_make_manifest_takes_the_revision_actually_used():
 # --- the command line, through the fake hub ----------------------------------------------------
 
 
-def test_the_command_line_pins_every_source_and_records_it(monkeypatch, tmp_path, waits):
+def test_the_command_line_pins_every_source_and_records_it(monkeypatch, tmp_path, waits, unpinned):
     by_repo = {(s.hf_path, s.hf_config): s for s in SOURCES.values()}
     fixtures = fixture_fetch(FIX)
     loads: list[dict] = []
@@ -282,7 +293,7 @@ def test_the_command_line_pins_every_source_and_records_it(monkeypatch, tmp_path
     assert set(manifest["datasets"]) == set(DATASET_IDS)
 
 
-def test_a_source_that_cannot_be_looked_up_fails_in_plain_words(tmp_path):
+def test_a_source_that_cannot_be_looked_up_fails_in_plain_words(tmp_path, unpinned):
     def pin(spec):
         raise _http_error(401)
 
@@ -291,7 +302,7 @@ def test_a_source_that_cannot_be_looked_up_fails_in_plain_words(tmp_path):
     assert not (tmp_path / "data").exists()
 
 
-def test_a_lookup_that_hits_a_network_problem_is_left_for_the_command_line(tmp_path):
+def test_a_lookup_that_hits_a_network_problem_is_left_for_the_command_line(tmp_path, unpinned):
     def pin(spec):
         raise SourceUnavailable("network problem while looking up the current version of x")
 

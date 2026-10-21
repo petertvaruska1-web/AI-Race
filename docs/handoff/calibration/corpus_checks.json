@@ -1,0 +1,226 @@
+{
+ "web": {
+  "docs": 33663,
+  "quality_hist_0_to_1": [
+   4932,
+   291,
+   834,
+   1713,
+   1007,
+   684,
+   3823,
+   736,
+   1171,
+   18472
+  ],
+  "cleaning_keeps": {
+   "light": 0.849,
+   "standard": 0.769,
+   "thorough": 0.699
+  },
+  "mojibake_outside_garbled": "113/1500",
+  "mojibake_examples": [
+   "ollar, armholes, cuffs and waistband\n- 3¾\"wide 1x1 ribbed knit cuff and waistban",
+   "or the details tho!\nPowered by vBulletin® Version 4.2.0 Copyright © 2013 vBullet",
+   "offered on Saturdays behind Sierra No. 3™ (also known as the “Movie Star Locomot"
+  ],
+  "simplicity_q10_q50_q90": [
+   0.569,
+   0.704,
+   0.85
+  ],
+  "words_q10_q50_q90": [
+   66,
+   275,
+   983
+  ]
+ },
+ "books": {
+  "docs": 24880,
+  "quality_hist_0_to_1": [
+   114,
+   8,
+   11,
+   21,
+   30,
+   57,
+   125,
+   98,
+   103,
+   24313
+  ],
+  "cleaning_keeps": {
+   "light": 0.995,
+   "standard": 0.994,
+   "thorough": 0.989
+  },
+  "mojibake_outside_garbled": "4/1500",
+  "mojibake_examples": [
+   " waiting to hear a syllable from poor Phœbe, trotted off in search of her consor",
+   "dairy door, and\nwhen she had been fed Phœbe and I followed her stealthily,\nfrom ",
+   "marily and smartly; the “wepping,”\nas Phœbe would say, being Mrs. Heaven’s hand."
+  ],
+  "simplicity_q10_q50_q90": [
+   0.587,
+   0.841,
+   0.916
+  ],
+  "words_q10_q50_q90": [
+   292,
+   375,
+   397
+  ],
+  "passages_ending_at_sentence_end": 0.934,
+  "passages_with_paragraph_breaks": 0.927
+ },
+ "educational": {
+  "docs": 15863,
+  "quality_hist_0_to_1": [
+   1097,
+   8,
+   93,
+   360,
+   80,
+   101,
+   1135,
+   137,
+   538,
+   12314
+  ],
+  "cleaning_keeps": {
+   "light": 0.931,
+   "standard": 0.902,
+   "thorough": 0.879
+  },
+  "mojibake_outside_garbled": "149/1500",
+  "mojibake_examples": [
+   "we know its formula for volume is V = πr²h, where r represents the radius, h rep",
+   "ured by Elan under the brand name PRIALT®, was approved by the FDA in 2004 as a ",
+   "nox, the Earth's tilt angle α is about 0°. However, since the sinusoidal cycle b"
+  ],
+  "simplicity_q10_q50_q90": [
+   0.462,
+   0.674,
+   0.812
+  ],
+  "words_q10_q50_q90": [
+   249,
+   574,
+   915
+  ]
+ },
+ "conversations": {
+  "docs": 235749,
+  "quality_hist_0_to_1": [
+   101,
+   46,
+   123,
+   180,
+   330,
+   430,
+   694,
+   1022,
+   2249,
+   230574
+  ],
+  "cleaning_keeps": {
+   "light": 1.0,
+   "standard": 0.998,
+   "thorough": 0.994
+  },
+  "mojibake_outside_garbled": "0/1500",
+  "mojibake_examples": []
+ },
+ "code": {
+  "docs": 216271,
+  "quality_hist_0_to_1": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   2,
+   0,
+   0,
+   2,
+   216267
+  ],
+  "cleaning_keeps": {
+   "light": 1.0,
+   "standard": 1.0,
+   "thorough": 1.0
+  },
+  "mojibake_outside_garbled": "0/1500",
+  "mojibake_examples": []
+ },
+ "reasoning": {
+  "docs": 72138,
+  "quality_hist_0_to_1": [
+   2,
+   0,
+   0,
+   0,
+   2,
+   2,
+   3,
+   2,
+   204,
+   71923
+  ],
+  "cleaning_keeps": {
+   "light": 1.0,
+   "standard": 1.0,
+   "thorough": 1.0
+  },
+  "mojibake_outside_garbled": "1/1500",
+  "mojibake_examples": [
+   " The second sells the same computer for €920 with a 5% discount. What is the dif"
+  ]
+ },
+ "facts": {
+  "docs": 219535,
+  "quality_hist_0_to_1": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   219535
+  ],
+  "cleaning_keeps": {
+   "light": 1.0,
+   "standard": 1.0,
+   "thorough": 1.0
+  },
+  "mojibake_outside_garbled": "0/1500",
+  "mojibake_examples": []
+ },
+ "creative": {
+  "docs": 74325,
+  "quality_hist_0_to_1": [
+   22,
+   3,
+   8,
+   44,
+   30,
+   73,
+   273,
+   143,
+   191,
+   73538
+  ],
+  "cleaning_keeps": {
+   "light": 1.0,
+   "standard": 0.999,
+   "thorough": 0.997
+  },
+  "mojibake_outside_garbled": "1/1500",
+  "mojibake_examples": [
+   "ns then meeting again later near Sacré-Cœur Basilica. Both parties agreed, resum"
+  ]
+ }
+}

@@ -157,6 +157,11 @@ BYTES_PER_TOKEN_BY_COMPONENT: dict[str, float] = {
     "mbpp": 2.7,
     "tinystories": 3.6,  # simple stories into fewer, longer ones
     "cosmo_stories": 3.6,
+    # measured on the first full build with tok-v1, where 3.2 left these 4-14% short (ADR 0004)
+    "fact_prose": 3.7,
+    "soda": 3.7,
+    "fact_chat": 3.6,
+    "instructions": 3.3,
 }
 # Documents a generator is asked for at a time while it works towards a full-scale quota.
 GENERATOR_BATCH_DOCS = 200

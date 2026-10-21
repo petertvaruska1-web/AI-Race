@@ -9,7 +9,7 @@ import shutil
 import sys
 import types
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import huggingface_hub
@@ -68,6 +68,7 @@ from airace_content.sources import (
     fixture_fetch,
     hf_fetch,
     is_childrens_book,
+    repair_tinystories_mojibake,
     restore_plain_layout,
     row_to_content,
 )
@@ -206,7 +207,7 @@ def test_hf_fetch_imports_datasets_only_when_it_runs(monkeypatch):
     fake.load_dataset = load_dataset
     monkeypatch.setitem(sys.modules, "datasets", fake)  # installed or not, this is what loads
     monkeypatch.setattr(huggingface_hub, "HfApi", HfApi)
-    rows = hf_fetch(SOURCES["gsm8k"], 2)
+    rows = hf_fetch(replace(SOURCES["gsm8k"], revision=None), 2)  # unpinned: looked up
     assert calls == []  # a generator: nothing runs until it is iterated
     assert list(rows) == [{"question": "Q1"}, {"question": "Q2"}]
     assert calls == [("openai/gsm8k", "main", "train", True, "0123abcd")]
@@ -371,6 +372,24 @@ def test_tinystories_mojibake_is_repaired_to_ascii():
     # build._simple_vocab reads the same rows: "didn't" is a word of the vocabulary, not "didn"
     vocab = _simple_vocab("tiny", fixture_fetch(REAL_FIX))
     assert "didn't" in vocab and "didn" not in vocab and "it's" in vocab
+
+
+def test_tinystories_misdecoded_ellipses_and_letters_are_repaired():
+    # Found in the first full build: the ellipsis (E2 80 A6) was read as a closing quote and left
+    # '"¦', and accented letters and Spanish marks stayed misdecoded ("cafÃ©").
+    def misdecoded(text: str) -> str:
+        return text.encode("utf-8").decode("cp1252")
+
+    story = (
+        "And then… he fell. They went to the café. "
+        "¡Mira mi muñeca! «Do you want jam?» Élise said."
+    )
+    [repaired] = row_to_content("tinystories", {"text": misdecoded(story)})
+    assert repaired == (
+        "And then... he fell. They went to the café. "
+        "¡Mira mi muñeca! «Do you want jam?» Élise said."
+    )
+    assert repair_tinystories_mojibake("Ã Â plain") == "Ã Â plain"
 
 
 def test_chat_adapters():
@@ -585,18 +604,20 @@ def test_full_scale_gives_an_exhausted_sources_quota_to_the_others(build_inputs,
 
 
 def test_token_estimates_use_a_constant_per_kind_of_text():
-    # prose about 3.2 bytes per token, code and number patterns about 2.7, stories about 3.6
+    # prose about 3.2 bytes per token, code and number patterns about 2.7, stories about 3.6;
+    # dialogue and templated facts as measured on the first full build (tok-v1, ADR 0004)
     assert BYTES_PER_TOKEN_ESTIMATE == 3.2
     prose = [
         *("fineweb", "fineweb_edu", "cosmo_khan", "cosmo_wikihow", "cosmo_openstax", "gutenberg"),
-        *("soda", "everyday_conv", "gsm8k"),
-        *("fact_prose", "fact_chat", "instructions", "reasoning"),
+        *("everyday_conv", "gsm8k", "reasoning"),
     ]
     assert {c: component_bytes_per_token(c) for c in prose} == dict.fromkeys(prose, 3.2)
     for name in ("code", "patterns", "mbpp"):
         assert component_bytes_per_token(name) == 2.7
     for name in ("tinystories", "cosmo_stories"):
         assert component_bytes_per_token(name) == 3.6
+    measured = {"fact_prose": 3.7, "soda": 3.7, "fact_chat": 3.6, "instructions": 3.3}
+    assert {c: component_bytes_per_token(c) for c in measured} == measured
     for recipe in RECIPES.values():
         assert all(component_bytes_per_token(c.name) > 0 for c in recipe.components)
     assert estimate_tokens("a" * 2700) == math.ceil(2700 / 3.2)

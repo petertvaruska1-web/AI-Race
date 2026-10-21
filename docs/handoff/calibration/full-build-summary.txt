@@ -1,0 +1,11 @@
+corpus written to C:\Users\petko\Desktop\AI Race\data\corpus\v1
+  web              33,663 docs   32,283,110 tokens (108% of target)  held out 337  noise: typo 5049, spam 2020, boilerplate 3366, garbled 1683, duplicate 2693, false_fact 2020
+  books            24,880 docs   14,803,507 tokens (99% of target)  held out 249  noise: typo 498, garbled 249, duplicate 498
+  educational      15,863 docs   20,414,802 tokens (102% of target)  held out 159  noise: duplicate 317, false_fact 159
+  conversations   217,055 docs   17,848,778 tokens (89% of target)  held out 2,171  noise: typo 6512
+  code            216,271 docs   10,188,965 tokens (102% of target)  held out 2,163  noise: duplicate 6488
+  reasoning        72,138 docs    9,676,235 tokens (97% of target)  held out 722  noise: none
+  facts           190,577 docs   10,380,492 tokens (87% of target)  held out 1,989  noise: duplicate 3812
+  creative         74,325 docs   20,512,898 tokens (103% of target)  held out 744  noise: typo 1487, duplicate 2230
+tokenizer: trained
+done in 1035.1 s
