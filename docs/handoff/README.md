@@ -58,7 +58,10 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
    - Cloud: the template `docs/handoff/final-review/cloud-sync.sh`. It also copies briefs, deferred minors and final-review artefacts, and takes the commit trailer and branch from the environment.
 
 ## 4. Immediate next step
-**The local GPU session, §5.** Fast-forward `m1-it-learns` to the cloud branch (§2), then work the checklist in order. Merging to `main` remains the owner-facing finish step, after the gate.
+**Local GPU session in progress (2026-10-21).** Step 0 and Task 15 are done (corpus v1, ADR 0004). The evaluators and gate run 1 are done (4 of 7). Iteration 1's fixes are committed (af82afb, ADR 0005), and the chain "full rebuild → build-novelty-index → build-judge → gate --out runs/gate-1 --cpu-speed" was started.
+- On resume, rerun any step of that chain that did not finish; each reuses what is unchanged.
+- Then read `ml/runs/gate-1/report.md`, iterate if needed (plan step 8, recorded in its Iterations section), and finish step 4 below.
+- Merging to `main` remains the owner-facing finish step, after the gate.
 
 ## 5. Local GPU session checklist (Windows 11 + RTX 3050)
 `data/` is gitignored and large, so it never travels through git. Commands are in CLAUDE.md "Commands"; every corpus build needs `--extra content`.
