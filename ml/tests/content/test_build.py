@@ -420,13 +420,13 @@ def test_recipes_match_the_design():
     }
     src, gen = "source", "generator"
     assert shares == {
-        "web": [(src, "fineweb", 1.0, 0.35)],
-        "books": [(src, "gutenberg", 1.0, 0.30)],
+        "web": [(src, "fineweb", 1.0, 0.55)],
+        "books": [(src, "gutenberg", 1.0, 0.50)],
         "educational": [
             (src, "cosmo_khan", 0.25, None),
             (src, "cosmo_wikihow", 0.25, None),
             (src, "cosmo_openstax", 0.20, None),
-            (src, "fineweb_edu", 0.30, 0.35),
+            (src, "fineweb_edu", 0.30, 0.55),
         ],
         "conversations": [
             (src, "soda", 0.55, None),
@@ -928,9 +928,11 @@ def test_tags_describe_the_documents(tiny_build):
                 assert any(c in MOJIBAKE_CHARS for c in text)
             elif name == "false_fact":
                 assert any(s in text and wrong in text for (s, _), wrong in plan.mapping.items())
-            elif name == "duplicate":
+            elif name == "duplicate":  # a copy, perhaps with a typo or two; autojunk off, since
+                # on texts over 200 characters it ignores common letters and underrates copies
                 assert any(
-                    difflib.SequenceMatcher(None, text, other).ratio() > 0.95 for other in clean
+                    difflib.SequenceMatcher(None, text, other, autojunk=False).ratio() > 0.95
+                    for other in clean
                 )
         for c in np.unique(tags.dup_cluster[tags.dup_cluster >= 0]):
             assert tags.dup_canonical[tags.dup_cluster == c].sum() == 1

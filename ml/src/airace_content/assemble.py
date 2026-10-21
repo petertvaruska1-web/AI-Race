@@ -74,7 +74,7 @@ RECIPES: dict[str, Recipe] = {
     for recipe in (
         Recipe(
             "web",
-            [_source("fineweb", 1.0, 0.35)],
+            [_source("fineweb", 1.0, 0.55)],
             NoiseRates(
                 typo=0.15,
                 spam=0.06,
@@ -86,7 +86,7 @@ RECIPES: dict[str, Recipe] = {
         ),
         Recipe(
             "books",
-            [_source("gutenberg", 1.0, 0.30)],
+            [_source("gutenberg", 1.0, 0.50)],
             NoiseRates(typo=0.02, garbled=0.01, duplicate=0.02),
         ),
         Recipe(
@@ -95,7 +95,7 @@ RECIPES: dict[str, Recipe] = {
                 _source("cosmo_khan", 0.25),
                 _source("cosmo_wikihow", 0.25),
                 _source("cosmo_openstax", 0.20),
-                _source("fineweb_edu", 0.30, 0.35),
+                _source("fineweb_edu", 0.30, 0.55),
             ],
             NoiseRates(duplicate=0.02, false_fact=0.01),
         ),
