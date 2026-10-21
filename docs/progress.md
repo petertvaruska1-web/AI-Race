@@ -17,7 +17,7 @@ Newest entries first. Each entry: date, what changed, what's next, open issues.
   - Real Gutenberg and TinyStories text arrive clean.
   - The gate runs 3 seeds, measures its own noise floor, and counts only garble-like words.
 - **Decision records:** ADR 0001 addendum, ADR 0002 (gate measurement rules), ADR 0003 (corpus build rules).
-- **Tests:** default suite {SUITE}; slow suite {SLOW}; ruff {RUFF}.
+- **Tests:** default suite **1561 passed, 1 skipped** (166–232 s on cloud CPUs, depending on the machine); slow suite 5 passed (280 s); ruff clean.
 - **Model tiers** (the owner's suggestion): the top model for rulings only; Sonnet for verification, implementation and review.
 - **Next: the local GPU session** (`docs/handoff/README.md` §5):
   - setup and GPU tests
