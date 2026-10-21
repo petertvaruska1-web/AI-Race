@@ -9,31 +9,28 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
 - Creative decisions so far: **C1** shared session clock; **C2** small Notebook dataset. Pending: **D1** visual direction (ask at the start of Milestone 2 with 2–3 mockups), **D2** dataset source naming.
 - Project rules: `CLAUDE.md`. Architecture: `docs/superpowers/specs/2026-10-06-ai-race-architecture-design.md`. Plan being executed: `docs/superpowers/plans/2026-10-06-m1-it-learns.md`.
 
-## 2. Where things stand (2026-10-14)
+## 2. Where things stand (2026-10-21)
 - **Work branch:** **`claude/upbeat-franklin-k1192h`**, the cloud session's branch.
   - It contains all of `m1-it-learns` plus the cloud work, so `m1-it-learns` fast-forwards to it.
   - The local session runs: `git fetch origin && git checkout m1-it-learns && git merge --ff-only origin/claude/upbeat-franklin-k1192h`.
-- **Milestone 1 code is complete and reviewed task by task.** Tasks 1–14 and 16–20 are done, with Task 20 limited to its code steps 1–5.
-  - Ledger completion lines: Task 12 `f1a092b..3e705b4`, 13 `16e9dab..bf70e88`, 14 `5aeb149..832dddb`, 16 `e34d2f9..10b1edf`, 17 `2815283..435946c`, 18 `e2e7c7e..1f0ab4f`, 19 `9f3832b..5070a03`, 20 `0243951..93f2737`.
-  - Latest code commit: `93f2737`.
-  - Default suite: **1247 passed, 1 skipped** (~110 s on CPU); ruff is clean.
-  - The slow quick-gate test passes in ~96 s on CPU.
-- **In progress: the final whole-branch review.** As of 2026-10-14 21:00 UTC:
-  - **Done:** all 18 finders, the completeness critic, 6 extra finders and de-duplication, giving **56 findings** (1 Critical, 14 Important, 41 Minor).
-  - **Verification:** 13 Sonnet verifier agents were started at 20:20 UTC. Their verdicts go to `docs/handoff/final-review/verify/verdicts-<group>.json`. Any group without a verdict file must be re-run, as the review README explains.
-  - **Fix plan:** drafted before the verdicts, in **`docs/handoff/final-review/fix-wave-plan.md`**. It holds the tentative rulings for every finding, six implementer groups in order, and the model tiers.
-  - **Resume guide: `docs/handoff/final-review/README.md`.**
-  - **Model tiers** (the owner's suggestion, recorded as a ledger ruling):
-    - the top model only for controller rulings and measurement-rule decisions
-    - Sonnet for verification, implementation and re-review
-    - Haiku for copy jobs
-  - Ultracode is off, so use Agent-tool agents, not new Workflow runs, unless the owner opts in.
-- **Left for the local GPU machine** (see §5): Task 15, the real judge build, and Task 20 steps 6–9.
+- **Milestone 1 code is complete, reviewed task by task, and has passed the final whole-branch review and its fix wave.**
+  - Tasks 1–14 and 16–20 are done, with Task 20 limited to its code steps 1–5.
+  - Task completion ranges are in the ledger.
+  - **Final review:** 18 finders, a completeness critic and 6 extra finders produced 56 findings; 13 Sonnet skeptics verified them. The report is `docs/handoff/final-review/final-review.md`.
+  - **Rulings:** 43 fixes, 10 refutations accepted, F6's refutation overruled (it is among the 43), 2 deferred, 1 already done. All are in the ledger.
+  - **Fix wave:** six sequential Sonnet groups A–F (`docs/handoff/fix-wave/`), each with an adversarial review; all 43 fixes landed, and nothing blocking remains.
+  - **Controller follow-ups:** `ceee83f` (G7 also counts swapped-letter typos, and its data warning leads the detail) and `a2837b4` (the GPU memory test runs on the real vocabulary with a 4 GiB bound).
+  - **New decision records:** `docs/decisions/0002-feasibility-gate-measurement-rules.md`, `docs/decisions/0003-corpus-build-rules.md`, and an addendum to ADR 0001.
+  - **Tests:** default suite {SUITE}; slow suite (including the quick feasibility gate) {SLOW}; ruff {RUFF}.
+- **Next: the local GPU session (§5).** It covers Task 15, the evaluator builds and Task 20 steps 6–9. Nothing else is left in the cloud.
+- **Model tiers** (the owner's suggestion; a ledger ruling):
+  - the top model for rulings and measurement-rule decisions only
+  - Sonnet for verification, implementation and review
+  - Haiku for copy jobs
 - **Execution record:**
-  - `docs/handoff/sdd/ledger.md` has every ruling, deferred minor and carry-forward note.
-  - `docs/handoff/sdd/deferred-minors.md` lists the deferred minors for the final review.
-  - The `task-N-report.md` and `task-N-brief.md` files hold per-task details.
-  - `docs/decisions/0001-bench-v1-measurement-rules.md` records the measurement rules beyond the plan.
+  - `docs/handoff/sdd/ledger.md` has every ruling.
+  - `docs/handoff/sdd/task-*-report.md` holds per-task reports, including `task-fixwave-<G>-report.md`.
+  - The decision records in `docs/decisions/`.
 
 ## 3. How to resume the workflow
 1. Check out the work branch: `git fetch origin && git checkout claude/upbeat-franklin-k1192h`. In the local session, use `m1-it-learns` after the fast-forward in §2.
@@ -61,42 +58,42 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
    - Cloud: the template `docs/handoff/final-review/cloud-sync.sh`. It also copies briefs, deferred minors and final-review artefacts, and takes the commit trailer and branch from the environment.
 
 ## 4. Immediate next step
-Follow `docs/handoff/final-review/README.md`. In short:
-1. **Collect the 13 verdict files.** Re-run any missing group with a Sonnet agent and the saved brief.
-2. **Decide every finding** against `fix-wave-plan.md`. The controller re-checks every refuted serious finding. Each decision becomes a ledger `Ruling:` line with its cost if wrong.
-   - Write `final-review.md` (the review report) into the workspace and sync it.
-3. **Run the fix wave:** six sequential Sonnet implementers (groups A–F) with controller-written dispatch notes. Each reproduces every bug with a failing test first.
-4. **Run one scoped re-review** with Sonnet agents, one per group, and rule on any residuals.
-5. **Write the ADR text:** ADR 0001 addenda and a new ADR 0002 for the gate measurement rules.
-6. **Update the docs:** `docs/progress.md` and this file.
-7. **Sync, push, and send the final owner message** listing every ruling and its cost if wrong.
-
-After that, the branch is ready for the local GPU session (§5). Do not merge to `main`; merging is the owner-facing finish step.
+**The local GPU session, §5.** Fast-forward `m1-it-learns` to the cloud branch (§2), then work the checklist in order. Merging to `main` remains the owner-facing finish step, after the gate.
 
 ## 5. Local GPU session checklist (Windows 11 + RTX 3050)
-`data/` is gitignored and large, so it never travels through git.
-1. **Task 15: real dataset build.** It needs huggingface.co, which is blocked in the cloud.
+`data/` is gitignored and large, so it never travels through git. Commands are in CLAUDE.md "Commands"; every corpus build needs `--extra content`.
+0. **Setup and GPU tests first.**
+   - Run `cd ml && python -m uv sync --extra content`, then `python -m uv run pytest`, then `python -m uv run pytest -m gpu`.
+   - The GPU memory test (`test_a_judge_recipe_step_fits_the_8gb_reference_card`, below 4 GiB on the real vocabulary) and the bf16 parity test (`test_cuda_bf16_path_tracks_the_cpu_path`, run with tolerances) have never run on CUDA. They must pass before the 1-hour judge build.
+   - Optionally run `python -m uv run --extra content hf auth login`, because the Hub allows more traffic when logged in.
+1. **Task 15: the real dataset build.** It needs huggingface.co, which is blocked in the cloud.
    - Re-verify every source license. simplewiki is cc-by-sa-3.0, which is outside the plan's permissive list: decide, and record the decision.
-   - Run `airace-content build --scale full`. Check the exact command in CLAUDE.md "Commands"; the final review flags that it may need the `content` extra.
-   - Then check:
-     - the manifest's `exhausted` component warnings
-     - that Gutenberg's children's-book subjects are actually found
+   - **Calibrate the simplicity thresholds on real data before the full build (F15).** The current thresholds keep about 97–100% of real web, educational and Wikipedia text.
+     - On the first ~2000 rows of fineweb, fineweb_edu, simplewiki and gutenberg, measure per-source simplicity quantiles with the real simple_vocab. (A first tiny or partial build into its own `--out` produces simple_vocab.)
+     - Pick a keep-rate: about 0.6 keeps the simpler ~90% of FineWeb, and about 0.7 keeps ~80%. Set `simplicity_min` in `ml/src/airace_content/assemble.py` RECIPES and record the numbers.
+     - Alternatively, record that the filter stays deliberately mild.
+   - Run `python -m uv run --extra content airace-content build --scale full`, into the default root. A tiny check needs its own `--out`. Progress prints on stderr, and the build waits out dropped connections.
+   - The manifest records each source's pinned Hub commit (F29). Copy the verified shas into `SourceSpec.revision`, so later rebuilds read the same data.
+   - **Then check:**
+     - the summary's warnings: exhausted components, and components below 90% of plan (if the templated generators fact_prose, fact_chat or instructions fall short, give them their own bytes-per-token constant in `BYTES_PER_TOKEN_BY_COMPONENT`)
+     - that Gutenberg's children's-book subjects are found, and that passages read as whole paragraphs
+     - that no mojibake appears outside the deliberately garbled documents
      - educational text complexity
-     - the conversations' Thorough pass rate (~10% of clean tiny chats failed it)
+     - the conversations' Thorough pass rate
      - the quality histograms per dataset
-   - **Before the full build, calibrate the simplicity thresholds on real data** (final-review F15). On the first ~2000 rows per source, with the real simple_vocab, measure per-source simplicity quantiles, pick a keep-rate, and set `simplicity_min` in `ml/src/airace_content/assemble.py`. Record the numbers.
-   - Fill in each source's verified Hugging Face commit sha (`SourceSpec.revision`, once final-review F29 lands).
    - Write `docs/data-sources.md`.
-   - Run the tok-v1 reply-budget test that is skipped without a tokenizer (`tests/test_bench.py`). Every answer must fit its `max_new_tokens`.
-2. **After any corpus rebuild,** delete `data/judge/v1` and the novelty index before rebuilding them. They are not yet tied to the corpus they were built from, unless the final-review fix round adds that.
-3. **Build the evaluators:**
-   - `airace-ml build-novelty-index`
-   - `airace-ml build-judge` (~1 h on GPU)
-4. **Task 20 steps 6–9: the real feasibility gate.**
-   - Run `airace-ml gate --out runs/gate-1 [--cpu-speed]`, then read `runs/gate-1/report.md`.
-   - Iterate as the plan's step 8 says, and record the iterations in the report.
+   - Run the tok-v1 reply-budget test, skipped until a tokenizer exists: `python -m uv run pytest tests/test_bench.py -k real_tokenizer`. Every answer must fit its `max_new_tokens`; for example, the 12-token budget must hold "Bandar Seri Begawan".
+2. **Build the evaluators:** `airace-ml build-novelty-index`, then `airace-ml build-judge` (~1 h on GPU).
+   - Both record the data they were built from; `bench` and the gate refuse stale ones, and `build-judge` retrains when the data changed.
+   - After any later corpus rebuild, run both again.
+3. **Task 20 steps 6–9: the real feasibility gate.**
+   - Run `airace-ml gate --out runs/gate-1 [--cpu-speed]`, then read `runs/gate-1/report.md`. The run takes about 30–40 minutes longer than first estimated, because every criterion but G1 now runs 3 seeds (ADR 0002).
+   - A quick check needs its own folder (`--out runs/gate-quick --quick`).
+   - **Read the G7 detail first.** If it starts with "Check the training data first", the data-level garble ratio is above 0.7, so strengthen the web noise or the cleaning thresholds before trusting G7(a).
+   - Check creativity on the real judge: a constant reply should score near 0, and real models clearly higher (ADR 0001 rule 11).
+   - Iterate as the plan's step 8 says, recording each iteration in the report's Iterations section, which reruns now keep.
    - A rerun reuses every run and measurement whose data and code are unchanged.
-5. Write the dated entry in `docs/progress.md`, then the final whole-milestone wrap-up.
+4. Write the dated entry in `docs/progress.md`, then the final whole-milestone wrap-up and the merge to `main`.
 
 ## 6. Sync protocol between sessions
 - Commit after every task and fix round. Each commit message ends with the session's trailer lines.
@@ -120,3 +117,11 @@ Each task's notes are in the ledger. These still matter after M1's code:
   - `TrainRunConfig` JSON rejects integer fields sent as floats.
   - Events can re-emit after a crash-resume, so consumers dedupe by step.
   - The MiniPy parse lock is process-wide.
+  - A continuation run must never reuse its parent's sampler stream. The gate's G5 already avoids it; the trainer still seeds the sampler with `cfg.seed` only (F8).
+  - The live-training view needs a mini-eval event during training (spec §4.7 "live charts"). M1's trainer emits held-out losses and samples only (F50).
+  - `MICRO_BATCH_TOKENS` (8192) can be lowered if the largest legal shapes (about 16 × 640) run out of memory; it changes only summation order (F2).
+- **M4 (Notebook, Coaching, discoveries):**
+  - Creativity scoring must count a model's own notebook and coaching text as already seen (`NoveltyIndex.novelty(seen=)`).
+  - Notebook and coaching entries must be screened against bench-v1 prompts before training once discovery cards can show real prompts (F32).
+  - Replay currently reviews base datasets only (F7).
+  - The full topic × skill × format tag space for discoveries can be added by item id without re-measuring any score (F49).

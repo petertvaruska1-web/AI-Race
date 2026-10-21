@@ -1,5 +1,7 @@
 # Fix wave: state and how to resume
 
+**Status (2026-10-21): complete.** All 43 findings of groups A–F are FIXED (commits `40381f0..9d803cd`), plus controller follow-ups `ceee83f` (F13) and `a2837b4` (F2). No blocking review issue remains; the leftover notes have ledger rulings. Nothing below needs running again.
+
 - **Briefs:**
   - `group-A.md` … `group-F.md` hold the binding rulings per finding.
   - `fix-wave-rules.md` holds the implementer rules.

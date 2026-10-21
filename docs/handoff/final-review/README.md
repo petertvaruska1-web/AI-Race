@@ -1,5 +1,13 @@
 # Final whole-branch review of Milestone 1: state and how to resume
 
+**Status (2026-10-21): complete.**
+- **Report:** `final-review.md`.
+- **Verdicts:** `verify/verify-results.json`.
+- **Fixes:** all fixed (`docs/handoff/fix-wave/`).
+- **Decision records:** ADR 0001 addendum, ADR 0002 and ADR 0003.
+
+The sections below describe how the review was run and resumed; they are history now.
+
 Saved 2026-10-14 by the cloud session (branch `claude/upbeat-franklin-k1192h`). Usage limits interrupted the review repeatedly. Everything a fresh session needs to finish it without redoing finished work is in this folder.
 
 ## What the review is
