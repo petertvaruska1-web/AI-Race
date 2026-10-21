@@ -2,6 +2,29 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-10-21 — Milestone 1 code finished: final review and fix wave complete
+- **Final whole-branch review:**
+  - 18 finders, a completeness critic, and 6 extra finders that checked real Hugging Face rows.
+  - De-duplication into 56 findings, verified by 13 Sonnet skeptics.
+  - 43 confirmed findings were fixed; F6's refutation was overruled, and it is among the 43. 10 refutations were accepted, 2 items were deferred and 1 was already done.
+  - Report: `docs/handoff/final-review/final-review.md`.
+- **Fix wave:** six Sonnet implementer groups (benchmark items, data quality, build operations, trainer, evals, gate and CLI), each with an adversarial Sonnet review. All 43 fixes landed (`40381f0..9d803cd`), plus two controller follow-ups (`ceee83f`, `a2837b4`).
+- **Highlights:**
+  - The coding benchmark's 50 function items are answerable again.
+  - Knowledge answers are even, and creativity multiplies by variety, so models that know nothing score near 0.
+  - The judge trains in micro-batches, so it should fit an 8 GB card.
+  - The hour-long build retries and resumes, pins its sources, and refuses a tiny build's tokenizer.
+  - Real Gutenberg and TinyStories text arrive clean.
+  - The gate runs 3 seeds, measures its own noise floor, and counts only garble-like words.
+- **Decision records:** ADR 0001 addendum, ADR 0002 (gate measurement rules), ADR 0003 (corpus build rules).
+- **Tests:** default suite {SUITE}; slow suite {SLOW}; ruff {RUFF}.
+- **Model tiers** (the owner's suggestion): the top model for rulings only; Sonnet for verification, implementation and review.
+- **Next: the local GPU session** (`docs/handoff/README.md` §5):
+  - setup and GPU tests
+  - Task 15 (license decision, simplicity calibration, full build)
+  - build-novelty-index and build-judge
+  - the real feasibility gate
+
 ## 2026-10-14 — Milestone 1 code complete (Tasks 12–20); final review in progress
 - Cloud session, branch `claude/upbeat-franklin-k1192h`. `m1-it-learns` fast-forwards to it.
 - **Tasks 12–14 and 16–20 (code and tests) are complete and reviewed.** Each task had its own review and fix rounds (1–3 per task), and every ruling is in `docs/handoff/sdd/ledger.md`.
