@@ -13,6 +13,7 @@
 |----|----------|------|
 | C1 | **Shared session clock.** World time runs while the group plays. The world's creator (host) sets speed and can pause. The world freezes when every member has left and resumes next session. Absent or disconnected members run on **autopilot**. | 2026-10-06 |
 | C2 | **Notebook dataset, small.** Each company may write a size-capped, abuse-filtered dataset of its own (facts, example Q&As, style samples) that joins the training mix like any other dataset. | 2026-10-06 |
+| C3 | **A babbling start.** A company's first AI makes sense about 2 times in 3 and visibly improves as players train and grow it. The first training run stays about a minute long; the legibility bar for the first model is 60% (§4.12). | 2026-10-22 |
 
 ### Pending creative decision points (do not block the architecture)
 | ID | Question | When to ask | Temporary assumption |
@@ -209,7 +210,7 @@ No control maps to a capability number. Each changes what or how the real model 
 ### 4.12 Feasibility gate (Milestone 1 exit, the project's biggest risk)
 Measured by an automated experiment suite (3 seeds each) and recorded in a report:
 1. **Speed:** the first-model targets above are met.
-2. **Legibility:** after a balanced first run, ≥ 70 % of 20 probe replies are *well-formed*, counted over the replies of all 3 seeds together (ADR 0005). Well-formed means:
+2. **Legibility:** after a balanced first run, ≥ 60 % of 20 probe replies are *well-formed*, counted over the replies of all 3 seeds together (C3, ADR 0005/0006; was 70 %, which no first model reached). Well-formed means:
    - ≥ 4 words, at least 3 of them different (ADR 0001)
    - no word 3-gram repeated 3+ times
    - per-token perplexity under the reference judge at or below the 90th percentile the judge assigns to real held-out conversation replies

@@ -7,7 +7,7 @@ G1  Speed            the first model (balanced mix, starter shape and budget) me
                      when asked, in at most 20 minutes on the CPU), its full benchmark takes at
                      most 30 s, its first chat token at most 300 ms at 50 tokens/s or more, and
                      growing it at most 2 s
-G2  Legibility       at least 70% of that model's replies to 20 probe prompts are well-formed,
+G2  Legibility       at least 60% of that model's replies to 20 probe prompts are well-formed,
                      over the replies of every seed together
 G3  Differentiation  four contrasting mixes (story, code, fact and conversation heavy) at equal
                      compute each lead their benchmark category by more than twice the seed
@@ -140,7 +140,9 @@ GPU_SECONDS_LIMIT = 90.0
 CPU_SECONDS_LIMIT = 1200.0  # 20 minutes: the first model trains on 12.6M tokens (ADR 0005)
 NO_CUDA_DETAIL = "no CUDA device; GPU speed target not measured"
 LEGIBILITY_PROBES = 20
-LEGIBILITY_MIN_RATE = 0.7
+# The owner's bar for the first model (C3, 2026-10-22): a babbling start that makes sense about
+# 2 times in 3 and improves as it is trained; spec 4.12 had 70%, which no first model reached
+LEGIBILITY_MIN_RATE = 0.6
 SPREAD_FACTOR = 2.0  # a mix must lead its category by more than this many seed spreads
 SEED_MIN_DISTANCE = 0.05  # an absolute sanity bound; the bar G4 really sets is the noise floor
 GROWTH_MAX_LOGIT_DIFF = 1e-4

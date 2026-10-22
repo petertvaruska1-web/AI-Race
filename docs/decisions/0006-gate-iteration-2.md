@@ -1,7 +1,7 @@
 # ADR 0006: feasibility gate, iteration 2
 
 - **Date:** 2026-10-22
-- **Status:** Accepted (engineering decision), except the G2 bar, which waits on the owner (a product question)
+- **Status:** Accepted. The G2 bar was the owner's product decision (C3, 2026-10-22).
 - **Context:**
   - Gate run 2 (after ADR 0005) passed G4, G5 and G6. G1 failed on a timing artefact. G2, G3 and G7 failed.
   - Evidence scripts: `docs/handoff/calibration/` and `ml/runs/iter2/`, `ml/runs/sweep/` (not in git).
@@ -40,7 +40,7 @@
    - Thorough cleaning must bring garble-like words to at most **90%** of light cleaning's (was 80%). Fact-checking keeps 80%.
    - Both must now also fall on **every** seed, as well as by more than twice their seed spread.
    - Why: the 80% was written before any model was trained, and small models denoise typos by themselves. A tenth fewer garbled words, on every seed and beyond the seed noise, is a real and consistent effect. Run 2 measured a ratio of 0.87.
-3. **G2: the 70% bar is a product question for the owner.** At the first model's size it is not reachable by any setting tried. The answer only changes how G2 is judged, not what is trained, so the gate reruns now. The first model stays at 12.6M tokens: 16.8M gains nothing, and 25M on a model 2.6 times bigger gains 3 points for three times the time.
+3. **G2: the owner chose a babbling start (C3): the bar is 60%.** The question put to the owner, with sample replies: should the first AI make sense about 2 times in 3 and improve with training, or be coherent from the start at the cost of a much longer first training? At the first model's size it is not reachable by any setting tried. The answer only changes how G2 is judged, not what is trained, so the gate reruns now. The first model stays at 12.6M tokens: 16.8M gains nothing, and 25M on a model 2.6 times bigger gains 3 points for three times the time.
 
 ## Costs
 - Reference Facts changed, so the novelty index and the judge are rebuilt and the whole gate retrains.

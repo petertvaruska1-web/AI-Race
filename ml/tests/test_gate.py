@@ -84,8 +84,8 @@ def test_simple_evaluators():
         and not eval_speed(60, 1500).passed
     )
     assert (
-        eval_legibility([[True] * 14 + [False] * 6]).passed
-        and not eval_legibility([[True] * 13 + [False] * 7]).passed
+        eval_legibility([[True] * 12 + [False] * 8]).passed  # 60%: the owner's bar (C3)
+        and not eval_legibility([[True] * 11 + [False] * 9]).passed
     )
     assert eval_growth([1e-5], [2.0], [2.2]).passed
     assert not eval_growth([1e-3], [2.0], [2.2]).passed
@@ -229,20 +229,20 @@ def test_legibility_needs_exactly_twenty_replies():
 
 
 def test_legibility_pools_the_replies_of_every_seed():
-    # 70% of all the seeds' replies (ADR 0005): one seed's 20 replies are too few to hold to the
-    # bar alone (a model that is exactly 70% legible fails one of three seeds most of the time)
-    good, thin = [True] * 14 + [False] * 6, [True] * 13 + [False] * 7
+    # 60% of all the seeds' replies (ADR 0005, C3): one seed's 20 replies are too few to hold to
+    # the bar alone (a model exactly at the bar fails one of three seeds most of the time)
+    good, thin = [True] * 14 + [False] * 6, [True] * 11 + [False] * 9
     c = eval_legibility([good, [True] * 20, thin])
-    assert c.passed and c.data["rate"] == pytest.approx(47 / 60)
-    assert c.data["well_formed"] == 47 and c.data["replies"] == 60
-    assert c.data["rate_by_seed"] == [0.7, 1.0, 0.65] and c.data["well_formed_by_seed"] == [
+    assert c.passed and c.data["rate"] == pytest.approx(45 / 60)
+    assert c.data["well_formed"] == 45 and c.data["replies"] == 60
+    assert c.data["rate_by_seed"] == [0.7, 1.0, 0.55] and c.data["well_formed_by_seed"] == [
         14,
         20,
-        13,
+        11,
     ]
-    assert "47 of 60" in c.detail and "13 of 20" in c.detail and "all 3 seeds" in c.detail
-    short = eval_legibility([good, thin, thin])
-    assert not short.passed and short.data["rate"] == pytest.approx(40 / 60)
+    assert "45 of 60" in c.detail and "11 of 20" in c.detail and "all 3 seeds" in c.detail
+    short = eval_legibility([thin, thin, [True] * 13 + [False] * 7])
+    assert not short.passed and short.data["rate"] == pytest.approx(35 / 60)
     assert _finite_data(short.data)
     wrong_count = eval_legibility([good, good[:19], good])
     assert not wrong_count.passed and "20, 19, 20" in wrong_count.detail
@@ -1604,12 +1604,12 @@ def test_g5_fails_when_the_gain_of_growing_is_swamped_by_the_seed_spread(fake_ga
 
 
 def test_g2_fails_when_the_first_models_answer_too_few_replies_well(fake_gate, monkeypatch):
-    seed_flags = [[True] * 14 + [False] * 6] + [[True] * 13 + [False] * 7] * 2  # 40 of 60
+    seed_flags = [[True] * 12 + [False] * 8] + [[True] * 11 + [False] * 9] * 2  # 34 of 60
     replies = iter([flag for flags in seed_flags for flag in flags])
     monkeypatch.setattr(gate, "is_well_formed", lambda reply, judge: next(replies))
     outcome = fake_gate.run()
     g2 = outcome.criteria[1]
-    assert not g2.passed and g2.data["well_formed_by_seed"] == [14, 13, 13]
+    assert not g2.passed and g2.data["well_formed_by_seed"] == [12, 11, 11]
     assert {c.id for c in outcome.criteria if not c.passed} == {"G2"}
 
 
