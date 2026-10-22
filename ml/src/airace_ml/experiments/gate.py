@@ -18,8 +18,8 @@ G5  Growth           growing the first model changes none of its outputs, and th
                      then learns to a lower held-out loss than the ungrown one on the same tokens
 G6  Forgetting       a code-only continuation of the story-heavy model loses creativity and
                      language, and a 30% replay of the old mix wins back at least half of it
-G7  Preparation      thorough cleaning lowers the garble-like-word rate, and fact-checking lowers the
-                     false-fact rate, each to at most 80% of the unprepared model's
+G7  Preparation      thorough cleaning lowers the garble-like-word rate to at most 90% of light
+                     cleaning's, and fact-checking the false-fact rate to at most 80%, on every seed
 ==  ===============  =========================================================================
 
 Every criterion but G1 takes every seed (spec 4.12: "3 seeds each"); G1 is a timing, which does
@@ -147,7 +147,11 @@ GROWTH_MAX_LOGIT_DIFF = 1e-4
 FORGETTING_CATEGORIES: tuple[str, ...] = ("creativity", "language")
 FORGETTING_MIN_DROP = 3.0
 FORGETTING_MIN_RECOVERY = 0.5
-PREP_MAX_RATIO = 0.8
+# G7: thorough cleaning brings garble-like words to at most this share of light cleaning's (small
+# models already smooth away about half of random typos themselves: ADR 0005), and fact-checking
+# brings false facts to at most this share of no checking's
+GARBLE_MAX_RATIO = 0.9
+FALSE_FACT_MAX_RATIO = 0.8
 
 REPLAY_SHARE = 0.3
 WEB_HEAVY_SHARE = 0.7
@@ -672,11 +676,12 @@ def eval_prep(
     false_unchecked: Sequence[float],
     false_checked: Sequence[float],
 ) -> GateCriterion:
-    """G7: thorough cleaning brings the garble-like-word rate to at most 80% of light cleaning's, and
-    fact-checking brings the false-fact rate to at most 80% of no checking's, each averaged over
-    the seeds (one rate per seed in each argument); each fall must also be more than
-    :data:`SPREAD_FACTOR` times its seed spread. A mean rate of 0 without the preparation leaves
-    nothing to lower, so nothing is shown and the criterion fails."""
+    """G7: thorough cleaning brings the garble-like-word rate to at most
+    :data:`GARBLE_MAX_RATIO` (90%) of light cleaning's, and fact-checking brings the false-fact rate
+    to at most :data:`FALSE_FACT_MAX_RATIO` (80%) of no checking's, each averaged over the seeds (one
+    rate per seed in each argument). Each rate must also fall on every seed, and its mean fall be
+    more than :data:`SPREAD_FACTOR` times its seed spread. A mean rate of 0 without the preparation
+    leaves nothing to lower, so nothing is shown and the criterion fails."""
     dirty, clean, unchecked, checked = (
         _per_seed(v) for v in (garble_dirty, garble_clean, false_unchecked, false_checked)
     )
@@ -685,7 +690,10 @@ def eval_prep(
         "garble_thorough": None,
         "false_unchecked": None,
         "false_checked": None,
-        "max_ratio": PREP_MAX_RATIO,
+        "garble_max_ratio": GARBLE_MAX_RATIO,
+        "false_max_ratio": FALSE_FACT_MAX_RATIO,
+        "garble_ratio": None,
+        "false_ratio": None,
         "garble_light_by_seed": dirty,
         "garble_thorough_by_seed": clean,
         "false_unchecked_by_seed": unchecked,
@@ -712,6 +720,10 @@ def eval_prep(
         "false_fall_spread": _spread(false_falls),
     }
     data.update(means)
+    if means["garble_light"] > 0:
+        data["garble_ratio"] = means["garble_thorough"] / means["garble_light"]
+    if means["false_unchecked"] > 0:
+        data["false_ratio"] = means["false_checked"] / means["false_unchecked"]
     problems = []
     if means["garble_light"] <= 0:
         problems.append(
@@ -720,12 +732,17 @@ def eval_prep(
     if means["false_unchecked"] <= 0:
         problems.append("the unchecked model preferred no false fact, so nothing could fall")
     n = len(dirty)
-    rule = f"each must fall to {PREP_MAX_RATIO:.0%} or less"
+    rule = (
+        f"garble-like words must fall to {GARBLE_MAX_RATIO:.0%} or less, false facts to "
+        f"{FALSE_FACT_MAX_RATIO:.0%} or less"
+    )
+    every_seed = all(f > 0 for f in garble_falls) and all(f > 0 for f in false_falls)
     if n > 1:
         garble_bar = SPREAD_FACTOR * means["garble_fall_spread"]
         false_bar = SPREAD_FACTOR * means["false_fall_spread"]
         rule = (
-            f"means over {n} seeds; {rule}, and by more than twice its seed spread: garble-like "
+            f"means over {n} seeds; {rule}, each on every seed and by more than twice its seed "
+            f"spread: garble-like "
             f"words {means['garble_fall']:.1%} against {garble_bar:.1%}, false facts "
             f"{means['false_fall']:.1%} against {false_bar:.1%}"
         )
@@ -735,13 +752,15 @@ def eval_prep(
         f"{means['false_checked']:.1%} with fact-checking vs {means['false_unchecked']:.1%} "
         f"without ({rule})"
     )
+    if not every_seed:
+        problems.append("a preparation did not lower its rate on every seed")
     if problems:
         detail = "; ".join(problems) + ". " + detail
     passed = (
         not problems
-        and means["garble_thorough"] <= PREP_MAX_RATIO * means["garble_light"]
+        and means["garble_thorough"] <= GARBLE_MAX_RATIO * means["garble_light"]
         and means["garble_fall"] > SPREAD_FACTOR * means["garble_fall_spread"]
-        and means["false_checked"] <= PREP_MAX_RATIO * means["false_unchecked"]
+        and means["false_checked"] <= FALSE_FACT_MAX_RATIO * means["false_unchecked"]
         and means["false_fall"] > SPREAD_FACTOR * means["false_fall_spread"]
     )
     return _criterion("G7", passed, detail, data)

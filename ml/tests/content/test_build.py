@@ -489,7 +489,7 @@ def test_recipes_match_the_design():
             (gen, "patterns", 0.30, None),
             (src, "gsm8k", 0.10, None),
         ],
-        "facts": [(gen, "fact_prose", 1.0, None)],
+        "facts": [(gen, "fact_prose", 0.75, None), (gen, "fact_qa", 0.25, None)],
         "creative": [
             (src, "tinystories", 0.70, None),
             (src, "tinystories_requests", 0.15, None),
@@ -652,7 +652,13 @@ def test_token_estimates_use_a_constant_per_kind_of_text():
         assert component_bytes_per_token(name) == 2.7
     for name in ("tinystories", "tinystories_requests", "cosmo_stories"):
         assert component_bytes_per_token(name) == 3.6
-    measured = {"fact_prose": 3.7, "soda": 3.7, "fact_chat": 3.6, "instructions": 3.3}
+    measured = {
+        "fact_prose": 3.7,
+        "fact_qa": 3.5,
+        "soda": 3.7,
+        "fact_chat": 3.6,
+        "instructions": 3.3,
+    }
     assert {c: component_bytes_per_token(c) for c in measured} == measured
     for recipe in RECIPES.values():
         assert all(component_bytes_per_token(c.name) > 0 for c in recipe.components)

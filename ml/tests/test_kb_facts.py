@@ -17,6 +17,7 @@ from airace_ml.skills.facts import (
     consistency_groups,
     fact_chat_docs,
     fact_prose_docs,
+    fact_qa_docs,
     false_fact_sentence,
     knowledge_bench_items,
     plan_false_facts,
@@ -419,6 +420,45 @@ def test_chat_ai_replies_contain_the_true_object():
                 )
             ]
             assert candidates and any(f.obj in ai for f in candidates), (user, ai)
+
+
+def test_qa_docs_are_quiz_sheets_that_answer_truthfully():
+    # The knowledge bench asks inside "Question: ... / Answer:", the frame of the reasoning
+    # puzzles; facts in that frame (ADR 0006) keep it from meaning "a puzzle follows". The
+    # questions are the chat templates' (training phrasings), never the bench's.
+    kb = load_kb()
+    docs = fact_qa_docs(kb, skill_rng("facts_qa", "train"), 300)
+    assert len(docs) == 300 and docs == fact_qa_docs(kb, skill_rng("facts_qa", "train"), 300)
+    assert len({d.text for d in docs}) > 250
+    for d in docs:
+        assert d.kind == "plain" and d.topic in TOPICS
+        blocks = d.text.split("\n\n")
+        assert 2 <= len(blocks) <= 5 or len(blocks) == len(kb.facts_about(_subject_of(kb, d)))
+        subjects = set()
+        for block in blocks:
+            question, answer = block.split("\n")
+            assert question.startswith("Question: ") and answer.startswith("Answer: ")
+            asked = question.removeprefix("Question: ")
+            facts = [
+                f
+                for f in kb.facts
+                if any(
+                    asked == u.format(s=f.subject)
+                    for u, _ in kb.relations[f.relation].chat_templates
+                )
+            ]
+            assert facts and answer.removeprefix("Answer: ") in {f.obj for f in facts}, block
+            subjects |= {f.subject for f in facts}
+        assert subjects  # every question is about a fact of the knowledge base
+
+
+def _subject_of(kb, doc):
+    first = doc.text.split("\n")[0].removeprefix("Question: ")
+    return next(
+        f.subject
+        for f in kb.facts
+        if any(first == u.format(s=f.subject) for u, _ in kb.relations[f.relation].chat_templates)
+    )
 
 
 # --- knowledge bench ---------------------------------------------------------------------------

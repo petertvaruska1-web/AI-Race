@@ -28,8 +28,8 @@ bar = judge.calibration.conv_reply_p90
 probes = load_probes()
 chosen = [p for p in probes if p.kind == "open"][:10] + [p for p in probes if p.kind == "help"][:10]
 verbose = "-v" in sys.argv
-rounds = 3 if "-3" in sys.argv else 1  # -3: three sampling rounds (60 replies), a steadier rate
-for name in [a for a in sys.argv[1:] if a not in ("-v", "-3")] or ["starter", "g4-balanced-s1", "judge"]:
+rounds = 9 if "-9" in sys.argv else 3 if "-3" in sys.argv else 1  # -3 / -9: 60 / 180 replies
+for name in [a for a in sys.argv[1:] if a not in ("-v", "-3", "-9")] or ["starter", "g4-balanced-s1", "judge"]:
     folder = judge_dir(ROOT) if name == "judge" else (RUNS / name if (RUNS / name).exists() else Path(name))
     model, _ = load_checkpoint(folder, device)
     lm = TorchLM(model, tok, device)

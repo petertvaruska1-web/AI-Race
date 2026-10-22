@@ -38,7 +38,7 @@ from airace_content.sources import (
 from airace_content.textproc import normalize_text, simplicity
 from airace_ml.data.corpus import DATASET_IDS, NOISE_KINDS, TOPICS
 from airace_ml.skills.code import code_train_docs
-from airace_ml.skills.facts import FalseFactPlan, fact_chat_docs, fact_prose_docs
+from airace_ml.skills.facts import FalseFactPlan, fact_chat_docs, fact_prose_docs, fact_qa_docs
 from airace_ml.skills.instructions import instruction_train_docs
 from airace_ml.skills.kb import KB
 from airace_ml.skills.patterns import pattern_train_docs
@@ -119,7 +119,12 @@ RECIPES: dict[str, Recipe] = {
         ),
         # Simple Wikipedia (CC-BY-SA, share-alike) left this recipe: sources must be permissive
         # (ADR 0004), and its share went to the other component, as the plan prescribes.
-        Recipe("facts", [_generator("fact_prose", 1.0)], NoiseRates(duplicate=0.02)),
+        Recipe(
+            "facts",
+            # quiz sheets put facts in the frame the knowledge bench asks in (ADR 0006)
+            [_generator("fact_prose", 0.75), _generator("fact_qa", 0.25)],
+            NoiseRates(duplicate=0.02),
+        ),
         Recipe(
             "creative",
             [
@@ -164,6 +169,7 @@ BYTES_PER_TOKEN_BY_COMPONENT: dict[str, float] = {
     "cosmo_stories": 3.6,
     # measured on the first full build with tok-v1, where 3.2 left these 4-14% short (ADR 0004)
     "fact_prose": 3.7,
+    "fact_qa": 3.5,
     "soda": 3.7,
     "fact_chat": 3.6,
     "instructions": 3.3,
@@ -178,6 +184,7 @@ GeneratorFn = Callable[[KB, np.random.Generator, int], list[TextDoc]]
 GENERATORS: dict[str, GeneratorFn] = {
     "fact_prose": fact_prose_docs,
     "fact_chat": fact_chat_docs,
+    "fact_qa": fact_qa_docs,
     "instructions": instruction_train_docs,
     "code": lambda kb, rng, n: code_train_docs(rng, n),
     "reasoning": lambda kb, rng, n: reasoning_train_docs(rng, n),

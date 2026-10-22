@@ -1,9 +1,9 @@
 """Facts as text: training paragraphs and chats, knowledge and consistency benchmarks, false facts.
 
 Training text is written from each relation's ``train_templates`` (prose) and ``chat_templates``
-(chats). Benchmarks use phrasings training never contains: question templates and the
-fill-in-the-blank form of ``bench_templates``, always inside a ``Question: ...`` / ``Answer:``
-frame that no training document uses. Nothing here is a model output; these are data
+(chats, and quiz sheets of their questions). Benchmarks use phrasings training never contains:
+question templates and the fill-in-the-blank form of ``bench_templates``, always inside a
+``Question: ...`` / ``Answer:`` frame, which training uses for puzzles and quiz sheets. Nothing here is a model output; these are data
 generators.
 """
 
@@ -26,6 +26,7 @@ CLOZE_SHARE = 0.4  # share of knowledge items asked as a fill-in-the-blank state
 N_OPTIONS = 4
 MIN_SENTENCES, MAX_SENTENCES = 3, 6
 MAX_EXCHANGES = 3
+MIN_QA_BLOCKS, MAX_QA_BLOCKS = 2, 5
 
 
 def _fill(template: str, fact: Fact) -> str:
@@ -167,6 +168,31 @@ def fact_chat_docs(kb: KB, rng: np.random.Generator, n: int) -> list[TextDoc]:
             user, ai = chats[_pick(rng, len(chats))]
             turns += [("user", _fill(user, fact)), ("ai", _fill(ai, fact))]
         docs.append(TextDoc("chat", turns=turns, topic=kb.relations[asked[0].relation].topic))
+    return docs
+
+
+def fact_qa_docs(kb: KB, rng: np.random.Generator, n: int) -> list[TextDoc]:
+    """``n`` quiz sheets of 2-5 ``Question: ...`` / ``Answer: ...`` blocks about one subject (as
+    many as it has facts, when that is fewer), blank lines between them. The question is a chat
+    template's user line and the answer the bare object.
+
+    The reasoning puzzles use the same frame, so without facts in it "Question:" would come to
+    mean "a puzzle follows" and a knowledge question in it would get a puzzle's answer (ADR 0006).
+    The phrasings are the chats', so the bench's stay unseen."""
+    docs: list[TextDoc] = []
+    for _ in range(n):
+        subject = kb.subjects[_pick(rng, len(kb.subjects))]
+        facts = kb.facts_about(subject)
+        n_blocks = min(len(facts), int(rng.integers(MIN_QA_BLOCKS, MAX_QA_BLOCKS + 1)))
+        asked = [facts[int(i)] for i in rng.permutation(len(facts))[:n_blocks]]
+        blocks = []
+        for fact in asked:
+            chats = kb.relations[fact.relation].chat_templates
+            user, _ = chats[_pick(rng, len(chats))]
+            blocks.append(f"Question: {_fill(user, fact)}\nAnswer: {fact.obj}")
+        docs.append(
+            TextDoc("plain", "\n\n".join(blocks), topic=kb.relations[asked[0].relation].topic)
+        )
     return docs
 
 

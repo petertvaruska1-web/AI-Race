@@ -94,7 +94,7 @@ def test_simple_evaluators():
         and not eval_seed_variation([0.0, 0.01], [1.0], [0.0]).passed
     )
     assert eval_prep([0.10], [0.05], [0.4], [0.1]).passed
-    assert not eval_prep([0.10], [0.095], [0.4], [0.1]).passed
+    assert not eval_prep([0.10], [0.095], [0.4], [0.1]).passed  # 95% of light's
 
 
 def test_differentiation():
@@ -438,7 +438,8 @@ def test_forgetting_must_beat_the_seed_spread_on_the_drop_and_on_the_recovery():
 
 
 def test_prep_edges():
-    assert eval_prep([0.10], [0.08], [0.5], [0.4]).passed  # exactly 80% of each
+    assert eval_prep([0.10], [0.09], [0.5], [0.4]).passed  # exactly 90% and 80% (ADR 0005)
+    assert not eval_prep([0.10], [0.091], [0.5], [0.4]).passed
     assert not eval_prep([0.10], [0.05], [0.5], [0.45]).passed  # fact-checking alone falls short
     nothing_garbled = eval_prep([0.0], [0.0], [0.5], [0.1])
     assert not nothing_garbled.passed and "nothing could fall" in nothing_garbled.detail
@@ -465,8 +466,20 @@ def test_prep_must_beat_the_seed_spread_on_each_fall():
     noisy_facts = eval_prep([0.10] * 3, [0.05] * 3, [0.4] * 3, [0.46, 0.2, 0.0])
     assert not noisy_facts.passed and noisy_facts.data["false_fall_spread"] > 0.2
     # A steady fall that is too small is still too small.
-    small = eval_prep([0.10] * 3, [0.09] * 3, [0.4] * 3, [0.1] * 3)
+    small = eval_prep([0.10] * 3, [0.095] * 3, [0.4] * 3, [0.1] * 3)
     assert not small.passed
+
+
+def test_prep_must_fall_on_every_seed():
+    # mean falls well over twice their spread, but one seed got no better (ADR 0005)
+    one_seed_up = eval_prep([0.10, 0.10, 0.10], [0.06, 0.06, 0.101], [0.4] * 3, [0.1] * 3)
+    assert not one_seed_up.passed and "every seed" in one_seed_up.detail
+    facts_up = eval_prep([0.10] * 3, [0.05] * 3, [0.4, 0.4, 0.4], [0.1, 0.1, 0.41])
+    assert not facts_up.passed
+    gate_run_2 = eval_prep(  # the measured falls of gate run 2: small, but on every seed
+        [0.0277, 0.0279, 0.02647], [0.02586, 0.02346, 0.02236], [0.69] * 3, [0.48] * 3
+    )
+    assert gate_run_2.data["garble_ratio"] == pytest.approx(0.873, abs=0.001)
 
 
 # -- beyond the brief: measurements ----------------------------------------------------------------
