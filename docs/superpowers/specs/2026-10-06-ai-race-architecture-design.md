@@ -14,6 +14,7 @@
 | C1 | **Shared session clock.** World time runs while the group plays. The world's creator (host) sets speed and can pause. The world freezes when every member has left and resumes next session. Absent or disconnected members run on **autopilot**. | 2026-10-06 |
 | C2 | **Notebook dataset, small.** Each company may write a size-capped, abuse-filtered dataset of its own (facts, example Q&As, style samples) that joins the training mix like any other dataset. | 2026-10-06 |
 | C3 | **A babbling start.** A company's first AI makes sense about 2 times in 3 and visibly improves as players train and grow it. The first training run stays about a minute long; the legibility bar for the first model is 60% (§4.12). | 2026-10-22 |
+| C4 | **Ship at 5 of 7.** "80 percent now is better than 100 later": Milestone 1 closes with the feasibility gate at 5 of 7. Two gaps are accepted for now and revisited later: the first AI is 59% legible (bar 60%), and thorough cleaning barely lowers garbled output (fact-checking does work). Milestone 2, the first playable version, starts now. | 2026-10-22 |
 
 ### Pending creative decision points (do not block the architecture)
 | ID | Question | When to ask | Temporary assumption |

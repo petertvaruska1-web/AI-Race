@@ -4,7 +4,7 @@ Seeds: 1, 2, 3. Device: cuda.
 
 ## Summary
 
-**5 of 7 criteria passed.**
+**5 of 7 criteria passed.** The owner accepted this result on 2026-10-22 (decision C4): G2 (59% legible against 60%) and G7(a) (cleaning barely lowers garbled output) are known gaps, to be revisited later. Milestone 1 is closed.
 
 | ID | Criterion | Result | Detail |
 |---|---|---|---|

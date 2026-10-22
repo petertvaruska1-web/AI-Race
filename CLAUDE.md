@@ -40,6 +40,9 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 - ML CLI (`--help` on each): `cd ml && python -m uv run airace-ml train|chat|bench|fingerprint|build-novelty-index|build-judge|gate`
 - Feasibility gate: `airace-ml gate --out runs/gate-1 [--cpu-speed]` (needs `build-novelty-index` and `build-judge` first). Rerunning it reuses every run and measurement whose data and code are unchanged, and redoes the rest. A quick check of the setup (`--quick`) needs a folder of its own, e.g. `airace-ml gate --out runs/gate-quick --quick`: a gate folder remembers its setup (quick or full, device, seeds) in `gate_setup.json`, and the gate refuses to run another setup into it (exit 2), because the runs are named alike and would be trained over.
 - After any corpus or tokenizer rebuild (`airace-content build`), run `airace-ml build-novelty-index` and then `airace-ml build-judge` again: each records the data it was built from, and `bench` and the gate refuse ones built from older data (and a judge built with `--budget-tokens`, which is for quick tests only). `build-judge` trains the judge again when the data changed.
+- Chat with a trained model (the reference judge is the best one): `cd ml && python -m uv run airace-ml chat --model ../data/judge/v1` (`/raw`, `/reset`, `/quit`; `--temperature` sets the answer style). It only reads the model, but it shares the GPU and CPU, so don't run it while a gate measures speed (G1).
+- Long GPU runs (judge, gate) on the owner's PC: the app's keep-awake lets go after about 5 idle minutes and the PC then sleeps mid-run (gate run 2 lost hours this way). Keep a Monitor with a heartbeat of a few minutes on any run that outlasts the turn.
+- Gate evidence scripts (each states its own command): `docs/handoff/calibration/` (`g2_diagnosis.py`, `g4_k_probe.py`, `g7_*.py`, `creativity_probe.py`).
 - (More commands are added here as they come to exist.)
 
 ## Conventions
