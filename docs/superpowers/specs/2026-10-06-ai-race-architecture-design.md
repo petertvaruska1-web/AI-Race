@@ -210,7 +210,7 @@ No control maps to a capability number. Each changes what or how the real model 
 ### 4.12 Feasibility gate (Milestone 1 exit, the project's biggest risk)
 Measured by an automated experiment suite (3 seeds each) and recorded in a report:
 1. **Speed:** the first-model targets above are met.
-2. **Legibility:** after a balanced first run, ≥ 60 % of 20 probe replies are *well-formed*, counted over the replies of all 3 seeds together (C3, ADR 0005/0006; was 70 %, which no first model reached). Well-formed means:
+2. **Legibility:** after a balanced first run, ≥ 60 % of the replies to 20 probe prompts (each asked 3 times) are *well-formed*, counted over the replies of all 3 seeds together (C3, ADR 0005–0007; was 70 %, which no first model reached). Well-formed means:
    - ≥ 4 words, at least 3 of them different (ADR 0001)
    - no word 3-gram repeated 3+ times
    - per-token perplexity under the reference judge at or below the 90th percentile the judge assigns to real held-out conversation replies

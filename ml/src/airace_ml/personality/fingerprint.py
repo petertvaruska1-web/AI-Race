@@ -285,7 +285,7 @@ def measure_fingerprint(
     tok: Tok,
     *,
     probes: Sequence[Probe] | None = None,
-    k: int = 3,
+    k: int = 8,  # 3 left one model measured twice as far apart as two seeds (ADR 0007)
     seed: int = 0,
     temperature: float = 0.8,
     top_p: float = 0.95,

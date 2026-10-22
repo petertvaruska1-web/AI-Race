@@ -546,7 +546,7 @@ def test_one_batched_generate_call_with_the_given_settings(tiny_tok):
 
 
 def test_default_settings(tiny_tok):
-    lm = FixedLM([gen(tiny_tok, "hi")] * 180)
+    lm = FixedLM([gen(tiny_tok, "hi")] * 480)
     measure_fingerprint(lm, tiny_tok)
     call = lm.calls[0]
     assert (call["seed"], call["temperature"], call["top_p"], call["max_new_tokens"]) == (
@@ -555,7 +555,9 @@ def test_default_settings(tiny_tok):
         0.95,
         64,
     )
-    assert len(call["prompts"]) == 180  # k defaults to 3
+    # k defaults to 8: with 3 replies a probe, one model measured twice differed about as much as
+    # two seeds did (ADR 0007)
+    assert len(call["prompts"]) == 480
 
 
 def test_replies_are_decoded_and_stripped(tiny_tok):

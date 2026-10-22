@@ -140,6 +140,9 @@ GPU_SECONDS_LIMIT = 90.0
 CPU_SECONDS_LIMIT = 1200.0  # 20 minutes: the first model trains on 12.6M tokens (ADR 0005)
 NO_CUDA_DETAIL = "no CUDA device; GPU speed target not measured"
 LEGIBILITY_PROBES = 20
+# replies to each probe: 60 a seed, so which replies happen to be sampled sways the verdict less
+# (20 a seed moved it by about 6 points; ADR 0007)
+LEGIBILITY_SAMPLES = 3
 # The owner's bar for the first model (C3, 2026-10-22): a babbling start that makes sense about
 # 2 times in 3 and improves as it is trained; spec 4.12 had 70%, which no first model reached
 LEGIBILITY_MIN_RATE = 0.6
@@ -415,10 +418,13 @@ def eval_legibility(flags: Sequence[Sequence[bool]]) -> GateCriterion:
     }
     if not flags:
         return _criterion("G2", False, "no first model was judged", data)
-    if any(n != LEGIBILITY_PROBES for n in sizes):
+    if any(n != LEGIBILITY_PROBES * LEGIBILITY_SAMPLES for n in sizes):
         got = ", ".join(map(str, sizes))
         return _criterion(
-            "G2", False, f"needs {LEGIBILITY_PROBES} replies on every seed, got {got}", data
+            "G2",
+            False,
+            f"needs {LEGIBILITY_PROBES * LEGIBILITY_SAMPLES} replies on every seed, got {got}",
+            data,
         )
     rate = data["rate"]
     detail = f"replies well-formed: {sum(good)} of {sum(sizes)} ({rate:.0%})"
@@ -1367,6 +1373,7 @@ class _Gate:
             run = self.starter(seed)
             used.append(run)
             lm = self.lm(run)
+            asked = [probe for _ in range(LEGIBILITY_SAMPLES) for probe in chosen]
             replies = [
                 lm.chat_reply(
                     [("user", probe.text)],
@@ -1375,12 +1382,12 @@ class _Gate:
                     top_p=SAMPLE_TOP_P,
                     seed=i,
                 )
-                for i, probe in enumerate(chosen)
+                for i, probe in enumerate(asked)
             ]
             flags = [is_well_formed(reply, self.inputs.judge) for reply in replies]
             flags_by_seed.append(flags)
             if seed == self.seeds[0]:
-                self.transcripts["G2"] = [(p.text, r) for p, r in zip(chosen, replies, strict=True)]
+                self.transcripts["G2"] = list(zip((p.text for p in chosen), replies))
                 self.raw["legibility_flags"] = flags
         self.raw["legibility_flags_by_seed"] = {
             str(seed): flags for seed, flags in zip(self.seeds, flags_by_seed, strict=True)

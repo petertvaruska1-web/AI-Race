@@ -84,8 +84,8 @@ def test_simple_evaluators():
         and not eval_speed(60, 1500).passed
     )
     assert (
-        eval_legibility([[True] * 12 + [False] * 8]).passed  # 60%: the owner's bar (C3)
-        and not eval_legibility([[True] * 11 + [False] * 9]).passed
+        eval_legibility([([True] * 12 + [False] * 8) * 3]).passed  # 60%: the owner's bar (C3)
+        and not eval_legibility([([True] * 11 + [False] * 9) * 3]).passed
     )
     assert eval_growth([1e-5], [2.0], [2.2]).passed
     assert not eval_growth([1e-3], [2.0], [2.2]).passed
@@ -162,7 +162,7 @@ def test_configs_are_the_designed_ones():
         "conversations": "instruction",
     }
     assert FULL_SCALE.prep_budget == 2 * STARTER_BUDGET and FULL_SCALE.grown_shape == EARLY_SHAPE
-    assert FULL_SCALE.batch_tokens is None and FULL_SCALE.fingerprint_k == 3
+    assert FULL_SCALE.batch_tokens is None and FULL_SCALE.fingerprint_k == 8  # ADR 0007
     assert FULL_SCALE.garble_samples == 200 and QUICK_SCALE.garble_samples == 60
     q = QUICK_SCALE
     assert q.starter_shape == q.early_shape == ModelShape(2, 64, 64)
@@ -219,9 +219,10 @@ def test_speed_never_passes_a_cpu_time_off_as_a_gpu_time():
 
 
 def test_legibility_needs_exactly_twenty_replies():
-    assert eval_legibility([[True] * 14 + [False] * 6]).data["rate"] == 0.7
-    assert not eval_legibility([[True] * 21]).passed  # 21 replies were not the protocol
-    assert not eval_legibility([[True] * 19]).passed
+    assert eval_legibility([([True] * 14 + [False] * 6) * 3]).data["rate"] == 0.7
+    # 20 probes, 3 replies each (ADR 0007): 61 or 59 replies were not the protocol
+    assert not eval_legibility([[True] * 61]).passed
+    assert not eval_legibility([[True] * 59]).passed
     empty = eval_legibility([[]])
     assert not empty.passed and empty.data["rate"] == 0.0 and "got 0" in empty.detail
     nobody = eval_legibility([])
@@ -231,21 +232,21 @@ def test_legibility_needs_exactly_twenty_replies():
 def test_legibility_pools_the_replies_of_every_seed():
     # 60% of all the seeds' replies (ADR 0005, C3): one seed's 20 replies are too few to hold to
     # the bar alone (a model exactly at the bar fails one of three seeds most of the time)
-    good, thin = [True] * 14 + [False] * 6, [True] * 11 + [False] * 9
-    c = eval_legibility([good, [True] * 20, thin])
-    assert c.passed and c.data["rate"] == pytest.approx(45 / 60)
-    assert c.data["well_formed"] == 45 and c.data["replies"] == 60
+    good, thin = ([True] * 14 + [False] * 6) * 3, ([True] * 11 + [False] * 9) * 3
+    c = eval_legibility([good, [True] * 60, thin])
+    assert c.passed and c.data["rate"] == pytest.approx(135 / 180)
+    assert c.data["well_formed"] == 135 and c.data["replies"] == 180
     assert c.data["rate_by_seed"] == [0.7, 1.0, 0.55] and c.data["well_formed_by_seed"] == [
-        14,
-        20,
-        11,
+        42,
+        60,
+        33,
     ]
-    assert "45 of 60" in c.detail and "11 of 20" in c.detail and "all 3 seeds" in c.detail
-    short = eval_legibility([thin, thin, [True] * 13 + [False] * 7])
-    assert not short.passed and short.data["rate"] == pytest.approx(35 / 60)
+    assert "135 of 180" in c.detail and "33 of 60" in c.detail and "all 3 seeds" in c.detail
+    short = eval_legibility([thin, thin, ([True] * 13 + [False] * 7) * 3])
+    assert not short.passed and short.data["rate"] == pytest.approx(105 / 180)
     assert _finite_data(short.data)
-    wrong_count = eval_legibility([good, good[:19], good])
-    assert not wrong_count.passed and "20, 19, 20" in wrong_count.detail
+    wrong_count = eval_legibility([good, good[:59], good])
+    assert not wrong_count.passed and "60, 59, 60" in wrong_count.detail
 
 
 def _mix_scores(means: dict[str, dict[str, float]], offsets=(-1, 0, 1)):
@@ -1604,12 +1605,12 @@ def test_g5_fails_when_the_gain_of_growing_is_swamped_by_the_seed_spread(fake_ga
 
 
 def test_g2_fails_when_the_first_models_answer_too_few_replies_well(fake_gate, monkeypatch):
-    seed_flags = [[True] * 12 + [False] * 8] + [[True] * 11 + [False] * 9] * 2  # 34 of 60
+    seed_flags = [([True] * 12 + [False] * 8) * 3] + [([True] * 11 + [False] * 9) * 3] * 2
     replies = iter([flag for flags in seed_flags for flag in flags])
     monkeypatch.setattr(gate, "is_well_formed", lambda reply, judge: next(replies))
     outcome = fake_gate.run()
     g2 = outcome.criteria[1]
-    assert not g2.passed and g2.data["well_formed_by_seed"] == [12, 11, 11]
+    assert not g2.passed and g2.data["well_formed_by_seed"] == [36, 33, 33]  # 102 of 180
     assert {c.id for c in outcome.criteria if not c.passed} == {"G2"}
 
 

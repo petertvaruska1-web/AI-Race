@@ -78,7 +78,7 @@ FULL_SCALE = GateScale(
     early_budget=EARLY_BUDGET,
     prep_budget=2 * STARTER_BUDGET,
     batch_tokens=None,
-    fingerprint_k=3,
+    fingerprint_k=8,  # ADR 0007
     garble_samples=GARBLE_SAMPLES,
 )
 
