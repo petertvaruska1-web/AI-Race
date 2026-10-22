@@ -2,6 +2,36 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-10-22 — Local GPU session: real corpus, judge and feasibility gate (5 of 7 pass)
+- **Setup (2026-10-21):** default suite 1559 passed in 153 s on the owner's PC. pytest -m gpu passed 4 tests on the RTX 3050. One Windows-only test was fixed.
+- **Task 15, corpus v1** (ADR 0004; `docs/data-sources.md`):
+  - 139.4M tokens, 936k documents, tokenizer tok-v1 frozen.
+  - All licences re-verified; Simple Wikipedia dropped (CC-BY-SA, share-alike).
+  - Simplicity thresholds calibrated on real data; sources pinned at the commits read; the TinyStories mojibake repair extended.
+- **Evaluators:** novelty index (16 s) and judge (about 36 min on GPU), rebuilt after each corpus change.
+- **Feasibility gate, four runs and three iterations** (ADR 0005–0007; report: `docs/reports/m1-feasibility.md`):
+  - Run 1: 4 of 7. Run 2: 3 of 7 (the PC slept mid-run). Run 3: 4 of 7. **Run 4: 5 of 7.**
+  - Content fixes:
+    - Stories told on request (`tinystories_requests`): creativity 0 → 20.
+    - Quiz sheets in Reference Facts (`fact_qa`): knowledge 5 → 77.
+    - Denser planted false facts and a stricter quality score.
+  - Training fixes: the first model trains on 12.6M tokens, and the default batch is 8,192 tokens.
+  - Measurement fixes:
+    - G2 pools 180 replies.
+    - G4 fingerprints sample 8 replies per probe.
+    - G7(a) prompts with clean pages.
+    - G7(b) fact arms train on web alone.
+  - **Passing:** G1 speed (68 s GPU, 17 min CPU), G3 differentiation, G4 seed variation, G5 growth, G6 forgetting.
+- **Owner decision C3 (a babbling start):** the first AI's legibility bar is 60% (was 70%, which no first model reached).
+- **Open, for the owner:**
+  - **G2:** the first model is 59% legible (107 of 180), one reply short of 60%. Model size, budget, learning rate, batch and corpus mix were all swept; none moves it reliably.
+  - **G7(a):** thorough cleaning lowers garbled output only slightly (2.9% → 2.4%), and not on every seed. Small models drop random typos by themselves, and neither more samples nor more training changes that. Fact-checking works (67% → 48%).
+- **Spec updated:**
+  - §0: C3.
+  - §4.11: the first model trains on about 12.6M tokens, with a CPU fallback of at most 20 minutes.
+  - §4.12: G2 is judged at 60% on pooled replies.
+- **Next:** the owner's decisions on G2 and G7(a), then the milestone wrap-up and the merge to `main`. M2 starts with the D1 visual-direction question.
+
 ## 2026-10-21 — Milestone 1 code finished: final review and fix wave complete
 - **Final whole-branch review:**
   - 18 finders, a completeness critic, and 6 extra finders that checked real Hugging Face rows.
