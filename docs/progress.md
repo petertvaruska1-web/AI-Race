@@ -2,6 +2,20 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-10-22 — Milestone 1 closed; Milestone 2 planned
+- **Milestone 1 closed** at 5 of 7 (owner decision C4): merged into `main` and tagged `m1-complete`.
+- **Owner decisions:**
+  - C5: each company's palette colors its logo and the player's whole dashboard, over a neutral dark base. This resolves D1; the base style is a temporary assumption.
+  - C6: the first playable version may be single-player, with multiplayer designed in.
+- **Milestone 2 plan:** `docs/superpowers/plans/2026-10-22-m2-two-friends.md`, 28 tasks.
+  - Stage 1 (single player, Tasks 1–24):
+    - TS monorepo, protocol and deterministic sim
+    - server with guest accounts, world actors with input log and snapshots, realtime gateway, job broker and blob store
+    - Python catalog export and dial-out worker (train, eval, chat)
+    - React client (company founding, AI Lab, live training, playground, benchmarks)
+  - Stage 2 (Tasks 25–28): invites, sharing AIs with friends, hosting from the PC, the two-friends end-to-end test.
+- **Next:** execute Task 1 on branch `m2-two-friends`.
+
 ## 2026-10-22 — Local GPU session: real corpus, judge and feasibility gate (5 of 7 pass)
 - **Setup (2026-10-21):** default suite 1559 passed in 153 s on the owner's PC. pytest -m gpu passed 4 tests on the RTX 3050. One Windows-only test was fixed.
 - **Task 15, corpus v1** (ADR 0004; `docs/data-sources.md`):

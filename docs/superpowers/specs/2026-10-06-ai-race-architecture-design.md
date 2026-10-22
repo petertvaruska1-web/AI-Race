@@ -15,11 +15,12 @@
 | C2 | **Notebook dataset, small.** Each company may write a size-capped, abuse-filtered dataset of its own (facts, example Q&As, style samples) that joins the training mix like any other dataset. | 2026-10-06 |
 | C3 | **A babbling start.** A company's first AI makes sense about 2 times in 3 and visibly improves as players train and grow it. The first training run stays about a minute long; the legibility bar for the first model is 60% (§4.12). | 2026-10-22 |
 | C4 | **Ship at 5 of 7.** "80 percent now is better than 100 later": Milestone 1 closes with the feasibility gate at 5 of 7. Two gaps are accepted for now and revisited later: the first AI is 59% legible (bar 60%), and thorough cleaning barely lowers garbled output (fact-checking does work). Milestone 2, the first playable version, starts now. | 2026-10-22 |
+| C5 | **The company's colors are the look (D1).** Each player picks a color palette when founding their company. It colors the company's logo, and their whole dashboard takes on those colors, so every player's screen looks like their own company. Around it, the base UI stays a calm neutral dark (mockup A's "research lab" frame), so any palette stands out; the owner did not choose among the three mockup styles, so this base is a temporary assumption that can change later. | 2026-10-22 |
+| C6 | **Single player first, multiplayer designed in.** The first playable version (Milestone 2, stage 1) may be single-player: one person founds a company, trains an AI with the live view, chats with it and sees its scores. It is still built on the multiplayer architecture (server authority, worlds, per-viewer projection), so stage 2 adds joining friends, trying each other's AIs and hosting from the PC without rework. | 2026-10-22 |
 
 ### Pending creative decision points (do not block the architecture)
 | ID | Question | When to ask | Temporary assumption |
 |----|----------|-------------|----------------------|
-| D1 | Visual direction (art style, palette, typography, motion) | Start of Milestone 2, with 2–3 rendered mockups | Dark "neon research lab" UI: deep navy/graphite, one vivid accent taken from the company's own palette, rounded geometric type, small playful motion |
 | D2 | Name and flavor of the in-game dataset sources (fictional brand names vs. generic descriptions) | Milestone 2 content pass | Generic descriptive names ("Storybooks", "Web Crawl", …) |
 
 ### Technical decisions
@@ -418,7 +419,7 @@ Training yields between step chunks, so a single GPU can interleave interactive 
   - Preparation shows real examples of what would be removed.
   - The UI never fabricates predictions of model quality. Previews show costs and data facts only; quality is discovered by training and testing.
 - **Accessibility:** keyboard navigable, sufficient contrast, reduced-motion support.
-- Visual direction is pending as D1.
+- **Visual direction (C5):** the company palette themes the player's own screens (logo, accents, charts) over a neutral dark base. Palettes are checked for contrast against the base so text stays readable whatever the player picks.
 
 ---
 

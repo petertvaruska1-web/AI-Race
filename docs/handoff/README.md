@@ -58,12 +58,15 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
    - Cloud: the template `docs/handoff/final-review/cloud-sync.sh`. It also copies briefs, deferred minors and final-review artefacts, and takes the commit trailer and branch from the environment.
 
 ## 4. Immediate next step
-**The local GPU session ran the real gate four times (2026-10-21/22); it stands at 5 of 7** (`docs/reports/m1-feasibility.md`, ADR 0004–0007, ledger).
-- Waiting on the owner (product questions):
-  - G2: the first model is 59% legible against the owner's 60% bar (C3).
-  - G7(a): thorough cleaning barely lowers garbled output (2.9% → 2.4%, not on every seed), because small models drop random typos themselves.
-- Then finish step 4 below: the milestone wrap-up, CLAUDE.md, and the merge to `main` on the owner's go.
-- A gate rerun reuses every trained model while data and training code are unchanged.
+**Milestone 1 is closed** (2026-10-22, owner decision C4): merged into `main` and tagged `m1-complete`. The gate stands at 5 of 7 with two accepted gaps (`docs/reports/m1-feasibility.md`).
+
+**Milestone 2 starts on branch `m2-two-friends`.** Its plan is `docs/superpowers/plans/2026-10-22-m2-two-friends.md` (28 tasks).
+- Stage 1, Tasks 1–24: the single-player first playable version (C6). Stop and report to the owner after Task 24.
+- Stage 2, Tasks 25–28: friends.
+- New owner decisions: C5 (the company palette themes the dashboard; resolves D1) and C6 (single player first, multiplayer designed in).
+- Execute with `superpowers:subagent-driven-development`, as in M1. Model tiers: the top model for rulings, Sonnet for implementers and reviewers, Haiku for copy jobs.
+- Set up a fresh SDD workspace for M2 (`.superpowers/sdd/2026-10-22-m2-two-friends/`), with the M1 instruction files as templates and an empty ledger.
+- **Resume at Task 1.** No M2 code exists yet.
 
 ## 5. Local GPU session checklist (Windows 11 + RTX 3050)
 `data/` is gitignored and large, so it never travels through git. Commands are in CLAUDE.md "Commands"; every corpus build needs `--extra content`.
