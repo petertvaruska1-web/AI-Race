@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import cookie from "@fastify/cookie";
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from "fastify";
+import { registerAuthRoutes } from "./auth.ts";
 import { type ServerOptions, SIM_VERSION } from "./config.ts";
 import { type Db, openDb } from "./db/index.ts";
 import { createLogger, type Logger } from "./log.ts";
@@ -37,6 +38,7 @@ export async function buildApp(
   await app.register(cookie, { secret: opts.secret });
 
   app.get("/api/health", async () => ({ ok: true, sim: SIM_VERSION }));
+  registerAuthRoutes(app, ctx);
 
   let closed = false;
   return {
