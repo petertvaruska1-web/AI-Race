@@ -7,6 +7,7 @@ import {
   activeRun,
   applyCompletion,
   findRun,
+  findVersion,
   formatMoney,
   previewTraining,
   settleRuns,
@@ -87,7 +88,7 @@ function system(s: WorldState, e: SystemEvent): Handled {
       if (run.status === "completed") return no("This result was already applied.");
       if (run.status === "failed") return no("This run has finished.");
       if (run.held) return no("This result was already received.");
-      if (company.versions[e.versionId]) return no("That version id is already used.");
+      if (findVersion(s, e.versionId)) return no("That version id is already used.");
       // Results reveal at game pace (§7.3): an early one waits for the run's last day.
       if (run.status === "training" && s.day < run.endDay) {
         run.held = { versionId: e.versionId, result: e.result };
@@ -109,15 +110,12 @@ function system(s: WorldState, e: SystemEvent): Handled {
       return OK;
     }
     case "evalCompleted": {
-      for (const id of Object.keys(s.companies).sort()) {
-        const version = s.companies[id]?.versions[e.versionId];
-        if (!version) continue;
-        version.scores = { ...e.scores };
-        version.overall = e.overall;
-        version.personalityWords = [...e.personalityWords];
-        return OK;
-      }
-      return no("Unknown version.");
+      const version = findVersion(s, e.versionId);
+      if (!version) return no("Unknown version.");
+      version.scores = { ...e.scores };
+      version.overall = e.overall;
+      version.personalityWords = [...e.personalityWords];
+      return OK;
     }
     default:
       return no("This event isn't supported yet.");
@@ -187,7 +185,7 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       const company = member.companyId ? s.companies[member.companyId] : undefined;
       if (!company) return no("Found your company first.");
       if (!newId) return no("Missing run id.");
-      if (company.runs[newId]) return no("That run id is already used.");
+      if (findRun(s, newId)) return no("That run id is already used.");
       if (activeRun(company)) return no("Your AI is already training. Wait for it to finish.");
       const preview = previewTraining(s, company.id, cmd.plan);
       if (!preview.ok) return preview;

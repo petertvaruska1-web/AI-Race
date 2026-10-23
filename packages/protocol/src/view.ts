@@ -53,10 +53,10 @@ export const VersionView = z.strictObject({
 });
 export type VersionView = z.infer<typeof VersionView>;
 
+/** A shared AI as others see it (spec §6.4): no brain shape, data or training detail (R2). */
 export const PublicVersion = z.strictObject({
   id: zId,
   label: z.string(),
-  shape: ModelShapeView,
   createdDay: Day,
   scores: Scores.nullable(),
   overall: z.number().nullable(),

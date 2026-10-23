@@ -1,7 +1,7 @@
 import type { TrainingPlan, TrainingPreview } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
 import { paramCount, trainingFlops } from "./shape.ts";
-import type { CompanyState, RunState, TrainingResult, WorldState } from "./state.ts";
+import type { CompanyState, RunState, TrainingResult, VersionState, WorldState } from "./state.ts";
 
 export type PreviewResult = { ok: true; preview: TrainingPreview } | { ok: false; reason: string };
 
@@ -72,6 +72,14 @@ export function findRun(
     const company = state.companies[id];
     const run = company?.runs[runId];
     if (company && run) return { company, run };
+  }
+  return null;
+}
+
+export function findVersion(state: WorldState, versionId: string): VersionState | null {
+  for (const id of Object.keys(state.companies).sort()) {
+    const version = state.companies[id]?.versions[versionId];
+    if (version) return version;
   }
   return null;
 }

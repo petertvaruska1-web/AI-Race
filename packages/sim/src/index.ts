@@ -2,6 +2,7 @@ export * from "./balance.ts";
 export * from "./calendar.ts";
 export * from "./hash.ts";
 export * from "./palette.ts";
+export * from "./project.ts";
 export * from "./reducer.ts";
 export * from "./rng.ts";
 export * from "./shape.ts";

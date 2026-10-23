@@ -146,7 +146,7 @@
     - `PrivateCompany = {id, cash, runs: RunView[], versions: VersionView[]}`
     - `RunView = {id, status: "training"|"finalizing"|"completed"|"failed", computeStarted: boolean, plan, preview: TrainingPreview, startDay, endDay, progress: number, failure: string | null, versionId: string | null}`
     - `VersionView = {id, label, runId, parentId, shape: {nLayer, dModel, ctxLen}, createdDay, trainedTokens, scores: Record<string, number|null> | null, overall: number|null, personalityWords: string[], published: boolean}`
-    - `PublicVersion = {id, label, shape, createdDay, scores, overall, personalityWords}`
+    - `PublicVersion = {id, label, createdDay, scores, overall, personalityWords}` (no shape: brain size is private, R2 and spec §6.4; ADR 0008 item 12)
     - `TrainingPreview = {params, tokens, flops, cost, durationDays}`
   - **Client messages (`ClientMessage`; every message has `v: 1`):**
     - `hello{token}`, `watch{worldId}`, `unwatch{worldId}`, `resync{worldId}`
