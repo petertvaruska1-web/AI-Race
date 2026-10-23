@@ -2,6 +2,25 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-10-23 — Milestone 2, Tasks 1–9 (simulation and server core)
+- Branch `m2-two-friends`, executed inline with a commit and push after every task. `npm test`: 122 passed; `npm run check` clean.
+- **Built:**
+  - TypeScript monorepo (Tasks 1–2): shared message formats, with untrusted text cleaned and length-checked.
+  - The deterministic game simulation (Tasks 3–6):
+    - worlds, companies in their own colors (12 presets, readable on the dark dashboard), the clock and host handover
+    - training cost and game-day duration from real compute
+    - results revealed at game pace, refunds, versions and scores
+    - a per-player view that hides everything private
+  - The server core (Tasks 7–9):
+    - an embedded database (no install needed) and guest accounts with hashed sessions
+    - worlds run by a single-writer actor with a permanent input log, save points and crash recovery
+- **Decisions** (ADR 0008 items 11–13):
+  - Two balance numbers in the plan were off by a factor: the first AI costs $41,596 of the $250,000 founding cash, over 13 game days.
+  - A shared AI's public entry does not show its brain size (R2).
+  - Ids are unique across a world.
+- **Found by the property tests and fixed:** a version id reused while another result with that id waited for its game day.
+- **Next:** Task 10 (realtime gateway). Paused here because the week's usage is at 95%.
+
 ## 2026-10-22 — Milestone 1 closed; Milestone 2 planned
 - **Milestone 1 closed** at 5 of 7 (owner decision C4): merged into `main` and tagged `m1-complete`.
 - **Owner decisions:**
