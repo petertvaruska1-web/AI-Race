@@ -1,0 +1,90 @@
+import { z } from "zod";
+import { TEXT_LIMITS, zId, zName, zText } from "./text.ts";
+
+export const DATASET_IDS = [
+  "web",
+  "books",
+  "educational",
+  "conversations",
+  "code",
+  "reasoning",
+  "facts",
+  "creative",
+] as const;
+export type DatasetId = (typeof DATASET_IDS)[number];
+
+export const Hex = z.string().regex(/^#[0-9a-f]{6}$/i);
+export type Hex = z.infer<typeof Hex>;
+
+export const Palette = z.object({ primary: Hex, secondary: Hex });
+export type Palette = z.infer<typeof Palette>;
+
+export const LOGO_SHAPES = ["circle", "rounded-square", "hexagon", "shield", "diamond"] as const;
+export type LogoShape = (typeof LOGO_SHAPES)[number];
+
+export const LOGO_SYMBOLS = [
+  "spark",
+  "atom",
+  "leaf",
+  "bolt",
+  "star",
+  "wave",
+  "eye",
+  "flame",
+  "rocket",
+  "brain",
+  "cube",
+  "moon",
+  "sun",
+  "anchor",
+  "crown",
+  "feather",
+] as const;
+export type LogoSymbol = (typeof LOGO_SYMBOLS)[number];
+
+export const Logo = z.object({
+  shape: z.enum(LOGO_SHAPES),
+  symbol: z.enum(LOGO_SYMBOLS).nullable(),
+  initials: z.string().regex(/^[A-Z0-9]{0,2}$/),
+});
+export type Logo = z.infer<typeof Logo>;
+
+/** Integer weights; the trainer normalizes them. */
+export const MixWeight = z.number().int().min(0).max(100);
+
+/** The player-facing training plan. Each control maps to a real parameter (R7). */
+export const TrainingPlan = z.object({
+  mix: z.record(z.enum(DATASET_IDS), MixWeight),
+  cleaning: z.enum(["light", "standard", "thorough"]),
+  removeDuplicates: z.boolean(),
+  factCheck: z.boolean(),
+  variety: z.enum(["natural", "balanced"]),
+  brainSize: z.string().min(1).max(32),
+  attentionSpan: z.number().int().positive(),
+  length: z.string().min(1).max(32),
+  learningStyle: z.number().min(0).max(1),
+  review: z.number().min(0).max(0.5),
+  probePrompt: zText(...TEXT_LIMITS.probePrompt),
+  parentVersionId: zId.nullable(),
+});
+export type TrainingPlan = z.infer<typeof TrainingPlan>;
+
+export const SPEEDS = [1, 2, 4] as const;
+export const Speed = z.literal(SPEEDS);
+export type Speed = z.infer<typeof Speed>;
+
+export const Command = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("createCompany"),
+    name: zName(...TEXT_LIMITS.companyName),
+    logo: Logo,
+    palette: Palette,
+  }),
+  z.object({ type: z.literal("startWorld") }),
+  z.object({ type: z.literal("setSpeed"), speed: Speed }),
+  z.object({ type: z.literal("setPaused"), paused: z.boolean() }),
+  z.object({ type: z.literal("startTraining"), plan: TrainingPlan }),
+  z.object({ type: z.literal("publishVersion"), versionId: zId, published: z.boolean() }),
+]);
+export type Command = z.infer<typeof Command>;
+export type CommandType = Command["type"];
