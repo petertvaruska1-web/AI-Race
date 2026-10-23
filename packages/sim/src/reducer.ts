@@ -11,6 +11,7 @@ import {
   formatMoney,
   previewTraining,
   settleRuns,
+  versionIdTaken,
 } from "./training.ts";
 import { effectiveHost } from "./world.ts";
 
@@ -88,7 +89,7 @@ function system(s: WorldState, e: SystemEvent): Handled {
       if (run.status === "completed") return no("This result was already applied.");
       if (run.status === "failed") return no("This run has finished.");
       if (run.held) return no("This result was already received.");
-      if (findVersion(s, e.versionId)) return no("That version id is already used.");
+      if (versionIdTaken(s, e.versionId)) return no("That version id is already used.");
       // Results reveal at game pace (§7.3): an early one waits for the run's last day.
       if (run.status === "training" && s.day < run.endDay) {
         run.held = { versionId: e.versionId, result: e.result };

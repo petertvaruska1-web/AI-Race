@@ -84,6 +84,14 @@ export function findVersion(state: WorldState, versionId: string): VersionState 
   return null;
 }
 
+/** Whether a version id is used by a version or by a result waiting for its game day. */
+export function versionIdTaken(state: WorldState, versionId: string): boolean {
+  if (findVersion(state, versionId)) return true;
+  return Object.values(state.companies).some((c) =>
+    Object.values(c.runs).some((r) => r.held?.versionId === versionId),
+  );
+}
+
 /** Turns a finished run into the company's next version. Mutates `state`. */
 export function applyCompletion(
   state: WorldState,

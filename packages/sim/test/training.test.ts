@@ -366,3 +366,17 @@ describe("runProgress", () => {
 function never(): never {
   throw new Error("missing");
 }
+
+describe("world-unique ids", () => {
+  it("refuses a version id that a waiting result already holds", () => {
+    let s = ok(step(running(), train("u1", "r1")));
+    s = ok(step(s, train("u2", "r2")));
+    s = ok(step(s, completed("r1", "v-same")));
+    expect(rejected(step(s, completed("r2", "v-same")))).toMatch(/already used/i);
+  });
+
+  it("refuses a run id another company already uses", () => {
+    const s = ok(step(running(), train("u1", "r1")));
+    expect(rejected(step(s, train("u2", "r1")))).toMatch(/already used/i);
+  });
+});
