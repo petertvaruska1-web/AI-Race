@@ -47,3 +47,45 @@ export async function startTestServer(over: Partial<ServerOptions> = {}): Promis
     },
   };
 }
+
+/** Calls the API with an optional session cookie and JSON body. */
+export async function api(
+  s: TestServer,
+  path: string,
+  init: { method?: string; body?: unknown; cookie?: string } = {},
+): Promise<Response> {
+  const headers: Record<string, string> = {};
+  if (init.body !== undefined) headers["content-type"] = "application/json";
+  if (init.cookie) headers.cookie = `airace_session=${init.cookie}`;
+  return fetch(`${s.url}${path}`, {
+    method: init.method ?? (init.body === undefined ? "GET" : "POST"),
+    headers,
+    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+  });
+}
+
+/** Signs up a guest; returns its id and session cookie value. */
+export async function createGuest(
+  s: TestServer,
+  displayName = "Ana",
+): Promise<{ userId: string; cookie: string }> {
+  const res = await api(s, "/api/guest", { body: { displayName } });
+  if (res.status !== 200) throw new Error(`guest failed: ${res.status}`);
+  const { userId } = (await res.json()) as { userId: string };
+  const cookie = /airace_session=([^;]+)/.exec(res.headers.get("set-cookie") ?? "")?.[1];
+  if (!cookie) throw new Error("no session cookie");
+  return { userId, cookie };
+}
+
+/** A guest with a new world; returns ids and the cookie. */
+export async function createGuestWorld(
+  s: TestServer,
+  displayName = "Ana",
+  name = "Friday night",
+): Promise<{ userId: string; cookie: string; worldId: string }> {
+  const guest = await createGuest(s, displayName);
+  const res = await api(s, "/api/worlds", { body: { name }, cookie: guest.cookie });
+  if (res.status !== 200) throw new Error(`world failed: ${res.status}`);
+  const { worldId } = (await res.json()) as { worldId: string };
+  return { ...guest, worldId };
+}
