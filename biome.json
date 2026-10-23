@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!ml", "!data", "!docs", "!.claude", "!**/*.md"]
+    "includes": ["**", "!ml", "!data", "!docs", "!.claude", "!**/*.md", "!**/drizzle"]
   },
   "formatter": {
     "enabled": true,
