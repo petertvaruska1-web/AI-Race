@@ -64,9 +64,9 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
 - Stage 1, Tasks 1–24: the single-player first playable version (C6). Stop and report to the owner after Task 24.
 - Stage 2, Tasks 25–28: friends.
 - New owner decisions: C5 (the company palette themes the dashboard; resolves D1) and C6 (single player first, multiplayer designed in).
-- Execute with `superpowers:subagent-driven-development`, as in M1. Model tiers: the top model for rulings, Sonnet for implementers and reviewers, Haiku for copy jobs.
-- Set up a fresh SDD workspace for M2 (`.superpowers/sdd/2026-10-22-m2-two-friends/`), with the M1 instruction files as templates and an empty ledger.
-- **Resume at Task 1.** No M2 code exists yet.
+- Executed inline (`superpowers:executing-plans`, no subagents) to save usage, committing and pushing after every task.
+- **Done:** Task 1 (scaffold, ADR 0008), Task 2 (protocol), Task 3 (sim foundations). `npm test` and `npm run check` pass.
+- **Resume at Task 4** (sim world, companies and clock).
 
 ## 5. Local GPU session checklist (Windows 11 + RTX 3050)
 `data/` is gitignored and large, so it never travels through git. Commands are in CLAUDE.md "Commands"; every corpus build needs `--extra content`.

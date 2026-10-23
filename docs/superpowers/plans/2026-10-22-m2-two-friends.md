@@ -204,7 +204,7 @@
     - `Balance` type, plus `BALANCE_V1` and `BALANCE_TEST` (below)
     - `getBalance(version: "balance-v1" | "balance-test"): Balance`
   - **`BALANCE_V1`:**
-    - `{version:"balance-v1", tickMsAt1x: 8000, speeds:[1,2,4], foundingCash: 250000, cloudPflopsPerDay: 0.008, cloudPricePerPflop: 400, factCheckCost: 5000, maxMembers: 8}`
+    - `{version:"balance-v1", tickMsAt1x: 8000, speeds:[1,2,4], foundingCash: 250000, cloudPflopsPerDay: 0.008, cloudPricePerPflop: 400000, factCheckCost: 5000, maxMembers: 8}`
     - `brainSizes`: `[{id:"tiny",nLayer:4,dModel:128},{id:"small",nLayer:6,dModel:192},{id:"medium",nLayer:8,dModel:256}]`
     - `attentionSpans`: `[128, 256, 512]`
     - `lengths`: `[{id:"short",tokens:6291456},{id:"standard",tokens:12582912},{id:"long",tokens:25165824}]`
@@ -213,7 +213,7 @@
     - `tickMsAt1x: 200`
     - `brainSizes: [{id:"tiny",nLayer:2,dModel:64}]`, `attentionSpans: [64]`
     - `lengths: [{id:"short",tokens:65536}]`
-    - `cloudPflopsPerDay: 0.0000005`
+    - `cloudPflopsPerDay: 0.000005`
 
 - [ ] **Step 1: Write the failing tests.**
   - `paramCount`: (4,128) gives 1,377,408; (6,192) gives 3,443,136; (8,256) gives 7,475,456; (10,384) gives 19,275,648; (12,512) gives 40,645,120. These are the Python values.
@@ -221,7 +221,7 @@
   - `dateOfDay(0)` is `"2027-01-01"`; `dateOfDay(58)` is `"2027-02-28"`; `dateOfDay(365)` is `"2028-01-01"`; `dateOfDay(424)` is `"2028-02-29"`.
   - The same seed gives the same 1000 values; different seeds give different first values; all values are in [0, 1).
   - `stateHash({a:1,b:[2]})` equals `stateHash({b:[2],a:1})`.
-  - The first model at V1: `ceil(trainingFlops(1377408,12582912)/1e15/0.008)` is 13 days and costs `round(0.104 × 400)` dollars. Assert against the exact formula, so the first model costs about $42k of the $250k founding cash and lasts about 13 game days (104 s at 1×).
+  - The first model at V1: `ceil(trainingFlops(1377408,12582912)/1e15/0.008)` is 13 days and costs `round(0.104 × 400000)` dollars ($41,596; ADR 0008 item 11). Assert against the exact formula, so the first model costs about $42k of the $250k founding cash and lasts about 13 game days (104 s at 1×).
 - [ ] **Step 2:** Run: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4:** Run: PASS.

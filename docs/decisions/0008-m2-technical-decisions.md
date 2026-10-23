@@ -20,3 +20,6 @@
 8. **A train job interrupted by a lost worker restarts from its parent**, unless the same worker returns with local resume state. Restarting is simple and correct; the player is never charged twice (the charge belongs to the run, not the job).
 9. **The sim's determinism rule is enforced by a test** (`packages/sim/test/determinism-rules.test.ts`): the sim source may not mention the wall clock, ambient randomness, `crypto` or `node:` modules. Server-made IDs travel inside the logged input so replay reproduces them.
 10. **Biome checks code only**, not Markdown: its Markdown formatter would rewrite the hand-kept docs.
+11. **Two balance numbers in the plan were off by a factor and are corrected** (plan Task 3 updated):
+    - `cloudPricePerPflop` is **400,000** dollars, not 400. The plan's stated intent is a first model costing about $42k of the $250k founding cash; at 400 it would cost $42. At 400,000 it costs $41,596 over 13 game days (104 s at 1×).
+    - `BALANCE_TEST.cloudPflopsPerDay` is **0.000005**, not 0.0000005. The test model (2×64, 65,536 tokens) then trains in 30 game days (6 s at 1×) instead of 291 (58 s), which keeps the end-to-end tests quick.
