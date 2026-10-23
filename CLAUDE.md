@@ -43,6 +43,7 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 - Chat with a trained model (the reference judge is the best one): `cd ml && python -m uv run airace-ml chat --model ../data/judge/v1` (`/raw`, `/reset`, `/quit`; `--temperature` sets the answer style). It only reads the model, but it shares the GPU and CPU, so don't run it while a gate measures speed (G1).
 - Long GPU runs (judge, gate) on the owner's PC: the app's keep-awake lets go after about 5 idle minutes and the PC then sleeps mid-run (gate run 2 lost hours this way). Keep a Monitor with a heartbeat of a few minutes on any run that outlasts the turn.
 - Gate evidence scripts (each states its own command): `docs/handoff/calibration/` (`g2_diagnosis.py`, `g4_k_probe.py`, `g7_*.py`, `creativity_probe.py`).
+- TypeScript (repo root, Milestone 2): `npm install`, then `npm test` (Vitest over every workspace) and `npm run check` (Biome plus a type check of every workspace).
 - (More commands are added here as they come to exist.)
 
 ## Conventions

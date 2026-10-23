@@ -34,3 +34,7 @@ ml/runs/
 # Editors
 .vscode/
 .idea/
+
+# TypeScript / Playwright
+playwright-report/
+test-results/
