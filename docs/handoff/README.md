@@ -65,8 +65,8 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
 - Stage 2, Tasks 25–28: friends.
 - New owner decisions: C5 (the company palette themes the dashboard; resolves D1) and C6 (single player first, multiplayer designed in).
 - Executed inline (`superpowers:executing-plans`, no subagents) to save usage, committing and pushing after every task.
-- **Done:** Task 1 (scaffold, ADR 0008), Task 2 (protocol), Task 3 (sim foundations), Task 4 (worlds, companies, clock). `npm test` and `npm run check` pass.
-- **Resume at Task 5** (sim training economics, runs and versions).
+- **Done:** Task 1 (scaffold, ADR 0008), Task 2 (protocol), Task 3 (sim foundations), Task 4 (worlds, companies, clock), Task 5 (training economics). `npm test` and `npm run check` pass.
+- **Resume at Task 6** (sim projection, privacy and determinism properties).
 
 ## 5. Local GPU session checklist (Windows 11 + RTX 3050)
 `data/` is gitignored and large, so it never travels through git. Commands are in CLAUDE.md "Commands"; every corpus build needs `--extra content`.

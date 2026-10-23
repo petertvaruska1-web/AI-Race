@@ -1,7 +1,16 @@
 import { Command, TEXT_LIMITS } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
 import { paletteProblem } from "./palette.ts";
+import { rngInt } from "./rng.ts";
 import type { Input, StepResult, SystemEvent, WorldState } from "./state.ts";
+import {
+  activeRun,
+  applyCompletion,
+  findRun,
+  formatMoney,
+  previewTraining,
+  settleRuns,
+} from "./training.ts";
 import { effectiveHost } from "./world.ts";
 
 type Handled = { ok: true } | { ok: false; reason: string };
@@ -37,6 +46,7 @@ function apply(s: WorldState, input: Input): Handled {
 function tick(s: WorldState): Handled {
   if (s.phase !== "running" || s.paused) return no("The world is not running.");
   s.day += 1;
+  settleRuns(s);
   return OK;
 }
 
@@ -60,6 +70,54 @@ function system(s: WorldState, e: SystemEvent): Handled {
       if (!m) return no("Not a member of this world.");
       m.online = e.online;
       return OK;
+    }
+    case "computeStarted": {
+      const found = findRun(s, e.runId);
+      if (!found) return no("Unknown run.");
+      if (found.run.status === "completed" || found.run.status === "failed") {
+        return no("This run has finished.");
+      }
+      found.run.computeStarted = true;
+      return OK;
+    }
+    case "trainingCompleted": {
+      const found = findRun(s, e.runId);
+      if (!found) return no("Unknown run.");
+      const { company, run } = found;
+      if (run.status === "completed") return no("This result was already applied.");
+      if (run.status === "failed") return no("This run has finished.");
+      if (run.held) return no("This result was already received.");
+      if (company.versions[e.versionId]) return no("That version id is already used.");
+      // Results reveal at game pace (§7.3): an early one waits for the run's last day.
+      if (run.status === "training" && s.day < run.endDay) {
+        run.held = { versionId: e.versionId, result: e.result };
+      } else {
+        applyCompletion(s, company, run, e.versionId, e.result);
+      }
+      return OK;
+    }
+    case "trainingFailed": {
+      const found = findRun(s, e.runId);
+      if (!found) return no("Unknown run.");
+      const { company, run } = found;
+      if (run.status === "completed" || run.status === "failed")
+        return no("This run has finished.");
+      if (run.held) return no("This run already has its result.");
+      company.cash += run.preview.cost;
+      run.status = "failed";
+      run.failure = e.reason;
+      return OK;
+    }
+    case "evalCompleted": {
+      for (const id of Object.keys(s.companies).sort()) {
+        const version = s.companies[id]?.versions[e.versionId];
+        if (!version) continue;
+        version.scores = { ...e.scores };
+        version.overall = e.overall;
+        version.personalityWords = [...e.personalityWords];
+        return OK;
+      }
+      return no("Unknown version.");
     }
     default:
       return no("This event isn't supported yet.");
@@ -124,8 +182,39 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       s.paused = cmd.paused;
       return OK;
     }
-    case "startTraining":
-      return no("Training isn't available yet.");
+    case "startTraining": {
+      if (s.phase !== "running") return no("The world is not running yet.");
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("Found your company first.");
+      if (!newId) return no("Missing run id.");
+      if (company.runs[newId]) return no("That run id is already used.");
+      if (activeRun(company)) return no("Your AI is already training. Wait for it to finish.");
+      const preview = previewTraining(s, company.id, cmd.plan);
+      if (!preview.ok) return preview;
+      const { cost, durationDays } = preview.preview;
+      if (company.cash < cost) {
+        return no(
+          `Not enough cash: this training costs ${formatMoney(cost)} and you have ${formatMoney(company.cash)}.`,
+        );
+      }
+      const seed = rngInt(s.rng, 2 ** 31);
+      s.rng = seed.next;
+      company.cash -= cost;
+      company.runs[newId] = {
+        id: newId,
+        plan: cmd.plan,
+        preview: preview.preview,
+        seed: seed.value,
+        status: "training",
+        computeStarted: false,
+        startDay: s.day,
+        endDay: s.day + durationDays,
+        held: null,
+        failure: null,
+        versionId: null,
+      };
+      return OK;
+    }
     case "publishVersion":
       return no("Sharing isn't available yet.");
     default:

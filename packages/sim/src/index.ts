@@ -6,4 +6,5 @@ export * from "./reducer.ts";
 export * from "./rng.ts";
 export * from "./shape.ts";
 export * from "./state.ts";
+export * from "./training.ts";
 export * from "./world.ts";
