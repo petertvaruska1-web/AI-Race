@@ -3,9 +3,11 @@ import type { Route } from "../route.ts";
 import { useSocket } from "../store/session.ts";
 import { useWorld } from "../store/world.ts";
 import { applyCompanyTheme } from "../theme/palette.ts";
+import { Benchmarks } from "./Benchmarks.tsx";
 import { Dashboard, WorldLayout } from "./Dashboard.tsx";
 import { Lobby } from "./Lobby.tsx";
 import { Lab } from "./lab/LabLayout.tsx";
+import { Playground } from "./Playground.tsx";
 
 type WorldRoute = Extract<Route, { screen: "world" }>;
 
@@ -40,8 +42,8 @@ export function WorldScreen({ route }: { route: WorldRoute }) {
     <WorldLayout view={view} tab={route.tab}>
       {route.tab === "dashboard" && <Dashboard view={view} />}
       {route.tab === "lab" && <Lab view={view} />}
-      {route.tab === "play" && <p className="text-muted">The playground opens soon.</p>}
-      {route.tab === "bench" && <p className="text-muted">Benchmarks open soon.</p>}
+      {route.tab === "play" && <Playground view={view} />}
+      {route.tab === "bench" && <Benchmarks view={view} />}
     </WorldLayout>
   );
 }

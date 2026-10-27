@@ -1,5 +1,6 @@
 import type { Command, WorldView } from "@airace/protocol";
 import {
+  BALANCE_TEST,
   type BalanceVersion,
   createWorld,
   type Input,
@@ -50,4 +51,40 @@ export function runningWorld(balance: BalanceVersion = "balance-test"): WorldSta
 
 export function viewOf(s: WorldState, userId = "u1"): WorldView {
   return projectView(s, userId);
+}
+
+/** A running world where c1 has trained version v1 (scored when `scores` is given). */
+export function trainedWorld(
+  scores?: Record<string, number | null>,
+  conversations = 12,
+): WorldState {
+  const plan = {
+    ...BALANCE_TEST.defaultPlan,
+    mix: { ...BALANCE_TEST.defaultPlan.mix, conversations },
+  };
+  let s = apply(runningWorld(), command("u1", { type: "startTraining", plan }, "r1"));
+  s = apply(s, {
+    kind: "system",
+    event: {
+      type: "trainingCompleted",
+      runId: "r1",
+      versionId: "v1",
+      result: { steps: 8, finalLoss: 4, heldoutLosses: {}, unstable: false },
+    },
+  });
+  const end = s.companies.c1?.runs.r1?.endDay ?? 0;
+  while (s.day < end) s = apply(s, { kind: "tick" });
+  if (scores) {
+    s = apply(s, {
+      kind: "system",
+      event: {
+        type: "evalCompleted",
+        versionId: "v1",
+        scores,
+        overall: 30,
+        personalityWords: ["curious"],
+      },
+    });
+  }
+  return s;
 }
