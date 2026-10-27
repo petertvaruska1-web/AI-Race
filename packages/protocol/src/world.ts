@@ -118,6 +118,20 @@ export const Command = z.discriminatedUnion("type", [
   z.object({ type: z.literal("setPaused"), paused: z.boolean() }),
   z.object({ type: z.literal("startTraining"), plan: TrainingPlan }),
   z.object({ type: z.literal("publishVersion"), versionId: zId, published: z.boolean() }),
+  z.object({
+    type: z.literal("launchProduct"),
+    versionId: zId,
+    name: zName(...TEXT_LIMITS.productName),
+    plans: z.array(PlanId).max(3),
+    countdownDays: z.number().int().min(0).max(365),
+  }),
+  z.object({ type: z.literal("setPlan"), plan: PlanId, productId: zId.nullable() }),
+  z.object({
+    type: z.literal("setPrice"),
+    plan: z.enum(["personal", "business"]),
+    price: z.number().int(),
+  }),
+  z.object({ type: z.literal("retireProduct"), productId: zId }),
 ]);
 export type Command = z.infer<typeof Command>;
 export type CommandType = Command["type"];

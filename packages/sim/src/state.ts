@@ -2,6 +2,7 @@ import type {
   Command,
   Logo,
   Palette,
+  PlanId,
   RunStatus,
   Speed,
   TrainingPlan,
@@ -59,6 +60,28 @@ export type VersionState = {
   published: boolean;
 };
 
+export type ProductState = {
+  id: string;
+  name: string;
+  versionId: string;
+  status: "countdown" | "live" | "retired";
+  announcedDay: number;
+  launchDay: number;
+  hype: number;
+  /** Plans it powers from launch day. */
+  launchPlans: PlanId[];
+  /** Feedback batches already applied (the last 20), so a result is never counted twice. */
+  feedbackKeys: string[];
+};
+
+export type PlansState = {
+  free: { productId: string | null };
+  personal: { productId: string | null; price: number };
+  business: { productId: string | null; price: number };
+};
+
+export type FameState = { reputation: number; followers: number };
+
 export type CompanyState = {
   id: string;
   ownerUserId: string;
@@ -69,6 +92,9 @@ export type CompanyState = {
   runs: Record<string, RunState>;
   versions: Record<string, VersionState>;
   versionSeq: number;
+  products: Record<string, ProductState>;
+  plans: PlansState;
+  fame: FameState;
 };
 
 export type WorldState = {

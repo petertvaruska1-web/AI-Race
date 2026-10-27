@@ -1,6 +1,7 @@
 import { Command, TEXT_LIMITS } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
 import { paletteProblem } from "./palette.ts";
+import { newCompanyBusiness, productCommand, productsDay } from "./products.ts";
 import { rngInt } from "./rng.ts";
 import type { Input, StepResult, SystemEvent, WorldState } from "./state.ts";
 import {
@@ -49,6 +50,7 @@ function tick(s: WorldState): Handled {
   if (s.phase !== "running" || s.paused) return no("The world is not running.");
   s.day += 1;
   settleRuns(s);
+  productsDay(s);
   return OK;
 }
 
@@ -131,8 +133,9 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
   if (!parsed.success) {
     const field = parsed.error.issues[0]?.path[0];
     if (field === "name") {
-      const [min, max] = TEXT_LIMITS.companyName;
-      return no(`Company names are ${min}–${max} characters.`);
+      const isProduct = (raw as { type?: unknown } | null)?.type === "launchProduct";
+      const [min, max] = isProduct ? TEXT_LIMITS.productName : TEXT_LIMITS.companyName;
+      return no(`${isProduct ? "Product" : "Company"} names are ${min}–${max} characters.`);
     }
     return no("That request isn't valid.");
   }
@@ -160,6 +163,7 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
         runs: {},
         versions: {},
         versionSeq: 0,
+        ...newCompanyBusiness(getBalance(s.balance)),
       };
       member.companyId = newId;
       return OK;
@@ -216,6 +220,14 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
     }
     case "publishVersion":
       return no("Sharing isn't available yet.");
+    case "launchProduct":
+    case "setPlan":
+    case "setPrice":
+    case "retireProduct": {
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("Found your company first.");
+      return productCommand(s, company, cmd, newId);
+    }
     default:
       return no("That request isn't valid.");
   }

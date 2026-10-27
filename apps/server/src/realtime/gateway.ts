@@ -33,7 +33,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Commands that create something get their id from the server, inside the logged input. */
 function needsId(cmd: Command): boolean {
-  return cmd.type === "createCompany" || cmd.type === "startTraining";
+  return (
+    cmd.type === "createCompany" || cmd.type === "startTraining" || cmd.type === "launchProduct"
+  );
 }
 
 /**

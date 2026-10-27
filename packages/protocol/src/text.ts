@@ -32,6 +32,7 @@ export function zName(min: number, max: number) {
 /** Validated lengths of untrusted text (plan, Global Constraints). */
 export const TEXT_LIMITS = {
   companyName: [2, 32],
+  productName: [2, 24],
   displayName: [1, 24],
   worldName: [2, 40],
   probePrompt: [0, 120],
