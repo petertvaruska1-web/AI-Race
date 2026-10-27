@@ -16,7 +16,7 @@ autograd graph alive), with bf16 autocast on CUDA. All randomness comes from a p
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -198,6 +198,51 @@ class TorchLM:
         )[0]
         return self.tok.decode(gen.tokens)
 
+    def stream_chat_reply(
+        self,
+        history: Sequence[tuple[Role, str]],
+        *,
+        max_new_tokens: int = 96,
+        temperature: float = 0.8,
+        top_p: float = 0.95,
+        seed: int = 0,
+        on_text: Callable[[str], None],
+    ) -> str:
+        """:meth:`chat_reply`, calling ``on_text`` with each new piece of the reply as it is made.
+
+        Same seed, same text: it is the same generation. The reply so far is decoded whole at every
+        token and only its new end is sent, so a character made of several tokens is never split;
+        the pieces join to exactly the returned text.
+        """
+        reserve = min(max_new_tokens, self.ctx_len // 2)
+        prompt = build_chat_prompt(self.tok, history, self.ctx_len, reserve)
+        tokens: list[int] = []
+        sent = ""
+
+        def flush(final: bool) -> None:
+            nonlocal sent
+            text = self.tok.decode(tokens)
+            # A trailing U+FFFD is half a character; wait for the rest (unless it is the end).
+            ready = text if final else text.rstrip("�")
+            if ready.startswith(sent) and len(ready) > len(sent):
+                on_text(ready[len(sent) :])
+                sent = ready
+
+        def on_token(_row: int, token: int) -> None:
+            tokens.append(token)
+            flush(final=False)
+
+        gen = self.generate(
+            [prompt],
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            seed=seed,
+            on_token=on_token,
+        )[0]
+        flush(final=True)
+        return self.tok.decode(gen.tokens)
+
     def complete(
         self,
         text: str,
@@ -229,6 +274,7 @@ class TorchLM:
         top_p: float,
         seed: int,
         stop_ids: Sequence[int] | None = None,
+        on_token: Callable[[int, int], None] | None = None,
     ) -> list[Generation]:
         """Generate up to ``max_new_tokens`` tokens after each prompt.
 
@@ -236,7 +282,8 @@ class TorchLM:
         nucleus of ``softmax(logits / temperature)``. ``stop_ids=None`` means ``(end, bos)``; an
         empty sequence means never stop early. A prompt longer than ``ctx_len - 1`` keeps its last
         tokens (and its leading ``<|bos|>``), and a row stops once prompt plus reply reach
-        ``ctx_len``.
+        ``ctx_len``. ``on_token(row, token_id)``, if given, is called for each token as it is
+        added to a row's reply (for streaming).
         """
         if max_new_tokens < 0:
             raise ValueError(f"max_new_tokens must be >= 0, got {max_new_tokens}")
@@ -254,8 +301,13 @@ class TorchLM:
         with self._eval_mode():
             for lo in range(0, len(fitted), self._chunk_size()):
                 chunk = fitted[lo : lo + self._chunk_size()]
+                emit = None
+                if on_token is not None:
+                    emit = lambda row, token, lo=lo: on_token(lo + row, token)
                 out.extend(
-                    self._generate_chunk(chunk, max_new_tokens, temperature, top_p, stops, rng)
+                    self._generate_chunk(
+                        chunk, max_new_tokens, temperature, top_p, stops, rng, emit
+                    )
                 )
         return out
 
@@ -267,6 +319,7 @@ class TorchLM:
         top_p: float,
         stops: frozenset[int],
         rng: torch.Generator,
+        on_token: Callable[[int, int], None] | None = None,
     ) -> list[Generation]:
         """Left-pad, prefill once, then decode one token per step from the KV cache."""
         n = len(prompts)
@@ -297,6 +350,8 @@ class TorchLM:
                 gen.tokens.append(nxt_l[i])
                 gen.token_probs.append(token_p_l[i])
                 gen.top1_probs.append(top1_l[i])
+                if on_token is not None:
+                    on_token(i, nxt_l[i])
                 done[i] = len(gen.tokens) >= caps[i]
             if all(done):
                 break

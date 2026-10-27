@@ -16,12 +16,16 @@ def _naive_greedy(lm, ids, n):
     for _ in range(n):
         logits = lm.model(torch.tensor([out]))[0, -1]
         out.append(int(logits.argmax()))
-    return out[len(ids):]
+    return out[len(ids) :]
+
 
 def test_greedy_matches_naive_and_batching(tiny_lm, tiny_tok):
     p1, p2 = tiny_tok.encode("Once upon a time"), tiny_tok.encode("The cat")
     g = tiny_lm.generate([p1, p2], max_new_tokens=8, temperature=0, top_p=1, seed=0, stop_ids=[])
-    assert g[0].tokens == _naive_greedy(tiny_lm, p1, 8) and g[1].tokens == _naive_greedy(tiny_lm, p2, 8)
+    assert g[0].tokens == _naive_greedy(tiny_lm, p1, 8) and g[1].tokens == _naive_greedy(
+        tiny_lm, p2, 8
+    )
+
 
 def test_score_continuations_matches_manual(tiny_lm, tiny_tok):
     ctx, cont = tiny_tok.encode("The dog"), tiny_tok.encode(" runs fast")
@@ -31,20 +35,31 @@ def test_score_continuations_matches_manual(tiny_lm, tiny_tok):
     manual = sum(float(logp[len(ctx) - 1 + i, t]) for i, t in enumerate(cont))
     assert s.n_tokens == len(cont) and math.isclose(s.sum_logprob, manual, abs_tol=1e-4)
 
+
 def test_stops_at_end_token(tiny_lm, tiny_tok, monkeypatch):
     real = tiny_lm.model.forward
+
     def forced(*a, **k):
-        out = real(*a, **k); out[..., tiny_tok.end_id] = 1e4; return out
+        out = real(*a, **k)
+        out[..., tiny_tok.end_id] = 1e4
+        return out
+
     monkeypatch.setattr(tiny_lm.model, "forward", forced)
-    g = tiny_lm.generate([tiny_tok.encode("hi")], max_new_tokens=5, temperature=0, top_p=1, seed=0)[0]
+    g = tiny_lm.generate([tiny_tok.encode("hi")], max_new_tokens=5, temperature=0, top_p=1, seed=0)[
+        0
+    ]
     assert g.stopped and g.tokens == []
 
+
 def test_long_history_truncated(tiny_lm, tiny_tok):  # Review Focus 2
-    hist = [("user" if i % 2 == 0 else "ai", f"message number {i} " * 5) for i in range(40)] + [("user", "last question?")]
+    hist = [("user" if i % 2 == 0 else "ai", f"message number {i} " * 5) for i in range(40)] + [
+        ("user", "last question?")
+    ]
     ids = build_chat_prompt(tiny_tok, hist, ctx_len=64, reserve=16)
     assert len(ids) <= 48 and ids[0] == tiny_tok.bos_id and ids[-1] == tiny_tok.ai_id
     assert tiny_tok.encode("last question?")[-1] in ids
     assert isinstance(tiny_lm.chat_reply(hist, max_new_tokens=16), str)
+
 
 def test_seeded_sampling_and_probs(tiny_lm, tiny_tok):
     p = [tiny_tok.encode("Once")]
@@ -99,7 +114,7 @@ def _naive_greedy_with_top1(lm, ids, n):
             probs = torch.softmax(lm.model(torch.tensor([out]))[0, -1], -1)
             out.append(int(probs.argmax()))
             top1.append(float(probs.max()))
-    return out[len(ids):], top1
+    return out[len(ids) :], top1
 
 
 def test_ragged_batch_matches_naive_when_attention_is_sharp(sharp_lm, tiny_tok):
@@ -125,7 +140,9 @@ def test_batch_size_chunking_does_not_change_greedy_output(tiny_lm, tiny_tok):
     one_by_one = _gen(tiny_lm, prompts)
     tiny_lm.batch_size = 3
     chunked = _gen(tiny_lm, prompts)
-    assert [g.tokens for g in whole] == [g.tokens for g in one_by_one] == [g.tokens for g in chunked]
+    assert (
+        [g.tokens for g in whole] == [g.tokens for g in one_by_one] == [g.tokens for g in chunked]
+    )
     assert len(chunked) == len(prompts)
 
 
@@ -190,10 +207,10 @@ def test_overlong_prompt_keeps_bos_and_tail(tiny_lm, tiny_tok, monkeypatch):
     _gen(tiny_lm, [[tiny_tok.bos_id, *body]], max_new_tokens=1)
     prefill = fed[0][0].tolist()
     assert len(prefill) == ctx - 1
-    assert prefill[0] == tiny_tok.bos_id and prefill[1:] == body[-(ctx - 2):]
+    assert prefill[0] == tiny_tok.bos_id and prefill[1:] == body[-(ctx - 2) :]
     fed.clear()
     _gen(tiny_lm, [body], max_new_tokens=1)  # no bos: plain tail
-    assert fed[0][0].tolist() == body[-(ctx - 1):]
+    assert fed[0][0].tolist() == body[-(ctx - 1) :]
 
 
 def test_probabilities_are_the_raw_distribution(tiny_lm, tiny_tok):
@@ -273,7 +290,7 @@ def test_score_overlong_inputs_are_left_truncated(tiny_lm, tiny_tok):
     cont = tiny_tok.encode(" runs fast")
     long_ctx = [tiny_tok.bos_id, *([tiny_tok.encode("z")[0]] * (ctx_len * 2))]
     kept = ctx_len - len(cont)  # context tokens that fit next to the continuation
-    fit = [tiny_tok.bos_id, *long_ctx[-(kept - 1):]]
+    fit = [tiny_tok.bos_id, *long_ctx[-(kept - 1) :]]
     got = tiny_lm.score_continuations([long_ctx], [cont])[0]
     want = tiny_lm.score_continuations([fit], [cont])[0]
     assert got.n_tokens == len(cont)
@@ -317,7 +334,7 @@ def test_build_chat_prompt_single_huge_turn_keeps_tail_and_structure(tiny_tok):
     assert len(ids) == 48
     assert ids[:2] == [tiny_tok.bos_id, tiny_tok.user_id]
     assert ids[-2:] == [tiny_tok.end_id, tiny_tok.ai_id]
-    assert ids[2:-2] == tiny_tok.encode(text)[-(48 - 4):]
+    assert ids[2:-2] == tiny_tok.encode(text)[-(48 - 4) :]
 
 
 def test_build_chat_prompt_rejects_unusable_budget(tiny_tok):
@@ -335,7 +352,10 @@ def test_chat_reply_and_complete_are_seeded_text(tiny_lm, tiny_tok):
     assert isinstance(c, str) and c == tiny_lm.complete("Once upon", max_new_tokens=12, seed=4)
     g = tiny_lm.generate(
         [encode_chat(tiny_tok, hist, add_generation_prompt=True)],
-        max_new_tokens=12, temperature=0.8, top_p=0.95, seed=4,
+        max_new_tokens=12,
+        temperature=0.8,
+        top_p=0.95,
+        seed=4,
     )[0]
     assert a == tiny_tok.decode(g.tokens)  # chat_reply is generate() on the chat prompt
 
@@ -565,3 +585,30 @@ def test_cuda_device_is_inherited_or_moved_only_when_explicit(tiny_tok):
     assert inherited.generate(
         [tiny_tok.encode("Hi")], max_new_tokens=2, temperature=0, top_p=1, seed=0
     )
+
+
+def test_stream_chat_reply_matches_chat_reply_piece_by_piece(tiny_lm):
+    hist = [("user", "Tell me about the sea")]
+    for seed in (0, 4, 9):
+        pieces: list[str] = []
+        streamed = tiny_lm.stream_chat_reply(
+            hist, max_new_tokens=24, seed=seed, on_text=pieces.append
+        )
+        assert streamed == tiny_lm.chat_reply(hist, max_new_tokens=24, seed=seed)
+        assert "".join(pieces) == streamed
+        assert all(pieces), "no empty pieces"
+
+
+def test_generate_reports_each_token_of_each_row(tiny_lm, tiny_tok):
+    seen: list[tuple[int, int]] = []
+    prompts = [[tiny_tok.bos_id, 10, 11], [tiny_tok.bos_id, 12]]
+    gens = tiny_lm.generate(
+        prompts,
+        max_new_tokens=5,
+        temperature=0.8,
+        top_p=0.95,
+        seed=1,
+        on_token=lambda r, t: seen.append((r, t)),
+    )
+    for row, gen in enumerate(gens):
+        assert [t for r, t in seen if r == row] == gen.tokens

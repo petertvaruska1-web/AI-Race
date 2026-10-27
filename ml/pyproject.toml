@@ -2,7 +2,13 @@
 name = "airace-ml"
 version = "0.1.0"
 requires-python = ">=3.13,<3.14"
-dependencies = ["torch==2.14.1", "numpy>=2.5", "tokenizers>=0.23", "safetensors>=0.8"]
+dependencies = [
+    "torch==2.14.1",
+    "numpy>=2.5",
+    "tokenizers>=0.23",
+    "safetensors>=0.8",
+    "websockets>=15",
+]
 
 [project.optional-dependencies]
 content = ["datasets>=5.1"]
