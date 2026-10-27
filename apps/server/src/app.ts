@@ -5,6 +5,7 @@ import { registerAuthRoutes } from "./auth.ts";
 import { type ServerOptions, SIM_VERSION } from "./config.ts";
 import { type Db, openDb } from "./db/index.ts";
 import { createLogger, type Logger } from "./log.ts";
+import { Gateway } from "./realtime/gateway.ts";
 import { WorldRegistry } from "./worlds/registry.ts";
 import { registerWorldRoutes } from "./worlds/routes.ts";
 
@@ -14,6 +15,7 @@ export type AppContext = {
   db: Db;
   log: Logger;
   worlds: WorldRegistry;
+  gateway: Gateway;
   /** Run on close, latest registered first (actors, gateways, brokers). */
   onClose: (fn: () => Promise<void>) => void;
 };
@@ -29,19 +31,24 @@ export async function buildApp(
     opts,
     db: database.db,
     log,
-    worlds: undefined as unknown as WorldRegistry, // set just below; it needs ctx
+    // Set just below: both need ctx.
+    worlds: undefined as unknown as WorldRegistry,
+    gateway: undefined as unknown as Gateway,
     onClose: (fn) => {
       closers.push(fn);
     },
   };
   ctx.worlds = new WorldRegistry(ctx);
   ctx.onClose(() => ctx.worlds.shutdown());
+  ctx.gateway = new Gateway(ctx);
+  ctx.onClose(() => ctx.gateway.close());
 
   const app = Fastify({
     loggerInstance: log as FastifyBaseLogger,
     bodyLimit: 64 * 1024,
   });
   await app.register(cookie, { secret: opts.secret });
+  await ctx.gateway.register(app);
 
   app.get("/api/health", async () => ({ ok: true, sim: SIM_VERSION }));
   registerAuthRoutes(app, ctx);
