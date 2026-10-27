@@ -1,26 +1,41 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { api, type Me } from "./net/api.ts";
+import { browserSocket } from "./net/socket.ts";
 import { useRoute } from "./route.ts";
+import { Home, Welcome } from "./screens/Home.tsx";
+import { WorldScreen } from "./screens/World.tsx";
 import { useSession } from "./store/session.ts";
-import { useWorld } from "./store/world.ts";
-import { applyCompanyTheme } from "./theme/palette.ts";
+import { bindWorldStore } from "./store/world.ts";
 
-/** Routes between screens; later tasks fill in each one. */
+/** Signs the player in: one socket for the page, fed into the world store. */
+export function signIn(me: Me): void {
+  const socket = browserSocket(async () => {
+    const fresh = await api.me();
+    if (!fresh) throw new Error("signed out");
+    return fresh.wsToken;
+  });
+  bindWorldStore(socket);
+  useSession.getState().setMe(me);
+  useSession.getState().setSocket(socket);
+  void socket.connect();
+}
+
 export function App() {
   const route = useRoute();
   const me = useSession((s) => s.me);
-  const view = useWorld((s) => s.view);
+  const [checked, setChecked] = useState(false);
 
-  // C5: once the player has a company, every screen takes its colors.
-  const palette =
-    route.screen === "world"
-      ? (view?.companies.find((c) => c.id === view.me.company?.id)?.palette ?? null)
-      : null;
-  useEffect(() => applyCompanyTheme(palette), [palette]);
+  useEffect(() => {
+    api
+      .me()
+      .then((existing) => {
+        if (existing && !useSession.getState().me) signIn(existing);
+      })
+      .finally(() => setChecked(true));
+  }, []);
 
-  return (
-    <main className="mx-auto max-w-5xl p-6">
-      <h1 className="text-3xl font-bold">AI Race</h1>
-      <p className="text-muted">{me ? `Signed in as ${me.displayName}` : "Loading…"}</p>
-    </main>
-  );
+  if (!checked) return <p className="p-10 text-muted">Loading…</p>;
+  if (!me) return <Welcome onSignedIn={signIn} />;
+  if (route.screen === "world") return <WorldScreen route={route} />;
+  return <Home me={me} />;
 }
