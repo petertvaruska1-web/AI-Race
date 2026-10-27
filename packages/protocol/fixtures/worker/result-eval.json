@@ -4,8 +4,21 @@
     "report": {
       "suite": "bench-v1",
       "scores": {
-        "language": 41.5
-      }
+        "language": {
+          "score": 41.5,
+          "raw": 0.415,
+          "n": 40
+        },
+        "knowledge": {
+          "score": 12,
+          "raw": 0.12,
+          "n": 30
+        }
+      },
+      "overall": 26.75,
+      "missing": ["creativity"],
+      "items": [],
+      "seconds": 12.3
     },
     "traits": {
       "curious": 0.4

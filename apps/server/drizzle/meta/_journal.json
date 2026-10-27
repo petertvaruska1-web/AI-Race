@@ -15,6 +15,13 @@
       "when": 1793110136474,
       "tag": "0001_job_order",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793110580251,
+      "tag": "0002_run_version",
+      "breakpoints": true
     }
   ]
 }

@@ -41,6 +41,8 @@ const TRAIN_ONLY: FakeWorkerOptions = {
 describe("leasing", () => {
   it("leases a train job to a worker with a train slot", async () => {
     server = await start();
+    // The training service builds real specs at lease time; here the raw payload is the spec.
+    server.ctx.broker.onPrepare("train", async (job) => job.payload);
     const w = await worker(server, TRAIN_ONLY);
     const spec = trainSpec();
     const id = await server.ctx.broker.enqueue("train", spec, null);

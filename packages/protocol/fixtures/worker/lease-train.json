@@ -9,7 +9,34 @@
     "spec": {
       "runId": "1b4e28ba-2fa1-41d2-883f-0016d3cca427",
       "config": {
-        "seed": 12345
+        "run_id": "run-default",
+        "seed": 12345,
+        "shape": {
+          "n_layer": 4,
+          "d_model": 128,
+          "ctx_len": 256
+        },
+        "token_budget": 12582912,
+        "mixture": {
+          "web": 12,
+          "books": 12,
+          "educational": 12,
+          "conversations": 12,
+          "code": 12,
+          "reasoning": 12,
+          "facts": 12,
+          "creative": 12
+        },
+        "replay": 0,
+        "prep": {
+          "cleaning": "standard",
+          "dedup": false,
+          "fact_check": false,
+          "variety": "natural"
+        },
+        "boldness": 0.5,
+        "batch_tokens": 8192,
+        "probe_prompts": []
       },
       "parentTarUrl": null,
       "outTarUrl": "http://127.0.0.1:8787/blobs/checkpoints/6fa459ea-ee8a-4ca4-894e-db77e160355e.tar?exp=1&sig=abc"

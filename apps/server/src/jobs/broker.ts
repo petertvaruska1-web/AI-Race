@@ -39,6 +39,7 @@ export class JobBroker {
   private failed = new Map<JobType, Handler<string>[]>();
   private leased = new Map<JobType, Handler<{ attempt: number }>[]>();
   private chunks: Handler<string>[] = [];
+  private prepare = new Map<JobType, (job: JobRow) => Promise<unknown>>();
   private queue: Promise<unknown> = Promise.resolve();
   private sweepTimer: TimerHandle | null = null;
   private closed = false;
@@ -73,6 +74,14 @@ export class JobBroker {
   /** Fires each time a job is handed to a worker (`attempt` 1 is the first time). */
   onLeased(type: JobType, fn: Handler<{ attempt: number }>): void {
     push(this.leased, type, fn);
+  }
+
+  /**
+   * Builds the spec a worker receives when the job is leased (e.g. fresh signed URLs, so
+   * a job that waits in the queue never carries expired links). Without one, the payload is sent.
+   */
+  onPrepare(type: JobType, fn: (job: JobRow) => Promise<unknown>): void {
+    this.prepare.set(type, fn);
   }
 
   async enqueue(type: JobType, payload: unknown, worldId: string | null): Promise<string> {
@@ -254,6 +263,17 @@ export class JobBroker {
           .orderBy(asc(schema.jobs.priority), asc(schema.jobs.seq))
           .limit(1);
         if (!next) break;
+        let spec: unknown = next.payload;
+        const prepare = this.prepare.get(next.type as JobType);
+        if (prepare) {
+          try {
+            spec = await prepare(next);
+          } catch (err) {
+            this.ctx.log.error({ err, jobId: next.id }, "could not prepare job");
+            await this.retryOrFail(next, "The job could not be prepared.", false);
+            continue;
+          }
+        }
         const job = await this.update(next.id, {
           status: "leased",
           leaseWorker: conn.workerId,
@@ -267,7 +287,7 @@ export class JobBroker {
           type: "lease",
           jobId: job.id,
           jobType: type,
-          spec: job.payload,
+          spec,
           leaseMs: LEASE_MS,
         });
         this.ctx.log.info({ jobId: job.id, workerId: conn.workerId, type }, "job leased");

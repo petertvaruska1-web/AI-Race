@@ -65,8 +65,8 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
 - Stage 2, Tasks 25–28: friends.
 - New owner decisions: C5 (the company palette themes the dashboard; resolves D1) and C6 (single player first, multiplayer designed in).
 - Executed inline (`superpowers:executing-plans`, no subagents) to save usage, committing and pushing after every task.
-- **Done:** Task 1 (scaffold, ADR 0008), Task 2 (protocol), Task 3 (sim foundations), Task 4 (worlds, companies, clock), Task 5 (training economics), Task 6 (projection and properties). The sim package is complete for Stage 1. Task 7 (server scaffold, database, test harness), Task 8 (guest accounts), Task 9 (worlds and the world actor), Task 10 (realtime gateway), Task 11 (blob store), Task 12 (dataset catalog), Task 13 (job broker and worker gateway). `npm test` and `npm run check` pass.
-- **Resume at Task 14** (training service).
+- **Done:** Task 1 (scaffold, ADR 0008), Task 2 (protocol), Task 3 (sim foundations), Task 4 (worlds, companies, clock), Task 5 (training economics), Task 6 (projection and properties). The sim package is complete for Stage 1. Task 7 (server scaffold, database, test harness), Task 8 (guest accounts), Task 9 (worlds and the world actor), Task 10 (realtime gateway), Task 11 (blob store), Task 12 (dataset catalog), Task 13 (job broker and worker gateway), Task 14 (training service). `npm test` and `npm run check` pass.
+- **Resume at Task 15** (chat service).
 
 ## 5. Local GPU session checklist (Windows 11 + RTX 3050)
 `data/` is gitignored and large, so it never travels through git. Commands are in CLAUDE.md "Commands"; every corpus build needs `--extra content`.

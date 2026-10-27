@@ -23,6 +23,9 @@ export function previewTraining(
   if (!length) return { ok: false, reason: "Unknown training length." };
   if (!b.attentionSpans.includes(plan.attentionSpan))
     return { ok: false, reason: "Unknown attention span." };
+  if (plan.review > 0 && plan.parentVersionId === null) {
+    return { ok: false, reason: "Reviewing needs an earlier AI to review. Pick one to grow from." };
+  }
   if (plan.parentVersionId !== null) {
     const parent = company.versions[plan.parentVersionId];
     if (!parent) return { ok: false, reason: "That AI isn't one of yours." };

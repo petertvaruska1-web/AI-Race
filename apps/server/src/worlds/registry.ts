@@ -6,6 +6,7 @@ import { WorldActor } from "./actor.ts";
 export class WorldRegistry {
   private actors = new Map<string, Promise<WorldActor>>();
   private loaded = new Map<string, WorldActor>();
+  private loadHooks: ((actor: WorldActor) => Promise<void> | void)[] = [];
 
   constructor(private readonly ctx: AppContext) {}
 
@@ -41,7 +42,18 @@ export class WorldRegistry {
         await actor.submit(offline);
       }
     }
+    for (const hook of this.loadHooks) await hook(actor);
     return actor;
+  }
+
+  /** Runs `fn` for every actor once it is loaded (services attach their listeners here). */
+  onLoad(fn: (actor: WorldActor) => Promise<void> | void): void {
+    this.loadHooks.push(fn);
+  }
+
+  /** The actor if it is loaded, without loading it. */
+  peek(worldId: string): WorldActor | null {
+    return this.loaded.get(worldId) ?? null;
   }
 
   isLoaded(worldId: string): boolean {

@@ -11,6 +11,7 @@ import { JobBroker } from "./jobs/broker.ts";
 import { registerWorkerRoutes } from "./jobs/workerGateway.ts";
 import { createLogger, type Logger } from "./log.ts";
 import { Gateway } from "./realtime/gateway.ts";
+import { TrainingService } from "./training/service.ts";
 import { WorldRegistry } from "./worlds/registry.ts";
 import { registerWorldRoutes } from "./worlds/routes.ts";
 
@@ -22,6 +23,7 @@ export type AppContext = {
   worlds: WorldRegistry;
   gateway: Gateway;
   broker: JobBroker;
+  training: TrainingService;
   blobs: BlobStore;
   /** Null until the training data is installed. */
   catalog: Catalog | null;
@@ -44,6 +46,7 @@ export async function buildApp(
     worlds: undefined as unknown as WorldRegistry,
     gateway: undefined as unknown as Gateway,
     broker: undefined as unknown as JobBroker,
+    training: undefined as unknown as TrainingService,
     blobs: new LocalFsBlobStore(opts.blobDir),
     catalog: loadCatalog(opts.catalogPath, log),
     onClose: (fn) => {
@@ -56,6 +59,8 @@ export async function buildApp(
   ctx.onClose(() => ctx.gateway.close());
   ctx.broker = new JobBroker(ctx);
   ctx.onClose(() => ctx.broker.close());
+  ctx.training = new TrainingService(ctx);
+  ctx.onClose(() => ctx.training.close());
   ctx.gateway.registerQuery("catalog", async () => {
     if (!ctx.catalog) throw new HttpError(503, NO_TRAINING_DATA);
     return publicCatalog(ctx.catalog);

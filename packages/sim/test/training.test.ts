@@ -380,3 +380,9 @@ describe("world-unique ids", () => {
     expect(rejected(step(s, train("u2", "r1")))).toMatch(/already used/i);
   });
 });
+
+describe("review", () => {
+  it("needs an earlier AI to review", () => {
+    expect(rejected(step(running(), train("u1", "r1", plan({ review: 0.2 }))))).toMatch(/review/i);
+  });
+});

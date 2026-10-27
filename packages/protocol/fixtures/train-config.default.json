@@ -1,0 +1,30 @@
+{
+  "run_id": "run-default",
+  "seed": 12345,
+  "shape": {
+    "n_layer": 4,
+    "d_model": 128,
+    "ctx_len": 256
+  },
+  "token_budget": 12582912,
+  "mixture": {
+    "web": 12,
+    "books": 12,
+    "educational": 12,
+    "conversations": 12,
+    "code": 12,
+    "reasoning": 12,
+    "facts": 12,
+    "creative": 12
+  },
+  "replay": 0,
+  "prep": {
+    "cleaning": "standard",
+    "dedup": false,
+    "fact_check": false,
+    "variety": "natural"
+  },
+  "boldness": 0.5,
+  "batch_tokens": 8192,
+  "probe_prompts": []
+}

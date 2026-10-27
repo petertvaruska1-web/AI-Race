@@ -14,6 +14,7 @@ export const RequestId = z.string().min(1).max(64);
 export const Query = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("ping") }),
   z.object({ kind: z.literal("catalog") }),
+  z.object({ kind: z.literal("runTelemetry"), worldId: zId, runId: zId }),
 ]);
 export type Query = z.infer<typeof Query>;
 

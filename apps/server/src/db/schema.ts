@@ -134,6 +134,8 @@ export const trainingRuns = pgTable("training_runs", {
   worldId: uuid("world_id").notNull(),
   companyId: uuid("company_id").notNull(),
   jobId: uuid("job_id"),
+  /** The version this run will become; its checkpoint is uploaded under this id. */
+  versionId: uuid("version_id").notNull(),
   status: text("status").notNull(),
   createdAt: ms("created_at").notNull(),
 });
