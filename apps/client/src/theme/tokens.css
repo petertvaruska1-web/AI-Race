@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/* Base theme (C5): a neutral dark frame. A company's palette sets the --brand
+   colors (see palette.ts), so every screen takes the player's colors. */
+:root {
+  --bg: #0f1320;
+  --surface: #171c2c;
+  --surface-2: #1f2538;
+  --text: #e8ebf5;
+  --muted: #9aa3c2;
+  --border: #2a3150;
+  --danger: #ff6b6b;
+  --brand: #8b93b8;
+  --brand-2: #c2c8e0;
+  --on-brand: #000000;
+  --brand-soft: #22273a;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-danger: var(--danger);
+  --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
+  --color-on-brand: var(--on-brand);
+  --color-brand-soft: var(--brand-soft);
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  margin: 0;
+  min-height: 100%;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* Model output and player text are shown as text, line breaks kept (spec §11). */
+.player-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win over every component's own motion */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win over every component's own motion */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win over every component's own motion */
+    transition-duration: 0.01ms !important;
+  }
+}
