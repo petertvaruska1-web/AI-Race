@@ -1,7 +1,7 @@
 import { WorldView } from "@airace/protocol";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { BALANCE_V1, projectView, stateHash } from "../src/index.ts";
+import { BALANCE_V2, projectView, stateHash } from "../src/index.ts";
 import { arbInputs, newWorld, runInputs } from "./arbitraries.ts";
 
 const RUNS = { numRuns: 200 };
@@ -63,7 +63,7 @@ describe("sim properties", () => {
           const charged = Object.values(company.runs)
             .filter((r) => r.status !== "failed")
             .reduce((sum, r) => sum + r.preview.cost, 0);
-          expect(company.cash).toBe(BALANCE_V1.foundingCash - charged);
+          expect(company.cash).toBe(BALANCE_V2.foundingCash - charged);
           expect(company.cash).toBeGreaterThanOrEqual(0);
         }
       }),

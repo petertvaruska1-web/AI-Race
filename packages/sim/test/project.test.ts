@@ -1,7 +1,7 @@
 import { type Command, WorldView } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import {
-  BALANCE_V1,
+  BALANCE_V2,
   type Input,
   projectView,
   type StepResult,
@@ -60,8 +60,8 @@ function world(): WorldState {
   );
   s = ok(step(s, cmd("u1", { type: "startWorld" })));
   const plan = {
-    ...BALANCE_V1.defaultPlan,
-    mix: { ...BALANCE_V1.defaultPlan.mix },
+    ...BALANCE_V2.defaultPlan,
+    mix: { ...BALANCE_V2.defaultPlan.mix },
     probePrompt: "SECRET_PROMPT_A",
   };
   s = ok(step(s, cmd("u1", { type: "startTraining", plan }, "RUN_A1")));
@@ -113,7 +113,7 @@ describe("projectView", () => {
   it("shows the owner their cash, runs and versions", () => {
     const view = WorldView.parse(projectView(world(), "u1"));
     expect(view.me.company?.id).toBe("CO_A");
-    expect(view.me.company?.cash).toBe(BALANCE_V1.foundingCash - 2 * 41_596);
+    expect(view.me.company?.cash).toBe(BALANCE_V2.foundingCash - 2 * 41_596);
     expect(view.me.company?.runs.map((r) => [r.id, r.status])).toEqual([
       ["RUN_A1", "completed"],
       ["RUN_A2", "training"],

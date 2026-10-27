@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EvalJobSpec, TrainJobSpec } from "@airace/protocol";
-import { BALANCE_TEST, BALANCE_V1 } from "@airace/sim";
+import { BALANCE_TEST, BALANCE_V2 } from "@airace/sim";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { schema } from "../src/db/index.ts";
@@ -51,10 +51,10 @@ describe("trainer settings", () => {
         "utf8",
       ),
     );
-    const config = toTrainRunConfig(BALANCE_V1.defaultPlan, {
+    const config = toTrainRunConfig(BALANCE_V2.defaultPlan, {
       runId: "run-default",
       seed: 12345,
-      balance: BALANCE_V1,
+      balance: BALANCE_V2,
       parent: null,
     });
     expect(config).toEqual(fixture);

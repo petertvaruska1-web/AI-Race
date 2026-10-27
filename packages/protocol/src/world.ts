@@ -13,6 +13,39 @@ export const DATASET_IDS = [
 ] as const;
 export type DatasetId = (typeof DATASET_IDS)[number];
 
+/** The eight bench-v1 skill categories. */
+export const BENCH_CATEGORIES = [
+  "language",
+  "reasoning",
+  "pattern",
+  "knowledge",
+  "coding",
+  "creativity",
+  "consistency",
+  "instruction",
+] as const;
+export type BenchCategory = (typeof BENCH_CATEGORIES)[number];
+
+/** Customer groups (game-layer design §5). */
+export const GROUP_IDS = [
+  "students",
+  "creators",
+  "developers",
+  "businesses",
+  "everyday",
+  "researchers",
+] as const;
+export const GroupId = z.enum(GROUP_IDS);
+export type GroupId = z.infer<typeof GroupId>;
+
+export const PLAN_IDS = ["free", "personal", "business"] as const;
+export const PlanId = z.enum(PLAN_IDS);
+export type PlanId = z.infer<typeof PlanId>;
+
+/** Market regions. Phase 1 has one; Phase 2 adds the 9 US divisions. */
+export const REGION_IDS = ["national"] as const;
+export type RegionId = (typeof REGION_IDS)[number];
+
 export const Hex = z.string().regex(/^#[0-9a-f]{6}$/i);
 export type Hex = z.infer<typeof Hex>;
 

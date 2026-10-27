@@ -2,7 +2,7 @@ import type { Command, TrainingPlan } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import {
   activeRun,
-  BALANCE_V1,
+  BALANCE_V2,
   createWorld,
   type Input,
   previewTraining,
@@ -39,8 +39,8 @@ const cmd = (userId: string, c: unknown, newId?: string): Input => ({
 });
 
 const plan = (change: Partial<TrainingPlan> = {}): TrainingPlan => ({
-  ...BALANCE_V1.defaultPlan,
-  mix: { ...BALANCE_V1.defaultPlan.mix },
+  ...BALANCE_V2.defaultPlan,
+  mix: { ...BALANCE_V2.defaultPlan.mix },
   ...change,
 });
 
@@ -66,7 +66,7 @@ function running(start = true): WorldState {
     hostUserId: "u1",
     hostName: "Ana",
     seed: 3,
-    balance: "balance-v1",
+    balance: "balance-v2",
     inviteCode: "ABCD-1234",
   });
   s = ok(step(s, sys({ type: "memberJoined", userId: "u2", displayName: "Ben" })));
@@ -137,7 +137,7 @@ describe("previewTraining", () => {
 
   it("adds the fact-check fee", () => {
     const r = previewTraining(running(), "c1", plan({ factCheck: true }));
-    expect(r.ok && r.preview.cost).toBe(41_596 + BALANCE_V1.factCheckCost);
+    expect(r.ok && r.preview.cost).toBe(41_596 + BALANCE_V2.factCheckCost);
   });
 });
 
@@ -156,7 +156,7 @@ describe("startTraining", () => {
       versionId: null,
     });
     expect(Number.isInteger(run?.seed)).toBe(true);
-    expect(s.companies.c1?.cash).toBe(BALANCE_V1.foundingCash - 41_596);
+    expect(s.companies.c1?.cash).toBe(BALANCE_V2.foundingCash - 41_596);
     expect(s.rng).not.toEqual(before.rng);
     expect(activeRun(s.companies.c1 ?? never())).toBe(run);
   });
@@ -310,7 +310,7 @@ describe("failures and evaluations", () => {
       status: "failed",
       failure: "The computer running it stopped.",
     });
-    expect(s.companies.c1?.cash).toBe(BALANCE_V1.foundingCash);
+    expect(s.companies.c1?.cash).toBe(BALANCE_V2.foundingCash);
     expect(activeRun(s.companies.c1 ?? never())).toBeNull();
     expect(
       rejected(step(s, sys({ type: "trainingFailed", runId: "r1", reason: "again" }))),

@@ -59,7 +59,7 @@ async function snapshotSeqs(s: TestServer, worldId: string): Promise<number[]> {
 
 describe("world clock", () => {
   it("ticks a day every 8 s at 1x and every 4 s at 2x, and snapshots while running", async () => {
-    server = await startTestServer({ balance: "balance-v1" });
+    server = await startTestServer({ balance: "balance-v2" });
     const { userId, worldId, actor } = await runningWorld(server);
     await server.scheduler.advance(3 * 8000);
     expect(actor.state().day).toBe(3);
@@ -71,7 +71,7 @@ describe("world clock", () => {
   });
 
   it("stands still while paused or when everyone is away, then unloads", async () => {
-    server = await startTestServer({ balance: "balance-v1" });
+    server = await startTestServer({ balance: "balance-v2" });
     const { userId, worldId, actor } = await runningWorld(server);
     accepted(await actor.submit(command(userId, { type: "setPaused", paused: true })));
     const pausedSeq = actor.state().seq;
@@ -127,7 +127,7 @@ describe("inputs", () => {
 
 describe("recovery", () => {
   it("rebuilds the live state from a snapshot plus the later inputs", async () => {
-    server = await startTestServer({ balance: "balance-v1" });
+    server = await startTestServer({ balance: "balance-v2" });
     const { userId, worldId, actor } = await runningWorld(server);
     await actor.snapshot("test");
     const snapSeq = actor.state().seq;

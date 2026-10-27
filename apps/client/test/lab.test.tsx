@@ -1,5 +1,5 @@
 import { type Catalog, prepKey } from "@airace/protocol";
-import { BALANCE_V1, formatMoney, previewPlan } from "@airace/sim";
+import { BALANCE_V2, formatMoney, previewPlan } from "@airace/sim";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import sampleCatalog from "../../../packages/protocol/fixtures/catalog.sample.json";
@@ -26,20 +26,20 @@ const step = (name: string) => fireEvent.click(screen.getByRole("button", { name
 
 describe("AI Lab planning", () => {
   it("prices the plan as the server will, and changes with the brain size", async () => {
-    render(<Lab view={viewOf(runningWorld("balance-v1"))} />);
+    render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
     step("3 Design");
     const cost = await screen.findByTestId("plan-cost");
     expect(cost.textContent).toContain("$41,596");
     fireEvent.click(screen.getByRole("button", { name: /^Small/ }));
     const plan = usePlan.getState().plan;
     if (!plan) throw new Error("no plan");
-    const small = previewPlan(BALANCE_V1, null, plan);
+    const small = previewPlan(BALANCE_V2, null, plan);
     if (!small.ok) throw new Error(small.reason);
     expect(screen.getByTestId("plan-cost").textContent).toContain(formatMoney(small.preview.cost));
   });
 
   it("says when there is not enough cash", () => {
-    const s = runningWorld("balance-v1");
+    const s = runningWorld("balance-v2");
     const company = s.companies.c1;
     if (!company) throw new Error("no company");
     company.cash = 1000;
@@ -50,7 +50,7 @@ describe("AI Lab planning", () => {
   });
 
   it("shows each dataset with its samples as text", () => {
-    const { container } = render(<Lab view={viewOf(runningWorld("balance-v1"))} />);
+    const { container } = render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
     for (const d of CATALOG.datasets) {
       expect(screen.getByText(d.title)).toBeTruthy();
       // Samples keep their line breaks (pre-wrap), so compare the raw text.
@@ -59,7 +59,7 @@ describe("AI Lab planning", () => {
   });
 
   it("shows what thorough cleaning removes and what is left", () => {
-    render(<Lab view={viewOf(runningWorld("balance-v1"))} />);
+    render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
     step("2 Prepare");
     fireEvent.click(screen.getByRole("button", { name: "Thorough" }));
     const removed = CATALOG.datasets[0]?.removedExamples.cleaning.thorough[0] ?? "";
@@ -72,7 +72,7 @@ describe("AI Lab planning", () => {
   });
 
   it("starts training with exactly the plan on screen", async () => {
-    render(<Lab view={viewOf(runningWorld("balance-v1"))} />);
+    render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
     step("3 Design");
     fireEvent.click(screen.getByRole("button", { name: /^Long/ }));
     fireEvent.change(screen.getByPlaceholderText("What is the sun?"), {
@@ -90,7 +90,7 @@ describe("AI Lab planning", () => {
   });
 
   it("keeps plain words on every control", () => {
-    const { container } = render(<Lab view={viewOf(runningWorld("balance-v1"))} />);
+    const { container } = render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
     for (const s of ["1 Data", "2 Prepare", "3 Design"]) {
       step(s);
       const text = container.textContent?.toLowerCase() ?? "";

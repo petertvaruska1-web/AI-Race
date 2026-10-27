@@ -1,7 +1,7 @@
 import type { Command } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import {
-  BALANCE_V1,
+  BALANCE_V2,
   contrastRatio,
   createWorld,
   effectiveHost,
@@ -33,7 +33,7 @@ function world(): WorldState {
     hostUserId: "u1",
     hostName: "Ana",
     seed: 1,
-    balance: "balance-v1",
+    balance: "balance-v2",
     inviteCode: "ABCD-1234",
   });
 }
@@ -85,7 +85,7 @@ describe("createCompany", () => {
       id: "c1",
       ownerUserId: "u1",
       name: "Acme",
-      cash: BALANCE_V1.foundingCash,
+      cash: BALANCE_V2.foundingCash,
       versionSeq: 0,
     });
     expect(s.members.u1?.companyId).toBe("c1");
@@ -194,7 +194,7 @@ describe("members and presence", () => {
     let s = world();
     expect(rejected(step(s, join("u1", "Ana")))).toMatch(/already/i);
     expect(rejected(step(s, presence("u9", true)))).toMatch(/member/i);
-    for (let i = 2; i <= BALANCE_V1.maxMembers; i++) s = ok(step(s, join(`u${i}`, `P${i}`)));
+    for (let i = 2; i <= BALANCE_V2.maxMembers; i++) s = ok(step(s, join(`u${i}`, `P${i}`)));
     expect(rejected(step(s, join("u99", "Late")))).toMatch(/full/i);
   });
 });

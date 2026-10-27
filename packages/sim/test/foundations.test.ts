@@ -1,8 +1,9 @@
-import { TrainingPlan } from "@airace/protocol";
+import { BENCH_CATEGORIES, GROUP_IDS, REGION_IDS, TrainingPlan } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import {
+  adoptionShare,
   BALANCE_TEST,
-  BALANCE_V1,
+  BALANCE_V2,
   dateOfDay,
   getBalance,
   paramCount,
@@ -118,7 +119,7 @@ describe("calendar", () => {
 
 describe("balance", () => {
   it("prices the first model at about a sixth of the founding cash, over 13 game days", () => {
-    const b = BALANCE_V1;
+    const b = BALANCE_V2;
     const tiny = b.brainSizes.find((s) => s.id === b.defaultPlan.brainSize);
     const length = b.lengths.find((l) => l.id === b.defaultPlan.length);
     if (!tiny || !length) throw new Error("default plan names a missing option");
@@ -132,7 +133,7 @@ describe("balance", () => {
     expect(b.foundingCash / cost).toBeLessThan(7);
   });
 
-  it.each([BALANCE_V1, BALANCE_TEST])(
+  it.each([BALANCE_V2, BALANCE_TEST])(
     "$version has a valid default plan built from its own options",
     (b) => {
       const plan = TrainingPlan.parse(b.defaultPlan);
@@ -151,9 +152,49 @@ describe("balance", () => {
   });
 
   it("looks balances up by version", () => {
-    expect(getBalance("balance-v1")).toBe(BALANCE_V1);
+    expect(getBalance("balance-v2")).toBe(BALANCE_V2);
     expect(getBalance("balance-test")).toBe(BALANCE_TEST);
     expect(BALANCE_TEST.tickMsAt1x).toBe(200);
     expect(BALANCE_TEST.brainSizes).toEqual([{ id: "tiny", nLayer: 2, dModel: 64 }]);
+  });
+});
+
+describe("balance v2 economy", () => {
+  it("looks the economy balances up by version", () => {
+    expect(getBalance("balance-v2")).toBe(BALANCE_V2);
+    expect(getBalance("balance-test")).toBe(BALANCE_TEST);
+  });
+
+  it.each([BALANCE_V2, BALANCE_TEST])(
+    "$version mixes groups to 1 and weighs only bench categories",
+    (b) => {
+      for (const region of REGION_IDS) {
+        const mix = b.economy.groupMix[region];
+        expect(GROUP_IDS.reduce((sum, g) => sum + mix[g], 0)).toBeCloseTo(1, 9);
+      }
+      for (const g of GROUP_IDS) {
+        for (const category of Object.keys(b.economy.groups[g].weights)) {
+          expect(BENCH_CATEGORIES).toContain(category);
+        }
+      }
+    },
+  );
+
+  it("starts adoption near 10% and tends to 60%", () => {
+    expect(adoptionShare(BALANCE_V2.economy, 0)).toBeCloseTo(0.1, 2);
+    expect(adoptionShare(BALANCE_V2.economy, 365 * 40)).toBeCloseTo(0.6, 2);
+    expect(adoptionShare(BALANCE_V2.economy, 365 * 4)).toBeGreaterThan(
+      adoptionShare(BALANCE_V2.economy, 365),
+    );
+  });
+
+  it("keeps default prices inside their bounds", () => {
+    for (const plan of ["personal", "business"] as const) {
+      const p = BALANCE_V2.economy.prices[plan];
+      expect(p.default).toBeGreaterThanOrEqual(p.min);
+      expect(p.default).toBeLessThanOrEqual(p.max);
+    }
+    expect(BALANCE_V2.economy.prices.personal).toEqual({ default: 10, min: 1, max: 200 });
+    expect(BALANCE_V2.economy.prices.business).toEqual({ default: 30, min: 5, max: 500 });
   });
 });

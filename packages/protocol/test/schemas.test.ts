@@ -42,7 +42,7 @@ function sampleView(): WorldView {
       id: "w1",
       name: "Friday night",
       phase: "running",
-      balance: "balance-v1",
+      balance: "balance-v2",
       day: 3,
       date: "2027-01-04",
       speed: 1,

@@ -89,7 +89,7 @@ export const WorldView = z.strictObject({
     name: z.string(),
     phase: z.enum(["setup", "running"]),
     /** Which economy the world runs on; clients price plans with it. */
-    balance: z.enum(["balance-v1", "balance-test"]),
+    balance: z.enum(["balance-v2", "balance-test"]),
     day: Day,
     date: z.string(),
     speed: Speed,

@@ -22,9 +22,9 @@ function secretFrom(envName: string, file: string): string {
 const data = resolve(process.env.AIRACE_DATA ?? join(REPO_ROOT, "data"));
 const serverDir = join(data, "server");
 const port = Number(process.env.PORT ?? 8787);
-const balance = (process.env.AIRACE_BALANCE ?? "balance-v1") as BalanceVersion;
-if (balance !== "balance-v1" && balance !== "balance-test") {
-  throw new Error(`AIRACE_BALANCE must be balance-v1 or balance-test, got ${balance}`);
+const balance = (process.env.AIRACE_BALANCE ?? "balance-v2") as BalanceVersion;
+if (balance !== "balance-v2" && balance !== "balance-test") {
+  throw new Error(`AIRACE_BALANCE must be balance-v2 or balance-test, got ${balance}`);
 }
 const catalog = join(data, "catalog", "v1", "catalog.json");
 

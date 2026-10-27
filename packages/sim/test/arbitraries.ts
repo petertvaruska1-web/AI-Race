@@ -1,7 +1,7 @@
 import type { Command, TrainingPlan } from "@airace/protocol";
 import fc from "fast-check";
 import {
-  BALANCE_V1,
+  BALANCE_V2,
   createWorld,
   type Input,
   PALETTE_PRESETS,
@@ -24,7 +24,7 @@ export function newWorld(): WorldState {
     hostUserId: "u1",
     hostName: "Ana",
     seed: 11,
-    balance: "balance-v1",
+    balance: "balance-v2",
     inviteCode: "INVITE-42",
   });
 }
@@ -44,7 +44,7 @@ const plan = (userId: string): fc.Arbitrary<TrainingPlan> =>
       parent: fc.option(fc.constantFrom(...VERSION_IDS), { freq: 2 }),
     })
     .map((r) => ({
-      ...BALANCE_V1.defaultPlan,
+      ...BALANCE_V2.defaultPlan,
       mix: r.allZero
         ? {
             web: 0,
@@ -56,7 +56,7 @@ const plan = (userId: string): fc.Arbitrary<TrainingPlan> =>
             facts: 0,
             creative: 0,
           }
-        : { ...BALANCE_V1.defaultPlan.mix },
+        : { ...BALANCE_V2.defaultPlan.mix },
       brainSize: r.brainSize,
       length: r.length,
       attentionSpan: r.attentionSpan,
