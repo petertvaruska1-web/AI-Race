@@ -3,7 +3,6 @@ import io
 import tarfile
 import threading
 import uuid
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -170,36 +169,8 @@ def test_stops_when_the_server_refuses_its_token(tiny_data_root, tmp_path):
 # -- blobs ---------------------------------------------------------------------------------------
 
 
-@pytest.fixture
-def blob_server():
-    """A tiny HTTP server: GET serves `store[path]`, PUT writes it."""
-    store: dict[str, bytes] = {}
-
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            body = store.get(self.path.split("?")[0])
-            self.send_response(200 if body is not None else 404)
-            self.send_header("Content-Length", str(len(body or b"")))
-            self.end_headers()
-            self.wfile.write(body or b"")
-
-        def do_PUT(self):
-            n = int(self.headers["Content-Length"])
-            store[self.path.split("?")[0]] = self.rfile.read(n)
-            self.send_response(204)
-            self.end_headers()
-
-        def log_message(self, *args):
-            pass
-
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    yield f"http://127.0.0.1:{httpd.server_address[1]}", store
-    httpd.shutdown()
-
-
 def test_uploads_and_downloads_a_model_folder(blob_server, tmp_path):
-    url, store = blob_server
+    url, store, _ = blob_server
     src = tmp_path / "model"
     (src / "sub").mkdir(parents=True)
     (src / "weights.bin").write_bytes(b"\x00\x01" * 1000)
@@ -215,7 +186,7 @@ def test_uploads_and_downloads_a_model_folder(blob_server, tmp_path):
 
 
 def test_refuses_a_tar_that_escapes_its_folder(blob_server, tmp_path):
-    url, store = blob_server
+    url, store, _ = blob_server
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tar:
         info = tarfile.TarInfo("../evil")

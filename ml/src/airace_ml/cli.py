@@ -84,6 +84,7 @@ from airace_ml.train.trainer import (
 )
 
 EXIT_OK = 0
+DEFAULT_WORKER_SERVER = "ws://localhost:8787/worker"
 EXIT_FAILED = 1
 EXIT_USAGE = 2
 EXIT_INTERRUPTED = 130
@@ -317,6 +318,23 @@ def _parser() -> argparse.ArgumentParser:
     catalog.add_argument(
         "--out", type=Path, help="where to write it (default: <data root>/catalog/v1/catalog.json)"
     )
+
+    worker = add(
+        "worker",
+        _cmd_worker,
+        "run training, scoring and chat jobs for a game server (stop with Ctrl+C)",
+    )
+    worker.add_argument(
+        "--server",
+        default=DEFAULT_WORKER_SERVER,
+        help=f"the game server's worker address (default {DEFAULT_WORKER_SERVER})",
+    )
+    worker.add_argument(
+        "--token",
+        help="the server's worker token (default: <data root>/server/worker-token, which a game "
+        "server on this computer writes when it first starts)",
+    )
+    worker.add_argument("--id", help="a name for this worker (default: computer name and device)")
     return parser
 
 
@@ -880,6 +898,44 @@ def _cmd_bench(args: argparse.Namespace) -> int:
         except OSError as e:
             raise _os_problem(e, f"could not write the report to {args.out}") from e
         print(f"full report written to {args.out}", flush=True)
+    return EXIT_OK
+
+
+def _cmd_worker(args: argparse.Namespace) -> int:
+    import asyncio
+    import logging
+
+    from airace_ml.worker.agent import WorkerAgent
+    from airace_ml.worker.jobs import JobRunner
+
+    root = _data_root(args)
+    token = args.token
+    token_file = root / "server" / "worker-token"
+    if not token:
+        if not token_file.is_file():
+            raise _UsageError(
+                f"no worker token: pass --token, or start the game server on this computer once "
+                f"(it writes {token_file})"
+            )
+        token = token_file.read_text(encoding="utf-8").strip()
+    _require_tokenizer(root)
+    device = _device(args)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+    runner = JobRunner(root, device)
+    agent = WorkerAgent(
+        args.server,
+        token,
+        root,
+        device=device.type,
+        handlers=runner.handlers(),
+        slots={"train": 1, "eval": 1, "generate": 2},
+        worker_id=args.id,
+    )
+    print(f"Worker {agent.worker_id} serving {args.server} on {device.type}", flush=True)
+    try:
+        asyncio.run(agent.run_forever())
+    except KeyboardInterrupt:
+        print("Worker stopped.", flush=True)
     return EXIT_OK
 
 

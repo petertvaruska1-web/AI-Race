@@ -1,6 +1,8 @@
 import re
 import shutil
+import threading
 from dataclasses import replace
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import numpy as np
@@ -193,3 +195,34 @@ def nan_lm(tiny_tok) -> TorchLM:
     with torch.no_grad():
         model.tok_emb.weight.fill_(float("nan"))
     return TorchLM(model, tiny_tok, torch.device("cpu"))
+
+
+@pytest.fixture(scope="module")
+def blob_server():
+    """A tiny HTTP server: GET serves `store[path]`, PUT writes it; `gets` counts downloads."""
+    store: dict[str, bytes] = {}
+    gets: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            gets.append(self.path.split("?")[0])
+            body = store.get(self.path.split("?")[0])
+            self.send_response(200 if body is not None else 404)
+            self.send_header("Content-Length", str(len(body or b"")))
+            self.end_headers()
+            self.wfile.write(body or b"")
+
+        def do_PUT(self):
+            n = int(self.headers["Content-Length"])
+            store[self.path.split("?")[0]] = self.rfile.read(n)
+            self.send_response(204)
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    store_url = f"http://127.0.0.1:{httpd.server_address[1]}"
+    yield store_url, store, gets
+    httpd.shutdown()

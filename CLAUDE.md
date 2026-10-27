@@ -44,6 +44,7 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 - Long GPU runs (judge, gate) on the owner's PC: the app's keep-awake lets go after about 5 idle minutes and the PC then sleeps mid-run (gate run 2 lost hours this way). Keep a Monitor with a heartbeat of a few minutes on any run that outlasts the turn.
 - Gate evidence scripts (each states its own command): `docs/handoff/calibration/` (`g2_diagnosis.py`, `g4_k_probe.py`, `g7_*.py`, `creativity_probe.py`).
 - Dataset catalog for the game server (after any data rebuild, and once before the server's first start): `cd ml && python -m uv run airace-ml export-catalog --population runs/gate-1/runs` writes `data/catalog/v1/catalog.json`. Without it the server runs but refuses training ("The training data is not installed yet.").
+- ML worker for the game server: `cd ml && python -m uv run airace-ml worker [--server ws://localhost:8787/worker] [--token T] [--device cuda|cpu]`. It dials out to the server and runs its train, eval and chat jobs; on the owner's PC it reads the token the local server wrote to `data/server/worker-token`. Stop it with Ctrl+C.
 - TypeScript (repo root, Milestone 2): `npm install`, then `npm test` (Vitest over every workspace) and `npm run check` (Biome plus a type check of every workspace).
 - (More commands are added here as they come to exist.)
 
