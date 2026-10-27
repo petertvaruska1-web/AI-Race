@@ -31,12 +31,14 @@ export type Economy = {
     business: { default: number; min: number; max: number };
   };
   noAiUtility: Record<GroupId, number>;
+  /** Utility weights; `freePenalty` is what the free plan's limits cost it against paid plans. */
   utility: {
     score: number;
     price: number;
     speed: number;
     reputation: number;
     satisfaction: number;
+    freePenalty: number;
   };
   diffusion: {
     adoptRate: number;
@@ -187,7 +189,7 @@ const ECONOMY_V2: Economy = {
     everyday: 1,
     researchers: 1,
   },
-  utility: { score: 4, price: 1, speed: 0.5, reputation: 1, satisfaction: 1.5 },
+  utility: { score: 4, price: 1, speed: 0.5, reputation: 1, satisfaction: 1.5, freePenalty: 1.5 },
   diffusion: {
     adoptRate: 0.05,
     switchRate: 0.03,

@@ -1,8 +1,10 @@
 import type {
   Command,
+  GroupId,
   Logo,
   Palette,
   PlanId,
+  RegionId,
   RunStatus,
   Speed,
   TrainingPlan,
@@ -80,6 +82,25 @@ export type PlansState = {
   business: { productId: string | null; price: number };
 };
 
+export type Spotlight = {
+  id: string;
+  name: string;
+  handle: string;
+  group: GroupId;
+  region: RegionId;
+  bio: string;
+};
+
+/** Customer counts are fractional (they move smoothly); views round them. */
+export type MarketState = {
+  customers: Record<
+    string,
+    Partial<Record<string, Partial<Record<GroupId, Partial<Record<PlanId, number>>>>>>
+  >;
+  awareness: Record<string, Partial<Record<string, Partial<Record<GroupId, number>>>>>;
+  satisfaction: Record<string, Partial<Record<GroupId, number>>>;
+};
+
 export type FameState = { reputation: number; followers: number };
 
 export type CompanyState = {
@@ -112,6 +133,8 @@ export type WorldState = {
   inviteCode: string;
   /** Accepted inputs so far. */
   seq: number;
+  market: MarketState;
+  spotlights: Spotlight[];
 };
 
 export type SystemEvent =

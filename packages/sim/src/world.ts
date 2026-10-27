@@ -1,5 +1,7 @@
 import type { BalanceVersion } from "./balance.ts";
+import { emptyMarket } from "./market.ts";
 import { seedRng } from "./rng.ts";
+import { drawSpotlights } from "./spotlights.ts";
 import type { WorldState } from "./state.ts";
 
 export function createWorld(p: {
@@ -11,11 +13,12 @@ export function createWorld(p: {
   balance: BalanceVersion;
   inviteCode: string;
 }): WorldState {
+  const { spotlights, rng } = drawSpotlights(seedRng(p.seed));
   return {
     worldId: p.worldId,
     name: p.name,
     balance: p.balance,
-    rng: seedRng(p.seed),
+    rng,
     phase: "setup",
     day: 0,
     speed: 1,
@@ -33,6 +36,8 @@ export function createWorld(p: {
     companies: {},
     inviteCode: p.inviteCode,
     seq: 0,
+    market: emptyMarket(),
+    spotlights,
   };
 }
 

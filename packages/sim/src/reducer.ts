@@ -1,5 +1,6 @@
 import { Command, TEXT_LIMITS } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
+import { marketDay } from "./market.ts";
 import { paletteProblem } from "./palette.ts";
 import { newCompanyBusiness, productCommand, productsDay } from "./products.ts";
 import { rngInt } from "./rng.ts";
@@ -51,6 +52,7 @@ function tick(s: WorldState): Handled {
   s.day += 1;
   settleRuns(s);
   productsDay(s);
+  marketDay(s);
   return OK;
 }
 
