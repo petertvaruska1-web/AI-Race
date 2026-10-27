@@ -1,6 +1,6 @@
 import type { WorldView } from "@airace/protocol";
 import { getBalance, previewPlan } from "@airace/sim";
-import { type ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../../components/Button.tsx";
 import { formatMoney, gameDays } from "../../format.ts";
 import { useCatalog } from "../../store/catalog.ts";
@@ -9,6 +9,8 @@ import { useSocket } from "../../store/session.ts";
 import { DataStep } from "./DataStep.tsx";
 import { DesignStep } from "./DesignStep.tsx";
 import { PrepareStep } from "./PrepareStep.tsx";
+import { TrainStep } from "./TrainStep.tsx";
+import { VersionsStep } from "./VersionsStep.tsx";
 
 export type LabStep = "data" | "prepare" | "design" | "train" | "versions";
 
@@ -20,11 +22,8 @@ const STEPS: { id: LabStep; label: string }[] = [
   { id: "versions", label: "5 Versions" },
 ];
 
-/** Slots for the steps later tasks provide (live training, versions). */
-export type LabPanels = Partial<Record<"train" | "versions", ReactNode>>;
-
 /** The AI Lab: plan a run step by step, with the cost always in view, then watch it train. */
-export function Lab({ view, panels = {} }: { view: WorldView; panels?: LabPanels }) {
+export function Lab({ view }: { view: WorldView }) {
   const socket = useSocket();
   const { catalog, error, load } = useCatalog();
   const { plan, worldId, reset } = usePlan();
@@ -66,8 +65,8 @@ export function Lab({ view, panels = {} }: { view: WorldView; panels?: LabPanels
         <PrepareStep plan={plan} catalog={catalog} balance={balance} />
       )}
       {step === "design" && <DesignStep plan={plan} balance={balance} versions={versions} />}
-      {step === "train" && (panels.train ?? <p className="text-muted">Nothing is training yet.</p>)}
-      {step === "versions" && (panels.versions ?? null)}
+      {step === "train" && <TrainStep view={view} />}
+      {step === "versions" && <VersionsStep view={view} onTrainFurther={() => setStep("data")} />}
       {planning && <SummaryBar view={view} onStarted={() => setStep("train")} />}
     </div>
   );
