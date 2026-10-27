@@ -2,6 +2,24 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-10-27 — Game-layer design interview ("Open for Business", single player)
+- The owner judged the Stage 1 build a good demo but far from the game they want, and asked for a full design of the playable game before multiplayer.
+- A design interview set decisions C7–C29:
+  - a playful tycoon with a clean futuristic look in the company's colors
+  - the AI as a glowing orb driven by real measurements
+  - customers in six groups across 9 US regions
+  - real-reply social posts and headlines
+  - free, personal and business plans with a lineup of up to three AIs
+  - launch days; reputation, followers and rankings
+  - a surprise arch-rival plus three rivals with real, pre-built AIs (the player's AI comes first on the hardware)
+  - rent-then-build data centers
+  - a monthly report card and a costly rescue
+  - milestones plus an optional goal
+  - battles, interviews, discoveries and the notebook
+- **Design:** `docs/superpowers/specs/2026-10-27-game-layer-design.md`, delivered in four playable phases.
+- M2 Stage 2 (friends) moves after this layer. Demo worlds will not carry over (sim-2).
+- **Next:** the owner reviews the design document; then the Phase 1 implementation plan.
+
 ## 2026-10-27 — Milestone 2 Stage 1 playable (Tasks 10–24)
 - **The first playable version works on the owner's PC** (`npm run dev`, then http://localhost:5173). In one session it went:
   - sign-up, a world, a company in its own colors (the whole dashboard takes them)
