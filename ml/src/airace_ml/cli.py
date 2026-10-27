@@ -48,6 +48,7 @@ import torch
 from safetensors import SafetensorError
 
 import airace_ml.evals.judge as judge_module
+from airace_ml.catalog import write_catalog
 from airace_ml.console import use_utf8_output as _use_utf8_output
 from airace_ml.data.identity import data_identity
 from airace_ml.data.sampler import MixtureError
@@ -298,6 +299,24 @@ def _parser() -> argparse.ArgumentParser:
     )
     gate.add_argument("--cpu-speed", action="store_true", help="also measure the CPU's speed")
     gate.add_argument("--quick", action="store_true", help="a short run, for checking the setup")
+
+    catalog = add(
+        "export-catalog",
+        _cmd_export_catalog,
+        "write the dataset catalog the game server reads (sizes, samples, data identity)",
+    )
+    catalog.add_argument(
+        "--population",
+        type=Path,
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="folder of feasibility-gate runs whose personality fingerprints personality words "
+        "are measured against (repeatable; e.g. runs/gate-1/runs)",
+    )
+    catalog.add_argument(
+        "--out", type=Path, help="where to write it (default: <data root>/catalog/v1/catalog.json)"
+    )
     return parser
 
 
@@ -861,6 +880,12 @@ def _cmd_bench(args: argparse.Namespace) -> int:
         except OSError as e:
             raise _os_problem(e, f"could not write the report to {args.out}") from e
         print(f"full report written to {args.out}", flush=True)
+    return EXIT_OK
+
+
+def _cmd_export_catalog(args: argparse.Namespace) -> int:
+    path = write_catalog(_data_root(args), args.population, args.out)
+    print(f"Wrote the dataset catalog to {path}", flush=True)
     return EXIT_OK
 
 
