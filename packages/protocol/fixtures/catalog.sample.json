@@ -1,0 +1,560 @@
+{
+  "version": "catalog-v1",
+  "dataIdentity": "sample-0001",
+  "tokenizer": "tok-v1",
+  "suite": "bench-v1",
+  "datasets": [
+    {
+      "id": "web",
+      "title": "Web Crawl",
+      "blurb": "Everyday pages from across the internet: news, how-tos and forums. Broad, but messy.",
+      "tokens": 120000,
+      "docs": 1000,
+      "pools": {
+        "light|0|0": {
+          "docs": 1000,
+          "tokens": 120000
+        },
+        "light|0|1": {
+          "docs": 980,
+          "tokens": 117600
+        },
+        "light|1|0": {
+          "docs": 970,
+          "tokens": 116400
+        },
+        "light|1|1": {
+          "docs": 950,
+          "tokens": 114000
+        },
+        "standard|0|0": {
+          "docs": 950,
+          "tokens": 114000
+        },
+        "standard|0|1": {
+          "docs": 929,
+          "tokens": 111599
+        },
+        "standard|1|0": {
+          "docs": 919,
+          "tokens": 110399
+        },
+        "standard|1|1": {
+          "docs": 899,
+          "tokens": 107999
+        },
+        "thorough|0|0": {
+          "docs": 900,
+          "tokens": 108000
+        },
+        "thorough|0|1": {
+          "docs": 880,
+          "tokens": 105600
+        },
+        "thorough|1|0": {
+          "docs": 870,
+          "tokens": 104400
+        },
+        "thorough|1|1": {
+          "docs": 850,
+          "tokens": 102000
+        }
+      },
+      "samples": ["How to keep basil fresh: trim the stems and stand them in a glass of water."],
+      "removedExamples": {
+        "cleaning": {
+          "light": ["BUY NOW!!! cheap cheap cheap"],
+          "standard": ["click here click here to win"],
+          "thorough": ["teh cat sat onn the mat"]
+        },
+        "duplicates": [
+          "How to keep basil fresh: trim the stems and stand them in a glass of water."
+        ],
+        "factCheck": ["The moon is made of cheese."]
+      }
+    },
+    {
+      "id": "books",
+      "title": "Books",
+      "blurb": "Old public-domain novels and stories. Long, careful writing.",
+      "tokens": 240000,
+      "docs": 2000,
+      "pools": {
+        "light|0|0": {
+          "docs": 2000,
+          "tokens": 240000
+        },
+        "light|0|1": {
+          "docs": 1960,
+          "tokens": 235200
+        },
+        "light|1|0": {
+          "docs": 1940,
+          "tokens": 232800
+        },
+        "light|1|1": {
+          "docs": 1900,
+          "tokens": 228000
+        },
+        "standard|0|0": {
+          "docs": 1900,
+          "tokens": 228000
+        },
+        "standard|0|1": {
+          "docs": 1859,
+          "tokens": 223199
+        },
+        "standard|1|0": {
+          "docs": 1839,
+          "tokens": 220799
+        },
+        "standard|1|1": {
+          "docs": 1799,
+          "tokens": 215999
+        },
+        "thorough|0|0": {
+          "docs": 1800,
+          "tokens": 216000
+        },
+        "thorough|0|1": {
+          "docs": 1760,
+          "tokens": 211200
+        },
+        "thorough|1|0": {
+          "docs": 1740,
+          "tokens": 208800
+        },
+        "thorough|1|1": {
+          "docs": 1700,
+          "tokens": 204000
+        }
+      },
+      "samples": [
+        "The old house stood at the end of the lane, and nobody had lived there for years."
+      ],
+      "removedExamples": {
+        "cleaning": {
+          "light": ["BUY NOW!!! cheap cheap cheap"],
+          "standard": ["click here click here to win"],
+          "thorough": ["teh cat sat onn the mat"]
+        },
+        "duplicates": [
+          "The old house stood at the end of the lane, and nobody had lived there for years."
+        ],
+        "factCheck": []
+      }
+    },
+    {
+      "id": "educational",
+      "title": "Educational",
+      "blurb": "Simple lessons and explanations written for learners.",
+      "tokens": 360000,
+      "docs": 3000,
+      "pools": {
+        "light|0|0": {
+          "docs": 3000,
+          "tokens": 360000
+        },
+        "light|0|1": {
+          "docs": 2940,
+          "tokens": 352800
+        },
+        "light|1|0": {
+          "docs": 2910,
+          "tokens": 349200
+        },
+        "light|1|1": {
+          "docs": 2850,
+          "tokens": 342000
+        },
+        "standard|0|0": {
+          "docs": 2850,
+          "tokens": 342000
+        },
+        "standard|0|1": {
+          "docs": 2790,
+          "tokens": 334800
+        },
+        "standard|1|0": {
+          "docs": 2760,
+          "tokens": 331200
+        },
+        "standard|1|1": {
+          "docs": 2699,
+          "tokens": 323999
+        },
+        "thorough|0|0": {
+          "docs": 2700,
+          "tokens": 324000
+        },
+        "thorough|0|1": {
+          "docs": 2640,
+          "tokens": 316800
+        },
+        "thorough|1|0": {
+          "docs": 2610,
+          "tokens": 313200
+        },
+        "thorough|1|1": {
+          "docs": 2550,
+          "tokens": 306000
+        }
+      },
+      "samples": ["Plants make their food from sunlight. This is called photosynthesis."],
+      "removedExamples": {
+        "cleaning": {
+          "light": ["BUY NOW!!! cheap cheap cheap"],
+          "standard": ["click here click here to win"],
+          "thorough": ["teh cat sat onn the mat"]
+        },
+        "duplicates": ["Plants make their food from sunlight. This is called photosynthesis."],
+        "factCheck": []
+      }
+    },
+    {
+      "id": "conversations",
+      "title": "Conversations",
+      "blurb": "People talking and answering each other.",
+      "tokens": 480000,
+      "docs": 4000,
+      "pools": {
+        "light|0|0": {
+          "docs": 4000,
+          "tokens": 480000
+        },
+        "light|0|1": {
+          "docs": 3920,
+          "tokens": 470400
+        },
+        "light|1|0": {
+          "docs": 3880,
+          "tokens": 465600
+        },
+        "light|1|1": {
+          "docs": 3800,
+          "tokens": 456000
+        },
+        "standard|0|0": {
+          "docs": 3800,
+          "tokens": 456000
+        },
+        "standard|0|1": {
+          "docs": 3719,
+          "tokens": 446399
+        },
+        "standard|1|0": {
+          "docs": 3679,
+          "tokens": 441599
+        },
+        "standard|1|1": {
+          "docs": 3599,
+          "tokens": 431999
+        },
+        "thorough|0|0": {
+          "docs": 3600,
+          "tokens": 432000
+        },
+        "thorough|0|1": {
+          "docs": 3520,
+          "tokens": 422400
+        },
+        "thorough|1|0": {
+          "docs": 3480,
+          "tokens": 417600
+        },
+        "thorough|1|1": {
+          "docs": 3400,
+          "tokens": 408000
+        }
+      },
+      "samples": ["A: Did you finish the book?\nB: Almost! Two chapters left."],
+      "removedExamples": {
+        "cleaning": {
+          "light": ["BUY NOW!!! cheap cheap cheap"],
+          "standard": ["click here click here to win"],
+          "thorough": ["teh cat sat onn the mat"]
+        },
+        "duplicates": ["A: Did you finish the book?\nB: Almost! Two chapters left."],
+        "factCheck": []
+      }
+    },
+    {
+      "id": "code",
+      "title": "Code",
+      "blurb": "Small programs with their explanations.",
+      "tokens": 600000,
+      "docs": 5000,
+      "pools": {
+        "light|0|0": {
+          "docs": 5000,
+          "tokens": 600000
+        },
+        "light|0|1": {
+          "docs": 4900,
+          "tokens": 588000
+        },
+        "light|1|0": {
+          "docs": 4850,
+          "tokens": 582000
+        },
+        "light|1|1": {
+          "docs": 4750,
+          "tokens": 570000
+        },
+        "standard|0|0": {
+          "docs": 4750,
+          "tokens": 570000
+        },
+        "standard|0|1": {
+          "docs": 4650,
+          "tokens": 558000
+        },
+        "standard|1|0": {
+          "docs": 4600,
+          "tokens": 552000
+        },
+        "standard|1|1": {
+          "docs": 4500,
+          "tokens": 540000
+        },
+        "thorough|0|0": {
+          "docs": 4500,
+          "tokens": 540000
+        },
+        "thorough|0|1": {
+          "docs": 4400,
+          "tokens": 528000
+        },
+        "thorough|1|0": {
+          "docs": 4350,
+          "tokens": 522000
+        },
+        "thorough|1|1": {
+          "docs": 4250,
+          "tokens": 510000
+        }
+      },
+      "samples": ["def add(a, b):\n    return a + b"],
+      "removedExamples": {
+        "cleaning": {
+          "light": ["BUY NOW!!! cheap cheap cheap"],
+          "standard": ["click here click here to win"],
+          "thorough": ["teh cat sat onn the mat"]
+        },
+        "duplicates": ["def add(a, b):\n    return a + b"],
+        "factCheck": []
+      }
+    },
+    {
+      "id": "reasoning",
+      "title": "Reasoning",
+      "blurb": "Puzzles and step-by-step problem solving.",
+      "tokens": 720000,
+      "docs": 6000,
+      "pools": {
+        "light|0|0": {
+          "docs": 6000,
+          "tokens": 720000
+        },
+        "light|0|1": {
+          "docs": 5880,
+          "tokens": 705600
+        },
+        "light|1|0": {
+          "docs": 5820,
+          "tokens": 698400
+        },
+        "light|1|1": {
+          "docs": 5700,
+          "tokens": 684000
+        },
+        "standard|0|0": {
+          "docs": 5700,
+          "tokens": 684000
+        },
+        "standard|0|1": {
+          "docs": 5580,
+          "tokens": 669600
+        },
+        "standard|1|0": {
+          "docs": 5520,
+          "tokens": 662400
+        },
+        "standard|1|1": {
+          "docs": 5399,
+          "tokens": 647999
+        },
+        "thorough|0|0": {
+          "docs": 5400,
+          "tokens": 648000
+        },
+        "thorough|0|1": {
+          "docs": 5280,
+          "tokens": 633600
+        },
+        "thorough|1|0": {
+          "docs": 5220,
+          "tokens": 626400
+        },
+        "thorough|1|1": {
+          "docs": 5100,
+          "tokens": 612000
+        }
+      },
+      "samples": ["Tom has 3 apples and buys 2 more. How many does he have? 3 + 2 = 5."],
+      "removedExamples": {
+        "cleaning": {
+          "light": ["BUY NOW!!! cheap cheap cheap"],
+          "standard": ["click here click here to win"],
+          "thorough": ["teh cat sat onn the mat"]
+        },
+        "duplicates": ["Tom has 3 apples and buys 2 more. How many does he have? 3 + 2 = 5."],
+        "factCheck": []
+      }
+    },
+    {
+      "id": "facts",
+      "title": "Reference Facts",
+      "blurb": "Short reference entries and quiz sheets about the world.",
+      "tokens": 840000,
+      "docs": 7000,
+      "pools": {
+        "light|0|0": {
+          "docs": 7000,
+          "tokens": 840000
+        },
+        "light|0|1": {
+          "docs": 6860,
+          "tokens": 823200
+        },
+        "light|1|0": {
+          "docs": 6790,
+          "tokens": 814800
+        },
+        "light|1|1": {
+          "docs": 6650,
+          "tokens": 798000
+        },
+        "standard|0|0": {
+          "docs": 6650,
+          "tokens": 798000
+        },
+        "standard|0|1": {
+          "docs": 6510,
+          "tokens": 781200
+        },
+        "standard|1|0": {
+          "docs": 6439,
+          "tokens": 772799
+        },
+        "standard|1|1": {
+          "docs": 6299,
+          "tokens": 755999
+        },
+        "thorough|0|0": {
+          "docs": 6300,
+          "tokens": 756000
+        },
+        "thorough|0|1": {
+          "docs": 6160,
+          "tokens": 739200
+        },
+        "thorough|1|0": {
+          "docs": 6090,
+          "tokens": 730800
+        },
+        "thorough|1|1": {
+          "docs": 5950,
+          "tokens": 714000
+        }
+      },
+      "samples": ["Question: What is the capital of France?\nAnswer: Paris."],
+      "removedExamples": {
+        "cleaning": {
+          "light": ["BUY NOW!!! cheap cheap cheap"],
+          "standard": ["click here click here to win"],
+          "thorough": ["teh cat sat onn the mat"]
+        },
+        "duplicates": ["Question: What is the capital of France?\nAnswer: Paris."],
+        "factCheck": ["The moon is made of cheese."]
+      }
+    },
+    {
+      "id": "creative",
+      "title": "Creative Writing",
+      "blurb": "Short stories, poems and story requests.",
+      "tokens": 960000,
+      "docs": 8000,
+      "pools": {
+        "light|0|0": {
+          "docs": 8000,
+          "tokens": 960000
+        },
+        "light|0|1": {
+          "docs": 7840,
+          "tokens": 940800
+        },
+        "light|1|0": {
+          "docs": 7760,
+          "tokens": 931200
+        },
+        "light|1|1": {
+          "docs": 7600,
+          "tokens": 912000
+        },
+        "standard|0|0": {
+          "docs": 7600,
+          "tokens": 912000
+        },
+        "standard|0|1": {
+          "docs": 7439,
+          "tokens": 892799
+        },
+        "standard|1|0": {
+          "docs": 7359,
+          "tokens": 883199
+        },
+        "standard|1|1": {
+          "docs": 7199,
+          "tokens": 863999
+        },
+        "thorough|0|0": {
+          "docs": 7200,
+          "tokens": 864000
+        },
+        "thorough|0|1": {
+          "docs": 7040,
+          "tokens": 844800
+        },
+        "thorough|1|0": {
+          "docs": 6960,
+          "tokens": 835200
+        },
+        "thorough|1|1": {
+          "docs": 6800,
+          "tokens": 816000
+        }
+      },
+      "samples": ["Once upon a time, a small dragon was afraid of the dark."],
+      "removedExamples": {
+        "cleaning": {
+          "light": ["BUY NOW!!! cheap cheap cheap"],
+          "standard": ["click here click here to win"],
+          "thorough": ["teh cat sat onn the mat"]
+        },
+        "duplicates": ["Once upon a time, a small dragon was afraid of the dark."],
+        "factCheck": []
+      }
+    }
+  ],
+  "referenceTraits": [
+    {
+      "curious": 0.42,
+      "brief": 0.31
+    },
+    {
+      "curious": 0.18,
+      "brief": 0.66
+    }
+  ]
+}

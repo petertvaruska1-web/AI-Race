@@ -14,12 +14,6 @@ afterEach(async () => {
   server = null;
 });
 
-async function readAll(stream: Readable): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  for await (const c of stream) chunks.push(c as Buffer);
-  return Buffer.concat(chunks);
-}
-
 describe("blob store", () => {
   it("round-trips 3 MB through signed PUT and GET URLs", async () => {
     server = await startTestServer();

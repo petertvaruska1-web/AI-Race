@@ -1,8 +1,10 @@
 import { mkdirSync } from "node:fs";
+import type { Catalog } from "@airace/protocol";
 import cookie from "@fastify/cookie";
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from "fastify";
-import { registerAuthRoutes } from "./auth.ts";
+import { HttpError, registerAuthRoutes } from "./auth.ts";
 import { type BlobStore, LocalFsBlobStore, registerBlobRoutes } from "./blobs.ts";
+import { loadCatalog, NO_TRAINING_DATA, publicCatalog } from "./catalog.ts";
 import { type ServerOptions, SIM_VERSION } from "./config.ts";
 import { type Db, openDb } from "./db/index.ts";
 import { createLogger, type Logger } from "./log.ts";
@@ -18,6 +20,8 @@ export type AppContext = {
   worlds: WorldRegistry;
   gateway: Gateway;
   blobs: BlobStore;
+  /** Null until the training data is installed. */
+  catalog: Catalog | null;
   /** Run on close, latest registered first (actors, gateways, brokers). */
   onClose: (fn: () => Promise<void>) => void;
 };
@@ -37,6 +41,7 @@ export async function buildApp(
     worlds: undefined as unknown as WorldRegistry,
     gateway: undefined as unknown as Gateway,
     blobs: new LocalFsBlobStore(opts.blobDir),
+    catalog: loadCatalog(opts.catalogPath, log),
     onClose: (fn) => {
       closers.push(fn);
     },
@@ -45,6 +50,10 @@ export async function buildApp(
   ctx.onClose(() => ctx.worlds.shutdown());
   ctx.gateway = new Gateway(ctx);
   ctx.onClose(() => ctx.gateway.close());
+  ctx.gateway.registerQuery("catalog", async () => {
+    if (!ctx.catalog) throw new HttpError(503, NO_TRAINING_DATA);
+    return publicCatalog(ctx.catalog);
+  });
 
   const app = Fastify({
     loggerInstance: log as FastifyBaseLogger,

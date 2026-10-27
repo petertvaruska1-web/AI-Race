@@ -1,3 +1,4 @@
+export * from "./catalog.ts";
 export * from "./patch.ts";
 export * from "./text.ts";
 export * from "./view.ts";

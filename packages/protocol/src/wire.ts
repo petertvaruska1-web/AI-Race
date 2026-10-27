@@ -11,7 +11,10 @@ export const StreamName = z.string().min(1).max(200);
 export const RequestId = z.string().min(1).max(64);
 
 /** Read-only requests; later tasks add kinds. */
-export const Query = z.discriminatedUnion("kind", [z.object({ kind: z.literal("ping") })]);
+export const Query = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ping") }),
+  z.object({ kind: z.literal("catalog") }),
+]);
 export type Query = z.infer<typeof Query>;
 
 export const ClientMessage = z.discriminatedUnion("type", [

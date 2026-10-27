@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import type { RawData, WebSocket } from "ws";
 import type { AppContext } from "../app.ts";
 import { verifyWsToken } from "../auth.ts";
+import { NO_TRAINING_DATA } from "../catalog.ts";
 import type { TimerHandle } from "../scheduler.ts";
 import type { WorldActor } from "../worlds/actor.ts";
 import { WorldWatch } from "./broadcast.ts";
@@ -241,6 +242,10 @@ export class Gateway {
         cid,
         reason: "That world doesn't exist or you're not in it.",
       });
+      return;
+    }
+    if (cmd.type === "startTraining" && !this.ctx.catalog) {
+      session.send({ v: 1, type: "reject", cid, reason: NO_TRAINING_DATA });
       return;
     }
     const now = this.ctx.opts.scheduler.now();
