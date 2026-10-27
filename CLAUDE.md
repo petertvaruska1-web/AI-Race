@@ -46,6 +46,8 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 - Dataset catalog for the game server (after any data rebuild, and once before the server's first start): `cd ml && python -m uv run airace-ml export-catalog --population runs/gate-1/runs` writes `data/catalog/v1/catalog.json`. Without it the server runs but refuses training ("The training data is not installed yet.").
 - ML worker for the game server: `cd ml && python -m uv run airace-ml worker [--server ws://localhost:8787/worker] [--token T] [--device cuda|cpu]`. It dials out to the server and runs its train, eval and chat jobs; on the owner's PC it reads the token the local server wrote to `data/server/worker-token`. Stop it with Ctrl+C.
 - TypeScript (repo root, Milestone 2): `npm install`, then `npm test` (Vitest over every workspace) and `npm run check` (Biome plus a type check of every workspace).
+- Play the game on this PC: `npm run dev` starts the game server (port 8787), an ML worker on the GPU and the web app; open http://localhost:5173. It writes the dataset catalog first if it is missing. Ctrl+C stops everything. Game data (accounts, worlds, trained AIs) lives in `data/server/`.
+- End-to-end test (slow, about a minute; not part of `npm test`): `npm run e2e`. It builds a tiny practice dataset in a temp folder and plays a whole single-player game in the Edge that Windows has. `E2E_ECHO=1` prints the processes' output.
 - (More commands are added here as they come to exist.)
 
 ## Conventions

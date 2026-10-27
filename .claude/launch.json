@@ -2,15 +2,32 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 5173
+    },
+    {
       "name": "server",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["tsx", "apps/server/src/main.ts"],
+      "runtimeArgs": [
+        "tsx",
+        "apps/server/src/main.ts"
+      ],
       "port": 8787
     },
     {
       "name": "client",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "-w", "@airace/client"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "-w",
+        "@airace/client"
+      ],
       "port": 5173
     }
   ]

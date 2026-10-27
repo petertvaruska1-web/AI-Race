@@ -2,6 +2,25 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-10-27 — Milestone 2 Stage 1 playable (Tasks 10–24)
+- **The first playable version works on the owner's PC** (`npm run dev`, then http://localhost:5173). In one session it went:
+  - sign-up, a world, a company in its own colors (the whole dashboard takes them)
+  - a real first AI trained on the RTX 3050 through the game: 13 game days, $41,596, with live charts and its own words revealed at game pace
+  - v1 scored on all eight skills (overall 42; "inventive, often slips, reserved")
+  - a streamed chat ("Once upon a time there was a dog named John…")
+- **Built:**
+  - Server: the realtime gateway, signed blob store, dataset catalog, job broker with leases, training service with game-paced reveal, playground chat.
+  - Python: `export-catalog`, streaming replies, the dial-out worker (`airace-ml worker`) with train, eval and chat jobs.
+  - Web app: home, founding (logo builder, 12 palettes), dashboard, AI Lab (Data, Prepare, Design, live Train, Versions), Playground, Benchmarks.
+  - `npm run dev` and an end-to-end test (`npm run e2e`) that plays a whole game, including a page reload and a server restart mid-run.
+- **Tests:** TypeScript 217 passed; Python 1,610 passed (158 s); end-to-end passed twice (46 s); lint and type checks clean.
+- **Found and fixed along the way:**
+  - an interrupted model upload left a half-written file
+  - a worker that missed heartbeats could be handed its own expired job again
+  - a "review" setting without an earlier AI would have charged for a run that could only fail; it is now refused up front
+  - the dev runner took the web app's port
+- **Next:** Stage 2 (Tasks 25–28: invites, sharing AIs with friends, hosting from this PC), on the owner's go.
+
 ## 2026-10-23 — Milestone 2, Tasks 1–9 (simulation and server core)
 - Branch `m2-two-friends`, executed inline with a commit and push after every task. `npm test`: 122 passed; `npm run check` clean.
 - **Built:**

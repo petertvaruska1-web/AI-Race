@@ -11,13 +11,17 @@
   ],
   "scripts": {
     "test": "vitest run",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "check": "biome check . && npm run typecheck"
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tsconfig.json",
+    "check": "biome check . && npm run typecheck",
+    "dev": "tsx tools/dev.ts",
+    "e2e": "playwright test"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.2",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^24.19.2",
     "fast-check": "^4.10.2",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   }
