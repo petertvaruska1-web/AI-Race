@@ -2,99 +2,40 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { EvalJobSpec, type TrainingPlan, TrainJobSpec } from "@airace/protocol";
-import { BALANCE_TEST, BALANCE_V1, type RunState } from "@airace/sim";
+import { EvalJobSpec, TrainJobSpec } from "@airace/protocol";
+import { BALANCE_TEST, BALANCE_V1 } from "@airace/sim";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { schema } from "../src/db/index.ts";
 import { toTrainRunConfig } from "../src/training/config.ts";
 import { revealedCount } from "../src/training/reveal.ts";
 import { TRAINING_STOPPED } from "../src/training/service.ts";
-import type { WorldActor } from "../src/worlds/actor.ts";
-import { eventually, FakeWorker } from "./fakeWorker.ts";
+import { eventually } from "./fakeWorker.ts";
 import {
-  createGuest,
-  createGuestWorld,
-  SAMPLE_CATALOG,
-  startTestServer,
-  type TestServer,
-} from "./harness.ts";
+  cashOf,
+  closeSockets,
+  openSockets,
+  owner,
+  plan,
+  RESULT,
+  runOf,
+  send,
+  setup,
+  start,
+  toDay,
+  worker,
+} from "./flows.ts";
+import { createGuest, type TestServer } from "./harness.ts";
 import { connectAs, settle, type WsClient } from "./wsClient.ts";
 
 let server: TestServer | null = null;
-const sockets: { close(): void }[] = [];
 const temps: string[] = [];
 afterEach(async () => {
-  for (const s of sockets.splice(0)) s.close();
+  closeSockets();
   await server?.close();
   server = null;
   for (const t of temps.splice(0)) rmSync(t, { recursive: true, force: true });
 });
-
-const DAY_MS = BALANCE_TEST.tickMsAt1x;
-const RESULT = { steps: 8, final_loss: 3.9, heldout_losses: { web: 4.1 }, status: "completed" };
-const plan = (): TrainingPlan => ({
-  ...BALANCE_TEST.defaultPlan,
-  mix: { ...BALANCE_TEST.defaultPlan.mix },
-});
-
-const start = (over = {}) => startTestServer({ catalogPath: SAMPLE_CATALOG, ...over });
-
-async function worker(s: TestServer, o: Parameters<typeof FakeWorker.connect>[1] = {}) {
-  const w = await FakeWorker.connect(s, { workerId: "w", ...o });
-  sockets.push(w);
-  return w;
-}
-
-async function owner(s: TestServer, cookie: string, worldId: string): Promise<WsClient> {
-  const ws = await connectAs(s, cookie);
-  sockets.push(ws);
-  ws.send({ v: 1, type: "watch", worldId });
-  await ws.next("snapshot");
-  return ws;
-}
-
-async function send(ws: WsClient, worldId: string, cmd: unknown): Promise<void> {
-  const cid = randomUUID();
-  ws.send({ v: 1, type: "command", cid, worldId, cmd });
-  const outcome = await Promise.race([
-    ws.next("ack", (m) => m.cid === cid).then(() => null),
-    ws.next("reject", (m) => m.cid === cid).then((m) => m.reason),
-  ]);
-  if (outcome) throw new Error(`rejected: ${outcome}`);
-}
-
-/** A running world whose owner has a company and an open socket. */
-async function setup(s: TestServer) {
-  const o = await createGuestWorld(s);
-  const ws = await owner(s, o.cookie, o.worldId);
-  await send(ws, o.worldId, {
-    type: "createCompany",
-    name: "Acme",
-    logo: { shape: "circle", symbol: "spark", initials: "AC" },
-    palette: { primary: "#4f8cff", secondary: "#ffb020" },
-  });
-  await send(ws, o.worldId, { type: "startWorld" });
-  const actor = await s.ctx.worlds.get(o.worldId);
-  return { ...o, ws, actor };
-}
-
-function runOf(actor: WorldActor, userId: string): RunState {
-  const s = actor.state();
-  const company = s.companies[s.members[userId]?.companyId ?? ""];
-  const run = Object.values(company?.runs ?? {})[0];
-  if (!run) throw new Error("no run");
-  return run;
-}
-
-function cashOf(actor: WorldActor, userId: string): number {
-  const s = actor.state();
-  return s.companies[s.members[userId]?.companyId ?? ""]?.cash ?? -1;
-}
-
-async function toDay(s: TestServer, actor: WorldActor, day: number): Promise<void> {
-  await s.scheduler.advance((day - actor.state().day) * DAY_MS);
-}
 
 async function telemetry(ws: WsClient, worldId: string, runId: string) {
   const id = randomUUID();
@@ -179,7 +120,7 @@ describe("training flow", () => {
       event: { type: "memberJoined", userId: ben.userId, displayName: "Ben" },
     });
     const benWs = await connectAs(server, ben.cookie);
-    sockets.push(benWs);
+    openSockets.push(benWs);
     benWs.send({ v: 1, type: "subscribe", sub });
     expect((await benWs.next("error")).reason).toMatch(/can't follow/i);
     expect((await telemetry(benWs, o.worldId, run.id)).ok).toBe(false);
@@ -273,7 +214,7 @@ describe("training flow", () => {
       async () => (await server?.ctx.db.select().from(schema.trainingEvents))?.length === 3,
     );
     const run = runOf(o.actor, o.userId);
-    for (const s of sockets.splice(0)) s.close();
+    closeSockets();
     await server.close();
 
     server = await start(over);

@@ -5,6 +5,7 @@ import Fastify, { type FastifyBaseLogger, type FastifyInstance } from "fastify";
 import { HttpError, registerAuthRoutes } from "./auth.ts";
 import { type BlobStore, LocalFsBlobStore, registerBlobRoutes } from "./blobs.ts";
 import { loadCatalog, NO_TRAINING_DATA, publicCatalog } from "./catalog.ts";
+import { ChatService } from "./chat/service.ts";
 import { type ServerOptions, SIM_VERSION } from "./config.ts";
 import { type Db, openDb } from "./db/index.ts";
 import { JobBroker } from "./jobs/broker.ts";
@@ -24,6 +25,7 @@ export type AppContext = {
   gateway: Gateway;
   broker: JobBroker;
   training: TrainingService;
+  chat: ChatService;
   blobs: BlobStore;
   /** Null until the training data is installed. */
   catalog: Catalog | null;
@@ -47,6 +49,7 @@ export async function buildApp(
     gateway: undefined as unknown as Gateway,
     broker: undefined as unknown as JobBroker,
     training: undefined as unknown as TrainingService,
+    chat: undefined as unknown as ChatService,
     blobs: new LocalFsBlobStore(opts.blobDir),
     catalog: loadCatalog(opts.catalogPath, log),
     onClose: (fn) => {
@@ -61,6 +64,7 @@ export async function buildApp(
   ctx.onClose(() => ctx.broker.close());
   ctx.training = new TrainingService(ctx);
   ctx.onClose(() => ctx.training.close());
+  ctx.chat = new ChatService(ctx);
   ctx.gateway.registerQuery("catalog", async () => {
     if (!ctx.catalog) throw new HttpError(503, NO_TRAINING_DATA);
     return publicCatalog(ctx.catalog);

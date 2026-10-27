@@ -24,6 +24,12 @@ export const CLOSE_UNAUTHORIZED = 4401;
 
 export type StreamAuthorizer = (userId: string, sub: string) => Promise<boolean>;
 export type QueryHandler = (userId: string, q: Query) => Promise<unknown>;
+export type ChatMessage = Extract<ClientMessage, { type: "chat" }>;
+export type ChatHandler = (
+  userId: string,
+  msg: ChatMessage,
+) => Promise<{ ok: true; duplicate: boolean; data: unknown } | { ok: false; reason: string }>;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Commands that create something get their id from the server, inside the logged input. */
 function needsId(cmd: Command): boolean {
@@ -42,6 +48,7 @@ export class Gateway {
   private streams = new Map<string, StreamAuthorizer>();
   private subscribers = new Map<string, Set<Session>>();
   private queries = new Map<string, QueryHandler>();
+  private chat: ChatHandler | null = null;
   private closed = false;
 
   constructor(private readonly ctx: AppContext) {
@@ -60,6 +67,11 @@ export class Gateway {
 
   registerQuery(kind: string, handler: QueryHandler): void {
     this.queries.set(kind, handler);
+  }
+
+  /** Handles playground messages (plan Task 15); the gateway acks or rejects with the result. */
+  setChatHandler(handler: ChatHandler): void {
+    this.chat = handler;
   }
 
   publish(sub: string, data: unknown): void {
@@ -126,7 +138,16 @@ export class Gateway {
       return;
     }
     if (!parsed.success) {
-      session.send({ v: 1, type: "error", reason: "That message isn't valid." });
+      // A command or chat with a usable id gets a reject the client can match to it.
+      const d = data as { type?: unknown; cid?: unknown } | null;
+      const cid = typeof d?.cid === "string" && UUID.test(d.cid) ? d.cid : null;
+      if (cid && (d?.type === "chat" || d?.type === "command")) {
+        const reason =
+          d.type === "chat" ? "Messages are 1–500 characters." : "That request isn't valid.";
+        session.send({ v: 1, type: "reject", cid, reason });
+      } else {
+        session.send({ v: 1, type: "error", reason: "That message isn't valid." });
+      }
       return;
     }
     const userId = session.userId;
@@ -148,9 +169,15 @@ export class Gateway {
       }
       case "command":
         return this.command(session, userId, msg.cid, msg.worldId, msg.cmd);
-      case "chat":
-        session.send({ v: 1, type: "reject", cid: msg.cid, reason: "Chat isn't available yet." });
+      case "chat": {
+        const r = this.chat
+          ? await this.chat(userId, msg)
+          : { ok: false as const, reason: "Chat isn't available yet." };
+        if (r.ok)
+          session.send({ v: 1, type: "ack", cid: msg.cid, duplicate: r.duplicate, data: r.data });
+        else session.send({ v: 1, type: "reject", cid: msg.cid, reason: r.reason });
         return;
+      }
       case "subscribe":
         return this.subscribe(session, userId, msg.sub);
       case "unsubscribe":

@@ -107,11 +107,14 @@ export class FakeWorker {
 }
 
 /** Polls `check` (real time) until it returns a truthy value. */
-export async function eventually<T>(check: () => Promise<T> | T, timeoutMs = 3000): Promise<T> {
+export async function eventually<T>(
+  check: () => Promise<T> | T,
+  timeoutMs = 3000,
+): Promise<NonNullable<T>> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const value = await check();
-    if (value) return value;
+    if (value) return value as NonNullable<T>;
     if (Date.now() > deadline) throw new Error("condition not met in time");
     await new Promise((r) => setTimeout(r, 20));
   }
