@@ -1,19 +1,26 @@
 import type { Command, WorldView } from "@airace/protocol";
-import { createWorld, type Input, projectView, step, type WorldState } from "@airace/sim";
+import {
+  type BalanceVersion,
+  createWorld,
+  type Input,
+  projectView,
+  step,
+  type WorldState,
+} from "@airace/sim";
 
 // Real world views, made by the sim, for the client tests.
 
 export const LOGO = { shape: "circle", symbol: "spark", initials: "AC" } as const;
 export const PALETTE = { primary: "#4f8cff", secondary: "#ffb020" };
 
-export function testWorld(): WorldState {
+export function testWorld(balance: BalanceVersion = "balance-test"): WorldState {
   return createWorld({
     worldId: "w1",
     name: "Friday night",
     hostUserId: "u1",
     hostName: "Ana",
     seed: 1,
-    balance: "balance-test",
+    balance,
     inviteCode: "ABC234",
   });
 }
@@ -32,8 +39,8 @@ export const command = (userId: string, cmd: unknown, newId?: string): Input => 
 });
 
 /** A running world where u1 owns company c1. */
-export function runningWorld(): WorldState {
-  let s = testWorld();
+export function runningWorld(balance: BalanceVersion = "balance-test"): WorldState {
+  let s = testWorld(balance);
   s = apply(
     s,
     command("u1", { type: "createCompany", name: "Acme", logo: LOGO, palette: PALETTE }, "c1"),

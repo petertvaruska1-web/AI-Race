@@ -26,6 +26,7 @@ export function projectView(state: WorldState, viewerUserId: string): WorldView 
       id: state.worldId,
       name: state.name,
       phase: state.phase,
+      balance: state.balance,
       day: state.day,
       date: dateOfDay(state.day),
       speed: state.speed,

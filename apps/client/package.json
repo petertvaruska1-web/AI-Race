@@ -11,7 +11,6 @@
   "dependencies": {
     "@airace/protocol": "*",
     "@airace/sim": "*",
-    "@radix-ui/react-slider": "^1.6.1",
     "motion": "^14.7.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

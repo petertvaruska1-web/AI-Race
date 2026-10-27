@@ -1,5 +1,5 @@
 import type { TrainingPlan, TrainingPreview } from "@airace/protocol";
-import { getBalance } from "./balance.ts";
+import { type Balance, getBalance } from "./balance.ts";
 import { paramCount, trainingFlops } from "./shape.ts";
 import type { CompanyState, RunState, TrainingResult, VersionState, WorldState } from "./state.ts";
 
@@ -11,9 +11,25 @@ export function previewTraining(
   companyId: string,
   plan: TrainingPlan,
 ): PreviewResult {
-  const b = getBalance(state.balance);
   const company = state.companies[companyId];
   if (!company) return { ok: false, reason: "Unknown company." };
+  if (plan.parentVersionId !== null && !company.versions[plan.parentVersionId]) {
+    return { ok: false, reason: "That AI isn't one of yours." };
+  }
+  const parent =
+    plan.parentVersionId === null ? null : (company.versions[plan.parentVersionId] ?? null);
+  return previewPlan(getBalance(state.balance), parent, plan);
+}
+
+/**
+ * The same preview from the balance and the parent's brain alone, so a client can show
+ * exactly the cost and time the server will charge.
+ */
+export function previewPlan(
+  b: Balance,
+  parent: { nLayer: number; dModel: number } | null,
+  plan: TrainingPlan,
+): PreviewResult {
   if (Object.values(plan.mix).every((w) => w === 0)) {
     return { ok: false, reason: "Pick at least one dataset to train on." };
   }
@@ -26,16 +42,12 @@ export function previewTraining(
   if (plan.review > 0 && plan.parentVersionId === null) {
     return { ok: false, reason: "Reviewing needs an earlier AI to review. Pick one to grow from." };
   }
-  if (plan.parentVersionId !== null) {
-    const parent = company.versions[plan.parentVersionId];
-    if (!parent) return { ok: false, reason: "That AI isn't one of yours." };
-    // Growth keeps what the parent learned, so a brain can only grow (R6).
-    if (brain.nLayer < parent.nLayer || brain.dModel < parent.dModel) {
-      return {
-        ok: false,
-        reason: "A new version can't have a smaller brain than the AI it grows from.",
-      };
-    }
+  // Growth keeps what the parent learned, so a brain can only grow (R6).
+  if (parent && (brain.nLayer < parent.nLayer || brain.dModel < parent.dModel)) {
+    return {
+      ok: false,
+      reason: "A new version can't have a smaller brain than the AI it grows from.",
+    };
   }
   const params = paramCount(brain.nLayer, brain.dModel);
   const flops = trainingFlops(params, length.tokens);

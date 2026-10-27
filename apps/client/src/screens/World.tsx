@@ -3,7 +3,9 @@ import type { Route } from "../route.ts";
 import { useSocket } from "../store/session.ts";
 import { useWorld } from "../store/world.ts";
 import { applyCompanyTheme } from "../theme/palette.ts";
+import { Dashboard, WorldLayout } from "./Dashboard.tsx";
 import { Lobby } from "./Lobby.tsx";
+import { Lab } from "./lab/LabLayout.tsx";
 
 type WorldRoute = Extract<Route, { screen: "world" }>;
 
@@ -35,8 +37,11 @@ export function WorldScreen({ route }: { route: WorldRoute }) {
   }
   if (view.world.phase === "setup" || !view.me.company) return <Lobby view={view} />;
   return (
-    <main className="p-10">
-      <h1 className="text-2xl font-bold">{view.world.name}</h1>
-    </main>
+    <WorldLayout view={view} tab={route.tab}>
+      {route.tab === "dashboard" && <Dashboard view={view} />}
+      {route.tab === "lab" && <Lab view={view} />}
+      {route.tab === "play" && <p className="text-muted">The playground opens soon.</p>}
+      {route.tab === "bench" && <p className="text-muted">Benchmarks open soon.</p>}
+    </WorldLayout>
   );
 }
