@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import cookie from "@fastify/cookie";
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from "fastify";
 import { registerAuthRoutes } from "./auth.ts";
+import { type BlobStore, LocalFsBlobStore, registerBlobRoutes } from "./blobs.ts";
 import { type ServerOptions, SIM_VERSION } from "./config.ts";
 import { type Db, openDb } from "./db/index.ts";
 import { createLogger, type Logger } from "./log.ts";
@@ -16,6 +17,7 @@ export type AppContext = {
   log: Logger;
   worlds: WorldRegistry;
   gateway: Gateway;
+  blobs: BlobStore;
   /** Run on close, latest registered first (actors, gateways, brokers). */
   onClose: (fn: () => Promise<void>) => void;
 };
@@ -34,6 +36,7 @@ export async function buildApp(
     // Set just below: both need ctx.
     worlds: undefined as unknown as WorldRegistry,
     gateway: undefined as unknown as Gateway,
+    blobs: new LocalFsBlobStore(opts.blobDir),
     onClose: (fn) => {
       closers.push(fn);
     },
@@ -53,6 +56,7 @@ export async function buildApp(
   app.get("/api/health", async () => ({ ok: true, sim: SIM_VERSION }));
   registerAuthRoutes(app, ctx);
   registerWorldRoutes(app, ctx);
+  registerBlobRoutes(app, ctx);
 
   let closed = false;
   return {

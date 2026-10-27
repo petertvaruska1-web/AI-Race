@@ -35,6 +35,8 @@ export async function startTestServer(over: Partial<ServerOptions> = {}): Promis
   const address = app.server.address();
   if (!address || typeof address === "string") throw new Error("server has no port");
   const url = `http://127.0.0.1:${address.port}`;
+  // Signed URLs must point at the port the server actually got.
+  if (over.publicUrl === undefined) ctx.opts.publicUrl = url;
   return {
     url,
     wsUrl: url.replace("http", "ws"),
