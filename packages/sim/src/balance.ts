@@ -56,7 +56,11 @@ export type Economy = {
     followersDecayPerDay: number;
     viralScore: number;
     viralFollowers: number;
+    /** How far each news story moves a company's news mood (a moving average). */
+    newsAlpha: number;
   };
+  /** The sentiment (-1..1) of good-news stories; a viral post carries its own. */
+  newsSentiment: { launch: number; customers: number; firstPaying: number };
   feedback: { perGroup: number; satisfactionAlpha: number; satisfactionStart: number };
   feedCap: number;
   hypePerDay: number;
@@ -206,7 +210,9 @@ const ECONOMY_V2: Economy = {
     followersDecayPerDay: 0.002,
     viralScore: 0.9,
     viralFollowers: 1000,
+    newsAlpha: 0.3,
   },
+  newsSentiment: { launch: 0.5, customers: 0.6, firstPaying: 0.8 },
   feedback: { perGroup: 1, satisfactionAlpha: 0.3, satisfactionStart: 0.5 },
   feedCap: 200,
   hypePerDay: 0.05,

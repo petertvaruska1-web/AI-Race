@@ -64,6 +64,23 @@ const BIOS: Record<GroupId, string[]> = {
   ],
 };
 
+/** A customer who is not a spotlight: a name and handle drawn from the world rng. */
+export function drawAuthor(rng: RngState): { name: string; handle: string; rng: RngState } {
+  let r = rng;
+  const draw = (n: number) => {
+    const x = rngInt(r, n);
+    r = x.next;
+    return x.value;
+  };
+  const first = FIRST_NAMES[draw(FIRST_NAMES.length)] ?? "Sam";
+  const initial = LAST_INITIALS[draw(LAST_INITIALS.length)] ?? "A";
+  return {
+    name: `${first} ${initial}.`,
+    handle: `@${first.toLowerCase()}_${initial.toLowerCase()}${10 + draw(90)}`,
+    rng: r,
+  };
+}
+
 /** Draws the world's six spotlight customers; returns them and the advanced rng. */
 export function drawSpotlights(rng: RngState): { spotlights: Spotlight[]; rng: RngState } {
   let r = rng;

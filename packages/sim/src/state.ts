@@ -4,8 +4,10 @@ import type {
   GroupId,
   IncomeCategory,
   Logo,
+  NewsTopic,
   Palette,
   PlanId,
+  PostTone,
   RegionId,
   RunStatus,
   Speed,
@@ -103,7 +105,47 @@ export type MarketState = {
   satisfaction: Record<string, Partial<Record<GroupId, number>>>;
 };
 
-export type FameState = { reputation: number; followers: number };
+export type FameState = {
+  /** 0..100 */
+  reputation: number;
+  /** Fractional; views round. */
+  followers: number;
+  /** A moving average (-1..1) of the sentiment of the company's news. */
+  newsSentiment: number;
+};
+
+/** One scored customer question, as the worker reports it. `reply` is real model output. */
+export type FeedbackResult = {
+  group: GroupId;
+  questionId: string;
+  question: string;
+  reply: string;
+  /** 0..1 */
+  score: number;
+};
+
+type FeedBase = {
+  id: string;
+  day: number;
+  companyId: string | null;
+  /** -1..1 */
+  sentiment: number;
+};
+
+/** A customer post: a game-written frame around a reply quoted verbatim (R1). */
+export type PostItem = FeedBase & {
+  kind: "post";
+  author: { name: string; handle: string; group: GroupId; spotlightId: string | null };
+  productName: string;
+  question: string;
+  reply: string;
+  tone: PostTone;
+};
+
+/** A news story: game commentary over real events, never an AI's words. */
+export type NewsItem = FeedBase & { kind: "news"; topic: NewsTopic; headline: string };
+
+export type FeedItem = PostItem | NewsItem;
 
 /** One game month of bookings, in whole dollars. */
 export type MonthLedger = {
@@ -137,6 +179,8 @@ export type CompanyState = {
   plans: PlansState;
   fame: FameState;
   ledger: LedgerState;
+  /** Milestones already in the news, so each is told once. */
+  announced: { customers: number; firstPaying: boolean };
 };
 
 export type WorldState = {
@@ -156,6 +200,10 @@ export type WorldState = {
   seq: number;
   market: MarketState;
   spotlights: Spotlight[];
+  /** Posts and news, oldest first, capped at the balance's `feedCap`. */
+  feed: FeedItem[];
+  /** Feed items made so far; numbers their ids. */
+  feedSeq: number;
 };
 
 export type SystemEvent =
@@ -170,6 +218,13 @@ export type SystemEvent =
       scores: Record<string, number | null>;
       overall: number | null;
       personalityWords: string[];
+    }
+  | {
+      type: "feedbackScored";
+      productId: string;
+      /** "w12" for a weekly batch, "launch" for the launch-day burst. */
+      key: string;
+      results: FeedbackResult[];
     };
 
 /** Everything that can change a world. Logged, so replay reproduces the state. */

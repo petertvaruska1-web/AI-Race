@@ -167,6 +167,26 @@ describe("launching products", () => {
     expect(company(s).products.p2?.name).toBe("<b>Swift</b>");
   });
 
+  it("refuses a product id that another company already uses", () => {
+    let s = ok(step(withVersion(), launch()));
+    s = ok(step(s, sys({ type: "memberJoined", userId: "u2", displayName: "Ben" })));
+    s = ok(
+      step(s, {
+        kind: "command",
+        userId: "u2",
+        cmd: {
+          type: "createCompany",
+          name: "Beta",
+          logo: LOGO,
+          palette: { primary: "#4f8cff", secondary: "#ffb020" },
+        },
+        newId: "c2",
+      }),
+    );
+    const theirs = step(s, { ...launch(), userId: "u2" } as Input);
+    expect(rejected(theirs)).toMatch(/id is already used/i);
+  });
+
   it("refuses countdowns outside 3–14 days", () => {
     expect(rejected(step(withVersion(), launch({ countdownDays: 2 })))).toMatch(/3–14/);
     expect(rejected(step(withVersion(), launch({ countdownDays: 15 })))).toMatch(/3–14/);

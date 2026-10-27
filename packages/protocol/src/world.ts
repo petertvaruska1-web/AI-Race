@@ -48,6 +48,13 @@ export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
 export const COST_CATEGORIES = ["training", "serving", "dataChecks"] as const;
 export type CostCategory = (typeof COST_CATEGORIES)[number];
 
+/** News stories in Phase 1 (game-layer design §7). Later phases add more. */
+export const NEWS_TOPICS = ["launch", "customers", "firstPaying", "viral"] as const;
+export type NewsTopic = (typeof NEWS_TOPICS)[number];
+/** A customer post's tone, picked from its reply's score. */
+export const POST_TONES = ["praise", "joke", "roast"] as const;
+export type PostTone = (typeof POST_TONES)[number];
+
 /** Market regions. Phase 1 has one; Phase 2 adds the 9 US divisions. */
 export const REGION_IDS = ["national"] as const;
 export type RegionId = (typeof REGION_IDS)[number];

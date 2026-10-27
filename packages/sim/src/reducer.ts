@@ -1,5 +1,7 @@
 import { Command, TEXT_LIMITS } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
+import { fameDay } from "./fame.ts";
+import { applyFeedback, newsDay } from "./feed.ts";
 import { bookTraining, closeMonths, ledgerDay, newLedger } from "./ledger.ts";
 import { marketDay } from "./market.ts";
 import { paletteProblem } from "./palette.ts";
@@ -56,6 +58,8 @@ function tick(s: WorldState): Handled {
   productsDay(s);
   marketDay(s);
   ledgerDay(s);
+  newsDay(s);
+  fameDay(s);
   return OK;
 }
 
@@ -125,6 +129,8 @@ function system(s: WorldState, e: SystemEvent): Handled {
       version.personalityWords = [...e.personalityWords];
       return OK;
     }
+    case "feedbackScored":
+      return applyFeedback(s, e);
     default:
       return no("This event isn't supported yet.");
   }

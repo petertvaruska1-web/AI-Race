@@ -1,5 +1,7 @@
 export * from "./balance.ts";
 export * from "./calendar.ts";
+export * from "./fame.ts";
+export * from "./feed.ts";
 export * from "./hash.ts";
 export * from "./ledger.ts";
 export * from "./market.ts";

@@ -17,6 +17,7 @@ export function newCompanyBusiness(b: Balance): {
   products: Record<string, ProductState>;
   plans: PlansState;
   fame: FameState;
+  announced: CompanyState["announced"];
 } {
   const { prices, fame } = b.economy;
   return {
@@ -26,8 +27,24 @@ export function newCompanyBusiness(b: Balance): {
       personal: { productId: null, price: prices.personal.default },
       business: { productId: null, price: prices.business.default },
     },
-    fame: { reputation: fame.reputationStart, followers: 0 },
+    fame: { reputation: fame.reputationStart, followers: 0, newsSentiment: 0 },
+    announced: { customers: 0, firstPaying: false },
   };
+}
+
+/** The product with this id in any company. Product ids are unique across a world. */
+export function findProduct(
+  s: WorldState,
+  productId: string,
+): { company: CompanyState; product: ProductState } | null {
+  for (const id of Object.keys(s.companies).sort()) {
+    const company = s.companies[id];
+    if (company && Object.hasOwn(company.products, productId)) {
+      const product = company.products[productId];
+      if (product) return { company, product };
+    }
+  }
+  return null;
 }
 
 /** The live product behind a plan, or null when the plan is closed. */
@@ -53,7 +70,7 @@ export function productCommand(
     case "launchProduct": {
       if (s.phase !== "running") return no("The world is not running yet.");
       if (!newId) return no("Missing product id.");
-      if (company.products[newId]) return no("That product id is already used.");
+      if (findProduct(s, newId)) return no("That product id is already used.");
       const version = company.versions[cmd.versionId];
       if (!version) return no("That AI isn't one of yours.");
       if (version.scores === null) {

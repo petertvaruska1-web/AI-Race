@@ -38,6 +38,8 @@ export function createWorld(p: {
     seq: 0,
     market: emptyMarket(),
     spotlights,
+    feed: [],
+    feedSeq: 0,
   };
 }
 
