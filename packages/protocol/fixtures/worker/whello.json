@@ -1,0 +1,22 @@
+{
+  "schema": "WorkerMessage",
+  "message": {
+    "v": 1,
+    "type": "whello",
+    "token": "worker-token",
+    "workerId": "pc-rtx3050",
+    "capabilities": {
+      "device": "cuda",
+      "vramMb": 8192,
+      "maxParams": 50000000,
+      "jobTypes": ["train", "eval", "generate"],
+      "slots": {
+        "train": 1,
+        "eval": 1,
+        "generate": 2
+      },
+      "dataIdentity": "sample-0001"
+    },
+    "running": ["7c9e6679-7425-40de-944b-e07fc1f90ae7"]
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "schema": "ServerToWorker",
+  "message": {
+    "v": 1,
+    "type": "cancel",
+    "jobId": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+  }
+}

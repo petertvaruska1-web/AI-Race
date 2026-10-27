@@ -1,0 +1,15 @@
+{
+  "schema": "EvalJobResult",
+  "message": {
+    "report": {
+      "suite": "bench-v1",
+      "scores": {
+        "language": 41.5
+      }
+    },
+    "traits": {
+      "curious": 0.4
+    },
+    "personalityWords": ["curious", "brief"]
+  }
+}

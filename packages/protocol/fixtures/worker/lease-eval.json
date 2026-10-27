@@ -1,0 +1,20 @@
+{
+  "schema": "ServerToWorker",
+  "message": {
+    "v": 1,
+    "type": "lease",
+    "jobId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "jobType": "eval",
+    "leaseMs": 30000,
+    "spec": {
+      "versionId": "6fa459ea-ee8a-4ca4-894e-db77e160355e",
+      "modelTarUrl": "http://127.0.0.1:8787/blobs/checkpoints/6fa459ea-ee8a-4ca4-894e-db77e160355e.tar?exp=1&sig=abc",
+      "population": [
+        {
+          "curious": 0.42,
+          "brief": 0.31
+        }
+      ]
+    }
+  }
+}

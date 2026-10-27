@@ -5,6 +5,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  serial,
   text,
   unique,
   uuid,
@@ -110,6 +111,8 @@ export const jobs = pgTable(
   "jobs",
   {
     id: uuid("id").primaryKey(),
+    /** Arrival order: jobs enqueued in the same millisecond still run first-come first-served. */
+    seq: serial("seq").notNull(),
     type: text("type").notNull(),
     priority: integer("priority").notNull().default(0),
     worldId: uuid("world_id"),
@@ -123,7 +126,7 @@ export const jobs = pgTable(
     createdAt: ms("created_at").notNull(),
     updatedAt: ms("updated_at").notNull(),
   },
-  (t) => [index("jobs_queue_idx").on(t.status, t.priority, t.createdAt)],
+  (t) => [index("jobs_queue_idx").on(t.status, t.priority, t.seq)],
 );
 
 export const trainingRuns = pgTable("training_runs", {

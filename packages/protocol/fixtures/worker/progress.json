@@ -1,0 +1,14 @@
+{
+  "schema": "WorkerMessage",
+  "message": {
+    "v": 1,
+    "type": "progress",
+    "jobId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "event": {
+      "kind": "step",
+      "step": 128,
+      "loss": 5.21,
+      "tokens": 1048576
+    }
+  }
+}

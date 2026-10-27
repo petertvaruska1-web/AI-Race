@@ -16,7 +16,9 @@ const HELLO_TIMEOUT_MS = 5000;
 const PRESENCE_GRACE_MS = 5000;
 const RATE_WINDOW_MS = 10_000;
 const RATE_MAX_COMMANDS = 20;
+/** Player messages are small; the socket layer allows more for workers' results. */
 const MAX_MESSAGE_BYTES = 64 * 1024;
+const MAX_SOCKET_BYTES = 8 * 1024 * 1024;
 /** Close code for a socket that never proved who it is. */
 export const CLOSE_UNAUTHORIZED = 4401;
 
@@ -47,7 +49,7 @@ export class Gateway {
   }
 
   async register(app: FastifyInstance): Promise<void> {
-    await app.register(websocket, { options: { maxPayload: MAX_MESSAGE_BYTES } });
+    await app.register(websocket, { options: { maxPayload: MAX_SOCKET_BYTES } });
     app.get("/ws", { websocket: true }, (socket) => this.accept(socket));
   }
 
@@ -96,6 +98,11 @@ export class Gateway {
   }
 
   private async onMessage(session: Session, raw: RawData, hello: TimerHandle): Promise<void> {
+    const bytes = Array.isArray(raw) ? raw.reduce((n, b) => n + b.length, 0) : raw.byteLength;
+    if (bytes > MAX_MESSAGE_BYTES) {
+      session.socket.close(1009, "message too large");
+      return;
+    }
     let data: unknown = null;
     try {
       data = JSON.parse(raw.toString());

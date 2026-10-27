@@ -1,0 +1,9 @@
+{
+  "schema": "TrainJobResult",
+  "message": {
+    "steps": 1536,
+    "final_loss": null,
+    "heldout_losses": {},
+    "status": "unstable_stopped"
+  }
+}

@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { type AppContext, buildApp } from "../src/app.ts";
 import type { ServerOptions } from "../src/config.ts";
@@ -91,3 +92,8 @@ export async function createGuestWorld(
   const { worldId } = (await res.json()) as { worldId: string };
   return { ...guest, worldId };
 }
+
+/** The protocol package's sample catalog (data identity "sample-0001"). */
+export const SAMPLE_CATALOG = fileURLToPath(
+  new URL("../../../packages/protocol/fixtures/catalog.sample.json", import.meta.url),
+);

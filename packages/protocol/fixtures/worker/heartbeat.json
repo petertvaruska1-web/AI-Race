@@ -1,0 +1,7 @@
+{
+  "schema": "WorkerMessage",
+  "message": {
+    "v": 1,
+    "type": "heartbeat"
+  }
+}

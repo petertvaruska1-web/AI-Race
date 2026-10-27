@@ -1,0 +1,7 @@
+{
+  "schema": "ServerToWorker",
+  "message": {
+    "v": 1,
+    "type": "wwelcome"
+  }
+}

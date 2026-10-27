@@ -1,0 +1,6 @@
+{
+  "schema": "GenerateJobResult",
+  "message": {
+    "text": "Hello there!"
+  }
+}

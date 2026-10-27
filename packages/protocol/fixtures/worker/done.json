@@ -1,0 +1,17 @@
+{
+  "schema": "WorkerMessage",
+  "message": {
+    "v": 1,
+    "type": "done",
+    "jobId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "result": {
+      "steps": 1536,
+      "final_loss": 3.91,
+      "heldout_losses": {
+        "web": 4.12,
+        "books": null
+      },
+      "status": "completed"
+    }
+  }
+}
