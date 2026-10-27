@@ -42,6 +42,12 @@ export const PLAN_IDS = ["free", "personal", "business"] as const;
 export const PlanId = z.enum(PLAN_IDS);
 export type PlanId = z.infer<typeof PlanId>;
 
+/** Ledger categories (game-layer design §8). Marketing, data centers and interest come in Phase 2. */
+export const INCOME_CATEGORIES = ["personal", "business"] as const;
+export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
+export const COST_CATEGORIES = ["training", "serving", "dataChecks"] as const;
+export type CostCategory = (typeof COST_CATEGORIES)[number];
+
 /** Market regions. Phase 1 has one; Phase 2 adds the 9 US divisions. */
 export const REGION_IDS = ["national"] as const;
 export type RegionId = (typeof REGION_IDS)[number];

@@ -1,6 +1,8 @@
 import type {
   Command,
+  CostCategory,
   GroupId,
+  IncomeCategory,
   Logo,
   Palette,
   PlanId,
@@ -103,6 +105,24 @@ export type MarketState = {
 
 export type FameState = { reputation: number; followers: number };
 
+/** One game month of bookings, in whole dollars. */
+export type MonthLedger = {
+  /** "2027-03" */
+  month: string;
+  income: Record<IncomeCategory, number>;
+  costs: Record<CostCategory, number>;
+  revenueByGroup: Record<GroupId, number>;
+  revenueByPlan: Record<PlanId, number>;
+  /** Customers when the month closed (0 while it is open). */
+  customersEnd: number;
+};
+
+export type LedgerState = {
+  current: MonthLedger;
+  /** The last 24 closed months, newest last. */
+  months: MonthLedger[];
+};
+
 export type CompanyState = {
   id: string;
   ownerUserId: string;
@@ -116,6 +136,7 @@ export type CompanyState = {
   products: Record<string, ProductState>;
   plans: PlansState;
   fame: FameState;
+  ledger: LedgerState;
 };
 
 export type WorldState = {

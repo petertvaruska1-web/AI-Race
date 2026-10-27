@@ -1,5 +1,6 @@
 import { Command, TEXT_LIMITS } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
+import { bookTraining, closeMonths, ledgerDay, newLedger } from "./ledger.ts";
 import { marketDay } from "./market.ts";
 import { paletteProblem } from "./palette.ts";
 import { newCompanyBusiness, productCommand, productsDay } from "./products.ts";
@@ -50,9 +51,11 @@ function apply(s: WorldState, input: Input): Handled {
 function tick(s: WorldState): Handled {
   if (s.phase !== "running" || s.paused) return no("The world is not running.");
   s.day += 1;
+  closeMonths(s);
   settleRuns(s);
   productsDay(s);
   marketDay(s);
+  ledgerDay(s);
   return OK;
 }
 
@@ -109,7 +112,7 @@ function system(s: WorldState, e: SystemEvent): Handled {
       if (run.status === "completed" || run.status === "failed")
         return no("This run has finished.");
       if (run.held) return no("This run already has its result.");
-      company.cash += run.preview.cost;
+      bookTraining(s, company, run, -1);
       run.status = "failed";
       run.failure = e.reason;
       return OK;
@@ -166,6 +169,7 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
         versions: {},
         versionSeq: 0,
         ...newCompanyBusiness(getBalance(s.balance)),
+        ledger: newLedger(s.day),
       };
       member.companyId = newId;
       return OK;
@@ -204,7 +208,7 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       }
       const seed = rngInt(s.rng, 2 ** 31);
       s.rng = seed.next;
-      company.cash -= cost;
+      bookTraining(s, company, { plan: cmd.plan, preview: preview.preview }, 1);
       company.runs[newId] = {
         id: newId,
         plan: cmd.plan,

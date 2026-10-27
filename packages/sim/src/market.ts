@@ -60,6 +60,17 @@ export function customersOf(
   return m.customers[companyId]?.[region]?.[group]?.[plan] ?? 0;
 }
 
+/** All of a company's customers (a business account counts once). */
+export function totalCustomers(m: MarketState, companyId: string): number {
+  let n = 0;
+  for (const region of REGION_IDS) {
+    for (const group of GROUP_IDS) {
+      for (const plan of PLAN_IDS) n += customersOf(m, companyId, region, group, plan);
+    }
+  }
+  return n;
+}
+
 function setCustomers(
   m: MarketState,
   companyId: string,

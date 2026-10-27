@@ -32,3 +32,8 @@ export function dateOfDay(day: number): string {
   const { year, month, day: d } = civilFromDays(DAY_ZERO + day);
   return `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
+
+/** The month (YYYY-MM) of a game day. */
+export function monthOfDay(day: number): string {
+  return dateOfDay(day).slice(0, 7);
+}

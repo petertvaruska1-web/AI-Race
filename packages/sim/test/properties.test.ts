@@ -55,16 +55,23 @@ describe("sim properties", () => {
     );
   });
 
-  it("(d) money: cash is founding cash minus charged runs plus refunds, never negative", () => {
+  // Cash may fall below zero (serving costs); rescue at a month end is Phase 2.
+  it("(d) money: cash is founding cash plus every income less every cost, each booked once", () => {
+    const total = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
     fc.assert(
       fc.property(arbInputs(100), (inputs) => {
         const s = runInputs(newWorld(), inputs);
         for (const company of Object.values(s.companies)) {
+          const months = [...company.ledger.months, company.ledger.current];
+          const net = months.reduce((sum, m) => sum + total(m.income) - total(m.costs), 0);
+          expect(Number.isInteger(company.cash)).toBe(true);
+          expect(company.cash).toBe(BALANCE_V2.foundingCash + net);
+          // Training money: every run not refunded, once.
           const charged = Object.values(company.runs)
             .filter((r) => r.status !== "failed")
             .reduce((sum, r) => sum + r.preview.cost, 0);
-          expect(company.cash).toBe(BALANCE_V2.foundingCash - charged);
-          expect(company.cash).toBeGreaterThanOrEqual(0);
+          const booked = months.reduce((sum, m) => sum + m.costs.training + m.costs.dataChecks, 0);
+          expect(booked).toBe(charged);
         }
       }),
       RUNS,
