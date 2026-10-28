@@ -99,6 +99,19 @@ export const REGION_NAMES: Record<RegionId, string> = {
   pacific: "Pacific",
 };
 
+/** How a sentence names a region after "in": "in the Pacific", "in New England". */
+export const REGION_PLACES: Record<RegionId, string> = {
+  newEngland: "New England",
+  midAtlantic: "the Mid-Atlantic",
+  greatLakes: "the Great Lakes",
+  plains: "the Great Plains",
+  southAtlantic: "the South Atlantic",
+  midSouth: "the Mid-South",
+  southCentral: "South Central",
+  mountain: "the Mountain West",
+  pacific: "the Pacific",
+};
+
 export const Hex = z.string().regex(/^#[0-9a-f]{6}$/i);
 export type Hex = z.infer<typeof Hex>;
 
@@ -193,6 +206,8 @@ export const Command = z.discriminatedUnion("type", [
     days: z.number().int(),
   }),
   z.object({ type: z.literal("stopCampaign"), campaignId: zId }),
+  z.object({ type: z.literal("buildDataCenter"), region: z.enum(REGION_IDS) }),
+  z.object({ type: z.literal("setTrainingShare"), share: z.number() }),
 ]);
 export type Command = z.infer<typeof Command>;
 export type CommandType = Command["type"];

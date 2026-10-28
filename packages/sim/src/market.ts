@@ -7,6 +7,7 @@ import {
   type RegionId,
 } from "@airace/protocol";
 import { adoptionShare, type Economy, getBalance } from "./balance.ts";
+import { closeness } from "./compute.ts";
 import { liveProductFor } from "./products.ts";
 import { paramCount } from "./shape.ts";
 import type { MarketState, VersionState, WorldState } from "./state.ts";
@@ -30,6 +31,7 @@ export function productAppeal(
   reputation: number,
   satisfaction: number,
   served = 1,
+  closeness = 0,
 ): number {
   const g = economy.groups[group];
   const u = economy.utility;
@@ -48,7 +50,8 @@ export function productAppeal(
     u.speed * g.speedPreference * speed +
     u.reputation * (reputation / 100 - 0.5) +
     u.satisfaction * (satisfaction - 0.5) +
-    u.reliability * (served - 1)
+    u.reliability * (served - 1) +
+    u.nearby * closeness * (1 + Math.max(0, g.speedPreference))
   );
 }
 
@@ -191,6 +194,7 @@ export function marketDay(s: WorldState): void {
             company.fame.reputation,
             satisfaction,
             company.compute.served,
+            closeness(company, region, s.day, e),
           );
           options.push({ companyId: id, plan, utility, satisfaction });
         }

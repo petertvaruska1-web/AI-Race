@@ -2,11 +2,15 @@ import { type Command, WorldView } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import {
   BALANCE_TEST,
+  closeness,
   computeDay,
   createWorld,
+  customersByRegion,
   emptyMonth,
   type Input,
+  ownedPflops,
   paramCount,
+  previewPlan,
   projectView,
   type StepResult,
   servingLoad,
@@ -195,5 +199,142 @@ describe("serving capacity", () => {
       loadPflops: c1(s).compute.loadPflops,
       served: 1,
     });
+  });
+});
+
+const BIG = 50_000_000;
+
+/** `s` with an open Pacific data center, as if built 60 days ago. */
+function withCenter(s: WorldState): WorldState {
+  const next = structuredClone(s);
+  c1(next).dataCenters.dc1 = {
+    id: "dc1",
+    region: "pacific",
+    startDay: Math.max(0, next.day - 60),
+    openDay: next.day,
+    pflopsPerDay: e.dataCenter.pflopsPerDay,
+  };
+  return next;
+}
+
+describe("data centers", () => {
+  it("refuse to be built without the money, or past the most a company may own", () => {
+    const s = live();
+    const r = step(s, cmd({ type: "buildDataCenter", region: "pacific" }, "dc1"));
+    expect(r.ok ? "" : r.reason).toMatch(/^A data center costs \$1,500,000\. You have \$[\d,]+\.$/);
+    let rich = structuredClone(s);
+    c1(rich).cash = BIG;
+    for (let i = 1; i <= e.dataCenter.maxPerCompany; i++) {
+      rich = ok(step(rich, cmd({ type: "buildDataCenter", region: "pacific" }, `dc${i}`)));
+    }
+    const more = step(rich, cmd({ type: "buildDataCenter", region: "pacific" }, "dc9"));
+    expect(more.ok ? "" : more.reason).toBe("You can own at most 6 data centers.");
+  });
+
+  it("are paid for at once, open after their build time with the news, then cost upkeep daily", () => {
+    let s = live();
+    c1(s).cash = BIG;
+    const built = s.day;
+    s = ok(step(s, cmd({ type: "buildDataCenter", region: "pacific" }, "dc1")));
+    expect(c1(s).cash).toBe(BIG - e.dataCenter.cost);
+    expect(c1(s).ledger.current.costs.dataCenterBuild).toBe(e.dataCenter.cost);
+    s = ticks(s, e.dataCenter.buildDays - 1);
+    expect(ownedPflops(c1(s), s.day)).toBe(0);
+    s = ticks(s, 1);
+    expect(s.day).toBe(built + e.dataCenter.buildDays);
+    expect(ownedPflops(c1(s), s.day)).toBe(e.dataCenter.pflopsPerDay);
+    const opened = s.feed.filter((f) => f.kind === "news" && f.topic === "dataCenter");
+    expect(opened.map((f) => (f.kind === "news" ? f.headline : ""))).toEqual([
+      "Acme opens a data center in the Pacific",
+    ]);
+    const months = () => [...c1(s).ledger.months, c1(s).ledger.current];
+    const upkeep = () => months().reduce((n, m) => n + m.costs.dataCenterUpkeep, 0);
+    const before = upkeep();
+    s = ticks(s, 30);
+    expect(upkeep() - before).toBe(e.dataCenter.upkeepPerMonth);
+    expect(s.feed.filter((f) => f.kind === "news" && f.topic === "dataCenter")).toHaveLength(1);
+  });
+
+  it("serve their customers for less than the cloud", () => {
+    const cloudOnly = only(live(), 100_000);
+    c1(cloudOnly).compute.cloudPflops = Number.POSITIVE_INFINITY;
+    const owned = withCenter(cloudOnly);
+    for (const s of [cloudOnly, owned]) {
+      c1(s).ledger.current = emptyMonth(c1(s).ledger.current.month);
+      computeDay(s);
+    }
+    expect(c1(owned).compute.served).toBe(1);
+    expect(c1(owned).ledger.current.costs.serving).toBe(
+      Math.round(dollarsFor(100_000) * e.compute.ownedServingPriceShare),
+    );
+    expect(c1(owned).ledger.current.costs.serving).toBeLessThan(
+      c1(cloudOnly).ledger.current.costs.serving,
+    );
+  });
+
+  it("answer faster nearby, winning customers in their region and its neighbours", () => {
+    const s = live();
+    const near = ticks(withCenter(s), 10);
+    const far = ticks(s, 10);
+    const inRegion = (w: WorldState, r: "pacific" | "mountain") =>
+      customersByRegion(w.market, "c1")[r] ?? 0;
+    expect(closeness(c1(near), "pacific", near.day, e)).toBe(1);
+    expect(closeness(c1(near), "mountain", near.day, e)).toBe(e.nearby.neighbor);
+    expect(closeness(c1(near), "newEngland", near.day, e)).toBe(0);
+    expect(inRegion(near, "pacific")).toBeGreaterThan(inRegion(far, "pacific"));
+    expect(inRegion(near, "mountain")).toBeGreaterThan(inRegion(far, "mountain"));
+  });
+
+  it("lend a share to training: the next run is shorter and cheaper, serving room smaller", () => {
+    const plan = { ...BALANCE_TEST.defaultPlan, mix: { ...BALANCE_TEST.defaultPlan.mix } };
+    const owned = e.dataCenter.pflopsPerDay * 0.5;
+    const plain = previewPlan(BALANCE_TEST, null, plan);
+    const lent = previewPlan(BALANCE_TEST, null, plan, owned);
+    if (!plain.ok || !lent.ok) throw new Error("no preview");
+    const pflop = plain.preview.flops / 1e15;
+    const cloud = BALANCE_TEST.cloudPflopsPerDay;
+    expect(lent.preview.durationDays).toBe(Math.max(1, Math.ceil(pflop / (cloud + owned))));
+    expect(lent.preview.cost).toBe(
+      Math.round((pflop * BALANCE_TEST.cloudPricePerPflop * cloud) / (cloud + owned)),
+    );
+    expect(lent.preview.cost).toBeLessThan(plain.preview.cost);
+
+    // 4 million users need more than half a center: lent away, the rest overloads the cloud.
+    const busy = withCenter(only(live(), 4_000_000));
+    computeDay(busy);
+    expect(c1(busy).compute.served).toBe(1);
+    const sharing = ok(
+      step(withCenter(only(live(), 4_000_000)), cmd({ type: "setTrainingShare", share: 0.5 })),
+    );
+    expect(c1(sharing).compute.trainingShare).toBe(0.5);
+    computeDay(sharing);
+    expect(c1(sharing).compute.served).toBeLessThan(1);
+  });
+
+  it("refuse a share for training outside 0 to 1", () => {
+    const s = live();
+    for (const share of [-0.1, 1.5]) {
+      const r = step(s, cmd({ type: "setTrainingShare", share }));
+      expect(r.ok ? "" : r.reason).toBe("Choose a share from 0% to 100%.");
+    }
+    // Not a number at all never passes the command check.
+    expect(step(s, cmd({ type: "setTrainingShare", share: Number.NaN })).ok).toBe(false);
+    const r = ok(step(s, cmd({ type: "setTrainingShare", share: 0.333 })));
+    expect(c1(r).compute.trainingShare).toBe(0.33);
+  });
+
+  it("show to their owner only", () => {
+    const s = withCenter(live());
+    const view = WorldView.parse(projectView(s, "u1"));
+    expect(view.me.company?.dataCenters).toEqual([
+      {
+        id: "dc1",
+        region: "pacific",
+        startDay: Math.max(0, s.day - 60),
+        openDay: s.day,
+        open: true,
+      },
+    ]);
+    expect(view.me.company?.compute.ownedPflops).toBe(e.dataCenter.pflopsPerDay);
   });
 });

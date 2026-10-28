@@ -1,7 +1,7 @@
 import { Command, TEXT_LIMITS } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
 import { campaignCommand, campaignsDay } from "./campaigns.ts";
-import { computeDay, newCompute } from "./compute.ts";
+import { computeCommand, computeDay, dataCentersDay, newCompute } from "./compute.ts";
 import { fameDay } from "./fame.ts";
 import { applyFeedback, newsDay } from "./feed.ts";
 import { historyDay } from "./history.ts";
@@ -61,6 +61,7 @@ function tick(s: WorldState): Handled {
   campaignsDay(s);
   productsDay(s);
   marketDay(s);
+  dataCentersDay(s);
   computeDay(s);
   ledgerDay(s);
   newsDay(s);
@@ -186,6 +187,7 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
         history: [],
         campaigns: {},
         compute: newCompute(getBalance(s.balance)),
+        dataCenters: {},
       };
       member.companyId = newId;
       return OK;
@@ -255,6 +257,12 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       const company = member.companyId ? s.companies[member.companyId] : undefined;
       if (!company) return no("Found your company first.");
       return campaignCommand(s, company, cmd, newId);
+    }
+    case "buildDataCenter":
+    case "setTrainingShare": {
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("Found your company first.");
+      return computeCommand(s, company, cmd, newId);
     }
     default:
       return no("That request isn't valid.");

@@ -192,6 +192,15 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
       loadPflops: c.compute.loadPflops,
       served: c.compute.served,
     },
+    dataCenters: Object.values(c.dataCenters)
+      .sort((a, b) => a.startDay - b.startDay || cmp(a.id, b.id))
+      .map((d) => ({
+        id: d.id,
+        region: d.region,
+        startDay: d.startDay,
+        openDay: d.openDay,
+        open: d.openDay <= state.day,
+      })),
     campaigns: Object.values(c.campaigns)
       .sort((a, b) => a.startDay - b.startDay || cmp(a.id, b.id))
       .map((k) => ({

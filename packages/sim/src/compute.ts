@@ -1,11 +1,23 @@
-import { GROUP_IDS, PLAN_IDS, REGION_IDS } from "@airace/protocol";
-import { type Balance, getBalance } from "./balance.ts";
+import {
+  type Command,
+  GROUP_IDS,
+  PLAN_IDS,
+  REGION_IDS,
+  REGION_PLACES,
+  type RegionId,
+} from "@airace/protocol";
+import { type Balance, type Economy, getBalance } from "./balance.ts";
 import { tellNews } from "./feed.ts";
 import { book } from "./ledger.ts";
 import { customersOf } from "./market.ts";
 import { liveProductFor } from "./products.ts";
 import { paramCount } from "./shape.ts";
 import type { CompanyState, ComputeState, WorldState } from "./state.ts";
+import { formatMoney } from "./training.ts";
+
+type Handled = { ok: true } | { ok: false; reason: string };
+const OK: Handled = { ok: true };
+const no = (reason: string): Handled => ({ ok: false, reason });
 
 // Serving capacity (game-layer design §8), in PFLOP a game day. Every customer,
 // free ones too, uses compute each day in step with the size of the AI behind
@@ -52,9 +64,85 @@ export function servingLoad(s: WorldState, companyId: string): number {
   return demand(s, companyId).pflops;
 }
 
-/** The company's open data-center capacity (PFLOP a day). Data centers arrive in Task 5. */
-export function ownedPflops(_company: CompanyState, _day: number): number {
-  return 0;
+/** The company's open data-center capacity (PFLOP a day). */
+export function ownedPflops(company: CompanyState, day: number): number {
+  let pflops = 0;
+  for (const dc of Object.values(company.dataCenters)) {
+    if (dc.openDay <= day) pflops += dc.pflopsPerDay;
+  }
+  return pflops;
+}
+
+/** How close a region is to the company's open data centers: 1 in it, less next door, else 0. */
+export function closeness(
+  company: CompanyState,
+  region: RegionId,
+  day: number,
+  economy: Economy,
+): number {
+  let best = 0;
+  for (const dc of Object.values(company.dataCenters)) {
+    if (dc.openDay > day) continue;
+    if (dc.region === region) return economy.nearby.region;
+    if (economy.neighbors[dc.region].includes(region)) best = economy.nearby.neighbor;
+  }
+  return best;
+}
+
+type ComputeCommand = Extract<Command, { type: "buildDataCenter" | "setTrainingShare" }>;
+
+export function computeCommand(
+  s: WorldState,
+  company: CompanyState,
+  cmd: ComputeCommand,
+  newId: string | undefined,
+): Handled {
+  if (cmd.type === "setTrainingShare") {
+    if (!Number.isFinite(cmd.share) || cmd.share < 0 || cmd.share > 1) {
+      return no("Choose a share from 0% to 100%.");
+    }
+    company.compute.trainingShare = Math.round(cmd.share * 100) / 100;
+    return OK;
+  }
+  const dc = getBalance(s.balance).economy.dataCenter;
+  if (s.phase !== "running") return no("The world is not running yet.");
+  if (!newId) return no("Missing data center id.");
+  if (company.dataCenters[newId]) return no("That data center id is already used.");
+  if (Object.keys(company.dataCenters).length >= dc.maxPerCompany) {
+    return no(`You can own at most ${dc.maxPerCompany} data centers.`);
+  }
+  if (company.cash < dc.cost) {
+    return no(
+      `A data center costs ${formatMoney(dc.cost)}. You have ${formatMoney(company.cash)}.`,
+    );
+  }
+  book(company, "dataCenterBuild", dc.cost);
+  company.dataCenters[newId] = {
+    id: newId,
+    region: cmd.region,
+    startDay: s.day,
+    openDay: s.day + dc.buildDays,
+    pflopsPerDay: dc.pflopsPerDay,
+  };
+  return OK;
+}
+
+/** Data centers that open today make the news; every open one costs a day of upkeep. Call before `computeDay`. */
+export function dataCentersDay(s: WorldState): void {
+  const dc = getBalance(s.balance).economy.dataCenter;
+  for (const id of Object.keys(s.companies).sort()) {
+    const company = s.companies[id];
+    if (!company) continue;
+    for (const key of Object.keys(company.dataCenters).sort()) {
+      const center = company.dataCenters[key];
+      if (!center || center.openDay > s.day) continue;
+      if (center.openDay === s.day) {
+        const headline = `${company.name} opens a data center in ${REGION_PLACES[center.region]}`;
+        tellNews(s, company, "dataCenter", headline, 0.5);
+      }
+      book(company, "dataCenterUpkeep", dc.upkeepPerMonth / 30);
+    }
+  }
 }
 
 /**

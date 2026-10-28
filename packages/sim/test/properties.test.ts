@@ -27,6 +27,7 @@ describe("sim properties", { timeout: 30_000 }, () => {
             "byRegion",
             "campaigns",
             "compute",
+            "dataCenters",
           ]) {
             expect(count(text, key), key).toBe(own ? 1 : 0);
           }

@@ -196,6 +196,7 @@ function sampleView(): WorldView {
           loadPflops: 0.0001,
           served: 1,
         },
+        dataCenters: [{ id: "dc1", region: "pacific", startDay: 1, openDay: 61, open: false }],
         campaigns: [
           {
             id: "k1",

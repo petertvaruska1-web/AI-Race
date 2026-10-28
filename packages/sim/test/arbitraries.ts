@@ -174,6 +174,15 @@ const commandInput: fc.Arbitrary<Input> = user.chain((u) =>
     fc
       .constantFrom(...CAMPAIGN_IDS)
       .map((id) => command(u, { type: "stopCampaign", campaignId: id })),
+    fc
+      .record({
+        region: fc.constantFrom("pacific", "newEngland"),
+        id: fc.constantFrom("DC_1", "DC_2"),
+      })
+      .map((r) => command(u, { type: "buildDataCenter", region: r.region }, r.id)),
+    fc
+      .constantFrom(0, 0.5, 1, -1, 2)
+      .map((share) => command(u, { type: "setTrainingShare", share })),
   ),
 );
 

@@ -55,6 +55,8 @@ export type Economy = {
     businessFit: number;
     /** What unanswered questions cost: times (served share − 1). */
     reliability: number;
+    /** What a nearby data center is worth: times closeness, more for groups that want speed. */
+    nearby: number;
   };
   diffusion: {
     adoptRate: number;
@@ -84,6 +86,16 @@ export type Economy = {
     overloadNewsBelow: number;
     overloadNewsGapDays: number;
   };
+  /** One size of data center: its price, build time, capacity (PFLOP a day) and upkeep. */
+  dataCenter: {
+    cost: number;
+    buildDays: number;
+    pflopsPerDay: number;
+    upkeepPerMonth: number;
+    maxPerCompany: number;
+  };
+  /** Closeness to an open data center: in the region, or in a neighbouring one. */
+  nearby: { region: number; neighbor: number };
   campaigns: {
     budget: { min: number; max: number };
     days: { min: number; max: number };
@@ -295,6 +307,7 @@ const ECONOMY_V2: Economy = {
     freePenalty: 0.5,
     businessFit: 1,
     reliability: 3,
+    nearby: 0.6,
   },
   // - wordOfMouth 0.5 and launchBoost 0.1: about 1,300 customers on launch day and
   //   steady growth all year; at 0.02 and 0.01 a small company never got known.
@@ -317,6 +330,14 @@ const ECONOMY_V2: Economy = {
     overloadNewsBelow: 0.9,
     overloadNewsGapDays: 30,
   },
+  dataCenter: {
+    cost: 1_500_000,
+    buildDays: 60,
+    pflopsPerDay: 0.05,
+    upkeepPerMonth: 30_000,
+    maxPerCompany: 6,
+  },
+  nearby: { region: 1, neighbor: 0.4 },
   campaigns: {
     budget: { min: 100, max: 100_000 },
     days: { min: 7, max: 90 },

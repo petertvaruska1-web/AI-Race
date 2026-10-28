@@ -1,5 +1,6 @@
 import type { TrainingPlan, TrainingPreview } from "@airace/protocol";
 import { type Balance, getBalance } from "./balance.ts";
+import { ownedPflops } from "./compute.ts";
 import { paramCount, trainingFlops } from "./shape.ts";
 import type { CompanyState, RunState, TrainingResult, VersionState, WorldState } from "./state.ts";
 
@@ -18,17 +19,20 @@ export function previewTraining(
   }
   const parent =
     plan.parentVersionId === null ? null : (company.versions[plan.parentVersionId] ?? null);
-  return previewPlan(getBalance(state.balance), parent, plan);
+  const lent = ownedPflops(company, state.day) * company.compute.trainingShare;
+  return previewPlan(getBalance(state.balance), parent, plan, lent);
 }
 
 /**
- * The same preview from the balance and the parent's brain alone, so a client can show
- * exactly the cost and time the server will charge.
+ * The same preview from the balance, the parent's brain and the data-center compute
+ * lent to training (PFLOP a day) alone, so a client can show exactly the cost and
+ * time the server will charge. Lent compute is free and runs beside the cloud.
  */
 export function previewPlan(
   b: Balance,
   parent: { nLayer: number; dModel: number } | null,
   plan: TrainingPlan,
+  ownedPflopsPerDay = 0,
 ): PreviewResult {
   if (Object.values(plan.mix).every((w) => w === 0)) {
     return { ok: false, reason: "Pick at least one dataset to train on." };
@@ -58,8 +62,12 @@ export function previewPlan(
       params,
       tokens: length.tokens,
       flops,
-      cost: Math.round(pflop * b.cloudPricePerPflop) + (plan.factCheck ? b.factCheckCost : 0),
-      durationDays: Math.max(1, Math.ceil(pflop / b.cloudPflopsPerDay)),
+      cost:
+        Math.round(
+          (pflop * b.cloudPricePerPflop * b.cloudPflopsPerDay) /
+            (b.cloudPflopsPerDay + ownedPflopsPerDay),
+        ) + (plan.factCheck ? b.factCheckCost : 0),
+      durationDays: Math.max(1, Math.ceil(pflop / (b.cloudPflopsPerDay + ownedPflopsPerDay))),
     },
   };
 }

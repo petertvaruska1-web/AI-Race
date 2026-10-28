@@ -226,6 +226,16 @@ export const CampaignView = z.strictObject({
 });
 export type CampaignView = z.infer<typeof CampaignView>;
 
+/** A data center, building or open (its owner's only). */
+export const DataCenterView = z.strictObject({
+  id: zId,
+  region: z.enum(REGION_IDS),
+  startDay: Day,
+  openDay: Day,
+  open: z.boolean(),
+});
+export type DataCenterView = z.infer<typeof DataCenterView>;
+
 export const PrivateCompany = z.strictObject({
   id: zId,
   cash: z.number().int(),
@@ -248,6 +258,7 @@ export const PrivateCompany = z.strictObject({
    */
   history: z.record(z.string().regex(/^\d+$/), DaySampleView),
   campaigns: z.array(CampaignView),
+  dataCenters: z.array(DataCenterView),
   /** Serving capacity in PFLOP a day, and the share of today's questions answered. */
   compute: z.strictObject({
     cloudPflops: z.number().min(0),

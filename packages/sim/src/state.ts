@@ -194,6 +194,15 @@ export type ComputeState = {
   lastOverloadNews: number | null;
 };
 
+/** A data center: it serves (and trains) from `openDay` with its capacity. */
+export type DataCenterState = {
+  id: string;
+  region: RegionId;
+  startDay: number;
+  openDay: number;
+  pflopsPerDay: number;
+};
+
 /** A running ad campaign; it spends on the ticks after `startDay`, through `endDay`. */
 export type CampaignState = {
   id: string;
@@ -225,6 +234,7 @@ export type CompanyState = {
   history: DaySample[];
   campaigns: Record<string, CampaignState>;
   compute: ComputeState;
+  dataCenters: Record<string, DataCenterState>;
 };
 
 export type WorldState = {
