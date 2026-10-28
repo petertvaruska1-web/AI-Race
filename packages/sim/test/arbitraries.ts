@@ -183,6 +183,7 @@ const commandInput: fc.Arbitrary<Input> = user.chain((u) =>
     fc
       .constantFrom(0, 0.5, 1, -1, 2)
       .map((share) => command(u, { type: "setTrainingShare", share })),
+    fc.constantFrom("loan", "investor").map((kind) => command(u, { type: "chooseRescue", kind })),
   ),
 );
 

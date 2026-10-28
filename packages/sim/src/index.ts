@@ -13,6 +13,7 @@ export * from "./products.ts";
 export * from "./project.ts";
 export * from "./reducer.ts";
 export * from "./reports.ts";
+export * from "./rescue.ts";
 export * from "./rng.ts";
 export * from "./shape.ts";
 export * from "./spotlights.ts";

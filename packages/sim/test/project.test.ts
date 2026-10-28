@@ -149,6 +149,7 @@ describe("projectView", () => {
       "logo",
       "name",
       "ownerUserId",
+      "ownership",
       "palette",
       "prices",
       "products",

@@ -15,6 +15,7 @@ import { monthOfDay } from "./calendar.ts";
 import { customersOf, totalCustomers } from "./market.ts";
 import { liveProductFor } from "./products.ts";
 import { reportMonth } from "./reports.ts";
+import { rescueMonth } from "./rescue.ts";
 import type { CompanyState, LedgerState, MonthLedger, RunState, WorldState } from "./state.ts";
 
 // The money ledger (game-layer design §8). Every change of cash is booked here
@@ -158,6 +159,7 @@ export function closeMonths(s: WorldState): void {
       closeMonth(company, month, totalCustomers(s.market, id), byGroup);
       const closed = company.ledger.months.at(-1);
       if (closed) reportMonth(s, company, closed, company.ledger.months.at(-2));
+      rescueMonth(s, company);
     }
   }
 }

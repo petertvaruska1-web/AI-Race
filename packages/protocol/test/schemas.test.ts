@@ -123,6 +123,7 @@ function sampleView(): WorldView {
           (typeof REGION_IDS)[number],
           number
         >,
+        ownership: 0.75,
         reputation: 52,
         followers: 37,
       },
@@ -196,6 +197,8 @@ function sampleView(): WorldView {
           loadPflops: 0.0001,
           served: 1,
         },
+        rescue: { deadlineDay: 45 },
+        loan: { balance: 120_000, principalPerMonth: 5000, monthlyRate: 0.04 },
         reports: [
           {
             month: "2027-02",

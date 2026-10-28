@@ -264,6 +264,11 @@ export type CompanyState = {
   dataCenters: Record<string, DataCenterState>;
   /** The last 24 report cards, newest last. */
   reports: ReportCard[];
+  /** A rescue offer waiting for a choice. */
+  rescue: { offeredDay: number; deadlineDay: number } | null;
+  loan: { balance: number; principalPerMonth: number } | null;
+  /** The founders' share of the company (1 = all of it); investor rescues take part. */
+  ownership: number;
 };
 
 export type WorldState = {

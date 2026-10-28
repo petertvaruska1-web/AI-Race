@@ -119,6 +119,7 @@ function publicCompany(state: WorldState, c: CompanyState): PublicCompany {
     },
     customers: threeFigures(totalCustomers(state.market, c.id)),
     customersByRegion: perRegion(customersByRegion(state.market, c.id), threeFigures),
+    ownership: c.ownership,
     reputation: Math.round(c.fame.reputation),
     followers: Math.round(c.fame.followers),
   };
@@ -192,6 +193,14 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
       loadPflops: c.compute.loadPflops,
       served: c.compute.served,
     },
+    rescue: c.rescue ? { deadlineDay: c.rescue.deadlineDay } : null,
+    loan: c.loan
+      ? {
+          balance: c.loan.balance,
+          principalPerMonth: c.loan.principalPerMonth,
+          monthlyRate: getBalance(state.balance).economy.rescue.loanMonthlyRate,
+        }
+      : null,
     reports: c.reports.slice(-MONTHS_SHOWN).map((r) => ({
       ...r,
       growthByGroup: pick(GROUP_IDS, r.growthByGroup),

@@ -197,6 +197,8 @@ export const PublicCompany = z.strictObject({
   customers: Count,
   /** Rounded to three significant figures. */
   customersByRegion: z.record(z.enum(REGION_IDS), Count),
+  /** The founders' share of the company, after any investor rescue (1 = all of it). */
+  ownership: z.number().gt(0).max(1),
   reputation: Reputation,
   followers: Count,
 });
@@ -288,6 +290,15 @@ export const PrivateCompany = z.strictObject({
   dataCenters: z.array(DataCenterView),
   /** The last 12 report cards, newest last. */
   reports: z.array(ReportCardView).max(12),
+  /** A rescue offer waiting for a choice, until its deadline. */
+  rescue: z.strictObject({ deadlineDay: Day }).nullable(),
+  loan: z
+    .strictObject({
+      balance: z.number().int().min(0),
+      principalPerMonth: z.number().int().min(0),
+      monthlyRate: z.number().min(0),
+    })
+    .nullable(),
   /** Serving capacity in PFLOP a day, and the share of today's questions answered. */
   compute: z.strictObject({
     cloudPflops: z.number().min(0),

@@ -94,6 +94,17 @@ export type Economy = {
     upkeepPerMonth: number;
     maxPerCompany: number;
   };
+  /**
+   * The rescue: cash restored to `cushion`; a loan's monthly interest and term; an
+   * investor's share; days to choose before the game takes the loan.
+   */
+  rescue: {
+    cushion: number;
+    loanMonthlyRate: number;
+    loanTermMonths: number;
+    investorStake: number;
+    decideDays: number;
+  };
   /** Closeness to an open data center: in the region, or in a neighbouring one. */
   nearby: { region: number; neighbor: number };
   campaigns: {
@@ -338,6 +349,13 @@ const ECONOMY_V2: Economy = {
     maxPerCompany: 6,
   },
   nearby: { region: 1, neighbor: 0.4 },
+  rescue: {
+    cushion: 100_000,
+    loanMonthlyRate: 0.04,
+    loanTermMonths: 24,
+    investorStake: 0.25,
+    decideDays: 14,
+  },
   campaigns: {
     budget: { min: 100, max: 100_000 },
     days: { min: 7, max: 90 },

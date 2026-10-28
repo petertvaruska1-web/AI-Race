@@ -29,6 +29,7 @@ describe("sim properties", { timeout: 30_000 }, () => {
             "compute",
             "dataCenters",
             "reports",
+            "loan",
           ]) {
             expect(count(text, key), key).toBe(own ? 1 : 0);
           }
@@ -103,6 +104,8 @@ describe("sim properties", { timeout: 30_000 }, () => {
           );
           expect(Number.isInteger(company.cash)).toBe(true);
           expect(company.cash).toBe(BALANCE_V2.foundingCash + net);
+          expect(company.ownership).toBeGreaterThan(0);
+          expect(company.ownership).toBeLessThanOrEqual(1);
           // Training money: every run not refunded, once.
           const charged = Object.values(company.runs)
             .filter((r) => r.status !== "failed")
