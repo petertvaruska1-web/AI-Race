@@ -9,8 +9,16 @@ export type JobRow = typeof schema.jobs.$inferSelect;
 export type JobStatus = "queued" | "leased" | "done" | "failed" | "cancelled";
 type Handler<T> = (job: JobRow, value: T) => void | Promise<void>;
 
-/** Lower runs first: a player waiting on a chat reply beats a benchmark beats training. */
-export const JOB_PRIORITY: Record<JobType, number> = { generate: 0, eval: 1, train: 2 };
+/**
+ * Lower runs first (game-layer design §12): a player waiting on a chat reply, then
+ * the player's training, then scoring, then weekly customer feedback.
+ */
+export const JOB_PRIORITY: Record<JobType, number> = {
+  generate: 0,
+  train: 2,
+  eval: 3,
+  feedback: 4,
+};
 export const LEASE_MS = 30_000;
 export const MAX_ATTEMPTS = 3;
 const SWEEP_MS = 5_000;

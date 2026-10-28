@@ -1,0 +1,18 @@
+{
+  "schema": "ServerToWorker",
+  "message": {
+    "v": 1,
+    "type": "lease",
+    "jobId": "0d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6",
+    "jobType": "feedback",
+    "leaseMs": 30000,
+    "spec": {
+      "productId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "versionId": "6fa459ea-ee8a-4ca4-894e-db77e160355e",
+      "modelTarUrl": "http://127.0.0.1:8787/blobs/checkpoints/6fa459ea-ee8a-4ca4-894e-db77e160355e.tar?exp=1&sig=abc",
+      "groups": ["students", "creators", "developers", "businesses", "everyday", "researchers"],
+      "perGroup": 1,
+      "seed": 1234567
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GroupId } from "./world.ts";
 
 // Messages between the server and ML workers (plan Task 13). The Python worker
 // (ml/, Task 17) loads the fixtures in fixtures/worker/ to check it speaks the
@@ -7,7 +8,7 @@ import { z } from "zod";
 
 const v = z.literal(1);
 
-export const JOB_TYPES = ["train", "eval", "generate"] as const;
+export const JOB_TYPES = ["train", "eval", "generate", "feedback"] as const;
 export const JobType = z.enum(JOB_TYPES);
 export type JobType = z.infer<typeof JobType>;
 
@@ -19,7 +20,8 @@ export const WorkerCapabilities = z.object({
   vramMb: z.number().int().min(0),
   maxParams: z.number().int().positive(),
   jobTypes: z.array(JobType).min(1),
-  slots: z.object({ train: Slots, eval: Slots, generate: Slots }),
+  /** A worker from before feedback jobs sends no feedback slot: it gets none. */
+  slots: z.object({ train: Slots, eval: Slots, generate: Slots, feedback: Slots.default(0) }),
   /** Which corpus, tokenizer and evaluators the worker has installed (ADR 0008 item 2). */
   dataIdentity: z.string().min(1),
 });
@@ -112,6 +114,32 @@ export type GenerateJobSpec = z.infer<typeof GenerateJobSpec>;
 export const GenerateJobResult = z.object({ text: z.string() });
 export type GenerateJobResult = z.infer<typeof GenerateJobResult>;
 
+/** A product's AI answers customer questions from each group's pool (game-layer design §7). */
+export const FeedbackJobSpec = z.object({
+  productId: z.uuid(),
+  versionId: z.uuid(),
+  modelTarUrl: Url,
+  groups: z.array(GroupId).min(1),
+  perGroup: z.number().int().positive(),
+  seed: z.number().int().min(0),
+});
+export type FeedbackJobSpec = z.infer<typeof FeedbackJobSpec>;
+
+export const FeedbackJobResult = z.object({
+  results: z.array(
+    z.object({
+      group: GroupId,
+      questionId: z.string().min(1),
+      question: z.string(),
+      /** Real model output, exactly as generated (R1). */
+      reply: z.string(),
+      /** What the question's automatic check gave the reply, 0..1. */
+      score: z.number().min(0).max(1),
+    }),
+  ),
+});
+export type FeedbackJobResult = z.infer<typeof FeedbackJobResult>;
+
 /** Schemas by name, for the shared fixtures (`{schema, message}`). */
 export const WORKER_SCHEMAS = {
   WorkerMessage,
@@ -122,4 +150,6 @@ export const WORKER_SCHEMAS = {
   EvalJobResult,
   GenerateJobSpec,
   GenerateJobResult,
+  FeedbackJobSpec,
+  FeedbackJobResult,
 } as const;

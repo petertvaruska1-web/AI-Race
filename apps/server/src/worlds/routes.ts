@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { TEXT_LIMITS, zName } from "@airace/protocol";
-import { createWorld } from "@airace/sim";
+import { createWorld, type WorldState } from "@airace/sim";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -8,7 +8,7 @@ import type { AppContext } from "../app.ts";
 import { requireUser, sendError } from "../auth.ts";
 import { SIM_VERSION } from "../config.ts";
 import { schema } from "../db/index.ts";
-import { isUniqueViolation } from "./actor.ts";
+import { isUniqueViolation, OutdatedWorldError } from "./actor.ts";
 import { generateInviteCode } from "./inviteCode.ts";
 
 const CreateWorldBody = z.object({ name: zName(...TEXT_LIMITS.worldName) });
@@ -93,7 +93,19 @@ export function registerWorldRoutes(app: FastifyInstance, ctx: AppContext): void
         .orderBy(schema.memberships.joinedAt);
       const worlds = [];
       for (const row of rows) {
-        const s = (await ctx.worlds.get(row.worldId)).state();
+        let s: WorldState;
+        try {
+          s = (await ctx.worlds.get(row.worldId)).state();
+        } catch (err) {
+          if (!(err instanceof OutdatedWorldError)) throw err;
+          // Made with an older version: listed so the player knows, but it can't be opened.
+          const [world] = await ctx.db
+            .select({ name: schema.worlds.name })
+            .from(schema.worlds)
+            .where(eq(schema.worlds.id, row.worldId));
+          worlds.push({ id: row.worldId, name: world?.name ?? "", outdated: true });
+          continue;
+        }
         worlds.push({
           id: s.worldId,
           name: s.name,

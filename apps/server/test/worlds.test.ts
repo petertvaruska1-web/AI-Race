@@ -36,6 +36,30 @@ describe("world routes", () => {
     expect(state.inviteCode).toBe(world?.inviteCode);
   });
 
+  it("lists a world saved by an older version as outdated, without breaking the list", async () => {
+    server = await startTestServer();
+    const { cookie, worldId: oldId } = await createGuestWorld(server, "Ana", "Old world");
+    const created = await api(server, "/api/worlds", {
+      method: "POST",
+      cookie,
+      body: { name: "New world" },
+    });
+    const { worldId: newId } = (await created.json()) as { worldId: string };
+    await server.ctx.worlds.evict(oldId);
+    await server.ctx.db
+      .update(schema.worldSnapshots)
+      .set({ simVersion: "sim-1" })
+      .where(eq(schema.worldSnapshots.worldId, oldId));
+    const list = await api(server, "/api/worlds", { cookie });
+    expect(list.status).toBe(200);
+    expect(await list.json()).toEqual({
+      worlds: [
+        { id: oldId, name: "Old world", outdated: true },
+        { id: newId, name: "New world", phase: "setup", day: 0, memberCount: 1 },
+      ],
+    });
+  });
+
   it("lists only the caller's worlds", async () => {
     server = await startTestServer();
     await createGuestWorld(server, "Ana");

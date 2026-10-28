@@ -195,6 +195,17 @@ export const chatMessages = pgTable(
   (t) => [primaryKey({ columns: [t.threadId, t.idx] })],
 );
 
+/** One customer-feedback batch per product and key ("launch", "w12"): a restart never asks twice. */
+export const feedbackRequests = pgTable(
+  "feedback_requests",
+  {
+    productId: uuid("product_id").notNull(),
+    key: text("key").notNull(),
+    jobId: uuid("job_id"),
+  },
+  (t) => [primaryKey({ columns: [t.productId, t.key] })],
+);
+
 export const TABLE_NAMES = [
   "users",
   "auth_identities",
@@ -211,4 +222,5 @@ export const TABLE_NAMES = [
   "eval_results",
   "chat_threads",
   "chat_messages",
+  "feedback_requests",
 ] as const;

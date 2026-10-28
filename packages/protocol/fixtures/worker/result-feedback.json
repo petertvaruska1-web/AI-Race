@@ -1,0 +1,21 @@
+{
+  "schema": "FeedbackJobResult",
+  "message": {
+    "results": [
+      {
+        "group": "students",
+        "questionId": "students-003",
+        "question": "What is the capital of France?",
+        "reply": "Paris is the capital of France.",
+        "score": 1
+      },
+      {
+        "group": "developers",
+        "questionId": "developers-011",
+        "question": "Write a function that adds two numbers.",
+        "reply": "<b>x</b> <|end|>",
+        "score": 0
+      }
+    ]
+  }
+}

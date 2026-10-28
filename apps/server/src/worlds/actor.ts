@@ -23,6 +23,9 @@ export function isUniqueViolation(err: unknown): boolean {
   return false;
 }
 
+/** A world saved by another simulation version: it can't be replayed safely (C29). */
+export class OutdatedWorldError extends Error {}
+
 /**
  * The single writer of one world (spec §5.1). Inputs are applied one at a time:
  * dedupe by command id, `step`, append to the input log, swap the state, notify.
@@ -65,7 +68,7 @@ export class WorldActor {
       .limit(1);
     if (!snap) throw new Error(`World ${worldId} not found.`);
     if (snap.simVersion !== SIM_VERSION) {
-      throw new Error(
+      throw new OutdatedWorldError(
         `World ${worldId} was saved by simulation ${snap.simVersion}, but this server runs ${SIM_VERSION}. ` +
           "It can't be replayed safely; start it with a matching server version.",
       );

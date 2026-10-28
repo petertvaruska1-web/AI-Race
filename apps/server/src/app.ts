@@ -8,6 +8,7 @@ import { loadCatalog, NO_TRAINING_DATA, publicCatalog } from "./catalog.ts";
 import { ChatService } from "./chat/service.ts";
 import { type ServerOptions, SIM_VERSION } from "./config.ts";
 import { type Db, openDb } from "./db/index.ts";
+import { FeedbackService } from "./feedback/service.ts";
 import { JobBroker } from "./jobs/broker.ts";
 import { registerWorkerRoutes } from "./jobs/workerGateway.ts";
 import { createLogger, type Logger } from "./log.ts";
@@ -26,6 +27,7 @@ export type AppContext = {
   broker: JobBroker;
   training: TrainingService;
   chat: ChatService;
+  feedback: FeedbackService;
   blobs: BlobStore;
   /** Null until the training data is installed. */
   catalog: Catalog | null;
@@ -50,6 +52,7 @@ export async function buildApp(
     broker: undefined as unknown as JobBroker,
     training: undefined as unknown as TrainingService,
     chat: undefined as unknown as ChatService,
+    feedback: undefined as unknown as FeedbackService,
     blobs: new LocalFsBlobStore(opts.blobDir),
     catalog: loadCatalog(opts.catalogPath, log),
     onClose: (fn) => {
@@ -65,6 +68,8 @@ export async function buildApp(
   ctx.training = new TrainingService(ctx);
   ctx.onClose(() => ctx.training.close());
   ctx.chat = new ChatService(ctx);
+  ctx.feedback = new FeedbackService(ctx);
+  ctx.onClose(() => ctx.feedback.close());
   ctx.gateway.registerQuery("catalog", async () => {
     if (!ctx.catalog) throw new HttpError(503, NO_TRAINING_DATA);
     return publicCatalog(ctx.catalog);

@@ -27,6 +27,7 @@ describe("worker protocol fixtures", () => {
         train: WORKER_SCHEMAS.TrainJobSpec,
         eval: WORKER_SCHEMAS.EvalJobSpec,
         generate: WORKER_SCHEMAS.GenerateJobSpec,
+        feedback: WORKER_SCHEMAS.FeedbackJobSpec,
       }[lease.jobType];
       expect(spec.safeParse(lease.spec).error).toBeUndefined();
     }

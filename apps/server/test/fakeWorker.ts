@@ -51,7 +51,7 @@ export class FakeWorker {
         vramMb: 0,
         maxParams: 50_000_000,
         jobTypes,
-        slots: { train: 1, eval: 1, generate: 1, ...o.slots },
+        slots: { train: 1, eval: 1, generate: 1, feedback: 1, ...o.slots },
         dataIdentity: o.dataIdentity ?? s.ctx.catalog?.dataIdentity ?? "none",
       },
       running: o.running ?? [],
