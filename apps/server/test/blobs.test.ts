@@ -73,7 +73,10 @@ describe("blob store", () => {
     });
     await settle(200);
     expect(await server.ctx.blobs.exists("half/checkpoint.tar")).toBe(false);
-    // The upload did reach the server (its folder exists), and its partial file is gone.
-    expect(readdirSync(join(server.ctx.opts.blobDir, "half"))).toEqual([]);
+    // The upload did reach the server (its folder exists), and its partial file goes soon after;
+    // under a busy test run the cleanup can take longer than the 200 ms above.
+    const folder = join(server.ctx.opts.blobDir, "half");
+    for (let i = 0; i < 40 && readdirSync(folder).length > 0; i++) await settle(100);
+    expect(readdirSync(folder)).toEqual([]);
   });
 });
