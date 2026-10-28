@@ -16,7 +16,8 @@ export type WindowSpec =
   | { kind: "campaign"; region?: RegionId }
   | { kind: "dataCenter" }
   | { kind: "computers" }
-  | { kind: "report"; month: string };
+  | { kind: "report"; month: string }
+  | { kind: "rescue" };
 
 export type OpenWindow = {
   id: number;

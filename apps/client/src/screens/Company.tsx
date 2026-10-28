@@ -110,6 +110,9 @@ export function Company({ view }: { view: WorldView }) {
               onClick={(e) => open({ kind: "money" }, e.currentTarget)}
             />
           </div>
+          {pub.ownership < 1 && (
+            <p className="chip mt-4 inline-block">{`You own ${Math.round(pub.ownership * 100)}%`}</p>
+          )}
           {lastCard && (
             <button
               type="button"

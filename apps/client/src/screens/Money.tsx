@@ -32,6 +32,7 @@ export function Money({ view }: { view: WorldView }) {
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const company = view.me.company;
+  const pub = view.companies.find((c) => c.id === company?.id);
   if (!company) return null;
   const now = company.ledger.current;
   const last = company.ledger.months.at(-1);
@@ -125,7 +126,11 @@ export function Money({ view }: { view: WorldView }) {
         </Panel>
       </div>
 
-      {(now.financing.loans > 0 || now.financing.investors > 0 || now.financing.repaid > 0) && (
+      {(now.financing.loans > 0 ||
+        now.financing.investors > 0 ||
+        now.financing.repaid > 0 ||
+        company.loan !== null ||
+        (pub?.ownership ?? 1) < 1) && (
         <Panel
           title="Loans and investors"
           aria-label="Loans and investors"
@@ -138,6 +143,14 @@ export function Money({ view }: { view: WorldView }) {
               { label: "Repaid", value: now.financing.repaid, color: "var(--danger)" },
             ].filter((r) => r.value > 0)}
           />
+          {company.loan && (
+            <p className="mt-4 text-sm">
+              {`Owed: ${formatMoney(company.loan.balance)} · repaying ${formatMoney(company.loan.principalPerMonth)} a month, plus ${Math.round(company.loan.monthlyRate * 100)}% interest`}
+            </p>
+          )}
+          {(pub?.ownership ?? 1) < 1 && (
+            <p className="mt-2 text-sm">{`Investors own ${Math.round((1 - (pub?.ownership ?? 1)) * 100)}% of the company.`}</p>
+          )}
         </Panel>
       )}
 

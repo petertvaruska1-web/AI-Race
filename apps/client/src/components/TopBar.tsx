@@ -49,6 +49,7 @@ export function TopBar({ view }: { view: WorldView }) {
   const company = view.companies.find((c) => c.id === view.me.company?.id);
   const profit = monthProfit(view);
   const cash = view.me.company?.cash ?? 0;
+  const served = view.me.company?.compute.served ?? 1;
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-bg/80 backdrop-blur-md">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3">
@@ -80,6 +81,16 @@ export function TopBar({ view }: { view: WorldView }) {
             </span>
           </Figure>
         </button>
+        {served < 1 && (
+          <button
+            type="button"
+            aria-label={`Servers overloaded · ${Math.round(served * 100)}% answered`}
+            onClick={(e) => open({ kind: "computers" }, e.currentTarget)}
+            className="overload-chip rounded-full border border-danger px-3 py-1 text-xs font-semibold text-danger"
+          >
+            {`Servers overloaded · ${Math.round(served * 100)}% answered`}
+          </button>
+        )}
         <Clock view={view} />
       </div>
       <DayBar view={view} />

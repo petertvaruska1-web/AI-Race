@@ -12,6 +12,7 @@ import { PostWindow } from "./PostWindow.tsx";
 import { ProductWindow } from "./ProductWindow.tsx";
 import { RegionWindow } from "./RegionWindow.tsx";
 import { ReportWindow } from "./ReportWindow.tsx";
+import { RescueWindow } from "./RescueWindow.tsx";
 
 function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) {
   const s = entry.spec;
@@ -44,6 +45,8 @@ function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) 
       return <ComputersWindow entry={entry} view={view} />;
     case "report":
       return <ReportWindow entry={entry} view={view} month={s.month} />;
+    case "rescue":
+      return <RescueWindow entry={entry} view={view} />;
   }
 }
 

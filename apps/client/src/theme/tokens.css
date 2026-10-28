@@ -314,6 +314,17 @@ h3 {
   filter: drop-shadow(0 0 0.2px var(--brand-2));
 }
 
+/* Warnings that need the player: they breathe until dealt with. */
+@keyframes warn {
+  50% {
+    box-shadow: 0 0 18px color-mix(in srgb, var(--danger) 55%, transparent);
+  }
+}
+.overload-chip,
+.rescue-banner {
+  animation: warn 1.8s ease-in-out infinite;
+}
+
 /* The answered ring fills smoothly as service changes. */
 .gauge {
   transition: stroke-dashoffset 800ms ease;
