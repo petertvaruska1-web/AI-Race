@@ -21,6 +21,7 @@ import {
 } from "@airace/protocol";
 import { adoptionShare, getBalance } from "./balance.ts";
 import { dateOfDay } from "./calendar.ts";
+import { ownedPflops } from "./compute.ts";
 import { customersByRegion, customersOf, totalCustomers } from "./market.ts";
 import { liveProductFor } from "./products.ts";
 import type {
@@ -184,6 +185,13 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
       months: c.ledger.months.slice(-MONTHS_SHOWN).map(monthView),
     },
     fame: { reputation: Math.round(c.fame.reputation), followers: Math.round(c.fame.followers) },
+    compute: {
+      cloudPflops: c.compute.cloudPflops,
+      ownedPflops: ownedPflops(c, state.day),
+      trainingShare: c.compute.trainingShare,
+      loadPflops: c.compute.loadPflops,
+      served: c.compute.served,
+    },
     campaigns: Object.values(c.campaigns)
       .sort((a, b) => a.startDay - b.startDay || cmp(a.id, b.id))
       .map((k) => ({

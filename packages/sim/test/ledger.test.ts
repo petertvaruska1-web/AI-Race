@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   BALANCE_TEST,
   type CompanyState,
+  computeDay,
   createWorld,
   emptyMarket,
   emptyMonth,
@@ -148,6 +149,11 @@ function give(s: WorldState, group: GroupId, plan: PlanId, n: number): void {
 
 const sum = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
 
+/** Gives the company all the cloud room it could need, so serving is never cut short. */
+function roomFor(s: WorldState): void {
+  company(s).compute.cloudPflops = Number.POSITIVE_INFINITY;
+}
+
 describe("daily bookings", () => {
   it("books about N × $10 of personal income over 30 days, by group and plan", () => {
     const s = fresh(live());
@@ -180,6 +186,8 @@ describe("daily bookings", () => {
       v.dModel = dModel;
       give(s, "everyday", "free", 5_000_000);
       ledgerDay(s);
+      roomFor(s);
+      computeDay(s);
       expect(month(s).income.personal).toBe(0);
       return month(s).costs.serving;
     };
@@ -193,7 +201,8 @@ describe("daily bookings", () => {
   it("charges serving for every seat of a business account", () => {
     const s = fresh(live());
     give(s, "businesses", "business", 10_000);
-    ledgerDay(s);
+    roomFor(s);
+    computeDay(s);
     const seats = BALANCE_TEST.economy.groups.businesses.seatsPerAccount;
     const rate = BALANCE_TEST.economy.servingCostPerCustomerDayPerMParam;
     const expected = (10_000 * seats * rate * paramCount(2, 64)) / 1e6;
@@ -204,6 +213,7 @@ describe("daily bookings", () => {
     const s = fresh(live());
     const cash = company(s).cash;
     ledgerDay(s);
+    computeDay(s);
     expect(sum(month(s).income)).toBe(0);
     expect(month(s).costs.serving).toBe(0);
     expect(company(s).cash).toBe(cash);

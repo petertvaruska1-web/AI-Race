@@ -29,6 +29,7 @@ export function productAppeal(
   price: number,
   reputation: number,
   satisfaction: number,
+  served = 1,
 ): number {
   const g = economy.groups[group];
   const u = economy.utility;
@@ -46,7 +47,8 @@ export function productAppeal(
     fit +
     u.speed * g.speedPreference * speed +
     u.reputation * (reputation / 100 - 0.5) +
-    u.satisfaction * (satisfaction - 0.5)
+    u.satisfaction * (satisfaction - 0.5) +
+    u.reliability * (served - 1)
   );
 }
 
@@ -188,6 +190,7 @@ export function marketDay(s: WorldState): void {
             price,
             company.fame.reputation,
             satisfaction,
+            company.compute.served,
           );
           options.push({ companyId: id, plan, utility, satisfaction });
         }

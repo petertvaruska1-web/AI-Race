@@ -189,6 +189,13 @@ function sampleView(): WorldView {
         },
         ledger: { current: month, months: [] },
         fame: { reputation: 52, followers: 37 },
+        compute: {
+          cloudPflops: 0.00025,
+          ownedPflops: 0,
+          trainingShare: 0,
+          loadPflops: 0.0001,
+          served: 1,
+        },
         campaigns: [
           {
             id: "k1",

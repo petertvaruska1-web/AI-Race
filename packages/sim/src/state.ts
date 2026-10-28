@@ -183,6 +183,17 @@ export type LedgerState = {
   months: MonthLedger[];
 };
 
+/** Serving capacity (PFLOP a day) and how much of today's demand it met. */
+export type ComputeState = {
+  cloudPflops: number;
+  /** The share of owned capacity lent to training (0..1). */
+  trainingShare: number;
+  loadPflops: number;
+  /** The share of today's questions answered (0..1). */
+  served: number;
+  lastOverloadNews: number | null;
+};
+
 /** A running ad campaign; it spends on the ticks after `startDay`, through `endDay`. */
 export type CampaignState = {
   id: string;
@@ -213,6 +224,7 @@ export type CompanyState = {
   /** The last `HISTORY_DAYS` days, oldest first. */
   history: DaySample[];
   campaigns: Record<string, CampaignState>;
+  compute: ComputeState;
 };
 
 export type WorldState = {

@@ -248,6 +248,14 @@ export const PrivateCompany = z.strictObject({
    */
   history: z.record(z.string().regex(/^\d+$/), DaySampleView),
   campaigns: z.array(CampaignView),
+  /** Serving capacity in PFLOP a day, and the share of today's questions answered. */
+  compute: z.strictObject({
+    cloudPflops: z.number().min(0),
+    ownedPflops: z.number().min(0),
+    trainingShare: z.number().min(0).max(1),
+    loadPflops: z.number().min(0),
+    served: z.number().min(0).max(1),
+  }),
 });
 export type PrivateCompany = z.infer<typeof PrivateCompany>;
 

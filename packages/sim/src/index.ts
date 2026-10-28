@@ -1,6 +1,7 @@
 export * from "./balance.ts";
 export * from "./calendar.ts";
 export * from "./campaigns.ts";
+export * from "./compute.ts";
 export * from "./fame.ts";
 export * from "./feed.ts";
 export * from "./hash.ts";

@@ -65,7 +65,8 @@ function addItem(s: WorldState, item: NewFeedItem): void {
   if (s.feed.length > cap) s.feed.splice(0, s.feed.length - cap);
 }
 
-function addNews(
+/** Adds a news story about a company, and lets it move the company's news mood. */
+export function tellNews(
   s: WorldState,
   company: CompanyState,
   topic: NewsTopic,
@@ -172,7 +173,7 @@ function postBestAndWorst(
   if (!viral) return;
   company.fame.followers += viralFollowers / 10;
   const headline = `${viral.author.handle}'s ${TONE_WORDS[viral.tone]} ${product.name} is going viral`;
-  addNews(s, company, "viral", headline, viral.sentiment);
+  tellNews(s, company, "viral", headline, viral.sentiment);
 }
 
 /** Applies a scored feedback batch once: satisfaction, then posts (and maybe a viral story). */
@@ -235,19 +236,19 @@ export function newsDay(s: WorldState): void {
       const product = company.products[productId];
       if (product?.status !== "live" || product.launchDay !== s.day) continue;
       company.fame.followers += e.fame.followersPerHype * product.hype;
-      addNews(s, company, "launch", launchHeadline(company, product), e.newsSentiment.launch);
+      tellNews(s, company, "launch", launchHeadline(company, product), e.newsSentiment.launch);
     }
     const total = totalCustomers(s.market, id);
     const mark = CUSTOMER_MARKS.filter((m) => total >= m && m > company.announced.customers).at(-1);
     if (mark !== undefined) {
       company.announced.customers = mark;
       const headline = `${company.name} passes ${grouped(mark)} customers`;
-      addNews(s, company, "customers", headline, e.newsSentiment.customers);
+      tellNews(s, company, "customers", headline, e.newsSentiment.customers);
     }
     if (!company.announced.firstPaying && payingCustomers(s, id) >= 1) {
       company.announced.firstPaying = true;
       const headline = `${company.name} gets its first paying customer`;
-      addNews(s, company, "firstPaying", headline, e.newsSentiment.firstPaying);
+      tellNews(s, company, "firstPaying", headline, e.newsSentiment.firstPaying);
     }
   }
 }

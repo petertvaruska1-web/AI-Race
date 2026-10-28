@@ -158,18 +158,20 @@ describe("ad campaigns", () => {
 
   it("raise awareness only where they aim, winning more customers there", () => {
     const base = ticks(announced(), 3);
-    const aimed = ticks(ok(step(base, cmd(campaign({ days: 30 }), "k1"))), 30);
-    const plain = ticks(base, 30);
+    const started = ok(step(base, cmd(campaign({ days: 30 }), "k1")));
     const aware = (s: WorldState, r: string, g: string) =>
       s.market.awareness.c1?.[r as "pacific"]?.[g as "developers"] ?? 0;
+    // Its first day: only the cell it aims at moves.
+    const aimed = ticks(started, 1);
+    const plain = ticks(base, 1);
     expect(aware(aimed, "pacific", "developers")).toBeGreaterThan(
       aware(plain, "pacific", "developers"),
     );
-    expect(aware(aimed, "newEngland", "students")).toBeCloseTo(
-      aware(plain, "newEngland", "students"),
-      9,
+    expect(aware(aimed, "newEngland", "students")).toBe(aware(plain, "newEngland", "students"));
+    // A month on, it has won customers there.
+    expect(pacificDevelopers(ticks(started, 30))).toBeGreaterThan(
+      pacificDevelopers(ticks(base, 30)),
     );
-    expect(pacificDevelopers(aimed)).toBeGreaterThan(pacificDevelopers(plain));
   });
 
   it("aimed at everyone everywhere, reach every region and group", () => {

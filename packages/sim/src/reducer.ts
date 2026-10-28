@@ -1,6 +1,7 @@
 import { Command, TEXT_LIMITS } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
 import { campaignCommand, campaignsDay } from "./campaigns.ts";
+import { computeDay, newCompute } from "./compute.ts";
 import { fameDay } from "./fame.ts";
 import { applyFeedback, newsDay } from "./feed.ts";
 import { historyDay } from "./history.ts";
@@ -60,6 +61,7 @@ function tick(s: WorldState): Handled {
   campaignsDay(s);
   productsDay(s);
   marketDay(s);
+  computeDay(s);
   ledgerDay(s);
   newsDay(s);
   fameDay(s);
@@ -183,6 +185,7 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
         ledger: newLedger(s.day),
         history: [],
         campaigns: {},
+        compute: newCompute(getBalance(s.balance)),
       };
       member.companyId = newId;
       return OK;

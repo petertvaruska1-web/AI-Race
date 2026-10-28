@@ -57,7 +57,15 @@ export const COST_CATEGORIES = [
 export type CostCategory = (typeof COST_CATEGORIES)[number];
 
 /** News stories in Phase 1 (game-layer design §7). Later phases add more. */
-export const NEWS_TOPICS = ["launch", "customers", "firstPaying", "viral"] as const;
+export const NEWS_TOPICS = [
+  "launch",
+  "customers",
+  "firstPaying",
+  "viral",
+  "overload",
+  "dataCenter",
+  "rescue",
+] as const;
 export type NewsTopic = (typeof NEWS_TOPICS)[number];
 /** A customer post's tone, picked from its reply's score. */
 export const POST_TONES = ["praise", "joke", "roast"] as const;

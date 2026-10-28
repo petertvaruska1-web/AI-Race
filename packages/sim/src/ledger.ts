@@ -14,7 +14,6 @@ import { getBalance } from "./balance.ts";
 import { monthOfDay } from "./calendar.ts";
 import { customersOf, totalCustomers } from "./market.ts";
 import { liveProductFor } from "./products.ts";
-import { paramCount } from "./shape.ts";
 import type { CompanyState, LedgerState, MonthLedger, RunState, WorldState } from "./state.ts";
 
 // The money ledger (game-layer design §8). Every change of cash is booked here
@@ -103,33 +102,27 @@ export function bookTraining(
   book(company, "dataChecks", sign * checks);
 }
 
-/** A day of revenue and serving costs for every company. Call after the market step. */
+/** A day of revenue for every company (serving is booked by `computeDay`). Call after the market step. */
 export function ledgerDay(s: WorldState): void {
   const e = getBalance(s.balance).economy;
   for (const id of Object.keys(s.companies).sort()) {
     const company = s.companies[id];
     if (!company) continue;
-    let serving = 0;
     for (const plan of PLAN_IDS) {
       const product = liveProductFor(company, plan);
       const version = product ? company.versions[product.versionId] : undefined;
-      // A closed plan's customers are leaving: they neither pay nor use compute.
-      if (!version) continue;
-      const millions = paramCount(version.nLayer, version.dModel) / 1e6;
+      // A closed plan's customers are leaving: they no longer pay.
+      if (!version || plan === "free") continue;
       for (const group of GROUP_IDS) {
-        // A business account pays, and uses compute, for each of its seats.
+        // A business account pays for each of its seats.
         const seats = plan === "business" ? e.groups[group].seatsPerAccount : 1;
         for (const region of REGION_IDS) {
           const users = customersOf(s.market, id, region, group, plan) * seats;
-          serving += users * e.servingCostPerCustomerDayPerMParam * millions;
-          if (plan !== "free") {
-            const amount = (users * company.plans[plan].price) / BILLING_DAYS;
-            book(company, plan, amount, { group, plan, region });
-          }
+          const amount = (users * company.plans[plan].price) / BILLING_DAYS;
+          book(company, plan, amount, { group, plan, region });
         }
       }
     }
-    book(company, "serving", serving);
   }
 }
 

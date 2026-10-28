@@ -53,6 +53,8 @@ export type Economy = {
     satisfaction: number;
     freePenalty: number;
     businessFit: number;
+    /** What unanswered questions cost: times (served share − 1). */
+    reliability: number;
   };
   diffusion: {
     adoptRate: number;
@@ -69,6 +71,19 @@ export type Economy = {
    * person reached in a day, how much of a full reach turns into awareness, and the
    * hype a dollar adds to a launch counting down.
    */
+  /**
+   * Serving capacity in PFLOP a day: the cloud's starting room and how fast it can
+   * grow, owned compute's price as a share of the cloud's, and what an overload
+   * does to satisfaction and the news.
+   */
+  compute: {
+    cloudStartPflops: number;
+    cloudGrowthPerDay: number;
+    ownedServingPriceShare: number;
+    overloadSatisfactionHit: number;
+    overloadNewsBelow: number;
+    overloadNewsGapDays: number;
+  };
   campaigns: {
     budget: { min: number; max: number };
     days: { min: number; max: number };
@@ -279,6 +294,7 @@ const ECONOMY_V2: Economy = {
     satisfaction: 1.5,
     freePenalty: 0.5,
     businessFit: 1,
+    reliability: 3,
   },
   // - wordOfMouth 0.5 and launchBoost 0.1: about 1,300 customers on launch day and
   //   steady growth all year; at 0.02 and 0.01 a small company never got known.
@@ -293,6 +309,14 @@ const ECONOMY_V2: Economy = {
   // - 0.01: serving costs a tiny AI about 5% of its income; a medium AI costs four times
   //   as much per customer, so size is a real trade-off (at 0.0004 it was free).
   servingCostPerCustomerDayPerMParam: 0.01,
+  compute: {
+    cloudStartPflops: 0.00025,
+    cloudGrowthPerDay: 0.2,
+    ownedServingPriceShare: 0.3,
+    overloadSatisfactionHit: 0.05,
+    overloadNewsBelow: 0.9,
+    overloadNewsGapDays: 30,
+  },
   campaigns: {
     budget: { min: 100, max: 100_000 },
     days: { min: 7, max: 90 },
