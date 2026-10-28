@@ -1,7 +1,7 @@
 import type { VersionView, WorldView } from "@airace/protocol";
 import { dateOfDay, getBalance } from "@airace/sim";
 import { Button } from "../../components/Button.tsx";
-import { Card } from "../../components/Card.tsx";
+import { Panel } from "../../components/Panel.tsx";
 import { capitalize, words } from "../../format.ts";
 import { go } from "../../route.ts";
 import { usePlan } from "../../store/plan.ts";
@@ -30,7 +30,7 @@ export function VersionsStep({
   return (
     <div className="space-y-3">
       {versions.map((v) => (
-        <Card key={v.id} data-testid={`version-${v.label}`}>
+        <Panel key={v.id} data-testid={`version-${v.label}`}>
           <div className="flex flex-wrap items-center gap-4">
             <p className="text-2xl font-bold text-brand">{v.label}</p>
             <div className="mr-auto text-sm">
@@ -60,7 +60,7 @@ export function VersionsStep({
               Train further from this
             </Button>
           </div>
-        </Card>
+        </Panel>
       ))}
     </div>
   );

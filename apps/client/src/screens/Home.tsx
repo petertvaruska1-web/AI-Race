@@ -1,8 +1,8 @@
 import { TEXT_LIMITS } from "@airace/protocol";
 import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "../components/Button.tsx";
-import { Card } from "../components/Card.tsx";
 import { Field, INPUT } from "../components/Field.tsx";
+import { Panel } from "../components/Panel.tsx";
 import { api, type Me, type WorldSummary } from "../net/api.ts";
 import { go } from "../route.ts";
 
@@ -32,7 +32,7 @@ export function Welcome({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
     <main className="mx-auto mt-24 max-w-md px-6">
       <h1 className="mb-2 text-4xl font-bold">AI Race</h1>
       <p className="mb-8 text-muted">Run an AI company. Train a real AI. Race your friends.</p>
-      <Card>
+      <Panel>
         <form onSubmit={submit} className="space-y-4">
           <Field
             label="What should we call you?"
@@ -54,7 +54,7 @@ export function Welcome({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
             Continue
           </Button>
         </form>
-      </Card>
+      </Panel>
     </main>
   );
 }
@@ -77,7 +77,7 @@ export function Home({ me }: { me: Me }) {
     setError(null);
     try {
       const worldId = await api.createWorld(name);
-      go({ screen: "world", worldId, tab: "dashboard" });
+      go({ screen: "world", worldId, tab: "company" });
     } catch (err) {
       setError((err as Error).message);
     }
@@ -89,34 +89,41 @@ export function Home({ me }: { me: Me }) {
         <h1 className="text-3xl font-bold">Welcome, {me.displayName}</h1>
         <p className="text-muted">Pick up a world or start a new one.</p>
       </header>
-      <Card title="Your worlds">
+      <Panel title="Your worlds">
         {worlds === null ? (
           <p className="text-muted">Loading…</p>
         ) : worlds.length === 0 ? (
           <p className="text-muted">No worlds yet. Start one below.</p>
         ) : (
           <ul className="divide-y divide-border">
-            {worlds.map((w) => (
-              <li key={w.id} className="flex items-center justify-between py-3">
-                <div>
-                  <p className="font-semibold">{w.name}</p>
-                  <p className="text-sm text-muted">
-                    {w.phase === "setup" ? "Not started yet" : `Day ${w.day}`} · {w.memberCount}{" "}
-                    {w.memberCount === 1 ? "player" : "players"}
-                  </p>
-                </div>
-                <Button
-                  variant="secondary"
-                  onClick={() => go({ screen: "world", worldId: w.id, tab: "dashboard" })}
-                >
-                  Open
-                </Button>
-              </li>
-            ))}
+            {worlds.map((w) =>
+              w.outdated ? (
+                <li key={w.id} className="py-3 opacity-70">
+                  <p className="player-text font-semibold">{w.name}</p>
+                  <p className="text-sm text-muted">Made with an older version of the game</p>
+                </li>
+              ) : (
+                <li key={w.id} className="flex items-center justify-between py-3">
+                  <div>
+                    <p className="player-text font-semibold">{w.name}</p>
+                    <p className="text-sm text-muted">
+                      {w.phase === "setup" ? "Not started yet" : `Day ${w.day}`} · {w.memberCount}{" "}
+                      {w.memberCount === 1 ? "player" : "players"}
+                    </p>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => go({ screen: "world", worldId: w.id, tab: "company" })}
+                  >
+                    Open
+                  </Button>
+                </li>
+              ),
+            )}
           </ul>
         )}
-      </Card>
-      <Card
+      </Panel>
+      <Panel
         title="Start a new world"
         hint="A world is one game. Its clock starts when you open for business."
       >
@@ -133,7 +140,7 @@ export function Home({ me }: { me: Me }) {
             Start
           </Button>
         </form>
-      </Card>
+      </Panel>
       {error && (
         <p role="alert" className="text-sm text-danger">
           {error}

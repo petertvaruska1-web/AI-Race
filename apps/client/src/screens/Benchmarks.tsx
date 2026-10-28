@@ -1,7 +1,7 @@
 import type { VersionView, WorldView } from "@airace/protocol";
 import { useState } from "react";
-import { Card } from "../components/Card.tsx";
 import { INPUT } from "../components/Field.tsx";
+import { Panel } from "../components/Panel.tsx";
 
 /** The eight bench-v1 categories in plain words (R7). */
 export const CATEGORIES: { id: string; name: string; what: string }[] = [
@@ -59,14 +59,14 @@ export function Benchmarks({ view }: { view: WorldView }) {
         </p>
       </div>
       {version.scores === null ? (
-        <Card>
+        <Panel>
           <p className="text-muted">
             Scoring {version.label}… This takes a little while after training ends.
           </p>
-        </Card>
+        </Panel>
       ) : (
         <>
-          <Card>
+          <Panel>
             <div className="flex flex-wrap items-baseline gap-4">
               <p className="text-4xl font-bold text-brand" data-testid="overall">
                 {version.overall === null ? "–" : Math.round(version.overall)}
@@ -85,12 +85,12 @@ export function Benchmarks({ view }: { view: WorldView }) {
                 Compared with {parent.label}, the AI it grew from.
               </p>
             )}
-          </Card>
+          </Panel>
           <div className="grid gap-3 md:grid-cols-2">
             {CATEGORIES.map((c) => {
               const score = version.scores?.[c.id];
               return (
-                <Card key={c.id} data-testid={`score-${c.id}`}>
+                <Panel key={c.id} data-testid={`score-${c.id}`}>
                   <div className="flex items-baseline justify-between">
                     <h3 className="font-semibold">{c.name}</h3>
                     <span className="flex items-baseline gap-2">
@@ -109,7 +109,7 @@ export function Benchmarks({ view }: { view: WorldView }) {
                       aria-label={c.name}
                     />
                   )}
-                </Card>
+                </Panel>
               );
             })}
           </div>

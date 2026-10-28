@@ -14,6 +14,15 @@
   --brand-2: #c2c8e0;
   --on-brand: #000000;
   --brand-soft: #22273a;
+  --good: #4ade80;
+  /* The futuristic layer (game-layer design §3): glass panels lit by the company's color. */
+  --glass: color-mix(in srgb, var(--surface) 74%, transparent);
+  --glow: 0 0 24px color-mix(in srgb, var(--brand) 35%, transparent);
+  --line: color-mix(in srgb, var(--brand) 65%, transparent);
+  --grid: color-mix(in srgb, var(--brand) 7%, transparent);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
   color-scheme: dark;
 }
 
@@ -29,6 +38,7 @@
   --color-brand-2: var(--brand-2);
   --color-on-brand: var(--on-brand);
   --color-brand-soft: var(--brand-soft);
+  --color-good: var(--good);
   --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
@@ -40,6 +50,50 @@ body {
   font-family: var(--font-sans);
   margin: 0;
   min-height: 100%;
+}
+
+/* A soft wash of the company's colors behind everything. */
+body {
+  background:
+    radial-gradient(
+      1100px 600px at 8% -12%,
+      color-mix(in srgb, var(--brand) 16%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      900px 520px at 108% 8%,
+      color-mix(in srgb, var(--brand-2) 11%, transparent),
+      transparent 60%
+    ),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+/* A faint blueprint grid for the game area. */
+.grid-bg {
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Glass panels with a luminous top edge; they glow softly on hover. */
+.panel {
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-top-color: var(--line);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(14px);
+  transition:
+    box-shadow 200ms ease,
+    border-color 200ms ease;
+}
+.panel:hover {
+  box-shadow: var(--glow);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
 
 h1,

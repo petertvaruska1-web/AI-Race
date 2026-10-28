@@ -1,10 +1,12 @@
 import { useEffect } from "react";
+import { AppShell } from "../components/AppShell.tsx";
+import { Panel } from "../components/Panel.tsx";
 import type { Route } from "../route.ts";
 import { useSocket } from "../store/session.ts";
 import { useWorld } from "../store/world.ts";
 import { applyCompanyTheme } from "../theme/palette.ts";
 import { Benchmarks } from "./Benchmarks.tsx";
-import { Dashboard, WorldLayout } from "./Dashboard.tsx";
+import { Dashboard } from "./Dashboard.tsx";
 import { Lobby } from "./Lobby.tsx";
 import { Lab } from "./lab/LabLayout.tsx";
 import { Playground } from "./Playground.tsx";
@@ -39,11 +41,16 @@ export function WorldScreen({ route }: { route: WorldRoute }) {
   }
   if (view.world.phase === "setup" || !view.me.company) return <Lobby view={view} />;
   return (
-    <WorldLayout view={view} tab={route.tab}>
-      {route.tab === "dashboard" && <Dashboard view={view} />}
+    <AppShell view={view} tab={route.tab}>
+      {route.tab === "company" && <Dashboard view={view} />}
+      {(route.tab === "market" || route.tab === "money") && (
+        <Panel title={route.tab === "market" ? "Market" : "Money"}>
+          <p className="text-muted">This screen opens soon.</p>
+        </Panel>
+      )}
       {route.tab === "lab" && <Lab view={view} />}
       {route.tab === "play" && <Playground view={view} />}
       {route.tab === "bench" && <Benchmarks view={view} />}
-    </WorldLayout>
+    </AppShell>
   );
 }

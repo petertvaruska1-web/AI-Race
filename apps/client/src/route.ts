@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 
+const TABS = ["company", "market", "money", "lab", "play", "bench"] as const;
+export type Tab = (typeof TABS)[number];
+
 /** Screens are addressed by the URL hash, so a reload returns to the same screen. */
-export type Route =
-  | { screen: "home" }
-  | { screen: "world"; worldId: string; tab: "dashboard" | "lab" | "play" | "bench" };
+export type Route = { screen: "home" } | { screen: "world"; worldId: string; tab: Tab };
 
-const TABS = ["dashboard", "lab", "play", "bench"] as const;
-
+/** Parses `#/w/<world>/<tab>`; the old `dashboard` (and anything unknown) opens the company. */
 export function parseRoute(hash: string): Route {
   const [, w, worldId, tab] = hash.replace(/^#/, "").split("/");
   if (w === "w" && worldId) {
-    const t = TABS.find((x) => x === tab) ?? "dashboard";
+    const t = TABS.find((x) => x === tab) ?? "company";
     return { screen: "world", worldId, tab: t };
   }
   return { screen: "home" };

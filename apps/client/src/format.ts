@@ -16,6 +16,12 @@ export function gameDays(n: number): string {
   return n === 1 ? "1 game day" : `${n} game days`;
 }
 
+/** A whole count with thousands separators ("12,480"), without the platform's locale rules. */
+export function formatCount(n: number): string {
+  const digits = String(Math.abs(Math.round(n)));
+  return `${n < 0 ? "-" : ""}${digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+}
+
 export function percent(x: number): string {
   return `${Math.round(x * 100)}%`;
 }

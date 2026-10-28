@@ -1,7 +1,7 @@
 import { type PublicCatalog, prepKey, type TrainingPlan } from "@airace/protocol";
 import type { Balance } from "@airace/sim";
 import type { ReactNode } from "react";
-import { Card } from "../../components/Card.tsx";
+import { Panel } from "../../components/Panel.tsx";
 import { formatMoney, words } from "../../format.ts";
 import { usePlan } from "../../store/plan.ts";
 
@@ -53,7 +53,7 @@ function Toggle({
   children?: ReactNode;
 }) {
   return (
-    <Card>
+    <Panel>
       <label className="flex items-start gap-3">
         <input
           type="checkbox"
@@ -67,7 +67,7 @@ function Toggle({
         </span>
       </label>
       {children && <div className="mt-3">{children}</div>}
-    </Card>
+    </Panel>
   );
 }
 
@@ -89,7 +89,7 @@ export function PrepareStep({
 
   return (
     <div className="space-y-4">
-      <Card title="Cleaning" hint="How picky to be about what your AI reads.">
+      <Panel title="Cleaning" hint="How picky to be about what your AI reads.">
         <fieldset
           className="m-0 mb-3 inline-flex rounded-lg border border-border p-1"
           aria-label="Cleaning"
@@ -112,7 +112,7 @@ export function PrepareStep({
         <Removed
           items={examples(catalog, plan, (d) => d.removedExamples.cleaning[plan.cleaning])}
         />
-      </Card>
+      </Panel>
       <Toggle
         label="Remove duplicates"
         hint="Reads each text once, instead of memorizing what appears many times."

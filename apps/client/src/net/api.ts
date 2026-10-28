@@ -1,13 +1,17 @@
 /** The HTTP side of the server: accounts and the world list. Everything else goes over the socket. */
 
 export type Me = { userId: string; displayName: string; wsToken: string };
-export type WorldSummary = {
-  id: string;
-  name: string;
-  phase: "setup" | "running";
-  day: number;
-  memberCount: number;
-};
+export type WorldSummary =
+  | {
+      id: string;
+      name: string;
+      outdated?: false;
+      phase: "setup" | "running";
+      day: number;
+      memberCount: number;
+    }
+  /** Saved by an older version of the game: listed, but it can't be opened (C29). */
+  | { id: string; name: string; outdated: true };
 
 export class ApiError extends Error {
   constructor(

@@ -1,7 +1,7 @@
 import { TEXT_LIMITS, type TrainingPlan, type VersionView } from "@airace/protocol";
 import { type Balance, previewPlan } from "@airace/sim";
-import { Card } from "../../components/Card.tsx";
 import { Field, INPUT } from "../../components/Field.tsx";
+import { Panel } from "../../components/Panel.tsx";
 import { capitalize, formatMoney, gameDays, percent, words } from "../../format.ts";
 import { usePlan } from "../../store/plan.ts";
 
@@ -52,7 +52,7 @@ export function DesignStep({
   return (
     <div className="space-y-4">
       {versions.length > 0 && (
-        <Card
+        <Panel
           title="Grow from"
           hint="A new version keeps everything the earlier one learned and builds on it."
         >
@@ -74,10 +74,10 @@ export function DesignStep({
             ))}
             <option value="">Start a brand-new AI</option>
           </select>
-        </Card>
+        </Panel>
       )}
 
-      <Card
+      <Panel
         title="Brain size"
         hint="A bigger brain can learn more, but costs more and takes longer to train."
       >
@@ -101,9 +101,9 @@ export function DesignStep({
             );
           })}
         </div>
-      </Card>
+      </Panel>
 
-      <Card
+      <Panel
         title="Attention span"
         hint="How much text it keeps in mind at once while reading and answering."
       >
@@ -124,9 +124,9 @@ export function DesignStep({
             />
           ))}
         </div>
-      </Card>
+      </Panel>
 
-      <Card
+      <Panel
         title="Training length"
         hint="How much it reads in this run. Longer costs more and takes more game days."
       >
@@ -141,9 +141,9 @@ export function DesignStep({
             />
           ))}
         </div>
-      </Card>
+      </Panel>
 
-      <Card
+      <Panel
         title="Learning style"
         hint="Bold learns faster but can stumble; careful is slow and steady."
       >
@@ -161,9 +161,9 @@ export function DesignStep({
           />
           <span className="text-muted">Bold</span>
         </div>
-      </Card>
+      </Panel>
 
-      <Card
+      <Panel
         title={`Review what it knows: ${percent(plan.review)}`}
         hint={
           parent
@@ -182,9 +182,9 @@ export function DesignStep({
           onChange={(e) => update({ review: Number(e.target.value) })}
           className="w-full accent-[var(--brand)] disabled:opacity-40"
         />
-      </Card>
+      </Panel>
 
-      <Card>
+      <Panel>
         <Field
           label="Your test question (optional)"
           hint="We ask your AI this while it trains, so you can watch its answer improve."
@@ -197,7 +197,7 @@ export function DesignStep({
             onChange={(e) => update({ probePrompt: e.target.value })}
           />
         </Field>
-      </Card>
+      </Panel>
     </div>
   );
 }

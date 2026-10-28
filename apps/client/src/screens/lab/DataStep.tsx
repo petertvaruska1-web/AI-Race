@@ -1,5 +1,5 @@
 import { DATASET_IDS, type PublicCatalog, type TrainingPlan } from "@airace/protocol";
-import { Card } from "../../components/Card.tsx";
+import { Panel } from "../../components/Panel.tsx";
 import { percent, words } from "../../format.ts";
 import { usePlan } from "../../store/plan.ts";
 
@@ -17,7 +17,7 @@ export function DataStep({ plan, catalog }: { plan: TrainingPlan; catalog: Publi
         {catalog.datasets.map((d) => {
           const weight = plan.mix[d.id];
           return (
-            <Card key={d.id} data-testid={`dataset-${d.id}`}>
+            <Panel key={d.id} data-testid={`dataset-${d.id}`}>
               <div className="mb-2 flex items-baseline justify-between gap-2">
                 <h3 className="text-lg font-semibold">{d.title}</h3>
                 <span className="text-sm font-semibold text-brand">
@@ -48,7 +48,7 @@ export function DataStep({ plan, catalog }: { plan: TrainingPlan; catalog: Publi
                   ))}
                 </ul>
               </details>
-            </Card>
+            </Panel>
           );
         })}
       </div>

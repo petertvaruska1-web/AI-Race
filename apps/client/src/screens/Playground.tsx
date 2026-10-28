@@ -1,9 +1,9 @@
 import { TEXT_LIMITS, type VersionView, type WorldView } from "@airace/protocol";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Button } from "../components/Button.tsx";
-import { Card } from "../components/Card.tsx";
 import { ChatLog, type ChatMessage } from "../components/ChatLog.tsx";
 import { INPUT } from "../components/Field.tsx";
+import { Panel } from "../components/Panel.tsx";
 import { usePlayground } from "../store/playground.ts";
 import { useSocket } from "../store/session.ts";
 
@@ -169,7 +169,7 @@ export function Playground({ view }: { view: WorldView }) {
           ))}
         </ul>
       </aside>
-      <Card>
+      <Panel>
         {neverSawConversation(view, version) && (
           <p className="mb-3 rounded-lg bg-brand-soft p-3 text-sm">
             This AI never saw a conversation, so it may just continue your text.
@@ -212,7 +212,7 @@ export function Playground({ view }: { view: WorldView }) {
             Send
           </Button>
         </form>
-      </Card>
+      </Panel>
     </div>
   );
 }

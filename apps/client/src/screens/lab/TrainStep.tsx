@@ -1,7 +1,7 @@
 import type { RunView, WorldView } from "@airace/protocol";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card } from "../../components/Card.tsx";
 import { type Line, LineChart } from "../../components/LineChart.tsx";
+import { Panel } from "../../components/Panel.tsx";
 import { type SampleEvent, SampleFeed } from "../../components/SampleFeed.tsx";
 import { percent } from "../../format.ts";
 import { useSocket } from "../../store/session.ts";
@@ -139,7 +139,7 @@ function RunPanel({ view, run }: { view: WorldView; run: RunView }) {
 
   return (
     <div className="space-y-4">
-      <Card>
+      <Panel>
         <Status run={run} label={version?.label} />
         {(run.status === "training" || run.status === "finalizing") && (
           <div className="mt-3">
@@ -154,9 +154,9 @@ function RunPanel({ view, run }: { view: WorldView; run: RunView }) {
             </p>
           </div>
         )}
-      </Card>
+      </Panel>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card
+        <Panel
           title="How wrong its guesses are"
           hint="It reads by guessing the next word. Falling means it is learning."
         >
@@ -166,8 +166,8 @@ function RunPanel({ view, run }: { view: WorldView; run: RunView }) {
             x={loss.steps}
             lines={loss.lines}
           />
-        </Card>
-        <Card
+        </Panel>
+        <Panel
           title="What it's learning"
           hint="How well it guesses text it has never seen, for each kind of reading."
         >
@@ -177,14 +177,14 @@ function RunPanel({ view, run }: { view: WorldView; run: RunView }) {
             x={learning.steps}
             lines={learning.lines}
           />
-        </Card>
+        </Panel>
       </div>
-      <Card
+      <Panel
         title="What it says"
         hint="Its own words while it trains, including your test question."
       >
         <SampleFeed samples={samples} totalSteps={totalSteps} />
-      </Card>
+      </Panel>
     </div>
   );
 }

@@ -2,11 +2,11 @@ import { type Logo as LogoSpec, type Palette, TEXT_LIMITS, type WorldView } from
 import { PALETTE_PRESETS } from "@airace/sim";
 import { type FormEvent, useState } from "react";
 import { Button } from "../components/Button.tsx";
-import { Card } from "../components/Card.tsx";
 import { Field, INPUT } from "../components/Field.tsx";
 import { Logo } from "../components/Logo.tsx";
 import { LogoBuilder } from "../components/LogoBuilder.tsx";
 import { PalettePicker } from "../components/PalettePicker.tsx";
+import { Panel } from "../components/Panel.tsx";
 import { useSocket } from "../store/session.ts";
 
 const FIRST_PRESET = PALETTE_PRESETS[0]?.palette ?? { primary: "#4f8cff", secondary: "#38d9c0" };
@@ -45,7 +45,7 @@ function FoundCompany({ view }: { view: WorldView }) {
       </header>
       <form onSubmit={found} className="grid gap-6 md:grid-cols-[1fr_280px]">
         <div className="space-y-6">
-          <Card>
+          <Panel>
             <Field label="Company name" hint={`${min}–${max} characters.`}>
               <input
                 className={INPUT}
@@ -55,16 +55,16 @@ function FoundCompany({ view }: { view: WorldView }) {
                 placeholder="Acme Intelligence"
               />
             </Field>
-          </Card>
-          <Card title="Logo">
+          </Panel>
+          <Panel title="Logo">
             <LogoBuilder logo={logo} palette={palette} onChange={setLogo} />
-          </Card>
-          <Card title="Colors">
+          </Panel>
+          <Panel title="Colors">
             <PalettePicker value={palette} onChange={setPalette} />
-          </Card>
+          </Panel>
         </div>
         <aside className="space-y-4">
-          <Card title="Preview" className="sticky top-6">
+          <Panel title="Preview" className="sticky top-6">
             <div
               data-testid="preview"
               className="flex flex-col items-center gap-3 rounded-xl p-6"
@@ -90,7 +90,7 @@ function FoundCompany({ view }: { view: WorldView }) {
             >
               Found company
             </Button>
-          </Card>
+          </Panel>
         </aside>
       </form>
     </main>
