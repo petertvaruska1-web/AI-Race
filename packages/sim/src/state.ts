@@ -194,6 +194,33 @@ export type ComputeState = {
   lastOverloadNews: number | null;
 };
 
+/** A post kept on a report card: who said it, and the AI's reply quoted verbatim (R1). */
+export type MomentPost = {
+  author: { name: string; handle: string; group: GroupId };
+  productName: string;
+  question: string;
+  reply: string;
+  tone: PostTone;
+};
+
+/** A month's report card. Game commentary, except the quoted posts. */
+export type ReportCard = {
+  month: string;
+  revenue: number;
+  costs: number;
+  profit: number;
+  lastProfit: number | null;
+  customersStart: number;
+  customersEnd: number;
+  growthByGroup: Record<GroupId, number>;
+  /** Customer-weighted satisfaction (0..1) at the close; null without customers. */
+  mood: number | null;
+  best: MomentPost | null;
+  worst: MomentPost | null;
+  headline: string | null;
+  grade: "A" | "B" | "C" | "D" | "F";
+};
+
 /** A data center: it serves (and trains) from `openDay` with its capacity. */
 export type DataCenterState = {
   id: string;
@@ -235,6 +262,8 @@ export type CompanyState = {
   campaigns: Record<string, CampaignState>;
   compute: ComputeState;
   dataCenters: Record<string, DataCenterState>;
+  /** The last 24 report cards, newest last. */
+  reports: ReportCard[];
 };
 
 export type WorldState = {

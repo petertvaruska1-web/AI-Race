@@ -236,6 +236,33 @@ export const DataCenterView = z.strictObject({
 });
 export type DataCenterView = z.infer<typeof DataCenterView>;
 
+/** A post kept on a report card; its reply is real model output, verbatim (R1). */
+export const MomentPostView = z.strictObject({
+  author: z.strictObject({ name: z.string(), handle: z.string(), group: GroupId }),
+  productName: z.string(),
+  question: z.string(),
+  reply: z.string(),
+  tone: z.enum(POST_TONES),
+});
+
+/** A month's report card (its owner's only). */
+export const ReportCardView = z.strictObject({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  revenue: z.number().int(),
+  costs: z.number().int(),
+  profit: z.number().int(),
+  lastProfit: z.number().int().nullable(),
+  customersStart: Count,
+  customersEnd: Count,
+  growthByGroup: z.record(GroupId, z.number().int()),
+  mood: z.number().min(0).max(1).nullable(),
+  best: MomentPostView.nullable(),
+  worst: MomentPostView.nullable(),
+  headline: z.string().nullable(),
+  grade: z.enum(["A", "B", "C", "D", "F"]),
+});
+export type ReportCardView = z.infer<typeof ReportCardView>;
+
 export const PrivateCompany = z.strictObject({
   id: zId,
   cash: z.number().int(),
@@ -259,6 +286,8 @@ export const PrivateCompany = z.strictObject({
   history: z.record(z.string().regex(/^\d+$/), DaySampleView),
   campaigns: z.array(CampaignView),
   dataCenters: z.array(DataCenterView),
+  /** The last 12 report cards, newest last. */
+  reports: z.array(ReportCardView).max(12),
   /** Serving capacity in PFLOP a day, and the share of today's questions answered. */
   compute: z.strictObject({
     cloudPflops: z.number().min(0),

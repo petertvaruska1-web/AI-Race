@@ -192,6 +192,12 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
       loadPflops: c.compute.loadPflops,
       served: c.compute.served,
     },
+    reports: c.reports.slice(-MONTHS_SHOWN).map((r) => ({
+      ...r,
+      growthByGroup: pick(GROUP_IDS, r.growthByGroup),
+      best: r.best ? { ...r.best, author: { ...r.best.author } } : null,
+      worst: r.worst ? { ...r.worst, author: { ...r.worst.author } } : null,
+    })),
     dataCenters: Object.values(c.dataCenters)
       .sort((a, b) => a.startDay - b.startDay || cmp(a.id, b.id))
       .map((d) => ({

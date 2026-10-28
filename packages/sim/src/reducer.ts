@@ -188,6 +188,7 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
         campaigns: {},
         compute: newCompute(getBalance(s.balance)),
         dataCenters: {},
+        reports: [],
       };
       member.companyId = newId;
       return OK;

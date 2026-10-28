@@ -196,6 +196,29 @@ function sampleView(): WorldView {
           loadPflops: 0.0001,
           served: 1,
         },
+        reports: [
+          {
+            month: "2027-02",
+            revenue: 1200,
+            costs: 300,
+            profit: 900,
+            lastProfit: null,
+            customersStart: 0,
+            customersEnd: 140,
+            growthByGroup: { ...zeros(GROUP_IDS), students: 140 },
+            mood: 0.62,
+            best: {
+              author: { name: "Iris L.", handle: "@iris_l51", group: "students" },
+              productName: "Spark",
+              question: "Capital of France?",
+              reply: "<b>Paris</b> <|end|>",
+              tone: "praise",
+            },
+            worst: null,
+            headline: "Acme launches Spark",
+            grade: "B",
+          },
+        ],
         dataCenters: [{ id: "dc1", region: "pacific", startDay: 1, openDay: 61, open: false }],
         campaigns: [
           {
