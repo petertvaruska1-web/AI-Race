@@ -70,9 +70,8 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
 - **The single-player game layer** (owner request, 2026-10-27): design `docs/superpowers/specs/2026-10-27-game-layer-design.md` (decisions C7–C29, four phases).
   - **Phase 1 "A real company" is complete** (2026-10-28; plan `docs/superpowers/plans/2026-10-27-game-layer-phase1.md`, 15 tasks): launch day, plans and prices, a national market of six customer groups, real-reply customer posts, news, reputation and followers, the money ledger, the new look with the orb, and the Company, Money and Market screens. Record: `docs/handoff/sdd/ledger-game-layer-phase1.md`.
   - **Owner feedback after playing Phase 1 (2026-10-28, decision C30):** make the game engaging and immersive, not "looking at graphs": motion, transitions, windows that open (detail pop-ups), things to click, charts that expand, more visuals.
-  - **Next, in order, without stopping for review (the owner's explicit go):**
-    1. **An immersion pass** on the Phase 1 screens (Company, Money, Market, the shell, the Lab's train step): a short design, then build it with tests, and check it in the browser.
-    2. **Phase 2 "A growing business":** write its plan from the design (the 9-region map, ad campaigns, data centers, the monthly report card, rescue), with the same immersive feel in every new screen, then execute it inline like Phase 1.
+  - **The immersion pass is complete** (2026-10-28; design `docs/superpowers/specs/2026-10-28-immersion-design.md`): windows for every number (customers, groups, products, the AI, money, months, money lines, posts), day and month charts, 120 days of history per company, motion (screen slides, a day bar, floating changes, toasts with bursts, customers streaming into the orb, a crowd of dots per group), expanding training charts. Every new screen follows its rules.
+  - **Next, without stopping for review (the owner's explicit go): Phase 2 "A growing business":** write its plan from the design (the 9-region map, ad campaigns, data centers, the monthly report card, rescue), with the same immersive feel in every new screen, then execute it inline like Phase 1.
   - Phases 3 (rivals) and 4 (surprises and goals) follow; M2 Stage 2 (Tasks 25–28, friends) comes after the whole game layer.
 
 ## 5. Local GPU session checklist (Windows 11 + RTX 3050)

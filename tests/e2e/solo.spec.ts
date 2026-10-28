@@ -88,8 +88,9 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
   const customers = async () =>
     Number(((await page.getByTestId("customers").textContent()) ?? "").replace(/\D/g, ""));
   await expect.poll(customers, { timeout: 60_000 }).toBeGreaterThan(0);
-  await expect(page.getByText(/Ember Labs launches Spark/)).toBeVisible();
+  // The feed has it (a toast may show the same headline for a few seconds).
   const feed = page.getByRole("list", { name: "News and posts" });
+  await expect(feed.getByText(/Ember Labs launches Spark/)).toBeVisible();
   const quote = feed.locator("blockquote").first();
   await expect(quote).toBeVisible({ timeout: 300_000 });
   expect(((await quote.textContent()) ?? "").trim().length).toBeGreaterThan(0);
@@ -108,7 +109,7 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
   const before = await customers();
   await page.reload();
   await expect.poll(customers).toBeGreaterThanOrEqual(before);
-  await expect(page.getByText(/Ember Labs launches Spark/)).toBeVisible();
+  await expect(feed.getByText(/Ember Labs launches Spark/)).toBeVisible();
   await expect(
     page.getByRole("list", { name: "News and posts" }).locator("blockquote").first(),
   ).toBeVisible();

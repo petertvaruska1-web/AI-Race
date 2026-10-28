@@ -2,6 +2,13 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-10-28 — Immersion pass (owner decision C30)
+- **What changed for the player:** the screens now move and open up. Anything with a number opens a window that grows out of what was clicked and explains it with its history: customers (stacked day by day by group), each customer group (its customers, share, mood, plans, spotlight person and posts), each product, the AI itself (orb, score bars, style), money (cash day by day, profit month by month), each month's report, each income and cost line, and each post. Windows stack (Back returns), Escape and the backdrop close them, and they update live.
+- **Motion:** screens slide in, a line under the top bar fills over each game day, cash and customers float their changes, new posts slide into the feed, news about your company pops up as a toast with a small burst for milestones, new customers stream into the orb in their groups' colors, the Market draws each group's customers as a crowd of dots, money bars grow in, and the training charts expand to full width. Everything is instant for players who ask their system for less motion.
+- **Built:** design `docs/superpowers/specs/2026-10-28-immersion-design.md`. The sim keeps 120 days of history per company (in its owner's view only; worlds saved before keep working). Client: a window stack, day and month charts, the eight windows, and the screen changes. `npm run dev` can now run a second game beside the first (`AIRACE_WEB_PORT`).
+- **Verified:** TypeScript 355 tests; lint and type checks clean; the end-to-end game passes (its news check now looks in the feed, since a toast shows the same headline). Played in the browser on the GPU: trained an AI (overall 39), launched it, and opened every kind of window with live numbers.
+- **Next:** Phase 2 "A growing business", straight away (the owner's go), with the same feel in every new screen.
+
 ## 2026-10-28 — Game layer Phase 1: "A real company"
 - **What a player can now do** (single player, `npm run dev`): train an AI, launch it as a named product on the free, personal and business plans after a hype-building countdown, watch customers arrive in six groups, read customers' posts that quote the AI's real replies, read news of real events, and follow money in and out month by month. The whole app has a new look: glass panels lit in the company's colors, and the AI as a glowing orb that grows and changes with its real scores and personality.
 - **Built** (`docs/superpowers/plans/2026-10-27-game-layer-phase1.md`, 15 tasks):

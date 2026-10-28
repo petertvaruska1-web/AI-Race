@@ -66,13 +66,14 @@ describe("market crowd", () => {
     ).toBeTruthy();
   });
 
-  it("picks a step of people that keeps every crowd small", () => {
+  it("picks a round step of people that keeps the biggest crowd within 120 dots", () => {
     expect(crowdStep(0)).toBe(1);
-    expect(crowdStep(80)).toBe(1);
-    expect(crowdStep(81)).toBe(10);
-    expect(crowdStep(800)).toBe(10);
-    expect(crowdStep(801)).toBe(100);
-    expect(crowdStep(2_500_000)).toBe(100_000);
+    expect(crowdStep(120)).toBe(1);
+    expect(crowdStep(121)).toBe(2);
+    expect(crowdStep(240)).toBe(2);
+    expect(crowdStep(241)).toBe(5);
+    expect(crowdStep(8_442)).toBe(100);
+    expect(crowdStep(2_500_000)).toBe(50_000);
   });
 
   it("opens a group's window from its card", async () => {

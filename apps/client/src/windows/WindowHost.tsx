@@ -73,7 +73,8 @@ export function WindowHost({ view }: { view: WorldView }) {
           className="fixed inset-0 z-40 flex items-center justify-center p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          // Clicks pass through while it fades away.
+          exit={{ opacity: 0, pointerEvents: "none" }}
           transition={{ duration: 0.18 }}
         >
           <button

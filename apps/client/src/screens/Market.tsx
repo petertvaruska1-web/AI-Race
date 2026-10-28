@@ -10,13 +10,13 @@ import { useWindows } from "../store/windows.ts";
 const PLAN_NAMES = { free: "Free", personal: "Personal", business: "Business" } as const;
 
 /** The most dots a group's crowd draws. */
-const CROWD_MOST = 80;
+const CROWD_MOST = 120;
 
-/** People per dot, a power of ten, so the biggest group's crowd stays within `CROWD_MOST` dots. */
+/** People per dot (1, 2 or 5 times a power of ten), so the biggest crowd stays within `CROWD_MOST` dots. */
 export function crowdStep(most: number): number {
-  let step = 1;
-  while (most / step > CROWD_MOST) step *= 10;
-  return step;
+  for (let mag = 1; ; mag *= 10) {
+    for (const k of [1, 2, 5]) if (most / (k * mag) <= CROWD_MOST) return k * mag;
+  }
 }
 
 /** A group's customers as a crowd of dots in a sunflower spiral; new ones pop in. */
@@ -27,7 +27,7 @@ function Crowd({ people, step, color }: { people: number; step: number; color: s
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="mt-3 h-24 w-full" aria-hidden="true">
       {Array.from({ length: dots }, (_, i) => {
-        const r = 4.9 * Math.sqrt(i + 0.5);
+        const r = 4 * Math.sqrt(i + 0.5);
         const a = i * 2.399963;
         return (
           <circle
