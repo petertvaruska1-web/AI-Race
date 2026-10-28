@@ -184,6 +184,17 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
       months: c.ledger.months.slice(-MONTHS_SHOWN).map(monthView),
     },
     fame: { reputation: Math.round(c.fame.reputation), followers: Math.round(c.fame.followers) },
+    campaigns: Object.values(c.campaigns)
+      .sort((a, b) => a.startDay - b.startDay || cmp(a.id, b.id))
+      .map((k) => ({
+        id: k.id,
+        region: k.region,
+        group: k.group,
+        budgetPerDay: k.budgetPerDay,
+        startDay: k.startDay,
+        endDay: k.endDay,
+        spent: k.spent,
+      })),
     history: Object.fromEntries(
       c.history.map(({ day, ...sample }) => [
         String(day),

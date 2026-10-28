@@ -64,6 +64,19 @@ export type Economy = {
     neighborSpill: number;
   };
   servingCostPerCustomerDayPerMParam: number;
+  /**
+   * Ad campaigns: daily budgets and lengths allowed, how many at once, dollars per
+   * person reached in a day, how much of a full reach turns into awareness, and the
+   * hype a dollar adds to a launch counting down.
+   */
+  campaigns: {
+    budget: { min: number; max: number };
+    days: { min: number; max: number };
+    maxRunning: number;
+    costPerReach: number;
+    awarenessPerReach: number;
+    hypePerDollar: number;
+  };
   fame: {
     reputationStart: number;
     reputationRate: number;
@@ -280,6 +293,14 @@ const ECONOMY_V2: Economy = {
   // - 0.01: serving costs a tiny AI about 5% of its income; a medium AI costs four times
   //   as much per customer, so size is a real trade-off (at 0.0004 it was free).
   servingCostPerCustomerDayPerMParam: 0.01,
+  campaigns: {
+    budget: { min: 100, max: 100_000 },
+    days: { min: 7, max: 90 },
+    maxRunning: 5,
+    costPerReach: 0.05,
+    awarenessPerReach: 0.5,
+    hypePerDollar: 0.000002,
+  },
   fame: {
     reputationStart: 50,
     reputationRate: 0.03,

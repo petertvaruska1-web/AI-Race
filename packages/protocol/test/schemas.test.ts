@@ -189,6 +189,17 @@ function sampleView(): WorldView {
         },
         ledger: { current: month, months: [] },
         fame: { reputation: 52, followers: 37 },
+        campaigns: [
+          {
+            id: "k1",
+            region: "pacific",
+            group: "all",
+            budgetPerDay: 2000,
+            startDay: 1,
+            endDay: 31,
+            spent: 4000,
+          },
+        ],
         history: {
           "3": {
             cash: 120_000,

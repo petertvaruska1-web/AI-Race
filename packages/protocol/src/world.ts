@@ -177,6 +177,14 @@ export const Command = z.discriminatedUnion("type", [
     price: z.number().int(),
   }),
   z.object({ type: z.literal("retireProduct"), productId: zId }),
+  z.object({
+    type: z.literal("startCampaign"),
+    region: z.union([z.enum(REGION_IDS), z.literal("all")]),
+    group: z.union([GroupId, z.literal("all")]),
+    budgetPerDay: z.number().int(),
+    days: z.number().int(),
+  }),
+  z.object({ type: z.literal("stopCampaign"), campaignId: zId }),
 ]);
 export type Command = z.infer<typeof Command>;
 export type CommandType = Command["type"];

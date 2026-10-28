@@ -18,7 +18,15 @@ describe("sim properties", { timeout: 30_000 }, () => {
           const text = JSON.stringify(view);
           // Private fields appear once, in the viewer's own company, or not at all.
           const own = viewer.companyId ? s.companies[viewer.companyId] : undefined;
-          for (const key of ["ledger", "satisfaction", "plans", "fame", "history", "byRegion"]) {
+          for (const key of [
+            "ledger",
+            "satisfaction",
+            "plans",
+            "fame",
+            "history",
+            "byRegion",
+            "campaigns",
+          ]) {
             expect(count(text, key), key).toBe(own ? 1 : 0);
           }
           // Cash shows in the viewer's own company and in each day of its history.

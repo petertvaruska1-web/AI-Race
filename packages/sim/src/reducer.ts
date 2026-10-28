@@ -1,5 +1,6 @@
 import { Command, TEXT_LIMITS } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
+import { campaignCommand, campaignsDay } from "./campaigns.ts";
 import { fameDay } from "./fame.ts";
 import { applyFeedback, newsDay } from "./feed.ts";
 import { historyDay } from "./history.ts";
@@ -56,6 +57,7 @@ function tick(s: WorldState): Handled {
   s.day += 1;
   closeMonths(s);
   settleRuns(s);
+  campaignsDay(s);
   productsDay(s);
   marketDay(s);
   ledgerDay(s);
@@ -180,6 +182,7 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
         ...newCompanyBusiness(getBalance(s.balance)),
         ledger: newLedger(s.day),
         history: [],
+        campaigns: {},
       };
       member.companyId = newId;
       return OK;
@@ -243,6 +246,12 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       const company = member.companyId ? s.companies[member.companyId] : undefined;
       if (!company) return no("Found your company first.");
       return productCommand(s, company, cmd, newId);
+    }
+    case "startCampaign":
+    case "stopCampaign": {
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("Found your company first.");
+      return campaignCommand(s, company, cmd, newId);
     }
     default:
       return no("That request isn't valid.");

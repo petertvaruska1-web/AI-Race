@@ -183,6 +183,17 @@ export type LedgerState = {
   months: MonthLedger[];
 };
 
+/** A running ad campaign; it spends on the ticks after `startDay`, through `endDay`. */
+export type CampaignState = {
+  id: string;
+  region: RegionId | "all";
+  group: GroupId | "all";
+  budgetPerDay: number;
+  startDay: number;
+  endDay: number;
+  spent: number;
+};
+
 export type CompanyState = {
   id: string;
   ownerUserId: string;
@@ -201,6 +212,7 @@ export type CompanyState = {
   announced: { customers: number; firstPaying: boolean };
   /** The last `HISTORY_DAYS` days, oldest first. */
   history: DaySample[];
+  campaigns: Record<string, CampaignState>;
 };
 
 export type WorldState = {

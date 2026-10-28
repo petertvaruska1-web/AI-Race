@@ -110,11 +110,16 @@ function setCustomers(
   m.customers[companyId] = byRegion;
 }
 
-function awarenessOf(m: MarketState, companyId: string, region: string, group: GroupId): number {
+export function awarenessOf(
+  m: MarketState,
+  companyId: string,
+  region: string,
+  group: GroupId,
+): number {
   return m.awareness[companyId]?.[region]?.[group] ?? 0;
 }
 
-function setAwareness(
+export function setAwareness(
   m: MarketState,
   companyId: string,
   region: string,

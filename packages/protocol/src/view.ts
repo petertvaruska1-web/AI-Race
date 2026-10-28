@@ -214,6 +214,18 @@ export const DaySampleView = z.strictObject({
 });
 export type DaySampleView = z.infer<typeof DaySampleView>;
 
+/** A running ad campaign (its owner's only). */
+export const CampaignView = z.strictObject({
+  id: zId,
+  region: z.union([z.enum(REGION_IDS), z.literal("all")]),
+  group: z.union([GroupId, z.literal("all")]),
+  budgetPerDay: z.number().int().positive(),
+  startDay: Day,
+  endDay: Day,
+  spent: z.number().int().min(0),
+});
+export type CampaignView = z.infer<typeof CampaignView>;
+
 export const PrivateCompany = z.strictObject({
   id: zId,
   cash: z.number().int(),
@@ -235,6 +247,7 @@ export const PrivateCompany = z.strictObject({
    * a growing array would be resent whole (immersion design I2).
    */
   history: z.record(z.string().regex(/^\d+$/), DaySampleView),
+  campaigns: z.array(CampaignView),
 });
 export type PrivateCompany = z.infer<typeof PrivateCompany>;
 

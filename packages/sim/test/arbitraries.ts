@@ -17,6 +17,7 @@ export const RUN_IDS = ["RUN_1", "RUN_2", "RUN_3", "RUN_4", "RUN_5", "RUN_6", "R
 export const VERSION_IDS = ["VER_1", "VER_2", "VER_3", "VER_4", "VER_5", "VER_6", "VER_7", "VER_8"];
 const NAMES = ["Acme", "acme", "Beta Labs", "Cortex", "Delta", "A"];
 export const PRODUCT_IDS = ["PROD_1", "PROD_2", "PROD_3", "PROD_4"];
+export const CAMPAIGN_IDS = ["AD_1", "AD_2"];
 const PRODUCT_NAMES = ["Spark", "spark", "Nova", "<b>Bolt</b> 🚀", "X"];
 /** Replies a real model might write; posts must carry them unchanged. */
 const REPLIES = ["<b>x</b> <|end|>", "", "😀😀", "x".repeat(2000), "Paris."];
@@ -149,6 +150,30 @@ const commandInput: fc.Arbitrary<Input> = user.chain((u) =>
     fc
       .constantFrom(...PRODUCT_IDS)
       .map((id) => command(u, { type: "retireProduct", productId: id })),
+    fc
+      .record({
+        region: fc.constantFrom("pacific", "midSouth", "all"),
+        group: fc.constantFrom("developers", "everyday", "all"),
+        budget: fc.constantFrom(100, 2000, 99, 100_000),
+        days: fc.constantFrom(7, 30, 6),
+        id: fc.constantFrom(...CAMPAIGN_IDS),
+      })
+      .map((r) =>
+        command(
+          u,
+          {
+            type: "startCampaign",
+            region: r.region,
+            group: r.group,
+            budgetPerDay: r.budget,
+            days: r.days,
+          },
+          r.id,
+        ),
+      ),
+    fc
+      .constantFrom(...CAMPAIGN_IDS)
+      .map((id) => command(u, { type: "stopCampaign", campaignId: id })),
   ),
 );
 
