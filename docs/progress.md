@@ -2,6 +2,17 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-10-28 — Game layer Phase 1: "A real company"
+- **What a player can now do** (single player, `npm run dev`): train an AI, launch it as a named product on the free, personal and business plans after a hype-building countdown, watch customers arrive in six groups, read customers' posts that quote the AI's real replies, read news of real events, and follow money in and out month by month. The whole app has a new look: glass panels lit in the company's colors, and the AI as a glowing orb that grows and changes with its real scores and personality.
+- **Built** (`docs/superpowers/plans/2026-10-27-game-layer-phase1.md`, 15 tasks):
+  - Game rules (sim-2, balance-v2): products, plans and prices; a national market of six customer groups with spotlight customers; the money ledger; feedback satisfaction, posts, news, reputation and followers; what each player may see, with privacy checks over random games; a balance harness that retuned the economy (a typical first AI now stays a small startup).
+  - Server: weekly customer feedback jobs (plus one on launch), jobs ordered chat, training, scoring, feedback; worlds from an older version listed as outdated.
+  - Python: customer question pools drawn from the benchmark's held-out generators, and the worker's feedback job.
+  - Web app: the design system and app shell, the orb, and the Company, Money and Market screens with the launch dialog.
+- **Verified:** TypeScript 319 tests; Python 1,616 tests (2 min 45 s); lint and type checks clean; the end-to-end game (now with launch, customers, posts and money) passed three times. On the RTX 3050 a first AI trained in about 80 s and was scored in 15 s (overall 43); launched as "Wave", it had 5,555 customers two days later, posts quoted its real replies ("Phiated.", "BYetch"), and chat answered within a second while feedback batches ran (1–2 s each).
+- **Final review** (a self-review, by the owner's wish for no helper agents this milestone): fixed one serious hole (an id named like a built-in object part, such as `__proto__`, could reach every object on the server) and the Money screen showing rising costs in green. Seven small items are deferred in `docs/handoff/sdd/ledger-game-layer-phase1.md`.
+- **Next:** the owner's look at Phase 1; then Phase 2 "A growing business" (regions map, ad campaigns, data centers, report card, rescue).
+
 ## 2026-10-27 — Game-layer design interview ("Open for Business", single player)
 - The owner judged the Stage 1 build a good demo but far from the game they want, and asked for a full design of the playable game before multiplayer.
 - A design interview set decisions C7–C29:
