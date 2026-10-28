@@ -8,6 +8,7 @@ import { GroupWindow } from "./GroupWindow.tsx";
 import { CategoryWindow, MoneyWindow, MonthWindow } from "./MoneyWindows.tsx";
 import { PostWindow } from "./PostWindow.tsx";
 import { ProductWindow } from "./ProductWindow.tsx";
+import { RegionWindow } from "./RegionWindow.tsx";
 
 function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) {
   const s = entry.spec;
@@ -30,6 +31,8 @@ function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) 
       return <CategoryWindow entry={entry} view={view} side="costs" category={s.category} />;
     case "post":
       return <PostWindow entry={entry} view={view} postId={s.postId} />;
+    case "region":
+      return <RegionWindow entry={entry} view={view} region={s.region} />;
   }
 }
 

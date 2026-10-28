@@ -1,10 +1,12 @@
-import { GROUP_IDS, PLAN_IDS, type WorldView } from "@airace/protocol";
+import { GROUP_IDS, PLAN_IDS, REGION_IDS, type WorldView } from "@airace/protocol";
 import { Face } from "../components/Face.tsx";
 import { Panel } from "../components/Panel.tsx";
+import { RegionMap, type RegionMarks } from "../components/RegionMap.tsx";
 import { Stat } from "../components/Stat.tsx";
 import { formatCount } from "../format.ts";
 import { GROUPS, groupColors } from "../groups.ts";
 import { aboutPeople, caresAbout, groupCustomers, groupSatisfaction } from "../people.ts";
+import { regionCustomers, shareByRegion } from "../regions.ts";
 import { useWindows } from "../store/windows.ts";
 
 const PLAN_NAMES = { free: "Free", personal: "Personal", business: "Business" } as const;
@@ -102,11 +104,31 @@ export function Market({ view }: { view: WorldView }) {
             <p className="text-sm text-muted">of everyone willing</p>
           </div>
         </div>
-        <p className="mt-4 text-xs text-muted">
+        <div className="mt-5">
+          <RegionMap
+            label="Your customers by region"
+            values={shareByRegion(view)}
+            color={pub.palette.primary}
+            marks={regionMarks(view)}
+            onOpen={(region, el) => open({ kind: "region", region }, el)}
+            readout={(r) => {
+              const n = regionCustomers(view, r);
+              const people = view.world.market.regions[r].adoptable;
+              return (
+                <p className="text-muted">
+                  <span className="tabular font-semibold text-text">{formatCount(n)}</span>{" "}
+                  customers · {people > 0 ? `${((100 * n) / people).toFixed(2)}%` : "0%"} of those
+                  willing
+                </p>
+              );
+            }}
+          />
+        </div>
+        <p className="mt-3 text-xs text-muted">
           <span className="font-semibold text-text">
             {`Each dot is ${step === 1 ? "1 person" : `${formatCount(step)} people`}`}
           </span>{" "}
-          · Regions arrive soon: you'll see your customers spread across the country.
+          in the crowds below. Brighter regions are where more of the people willing use your AI.
         </p>
       </Panel>
 
@@ -161,6 +183,24 @@ export function Market({ view }: { view: WorldView }) {
       </div>
     </div>
   );
+}
+
+/** Campaigns and data centers shown on the map. */
+export function regionMarks(view: WorldView): RegionMarks {
+  const marks: RegionMarks = {};
+  const company = view.me.company;
+  for (const k of company?.campaigns ?? []) {
+    const regions = k.region === "all" ? REGION_IDS : [k.region];
+    for (const r of regions) marks[r] = { ...marks[r], campaign: true };
+  }
+  for (const d of company?.dataCenters ?? []) {
+    const now = marks[d.region]?.dataCenter;
+    marks[d.region] = {
+      ...marks[d.region],
+      dataCenter: d.open || now === "open" ? "open" : "building",
+    };
+  }
+  return marks;
 }
 
 /** Customers at each month's end, then today, as a small line drawn in when shown. */

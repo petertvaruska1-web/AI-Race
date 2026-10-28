@@ -1,4 +1,4 @@
-import type { CostCategory, GroupId, IncomeCategory } from "@airace/protocol";
+import type { CostCategory, GroupId, IncomeCategory, RegionId } from "@airace/protocol";
 import { create } from "zustand";
 
 /** What a window explains (immersion design: every number has a story). */
@@ -11,7 +11,8 @@ export type WindowSpec =
   | { kind: "month"; month: string }
   | { kind: "income"; category: IncomeCategory }
   | { kind: "cost"; category: CostCategory }
-  | { kind: "post"; postId: string };
+  | { kind: "post"; postId: string }
+  | { kind: "region"; region: RegionId };
 
 export type OpenWindow = {
   id: number;

@@ -4,6 +4,7 @@ import { Button } from "../components/Button.tsx";
 import { Feed } from "../components/Feed.tsx";
 import { FloatDelta } from "../components/FloatDelta.tsx";
 import { Panel } from "../components/Panel.tsx";
+import { RegionMap } from "../components/RegionMap.tsx";
 import { Stat } from "../components/Stat.tsx";
 import { monthProfit } from "../components/TopBar.tsx";
 import { formatCount, formatMoney } from "../format.ts";
@@ -12,9 +13,11 @@ import { daysOf } from "../history.ts";
 import { profitOf, total } from "../money.ts";
 import { Orb } from "../orb/Orb.tsx";
 import { arrivalsFrom } from "../orb/params.ts";
+import { regionCustomers, shareByRegion } from "../regions.ts";
 import { go } from "../route.ts";
 import { useWindows } from "../store/windows.ts";
 import { LaunchDialog, launchBlocked } from "./LaunchDialog.tsx";
+import { regionMarks } from "./Market.tsx";
 
 /**
  * The company's home: its AI as an orb, customers and money on the left, the
@@ -72,6 +75,24 @@ export function Company({ view }: { view: WorldView }) {
             />
           </div>
           <GroupBar groups={byGroup} palette={pub.palette} />
+          <div className="mt-4">
+            <RegionMap
+              small
+              label="Customers by region"
+              values={shareByRegion(view)}
+              color={pub.palette.primary}
+              marks={regionMarks(view)}
+              onOpen={(region, el) => open({ kind: "region", region }, el)}
+              readout={(r) => (
+                <p className="text-muted">
+                  <span className="tabular font-semibold text-text">
+                    {formatCount(regionCustomers(view, r))}
+                  </span>{" "}
+                  customers
+                </p>
+              )}
+            />
+          </div>
         </Panel>
         <Panel title="Money">
           <div className="lift relative -m-2 rounded-xl p-2">
