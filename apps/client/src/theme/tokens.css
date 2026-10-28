@@ -109,6 +109,147 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+/* Windows (immersion design): nearly solid glass, lit by the company's color. */
+.window {
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid var(--border);
+  border-top-color: var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 30px 80px rgb(0 0 0 / 0.5),
+    var(--glow);
+}
+.icon-btn {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  transition:
+    color 150ms ease,
+    background 150ms ease;
+}
+.icon-btn:hover {
+  color: var(--text);
+  background: var(--brand-soft);
+}
+.row-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-size: 0.875rem;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+.row-btn:hover {
+  border-color: var(--line);
+  box-shadow: var(--glow);
+  transform: translateY(-1px);
+}
+.chip {
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--surface-2);
+  padding: 0.125rem 0.625rem;
+  font-size: 0.75rem;
+}
+
+/* Anything that opens something lifts and glows under the pointer. */
+.lift {
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--glow);
+  border-color: var(--line);
+}
+.lift-row:hover,
+.lift-bar:hover {
+  background: color-mix(in srgb, var(--brand) 9%, transparent);
+}
+
+/* Things grow in when shown. "backwards" leaves no transform behind afterwards. */
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes grow-up {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+.chart-draw {
+  stroke-dasharray: 1;
+  animation: draw 900ms cubic-bezier(0.3, 0.7, 0.2, 1) backwards;
+}
+.chart-fade {
+  animation: fade-in 700ms ease 250ms backwards;
+}
+.bar-up {
+  transform-origin: bottom;
+  animation: grow-up 600ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  transition: height 500ms ease;
+}
+.bar-down {
+  transform-origin: top;
+  animation: grow-up 600ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  transition: height 500ms ease;
+}
+.bar-x {
+  transform-origin: left;
+  animation: grow-x 700ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  transition: width 600ms ease;
+}
+
+/* A screen slides in, its parts one after another. */
+.screen-in > * > * {
+  animation: rise 480ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.screen-in > * > :nth-child(2) {
+  animation-delay: 70ms;
+}
+.screen-in > * > :nth-child(3) {
+  animation-delay: 140ms;
+}
+.screen-in > * > :nth-child(4) {
+  animation-delay: 210ms;
+}
+.screen-in > * > :nth-child(n + 5) {
+  animation-delay: 280ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

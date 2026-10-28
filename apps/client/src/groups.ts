@@ -1,4 +1,5 @@
-import type { GroupId } from "@airace/protocol";
+import { GROUP_IDS, type GroupId, type Palette } from "@airace/protocol";
+import { mix } from "./theme/palette.ts";
 
 /** The customer groups in plain words (R7): one person, and the group. */
 export const GROUPS: Record<GroupId, { one: string; many: string; wants: string }> = {
@@ -17,3 +18,11 @@ export const GROUPS: Record<GroupId, { one: string; many: string; wants: string 
   },
   researchers: { one: "Researcher", many: "Researchers", wants: "Reasoning and knowledge" },
 };
+
+/** One shade of the company's colors per group, from its second color to its first. */
+export function groupColors(palette: Palette): Record<GroupId, string> {
+  const last = GROUP_IDS.length - 1;
+  return Object.fromEntries(
+    GROUP_IDS.map((g, i) => [g, mix(palette.secondary, palette.primary, i / last)]),
+  ) as Record<GroupId, string>;
+}

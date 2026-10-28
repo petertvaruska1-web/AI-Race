@@ -12,16 +12,25 @@ const TONES: Record<PostTone, { color: string; words: string }> = {
 
 /**
  * A customer's post: the game's frame around a question and the AI's reply,
- * quoted exactly and shown as text (R1). A long reply folds, but all of it stays.
+ * quoted exactly and shown as text (R1). A long reply folds, but all of it stays;
+ * `full` never folds. With `onOpen` the whole card opens the post's window.
  */
-export function PostCard({ post }: { post: PostView }) {
+export function PostCard({
+  post,
+  full = false,
+  onOpen,
+}: {
+  post: PostView;
+  full?: boolean;
+  onOpen?: (el: HTMLElement) => void;
+}) {
   const [open, setOpen] = useState(false);
   const tone = TONES[post.tone];
-  const long = post.reply.length > FOLD_AT;
+  const long = !full && post.reply.length > FOLD_AT;
   const spotlight = post.author.spotlightId !== null;
   return (
     <article
-      className="rounded-xl border border-border bg-surface/60 p-4"
+      className={`relative rounded-xl border border-border bg-surface/60 p-4 ${onOpen ? "lift" : ""}`}
       style={{ borderLeft: `3px solid ${tone.color}` }}
     >
       <header className="flex flex-wrap items-baseline gap-x-2">
@@ -54,13 +63,21 @@ export function PostCard({ post }: { post: PostView }) {
         {long && (
           <button
             type="button"
-            className="text-muted hover:text-text"
+            className="relative z-10 text-muted hover:text-text"
             onClick={() => setOpen(!open)}
           >
             {open ? "Show less" : "Show more"}
           </button>
         )}
       </footer>
+      {onOpen && (
+        <button
+          type="button"
+          aria-label={`Open the post by ${spotlight ? post.author.name : post.author.handle}`}
+          className="absolute inset-0 rounded-xl"
+          onClick={(e) => onOpen(e.currentTarget)}
+        />
+      )}
     </article>
   );
 }
