@@ -4,6 +4,7 @@ import type { Tab } from "../route.ts";
 import { useWindows } from "../store/windows.ts";
 import { WindowHost } from "../windows/WindowHost.tsx";
 import { SideNav } from "./SideNav.tsx";
+import { Toasts } from "./Toasts.tsx";
 import { TopBar } from "./TopBar.tsx";
 
 /** A world's frame: the top bar, the screens on the side and the open screen. */
@@ -36,6 +37,7 @@ export function AppShell({
           </div>
         </main>
       </div>
+      <Toasts view={view} />
       <WindowHost view={view} />
     </div>
   );

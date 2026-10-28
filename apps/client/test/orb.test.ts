@@ -1,5 +1,7 @@
+import { GROUP_IDS, type GroupId } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
-import { type OrbInput, orbParams } from "../src/orb/params.ts";
+import { groupColors } from "../src/groups.ts";
+import { arrivalsFrom, type OrbInput, orbParams } from "../src/orb/params.ts";
 
 const PALETTE = { primary: "#4f8cff", secondary: "#ffb020" };
 const SCORES = {
@@ -130,5 +132,44 @@ describe("orb parameters", () => {
     for (let x = 14; x <= 26; x++) {
       expect(Math.abs(edge(x + 1) - edge(x))).toBeLessThanOrEqual(0.1 * edge(x));
     }
+  });
+});
+
+describe("customer arrivals", () => {
+  const day = (d: number, customers: Partial<Record<GroupId, number>>) => ({
+    day: d,
+    cash: 0,
+    paying: 0,
+    followers: 0,
+    reputation: 50,
+    customers: { ...Object.fromEntries(GROUP_IDS.map((g) => [g, 0])), ...customers } as Record<
+      GroupId,
+      number
+    >,
+  });
+
+  it("streams in the day's new customers, each group in its share and color", () => {
+    const a = arrivalsFrom(
+      [day(1, { students: 10, everyday: 20 }), day(2, { students: 40, creators: 5, everyday: 20 })],
+      PALETTE,
+    );
+    const colors = groupColors(PALETTE);
+    expect(a?.colors).toEqual([colors.students, colors.creators]);
+    expect(a?.shares).toEqual([30 / 35, 5 / 35]);
+  });
+
+  it("streams faster the more arrive, and not at all when none do", () => {
+    expect(arrivalsFrom([day(1, { students: 10 }), day(2, { students: 5 })], PALETTE)).toBeNull();
+    expect(arrivalsFrom([day(1, { students: 10 })], PALETTE)).toBeNull();
+    const few = arrivalsFrom([day(1, {}), day(2, { students: 3 })], PALETTE);
+    const many = arrivalsFrom([day(1, {}), day(2, { students: 3000 })], PALETTE);
+    expect(many?.rate ?? 0).toBeGreaterThan(few?.rate ?? 1);
+    expect(many?.rate ?? 2).toBeLessThanOrEqual(1);
+  });
+
+  it("hands arrivals to the orb", () => {
+    const arrivals = { rate: 0.5, colors: ["#ffffff"], shares: [1] };
+    expect(orbParams({ ...SCORED, arrivals }).arrivals).toEqual(arrivals);
+    expect(orbParams(SCORED).arrivals).toBeNull();
   });
 });

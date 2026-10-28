@@ -1,5 +1,6 @@
 import { BALANCE_TEST } from "@airace/sim";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { TrainStep } from "../src/screens/lab/TrainStep.tsx";
 import { useSession } from "../src/store/session.ts";
@@ -130,5 +131,18 @@ describe("live training view", () => {
     await serve(game.ws, [sample(1, "<script>alert(1)</script> hello")]);
     expect(await screen.findByText("<script>alert(1)</script> hello")).toBeTruthy();
     expect(container.querySelector("script")).toBeNull();
+  });
+});
+
+describe("training charts", () => {
+  it("expand to the full width and back", async () => {
+    render(<TrainStep view={viewOf(training())} />);
+    await serve(game.ws, [progress(1), progress(2)]);
+    const panel = () => screen.getByRole("region", { name: "How wrong its guesses are" });
+    expect(panel().getAttribute("data-expanded")).toBe("false");
+    await userEvent.click(screen.getByRole("button", { name: "Expand How wrong its guesses are" }));
+    expect(panel().getAttribute("data-expanded")).toBe("true");
+    await userEvent.click(screen.getByRole("button", { name: "Shrink How wrong its guesses are" }));
+    expect(panel().getAttribute("data-expanded")).toBe("false");
   });
 });

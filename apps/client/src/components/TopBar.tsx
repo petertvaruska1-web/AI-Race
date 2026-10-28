@@ -1,8 +1,11 @@
 import { SPEEDS, type Speed, type WorldView } from "@airace/protocol";
+import { getBalance } from "@airace/sim";
 import type { ReactNode } from "react";
 import { formatMoney } from "../format.ts";
 import { useSocket } from "../store/session.ts";
+import { useWindows } from "../store/windows.ts";
 import { CountUp } from "./CountUp.tsx";
+import { FloatDelta } from "./FloatDelta.tsx";
 import { Logo } from "./Logo.tsx";
 
 const total = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
@@ -15,19 +18,37 @@ export function monthProfit(view: WorldView): number {
 
 function Figure({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <p className="text-right">
+    <span className="block text-right">
       <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted">
         {label}
       </span>
-      <span className="font-display text-lg font-semibold">{children}</span>
-    </p>
+      <span className="block font-display text-lg font-semibold">{children}</span>
+    </span>
+  );
+}
+
+/** A thin line that fills over each game day at the world's speed; it rests while paused. */
+function DayBar({ view }: { view: WorldView }) {
+  const ms = getBalance(view.world.balance).tickMsAt1x / view.world.speed;
+  return (
+    <div aria-hidden="true" className="h-0.5 w-full overflow-hidden">
+      <div
+        key={view.world.day}
+        data-testid="day-bar"
+        data-paused={view.world.paused}
+        className="day-bar h-full w-full"
+        style={{ animationDuration: `${ms}ms` }}
+      />
+    </div>
   );
 }
 
 /** The company in its colors, its money at a glance, and the shared clock. */
 export function TopBar({ view }: { view: WorldView }) {
+  const open = useWindows((s) => s.open);
   const company = view.companies.find((c) => c.id === view.me.company?.id);
   const profit = monthProfit(view);
+  const cash = view.me.company?.cash ?? 0;
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-bg/80 backdrop-blur-md">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3">
@@ -41,16 +62,27 @@ export function TopBar({ view }: { view: WorldView }) {
           </p>
           <p className="player-text text-xs text-muted">{view.world.name}</p>
         </div>
-        <Figure label="Cash">
-          <CountUp value={view.me.company?.cash ?? 0} format={formatMoney} />
-        </Figure>
-        <Figure label="Profit this month">
-          <span className={profit < 0 ? "text-danger" : profit > 0 ? "text-good" : ""}>
-            <CountUp value={profit} format={formatMoney} />
-          </span>
-        </Figure>
+        <button
+          type="button"
+          aria-label="Open money"
+          onClick={(e) => open({ kind: "money" }, e.currentTarget)}
+          className="lift flex gap-6 rounded-lg px-2 py-1"
+        >
+          <Figure label="Cash">
+            <span className="relative">
+              <CountUp value={cash} format={formatMoney} />
+              <FloatDelta value={cash} format={formatMoney} />
+            </span>
+          </Figure>
+          <Figure label="Profit this month">
+            <span className={profit < 0 ? "text-danger" : profit > 0 ? "text-good" : ""}>
+              <CountUp value={profit} format={formatMoney} />
+            </span>
+          </Figure>
+        </button>
         <Clock view={view} />
       </div>
+      <DayBar view={view} />
     </header>
   );
 }

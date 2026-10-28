@@ -1,5 +1,6 @@
 import type { RunView, WorldView } from "@airace/protocol";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "motion/react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { type Line, LineChart } from "../../components/LineChart.tsx";
 import { Panel } from "../../components/Panel.tsx";
 import { type SampleEvent, SampleFeed } from "../../components/SampleFeed.tsx";
@@ -183,28 +184,34 @@ function RunPanel({ view, run }: { view: WorldView; run: RunView }) {
         </div>
       </Panel>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Panel
+        <ChartPanel
           title="How wrong its guesses are"
           hint="It reads by guessing the next word. Falling means it is learning."
         >
-          <LineChart
-            testId="loss-chart"
-            label="How wrong its guesses are"
-            x={loss.steps}
-            lines={loss.lines}
-          />
-        </Panel>
-        <Panel
+          {(height) => (
+            <LineChart
+              testId="loss-chart"
+              label="How wrong its guesses are"
+              x={loss.steps}
+              lines={loss.lines}
+              height={height}
+            />
+          )}
+        </ChartPanel>
+        <ChartPanel
           title="What it's learning"
           hint="How well it guesses text it has never seen, for each kind of reading."
         >
-          <LineChart
-            testId="learning-chart"
-            label="What it's learning"
-            x={learning.steps}
-            lines={learning.lines}
-          />
-        </Panel>
+          {(height) => (
+            <LineChart
+              testId="learning-chart"
+              label="What it's learning"
+              x={learning.steps}
+              lines={learning.lines}
+              height={height}
+            />
+          )}
+        </ChartPanel>
       </div>
       <Panel
         title="What it says"
@@ -213,6 +220,46 @@ function RunPanel({ view, run }: { view: WorldView; run: RunView }) {
         <SampleFeed samples={samples} totalSteps={totalSteps} />
       </Panel>
     </div>
+  );
+}
+
+/** A chart's panel that expands to the full width and twice the height, and back. */
+function ChartPanel({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint: string;
+  children: (height: number) => ReactNode;
+}) {
+  const [big, setBig] = useState(false);
+  return (
+    <motion.div
+      layout
+      className={big ? "lg:col-span-2" : ""}
+      transition={{ type: "spring", stiffness: 300, damping: 32 }}
+    >
+      <Panel
+        title={title}
+        hint={hint}
+        aria-label={title}
+        data-expanded={big}
+        actions={
+          <button
+            type="button"
+            aria-label={`${big ? "Shrink" : "Expand"} ${title}`}
+            title={big ? "Make it smaller" : "Make it bigger"}
+            onClick={() => setBig(!big)}
+            className="icon-btn"
+          >
+            {big ? "⤡" : "⤢"}
+          </button>
+        }
+      >
+        {children(big ? 440 : 220)}
+      </Panel>
+    </motion.div>
   );
 }
 

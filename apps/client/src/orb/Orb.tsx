@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef } from "react";
 import { type OrbInput, type OrbParams, orbParams } from "./params.ts";
 
-type Particle = { x: number; y: number; vx: number; vy: number; life: number; color: string };
+type Particle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  color: string;
+  /** Dot radius: customers are bigger than data. */
+  size: number;
+};
 
 const MAX_PARTICLES = 240;
 
@@ -92,7 +101,7 @@ function drawFrame(
   for (const q of particles) {
     ctx.fillStyle = alpha(q.color, q.life * dim);
     ctx.beginPath();
-    ctx.arc(q.x, q.y, 1.6, 0, Math.PI * 2);
+    ctx.arc(q.x, q.y, q.size, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -121,6 +130,7 @@ function stepParticles(particles: Particle[], p: OrbParams, size: number, dt: nu
       vy: Math.sin(a) * v,
       life: 1,
       color: p.colors[Math.floor(Math.random() * p.colors.length)] ?? "#ffffff",
+      size: 1.6,
     });
     if (i > 5) break;
   }
@@ -137,8 +147,28 @@ function stepParticles(particles: Particle[], p: OrbParams, size: number, dt: nu
         vy: -Math.sin(a) * v,
         life: 1.2,
         color: byShare(p.intake.colors, p.intake.shares),
+        size: 1.6,
       });
       if (i > 5) break;
+    }
+  }
+  // New customers drift in from the edge, slower and bigger than data.
+  if (p.arrivals) {
+    const n = (0.15 + p.arrivals.rate) * 18 * dt;
+    for (let i = 0; i < n || Math.random() < n - i; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = size * 0.5;
+      const v = 28 + 26 * Math.random();
+      live.push({
+        x: c + Math.cos(a) * d,
+        y: c + Math.sin(a) * d,
+        vx: -Math.cos(a) * v,
+        vy: -Math.sin(a) * v,
+        life: 2.2,
+        color: byShare(p.arrivals.colors, p.arrivals.shares),
+        size: 2.4,
+      });
+      if (i > 3) break;
     }
   }
   return live.slice(-MAX_PARTICLES);

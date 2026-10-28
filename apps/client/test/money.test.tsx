@@ -1,11 +1,15 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { formatMoney } from "../src/format.ts";
+import { formatMoney, monthName } from "../src/format.ts";
+import { profitOf } from "../src/money.ts";
 import { LaunchDialog } from "../src/screens/LaunchDialog.tsx";
 import { Money } from "../src/screens/Money.tsx";
 import { useSession } from "../src/store/session.ts";
+import { useWindows } from "../src/store/windows.ts";
+import { WindowHost } from "../src/windows/WindowHost.tsx";
 import { liveGame } from "./mockSocket.ts";
-import { launchedWorld, SCORES, trainedWorld, viewOf } from "./views.ts";
+import { launchedWorld, SCORES, ticks, trainedWorld, viewOf } from "./views.ts";
 
 let game: Awaited<ReturnType<typeof liveGame>>;
 
@@ -86,5 +90,38 @@ describe("money screen", () => {
       reason: "Move its plans to another AI first.",
     });
     expect(await screen.findByText("Move its plans to another AI first.")).toBeTruthy();
+  });
+});
+
+describe("money screen clicks", () => {
+  beforeEach(() => useWindows.getState().closeAll());
+
+  it("opens a month from its bar, a category from its row and the money window", async () => {
+    const view = viewOf(ticks(launchedWorld(), 40));
+    render(
+      <>
+        <Money view={view} />
+        <WindowHost view={view} />
+      </>,
+    );
+    const closed = view.me.company?.ledger.months.at(-1);
+    if (!closed) throw new Error("no closed month");
+    const months = screen.getByRole("group", { name: "Profit by month" });
+    await userEvent.click(
+      within(months).getByRole("button", {
+        name: `${monthName(closed.month)}: ${formatMoney(profitOf(closed))}`,
+      }),
+    );
+    expect(await screen.findByRole("dialog", { name: monthName(closed.month) })).toBeTruthy();
+    for (const [button, dialog] of [
+      ["Open Serving customers", "Serving customers"],
+      ["Open Personal plans", "Personal plans"],
+      ["Open money", "Money"],
+    ] as const) {
+      await userEvent.click(screen.getByRole("button", { name: "Close all windows" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await userEvent.click(screen.getByRole("button", { name: button }));
+      expect(await screen.findByRole("dialog", { name: dialog })).toBeTruthy();
+    }
   });
 });

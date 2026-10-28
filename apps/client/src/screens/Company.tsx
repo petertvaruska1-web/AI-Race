@@ -1,22 +1,28 @@
-import { GROUP_IDS, type GroupId, type WorldView } from "@airace/protocol";
+import { GROUP_IDS, type GroupId, type Palette, type WorldView } from "@airace/protocol";
 import { useState } from "react";
 import { Button } from "../components/Button.tsx";
 import { Feed } from "../components/Feed.tsx";
+import { FloatDelta } from "../components/FloatDelta.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { Stat } from "../components/Stat.tsx";
 import { monthProfit } from "../components/TopBar.tsx";
 import { formatCount, formatMoney } from "../format.ts";
-import { GROUPS } from "../groups.ts";
+import { GROUPS, groupColors } from "../groups.ts";
+import { daysOf } from "../history.ts";
+import { profitOf, total } from "../money.ts";
 import { Orb } from "../orb/Orb.tsx";
+import { arrivalsFrom } from "../orb/params.ts";
 import { go } from "../route.ts";
-import { mix } from "../theme/palette.ts";
+import { useWindows } from "../store/windows.ts";
 import { LaunchDialog, launchBlocked } from "./LaunchDialog.tsx";
 
-const total = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
-
-/** The company's home: its AI as an orb, customers and money on the left, the feed on the right. */
+/**
+ * The company's home: its AI as an orb, customers and money on the left, the
+ * feed on the right. Everything opens its window; new customers stream into the orb.
+ */
 export function Company({ view }: { view: WorldView }) {
   const [launching, setLaunching] = useState(false);
+  const open = useWindows((s) => s.open);
   const company = view.me.company;
   const pub = view.companies.find((c) => c.id === company?.id);
   if (!company || !pub) return null;
@@ -27,48 +33,77 @@ export function Company({ view }: { view: WorldView }) {
 
   const startOfMonth = company.ledger.months.at(-1)?.customersEnd ?? 0;
   const byGroup = GROUP_IDS.map((g) => [g, total(company.customers.byGroup[g])] as const);
-  const profits = [...company.ledger.months, company.ledger.current].map(
-    (m) => total(m.income) - total(m.costs),
+  const profits = [...company.ledger.months, company.ledger.current].map(profitOf);
+  const orb = (
+    <Orb
+      size={280}
+      label={latest ? `Your AI ${latest.label}` : "A spark: your first AI is waiting to be trained"}
+      input={{
+        overall: latest?.overall ?? null,
+        scores: latest?.scores ?? null,
+        traits: latest?.traits ?? null,
+        trainedTokens: latest?.trainedTokens ?? 0,
+        palette: pub.palette,
+        training: null,
+        arrivals: arrivalsFrom(daysOf(company), pub.palette),
+      }}
+    />
   );
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_minmax(0,1fr)]">
       <div className="space-y-5 lg:order-1">
         <Panel title="Customers">
-          <Stat
-            label="People using your AI"
-            value={company.customers.total}
-            delta={company.customers.total - startOfMonth}
-            deltaLabel="this month"
-            format={formatCount}
-            testId="customers"
-          />
+          <div className="lift relative -m-2 rounded-xl p-2">
+            <Stat
+              label="People using your AI"
+              value={company.customers.total}
+              delta={company.customers.total - startOfMonth}
+              deltaLabel="this month"
+              format={formatCount}
+              testId="customers"
+            />
+            <FloatDelta value={company.customers.total} format={formatCount} />
+            <button
+              type="button"
+              aria-label="Open customers"
+              className="absolute inset-0 rounded-xl"
+              onClick={(e) => open({ kind: "customers" }, e.currentTarget)}
+            />
+          </div>
           <GroupBar groups={byGroup} palette={pub.palette} />
         </Panel>
         <Panel title="Money">
-          <div className="space-y-4">
-            <Stat label="Cash" value={company.cash} format={formatMoney} />
-            <Stat label="Profit this month" value={monthProfit(view)} format={formatMoney} />
+          <div className="lift relative -m-2 rounded-xl p-2">
+            <div className="space-y-4">
+              <Stat label="Cash" value={company.cash} format={formatMoney} />
+              <Stat label="Profit this month" value={monthProfit(view)} format={formatMoney} />
+            </div>
+            <Sparkline values={profits} />
+            <button
+              type="button"
+              aria-label="Open money"
+              className="absolute inset-0 rounded-xl"
+              onClick={(e) => open({ kind: "money" }, e.currentTarget)}
+            />
           </div>
-          <Sparkline values={profits} />
         </Panel>
       </div>
 
       <Panel className="flex flex-col items-center gap-4 text-center lg:order-0 xl:order-1">
-        <Orb
-          size={280}
-          label={
-            latest ? `Your AI ${latest.label}` : "A spark: your first AI is waiting to be trained"
-          }
-          input={{
-            overall: latest?.overall ?? null,
-            scores: latest?.scores ?? null,
-            traits: latest?.traits ?? null,
-            trainedTokens: latest?.trainedTokens ?? 0,
-            palette: pub.palette,
-            training: null,
-          }}
-        />
+        {latest ? (
+          <button
+            type="button"
+            aria-label={`About your AI ${latest.label}`}
+            title="Open your AI"
+            onClick={(e) => open({ kind: "ai", versionId: latest.id }, e.currentTarget)}
+            className="orb-button rounded-full"
+          >
+            {orb}
+          </button>
+        ) : (
+          orb
+        )}
         {latest ? (
           <div>
             <p className="font-display text-4xl font-bold text-brand">{latest.label}</p>
@@ -110,7 +145,7 @@ export function Company({ view }: { view: WorldView }) {
 
       <Panel title="What people are saying" className="lg:order-2 lg:col-span-2 xl:col-span-1">
         <div className="max-h-[70vh] overflow-y-auto pr-1">
-          <Feed items={view.feed} />
+          <Feed items={view.feed} companyId={company.id} />
         </div>
       </Panel>
       {launching && <LaunchDialog view={view} onClose={() => setLaunching(false)} />}
@@ -118,30 +153,42 @@ export function Company({ view }: { view: WorldView }) {
   );
 }
 
-/** One bar split by group, in shades of the company's colors, with a legend. */
+/** One bar split by group, in shades of the company's colors; each group opens its window. */
 function GroupBar({
   groups,
   palette,
 }: {
   groups: readonly (readonly [GroupId, number])[];
-  palette: { primary: string; secondary: string };
+  palette: Palette;
 }) {
+  const open = useWindows((s) => s.open);
   const sum = groups.reduce((a, [, n]) => a + n, 0);
-  const color = (i: number) => mix(palette.secondary, palette.primary, i / (groups.length - 1));
+  const colors = groupColors(palette);
   return (
     <div className="mt-4">
       <div className="flex h-3 overflow-hidden rounded-full bg-surface-2" aria-hidden="true">
         {sum > 0 &&
-          groups.map(([g, n], i) => (
-            <div key={g} style={{ width: `${(100 * n) / sum}%`, background: color(i) }} />
+          groups.map(([g, n]) => (
+            <div
+              key={g}
+              className="transition-[width] duration-700"
+              style={{ width: `${(100 * n) / sum}%`, background: colors[g] }}
+            />
           ))}
       </div>
-      <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-        {groups.map(([g, n], i) => (
-          <li key={g} className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full" style={{ background: color(i) }} />
-            <span className="text-muted">{GROUPS[g].many}</span>
-            <span className="tabular ml-auto">{formatCount(n)}</span>
+      <ul className="mt-3 grid grid-cols-2 gap-x-2 gap-y-0.5 text-xs">
+        {groups.map(([g, n]) => (
+          <li key={g}>
+            <button
+              type="button"
+              aria-label={`Open ${GROUPS[g].many}`}
+              onClick={(e) => open({ kind: "group", group: g }, e.currentTarget)}
+              className="lift-row flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left"
+            >
+              <span className="h-2 w-2 rounded-full" style={{ background: colors[g] }} />
+              <span className="text-muted">{GROUPS[g].many}</span>
+              <span className="tabular ml-auto">{formatCount(n)}</span>
+            </button>
           </li>
         ))}
       </ul>
@@ -149,7 +196,7 @@ function GroupBar({
   );
 }
 
-/** Profit month by month, as a small line over a zero line. */
+/** Profit month by month, as a small line over a zero line, drawn in when shown. */
 function Sparkline({ values }: { values: number[] }) {
   if (values.length < 2) {
     return (
@@ -172,27 +219,45 @@ function Sparkline({ values }: { values: number[] }) {
       preserveAspectRatio="none"
     >
       <line x1={0} x2={w} y1={y(0)} y2={y(0)} stroke="var(--border)" strokeDasharray="4 4" />
-      <polyline points={points} fill="none" stroke="var(--brand)" strokeWidth={2} />
+      <polyline
+        points={points}
+        fill="none"
+        stroke="var(--brand)"
+        strokeWidth={2}
+        pathLength={1}
+        className="chart-draw"
+      />
     </svg>
   );
 }
 
-/** The products on sale or counting down. */
+/** The products on sale or counting down; each opens its window. */
 function Lineup({ view }: { view: WorldView }) {
+  const open = useWindows((s) => s.open);
   const products = (view.me.company?.products ?? []).filter((p) => p.status !== "retired");
   if (products.length === 0) return null;
   return (
-    <ul className="w-full space-y-1 border-t border-border pt-3 text-sm">
-      {products.map((p) => (
-        <li key={p.id} className="flex justify-between gap-3">
-          <span className="player-text font-semibold">{p.name}</span>
-          <span className="text-muted">
-            {p.status === "live"
-              ? "On sale"
-              : `Launches in ${p.launchDay - view.world.day} ${p.launchDay - view.world.day === 1 ? "day" : "days"}`}
-          </span>
-        </li>
-      ))}
+    <ul className="w-full space-y-1.5 border-t border-border pt-3 text-sm">
+      {products.map((p) => {
+        const left = p.launchDay - view.world.day;
+        return (
+          <li key={p.id}>
+            <button
+              type="button"
+              aria-label={`Open ${p.name}`}
+              onClick={(e) => open({ kind: "product", productId: p.id }, e.currentTarget)}
+              className="row-btn justify-between"
+            >
+              <span className="player-text font-semibold">{p.name}</span>
+              <span className="text-muted">
+                {p.status === "live"
+                  ? "On sale"
+                  : `Launches in ${left} ${left === 1 ? "day" : "days"}`}
+              </span>
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }

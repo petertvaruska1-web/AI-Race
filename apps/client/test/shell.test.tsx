@@ -1,17 +1,22 @@
+import type { NewsView } from "@airace/protocol";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "../src/components/AppShell.tsx";
 import { CountUp } from "../src/components/CountUp.tsx";
+import { FloatDelta } from "../src/components/FloatDelta.tsx";
 import { Stat } from "../src/components/Stat.tsx";
-import { formatMoney } from "../src/format.ts";
+import { formatCount, formatMoney } from "../src/format.ts";
 import { parseRoute } from "../src/route.ts";
 import { Home } from "../src/screens/Home.tsx";
 import { useSession } from "../src/store/session.ts";
+import { useWindows } from "../src/store/windows.ts";
 import { liveGame } from "./mockSocket.ts";
-import { runningWorld, viewOf } from "./views.ts";
+import { launchedWorld, runningWorld, viewOf } from "./views.ts";
 
 beforeEach(async () => {
   useSession.setState({ socket: (await liveGame()).socket });
+  useWindows.getState().closeAll();
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -131,5 +136,98 @@ describe("stat", () => {
     expect(screen.getByText(/▼/).className).toContain("text-good");
     rerender(<Stat label="Income" value={10} delta={5} format={String} />);
     expect(screen.getByText(/▲/).className).toContain("text-good");
+  });
+});
+
+describe("day bar", () => {
+  it("fills over each game day at the world's speed, and rests while paused", () => {
+    const view = viewOf(runningWorld());
+    const shell = (v: typeof view) => (
+      <AppShell view={v} tab="company">
+        <p>Screen</p>
+      </AppShell>
+    );
+    const { rerender } = render(shell(view));
+    expect(screen.getByTestId("day-bar").style.animationDuration).toBe("200ms");
+    rerender(shell({ ...view, world: { ...view.world, speed: 4 } }));
+    expect(screen.getByTestId("day-bar").style.animationDuration).toBe("50ms");
+    rerender(shell({ ...view, world: { ...view.world, paused: true } }));
+    expect(screen.getByTestId("day-bar").getAttribute("data-paused")).toBe("true");
+  });
+});
+
+describe("toasts", () => {
+  const news = (id: string, companyId: string, headline: string): NewsView => ({
+    kind: "news",
+    id,
+    day: 9,
+    companyId,
+    sentiment: 0.6,
+    topic: "customers",
+    headline,
+  });
+
+  it("pop up for new news about the player's own company only", async () => {
+    const before = viewOf(launchedWorld());
+    const shell = (v: typeof before) => (
+      <AppShell view={v} tab="company">
+        <p>Screen</p>
+      </AppShell>
+    );
+    const { rerender } = render(shell(before));
+    expect(screen.queryByRole("status")).toBeNull();
+    rerender(
+      shell({
+        ...before,
+        feed: [
+          ...before.feed,
+          news("n-mine", "c1", "Acme passes 1,000 customers"),
+          news("n-theirs", "c2", "Bolt passes 1,000 customers"),
+        ],
+      }),
+    );
+    const toast = screen.getByRole("status");
+    expect(toast.textContent).toContain("Acme passes 1,000 customers");
+    expect(screen.queryByText("Bolt passes 1,000 customers")).toBeNull();
+    await userEvent.click(within(toast).getByRole("button", { name: /Acme passes/ }));
+    expect(await screen.findByRole("dialog", { name: "Customers" })).toBeTruthy();
+  });
+});
+
+describe("top bar", () => {
+  it("opens the money window from the cash", async () => {
+    render(
+      <AppShell view={viewOf(launchedWorld())} tab="company">
+        <p>Screen</p>
+      </AppShell>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Open money" }));
+    expect(await screen.findByRole("dialog", { name: "Money" })).toBeTruthy();
+  });
+
+  it("marks the open screen with a highlight that moves between screens", () => {
+    render(
+      <AppShell view={viewOf(runningWorld())} tab="market">
+        <p>Screen</p>
+      </AppShell>,
+    );
+    const nav = screen.getByRole("navigation", { name: "Screens" });
+    const market = within(nav).getByRole("link", { name: "Market" });
+    expect(market.querySelector("[data-pill]")).not.toBeNull();
+    expect(nav.querySelectorAll("[data-pill]")).toHaveLength(1);
+  });
+});
+
+describe("floating changes", () => {
+  it("float a number's change up from it, unless motion is reduced", () => {
+    motion(false);
+    const first = render(<FloatDelta value={10} format={formatCount} />);
+    first.rerender(<FloatDelta value={15} format={formatCount} />);
+    expect(screen.getByText("+5")).toBeTruthy();
+    first.unmount();
+    motion(true);
+    const second = render(<FloatDelta value={10} format={formatCount} />);
+    second.rerender(<FloatDelta value={15} format={formatCount} />);
+    expect(screen.queryByText("+5")).toBeNull();
   });
 });

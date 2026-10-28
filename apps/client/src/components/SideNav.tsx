@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import type { ReactNode } from "react";
 import type { Tab } from "../route.ts";
 
@@ -74,22 +75,30 @@ export function SideNav({ worldId, tab }: { worldId: string; tab: Tab }) {
           key={s.id}
           href={`#/w/${worldId}/${s.id}`}
           aria-current={tab === s.id ? "page" : undefined}
-          className={`flex items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2 text-sm transition ${
+          className={`relative flex items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2 text-sm transition ${
             tab === s.id
-              ? "bg-brand-soft font-semibold text-text shadow-[var(--glow)]"
+              ? "font-semibold text-text"
               : "text-muted hover:bg-surface-2 hover:text-text"
           }`}
         >
+          {tab === s.id && (
+            <motion.span
+              data-pill
+              layoutId="screen-pill"
+              className="absolute inset-0 rounded-xl bg-brand-soft shadow-[var(--glow)]"
+              transition={{ type: "spring", stiffness: 500, damping: 38 }}
+            />
+          )}
           <svg
             viewBox="0 0 24 24"
             width={20}
             height={20}
             aria-hidden="true"
-            className={tab === s.id ? "text-brand" : ""}
+            className={`relative ${tab === s.id ? "text-brand" : ""}`}
           >
             {s.icon}
           </svg>
-          {s.label}
+          <span className="relative">{s.label}</span>
         </a>
       ))}
     </nav>

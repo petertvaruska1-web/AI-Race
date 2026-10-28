@@ -1,60 +1,30 @@
 import {
+  COST_CATEGORIES,
   GROUP_IDS,
-  type MonthLedgerView,
+  INCOME_CATEGORIES,
   PLAN_IDS,
   type PlanId,
   type WorldView,
 } from "@airace/protocol";
 import { getBalance } from "@airace/sim";
 import { useState } from "react";
+import { Bars } from "../components/Bars.tsx";
 import { Button } from "../components/Button.tsx";
+import { MonthBars } from "../components/charts/MonthBars.tsx";
 import { INPUT } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { Stat } from "../components/Stat.tsx";
 import { formatMoney } from "../format.ts";
 import { GROUPS } from "../groups.ts";
+import { COST_NAMES, INCOME_NAMES, profitOf, total } from "../money.ts";
 import { useSocket } from "../store/session.ts";
+import { useWindows } from "../store/windows.ts";
 import { LaunchDialog, launchBlocked, planWords } from "./LaunchDialog.tsx";
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const total = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
-const monthName = (m: MonthLedgerView) => MONTHS[Number(m.month.slice(5)) - 1] ?? m.month;
-
-/** Labelled bars, each as long as its share of the largest. */
-function Bars({
-  rows,
-}: {
-  rows: { label: string; value: number; color?: string; testId?: string }[];
-}) {
-  const top = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
-  return (
-    <ul className="space-y-2 text-sm">
-      {rows.map((r) => (
-        <li key={r.label}>
-          <div className="flex justify-between gap-3">
-            <span className="text-muted">{r.label}</span>
-            <span className="tabular font-semibold" data-testid={r.testId}>
-              {formatMoney(r.value)}
-            </span>
-          </div>
-          <div className="mt-1 h-1.5 rounded-full bg-surface-2">
-            <div
-              className="h-1.5 rounded-full"
-              style={{
-                width: `${(100 * Math.abs(r.value)) / top}%`,
-                background: r.color ?? "var(--brand)",
-              }}
-            />
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 /** Where money comes from and goes, the AIs on sale, and the plans and prices (game-layer §8). */
 export function Money({ view }: { view: WorldView }) {
   const socket = useSocket();
+  const open = useWindows((s) => s.open);
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const company = view.me.company;
@@ -90,16 +60,23 @@ export function Money({ view }: { view: WorldView }) {
             By plan
           </h3>
           <Bars
-            rows={[
-              { label: "Personal", value: now.income.personal, testId: "income-personal" },
-              { label: "Business", value: now.income.business, color: "var(--brand-2)" },
-            ]}
+            rows={INCOME_CATEGORIES.map((c) => ({
+              label: INCOME_NAMES[c],
+              value: now.income[c],
+              color: c === "business" ? "var(--brand-2)" : undefined,
+              testId: `income-${c}`,
+              onOpen: (el) => open({ kind: "income", category: c }, el),
+            }))}
           />
           <h3 className="mt-5 mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
             By customer group
           </h3>
           <Bars
-            rows={GROUP_IDS.map((g) => ({ label: GROUPS[g].many, value: now.revenueByGroup[g] }))}
+            rows={GROUP_IDS.map((g) => ({
+              label: GROUPS[g].many,
+              value: now.revenueByGroup[g],
+              onOpen: (el) => open({ kind: "group", group: g }, el),
+            }))}
           />
         </Panel>
 
@@ -118,15 +95,12 @@ export function Money({ view }: { view: WorldView }) {
           />
           <div className="mt-5">
             <Bars
-              rows={[
-                { label: "Training", value: now.costs.training, color: "var(--danger)" },
-                { label: "Serving customers", value: now.costs.serving, color: "var(--danger)" },
-                {
-                  label: "Fact-checking data",
-                  value: now.costs.dataChecks,
-                  color: "var(--danger)",
-                },
-              ]}
+              rows={COST_CATEGORIES.map((c) => ({
+                label: COST_NAMES[c],
+                value: now.costs[c],
+                color: "var(--danger)",
+                onOpen: (el) => open({ kind: "cost", category: c }, el),
+              }))}
             />
           </div>
           <p className="mt-4 text-xs text-muted">
@@ -136,8 +110,30 @@ export function Money({ view }: { view: WorldView }) {
         </Panel>
       </div>
 
-      <Panel title="Profit by month" hint="Money in, less money out.">
-        <ProfitBars months={[...company.ledger.months, now]} />
+      <Panel
+        title="Profit by month"
+        hint="Money in, less money out. Click a month for its report."
+        actions={
+          <button
+            type="button"
+            aria-label="Open money"
+            title="Cash day by day"
+            className="icon-btn"
+            onClick={(e) => open({ kind: "money" }, e.currentTarget)}
+          >
+            ⤢
+          </button>
+        }
+      >
+        <MonthBars
+          label="Profit by month"
+          bars={[...company.ledger.months, now].map((m) => ({
+            month: m.month,
+            value: profitOf(m),
+          }))}
+          format={formatMoney}
+          onOpen={(month, el) => open({ kind: "month", month }, el)}
+        />
       </Panel>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -167,17 +163,22 @@ export function Money({ view }: { view: WorldView }) {
                     key={p.id}
                     className={`flex items-center gap-3 py-3 ${p.status === "retired" ? "opacity-50" : ""}`}
                   >
-                    <div className="mr-auto">
-                      <p className="player-text font-semibold">{p.name}</p>
-                      <p className="text-xs text-muted">
+                    <button
+                      type="button"
+                      aria-label={`Open ${p.name}`}
+                      onClick={(e) => open({ kind: "product", productId: p.id }, e.currentTarget)}
+                      className="lift-row mr-auto rounded-md px-1 text-left"
+                    >
+                      <span className="player-text block font-semibold">{p.name}</span>
+                      <span className="block text-xs text-muted">
                         {v?.label} ·{" "}
                         {p.status === "live"
                           ? "On sale"
                           : p.status === "countdown"
                             ? `Launches in ${p.launchDay - view.world.day} game days`
                             : "Retired"}
-                      </p>
-                    </div>
+                      </span>
+                    </button>
                     {p.status !== "retired" && (
                       <Button
                         variant="ghost"
@@ -291,32 +292,6 @@ function PlanRow({
           {problem}
         </p>
       )}
-    </div>
-  );
-}
-
-/** Each month's profit as a bar above or below the zero line. */
-function ProfitBars({ months }: { months: MonthLedgerView[] }) {
-  const profits = months.map((m) => total(m.income) - total(m.costs));
-  const top = Math.max(1, ...profits.map(Math.abs));
-  return (
-    <div className="flex h-40 items-stretch gap-2" role="img" aria-label="Profit by month">
-      {months.map((m, i) => {
-        const p = profits[i] ?? 0;
-        const h = `${(100 * Math.abs(p)) / top}%`;
-        return (
-          <div key={m.month} className="flex min-w-8 flex-1 flex-col items-center">
-            <div className="flex w-full flex-1 flex-col justify-end">
-              {p > 0 && <div className="rounded-t bg-good/80" style={{ height: h }} />}
-            </div>
-            <div className="h-px w-full bg-border" />
-            <div className="flex w-full flex-1 flex-col">
-              {p < 0 && <div className="rounded-b bg-danger/80" style={{ height: h }} />}
-            </div>
-            <span className="mt-1 text-[11px] text-muted">{monthName(m)}</span>
-          </div>
-        );
-      })}
     </div>
   );
 }

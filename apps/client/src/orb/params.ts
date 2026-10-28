@@ -1,4 +1,6 @@
-import { DATASET_IDS, type DatasetId, type Palette } from "@airace/protocol";
+import { DATASET_IDS, type DatasetId, GROUP_IDS, type Palette } from "@airace/protocol";
+import { groupColors } from "../groups.ts";
+import type { DayPoint } from "../history.ts";
 import { mix } from "../theme/palette.ts";
 
 // The AI as a glowing orb (game-layer design §4). Everything about how it looks
@@ -16,7 +18,12 @@ export type OrbInput = {
   palette: Palette;
   /** While a run trains: how far it is, how far the loss has fallen (0..1), and its data mix. */
   training: { progress: number; lossDrop: number; mix: Record<DatasetId, number> } | null;
+  /** New customers streaming in today (see `arrivalsFrom`). */
+  arrivals?: Arrivals | null;
 };
+
+/** A stream of sparks: how fast (0..1), and a color with its share of the sparks. */
+export type Arrivals = { rate: number; colors: string[]; shares: number[] };
 
 export type OrbParams = {
   /** Core radius, as a share of the largest (0..1). */
@@ -34,7 +41,9 @@ export type OrbParams = {
   /** The company's primary color through to its secondary. */
   colors: string[];
   /** Streams of data flowing in while training: a color and a share per dataset in the mix. */
-  intake: { rate: number; colors: string[]; shares: number[] } | null;
+  intake: Arrivals | null;
+  /** New customers flowing in, in their groups' colors. */
+  arrivals: Arrivals | null;
 };
 
 /** One color per dataset, for the streams flowing in during training. */
@@ -60,6 +69,28 @@ const NEUTRAL: Record<string, number> = {
 };
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+
+/**
+ * Today's new customers as a stream into the orb: one color per group that grew,
+ * in its share of the newcomers. Faster with more of them (10 a day is about a
+ * quarter, 10,000 the most). Null when nobody new came.
+ */
+export function arrivalsFrom(days: DayPoint[], palette: Palette): Arrivals | null {
+  const today = days.at(-1);
+  const yesterday = days.at(-2);
+  if (!today || !yesterday) return null;
+  const colors = groupColors(palette);
+  const grew = GROUP_IDS.map(
+    (g) => [g, today.customers[g] - yesterday.customers[g]] as const,
+  ).filter(([, n]) => n > 0);
+  const total = grew.reduce((a, [, n]) => a + n, 0);
+  if (total <= 0) return null;
+  return {
+    rate: clamp01(Math.log10(1 + total) / 4),
+    colors: grew.map(([g]) => colors[g]),
+    shares: grew.map(([, n]) => n / total),
+  };
+}
 
 /** 0 below 15, 1 above 25, smooth in between: a skill's ring fades in as it nears 20. */
 function skillRing(score: number): number {
@@ -116,5 +147,6 @@ export function orbParams(input: OrbInput): OrbParams {
     flicker: 0.7 * clamp01(trait("slip_rate")),
     colors,
     intake,
+    arrivals: input.arrivals ?? null,
   };
 }
