@@ -31,7 +31,11 @@ export type Economy = {
     business: { default: number; min: number; max: number };
   };
   noAiUtility: Record<GroupId, number>;
-  /** Utility weights; `freePenalty` is what the free plan's limits cost it against paid plans. */
+  /**
+   * Utility weights. `freePenalty` is what the free plan's limits cost it against
+   * paid plans; `businessFit` is what the business plan's team features are worth
+   * to the groups that buy it.
+   */
   utility: {
     score: number;
     price: number;
@@ -39,6 +43,7 @@ export type Economy = {
     reputation: number;
     satisfaction: number;
     freePenalty: number;
+    businessFit: number;
   };
   diffusion: {
     adoptRate: number;
@@ -185,23 +190,41 @@ const ECONOMY_V2: Economy = {
     personal: { default: 10, min: 1, max: 200 },
     business: { default: 30, min: 5, max: 500 },
   },
+  // Tuned by the balance harness (test/balance.test.ts), one reason each:
+  // - noAiUtility 6: a typical first AI alone in the market wins about 0.4% of the
+  //   people willing within a year (a small startup), not the half it won at 1.
   noAiUtility: {
-    students: 1,
-    creators: 1,
-    developers: 1,
-    businesses: 1,
-    everyday: 1,
-    researchers: 1,
+    students: 6,
+    creators: 6,
+    developers: 6,
+    businesses: 6,
+    everyday: 6,
+    researchers: 6,
   },
-  utility: { score: 4, price: 1, speed: 0.5, reputation: 1, satisfaction: 1.5, freePenalty: 1.5 },
+  // - score 2: an AI twice as good wins about 5x the customers by day 90 (15x at 4).
+  // - freePenalty 0.5: price-sensitive groups prefer free, the rest pay (about 40% pay).
+  // - businessFit 1: businesses, developers and researchers prefer the business plan.
+  utility: {
+    score: 2,
+    price: 1,
+    speed: 0.5,
+    reputation: 1,
+    satisfaction: 1.5,
+    freePenalty: 0.5,
+    businessFit: 1,
+  },
+  // - wordOfMouth 0.5 and launchBoost 0.1: about 1,300 customers on launch day and
+  //   steady growth all year; at 0.02 and 0.01 a small company never got known.
   diffusion: {
     adoptRate: 0.05,
     switchRate: 0.03,
-    wordOfMouth: 0.02,
+    wordOfMouth: 0.5,
     awarenessDecay: 0.01,
-    launchBoost: 0.01,
+    launchBoost: 0.1,
   },
-  servingCostPerCustomerDayPerMParam: 0.0004,
+  // - 0.01: serving costs a tiny AI about 5% of its income; a medium AI costs four times
+  //   as much per customer, so size is a real trade-off (at 0.0004 it was free).
+  servingCostPerCustomerDayPerMParam: 0.01,
   fame: {
     reputationStart: 50,
     reputationRate: 0.03,

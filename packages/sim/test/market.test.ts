@@ -160,6 +160,17 @@ describe("choice", () => {
     );
   });
 
+  it("makes the business plan the better fit for businesses at default prices", () => {
+    const e = BALANCE_V2.economy;
+    const v = version(SCORES);
+    for (const g of ["businesses", "developers", "researchers"] as const) {
+      const p = e.prices;
+      expect(productAppeal(e, g, v, "business", p.business.default, 50, 0.5), g).toBeGreaterThan(
+        productAppeal(e, g, v, "personal", p.personal.default, 50, 0.5),
+      );
+    }
+  });
+
   it("puts students off a price rise more than businesses", () => {
     const e = BALANCE_V2.economy;
     const v = version(SCORES);

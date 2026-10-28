@@ -32,9 +32,11 @@ export function productAppeal(
   const params = paramCount(version.nLayer, version.dModel);
   const speed = 1 - params / (params + 5e6);
   const cost = plan === "free" ? u.freePenalty : g.priceSensitivity * Math.log(1 + price / 10);
+  const fit = plan === "business" && g.buysBusiness ? u.businessFit : 0;
   return (
     u.score * skill -
     u.price * cost +
+    fit +
     u.speed * g.speedPreference * speed +
     u.reputation * (reputation / 100 - 0.5) +
     u.satisfaction * (satisfaction - 0.5)
