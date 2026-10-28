@@ -4,6 +4,7 @@ import { type Line, LineChart } from "../../components/LineChart.tsx";
 import { Panel } from "../../components/Panel.tsx";
 import { type SampleEvent, SampleFeed } from "../../components/SampleFeed.tsx";
 import { percent } from "../../format.ts";
+import { Orb } from "../../orb/Orb.tsx";
 import { useSocket } from "../../store/session.ts";
 import { mix } from "../../theme/palette.ts";
 
@@ -137,23 +138,49 @@ function RunPanel({ view, run }: { view: WorldView; run: RunView }) {
     (e): e is Extract<TrainEvent, { type: "sample" }> => e.type === "sample",
   );
 
+  // The orb shows the AI this run grows from (or the new one, once it is done),
+  // drawing in its reading while it trains.
+  const training = run.status === "training" || run.status === "finalizing";
+  const versions = view.me.company?.versions ?? [];
+  const base = version ?? versions.find((v) => v.id === run.plan.parentVersionId);
+  const losses = (loss.lines[0]?.values ?? []).filter((v): v is number => v !== null);
+  const first = losses[0];
+  const latest = losses.at(-1);
+  const lossDrop = first && latest !== undefined ? Math.max(0, (first - latest) / first) : 0;
+
   return (
     <div className="space-y-4">
-      <Panel>
-        <Status run={run} label={version?.label} />
-        {(run.status === "training" || run.status === "finalizing") && (
-          <div className="mt-3">
-            <progress
-              className="h-2 w-full accent-[var(--brand)]"
-              aria-label="Game time"
-              value={run.progress}
-              max={1}
-            />
-            <p className="mt-1 text-xs text-muted">
-              {percent(run.progress)} of its {run.endDay - run.startDay} game days
-            </p>
-          </div>
+      <Panel className="flex flex-wrap items-center gap-6">
+        {palette && (
+          <Orb
+            size={180}
+            label={base ? `Your AI ${base.label}` : "Your new AI"}
+            input={{
+              overall: base?.overall ?? null,
+              scores: base?.scores ?? null,
+              traits: base?.traits ?? null,
+              trainedTokens: base?.trainedTokens ?? 0,
+              palette,
+              training: training ? { progress: run.progress, lossDrop, mix: run.plan.mix } : null,
+            }}
+          />
         )}
+        <div className="min-w-0 flex-1">
+          <Status run={run} label={version?.label} />
+          {training && (
+            <div className="mt-3">
+              <progress
+                className="h-2 w-full accent-[var(--brand)]"
+                aria-label="Game time"
+                value={run.progress}
+                max={1}
+              />
+              <p className="mt-1 text-xs text-muted">
+                {percent(run.progress)} of its {run.endDay - run.startDay} game days
+              </p>
+            </div>
+          )}
+        </div>
       </Panel>
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel
