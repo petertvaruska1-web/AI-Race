@@ -88,3 +88,59 @@ export function trainedWorld(
   }
   return s;
 }
+
+/** Scores like the M1 gate's typical first model. */
+export const SCORES = {
+  language: 60,
+  reasoning: 8,
+  pattern: 80,
+  knowledge: 44,
+  coding: 38,
+  creativity: 2,
+  consistency: 37,
+  instruction: 63,
+};
+
+export function ticks(s: WorldState, n: number): WorldState {
+  let out = s;
+  for (let i = 0; i < n; i++) out = apply(out, { kind: "tick" });
+  return out;
+}
+
+/** c1's scored v1 launched as "Spark" on the free and personal plans, live for `days` days. */
+export function launchedWorld(days = 5): WorldState {
+  const s = apply(
+    trainedWorld(SCORES),
+    command(
+      "u1",
+      {
+        type: "launchProduct",
+        versionId: "v1",
+        name: "Spark",
+        plans: ["free", "personal"],
+        countdownDays: 3,
+      },
+      "p1",
+    ),
+  );
+  return ticks(s, 3 + days);
+}
+
+/** A scored customer-feedback batch for product p1: one reply per [group, score, reply]. */
+export function feedback(key: string, replies: [string, number, string][]): Input {
+  return {
+    kind: "system",
+    event: {
+      type: "feedbackScored",
+      productId: "p1",
+      key,
+      results: replies.map(([group, score, reply]) => ({
+        group,
+        questionId: `q-${group}`,
+        question: "What is the capital of France?",
+        reply,
+        score,
+      })),
+    },
+  } as Input;
+}
