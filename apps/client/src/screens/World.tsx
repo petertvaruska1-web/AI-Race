@@ -9,6 +9,7 @@ import { Benchmarks } from "./Benchmarks.tsx";
 import { Company } from "./Company.tsx";
 import { Lobby } from "./Lobby.tsx";
 import { Lab } from "./lab/LabLayout.tsx";
+import { Money } from "./Money.tsx";
 import { Playground } from "./Playground.tsx";
 
 type WorldRoute = Extract<Route, { screen: "world" }>;
@@ -43,11 +44,12 @@ export function WorldScreen({ route }: { route: WorldRoute }) {
   return (
     <AppShell view={view} tab={route.tab}>
       {route.tab === "company" && <Company view={view} />}
-      {(route.tab === "market" || route.tab === "money") && (
-        <Panel title={route.tab === "market" ? "Market" : "Money"}>
+      {route.tab === "market" && (
+        <Panel title="Market">
           <p className="text-muted">This screen opens soon.</p>
         </Panel>
       )}
+      {route.tab === "money" && <Money view={view} />}
       {route.tab === "lab" && <Lab view={view} />}
       {route.tab === "play" && <Playground view={view} />}
       {route.tab === "bench" && <Benchmarks view={view} />}

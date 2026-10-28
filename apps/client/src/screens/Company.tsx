@@ -10,20 +10,13 @@ import { GROUPS } from "../groups.ts";
 import { Orb } from "../orb/Orb.tsx";
 import { go } from "../route.ts";
 import { mix } from "../theme/palette.ts";
+import { LaunchDialog, launchBlocked } from "./LaunchDialog.tsx";
 
 const total = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
 
-/** Why the newest AI can't be launched yet, or null when it can. */
-export function launchBlocked(view: WorldView): string | null {
-  const latest = view.me.company?.versions.at(-1);
-  if (!latest) return "Train your first AI before launching it.";
-  if (latest.scores === null) return "Wait until your AI has been scored before launching it.";
-  return null;
-}
-
 /** The company's home: its AI as an orb, customers and money on the left, the feed on the right. */
 export function Company({ view }: { view: WorldView }) {
-  const [, setLaunching] = useState(false);
+  const [launching, setLaunching] = useState(false);
   const company = view.me.company;
   const pub = view.companies.find((c) => c.id === company?.id);
   if (!company || !pub) return null;
@@ -119,6 +112,7 @@ export function Company({ view }: { view: WorldView }) {
           <Feed items={view.feed} />
         </div>
       </Panel>
+      {launching && <LaunchDialog view={view} onClose={() => setLaunching(false)} />}
     </div>
   );
 }

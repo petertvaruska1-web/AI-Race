@@ -1,11 +1,13 @@
 import type { VersionView, WorldView } from "@airace/protocol";
 import { dateOfDay, getBalance } from "@airace/sim";
+import { useState } from "react";
 import { Button } from "../../components/Button.tsx";
 import { Panel } from "../../components/Panel.tsx";
 import { capitalize, words } from "../../format.ts";
 import { go } from "../../route.ts";
 import { usePlan } from "../../store/plan.ts";
 import { usePlayground } from "../../store/playground.ts";
+import { LaunchDialog } from "../LaunchDialog.tsx";
 
 function brainName(view: WorldView, v: VersionView): string {
   const b = getBalance(view.world.balance).brainSizes.find(
@@ -25,6 +27,7 @@ export function VersionsStep({
   const versions = [...(view.me.company?.versions ?? [])].reverse();
   const update = usePlan((s) => s.update);
   const pick = usePlayground((s) => s.setVersion);
+  const [launching, setLaunching] = useState<string | null>(null);
   if (versions.length === 0)
     return <p className="text-muted">No versions yet. Your first finished run becomes v1.</p>;
   return (
@@ -51,6 +54,11 @@ export function VersionsStep({
             >
               Chat
             </Button>
+            {v.scores !== null && (
+              <Button variant="secondary" onClick={() => setLaunching(v.id)}>
+                Launch this AI
+              </Button>
+            )}
             <Button
               onClick={() => {
                 update({ parentVersionId: v.id });
@@ -62,6 +70,9 @@ export function VersionsStep({
           </div>
         </Panel>
       ))}
+      {launching && (
+        <LaunchDialog view={view} versionId={launching} onClose={() => setLaunching(null)} />
+      )}
     </div>
   );
 }
