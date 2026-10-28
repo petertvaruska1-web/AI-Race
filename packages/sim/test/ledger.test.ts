@@ -139,9 +139,9 @@ function fresh(s: WorldState): WorldState {
 /** Puts `n` customers of `group` on `plan` (accounts, for the business plan). */
 function give(s: WorldState, group: GroupId, plan: PlanId, n: number): void {
   const byRegion = s.market.customers.c1 ?? {};
-  const byGroup = byRegion.national ?? {};
+  const byGroup = byRegion.pacific ?? {};
   byGroup[group] = { ...byGroup[group], [plan]: n };
-  byRegion.national = byGroup;
+  byRegion.pacific = byGroup;
   s.market.customers.c1 = byRegion;
 }
 
@@ -256,10 +256,9 @@ describe("months", () => {
   it("records the customers at the month's end", () => {
     let s = live();
     s = ticks(s, 58 - s.day); // 2027-02-28
-    const customers = Object.values(s.market.customers.c1?.national ?? {}).reduce(
-      (total, byPlan) => total + sum(byPlan as Record<string, number>),
-      0,
-    );
+    const customers = Object.values(s.market.customers.c1 ?? {})
+      .flatMap((byGroup) => Object.values(byGroup ?? {}))
+      .reduce((total, byPlan) => total + sum(byPlan as Record<string, number>), 0);
     expect(customers).toBeGreaterThan(0);
     s = ticks(s, 1); // 2027-03-01
     const february = company(s).ledger.months.at(-1);

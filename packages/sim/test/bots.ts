@@ -5,6 +5,7 @@ import {
   type GroupId,
   PLAN_IDS,
   type PlanId,
+  REGION_IDS,
 } from "@airace/protocol";
 import {
   type Balance,
@@ -221,7 +222,10 @@ export function runBot(balance: Balance, script: BotScript, days: number, seed =
     for (const group of GROUP_IDS) {
       const byPlan = {} as Record<PlanId, number>;
       for (const plan of PLAN_IDS) {
-        byPlan[plan] = customersOf(s.market, COMPANY, "national", group, plan);
+        byPlan[plan] = REGION_IDS.reduce(
+          (n, region) => n + customersOf(s.market, COMPANY, region, group, plan),
+          0,
+        );
         if (plan !== "free") paying += byPlan[plan];
       }
       byGroup[group] = byPlan;

@@ -1,4 +1,5 @@
-import { GROUP_IDS, type GroupId } from "@airace/protocol";
+import { GROUP_IDS, type GroupId, REGION_IDS, type RegionId } from "@airace/protocol";
+import type { Economy } from "./balance.ts";
 import { type RngState, rngInt } from "./rng.ts";
 import type { Spotlight } from "./state.ts";
 
@@ -81,8 +82,11 @@ export function drawAuthor(rng: RngState): { name: string; handle: string; rng: 
   };
 }
 
-/** Draws the world's six spotlight customers; returns them and the advanced rng. */
-export function drawSpotlights(rng: RngState): { spotlights: Spotlight[]; rng: RngState } {
+/** Draws the world's six spotlight customers; each lives in a region drawn by its group's people. */
+export function drawSpotlights(
+  rng: RngState,
+  economy: Economy,
+): { spotlights: Spotlight[]; rng: RngState } {
   let r = rng;
   const draw = (n: number) => {
     const x = rngInt(r, n);
@@ -96,12 +100,22 @@ export function drawSpotlights(rng: RngState): { spotlights: Spotlight[]; rng: R
     used.add(first);
     const initial = LAST_INITIALS[draw(LAST_INITIALS.length)] ?? "A";
     const bios = BIOS[group];
+    const weights = REGION_IDS.map((r) => economy.population[r] * economy.groupMix[r][group]);
+    let pick = (draw(1_000_000) / 1_000_000) * weights.reduce((a, b) => a + b, 0);
+    let region: RegionId = REGION_IDS[REGION_IDS.length - 1] ?? "pacific";
+    for (const [k, w] of weights.entries()) {
+      pick -= w;
+      if (pick < 0) {
+        region = REGION_IDS[k] ?? region;
+        break;
+      }
+    }
     return {
       id: `spot-${i + 1}`,
       name: `${first} ${initial}.`,
       handle: `@${first.toLowerCase()}_${initial.toLowerCase()}${10 + draw(90)}`,
       group,
-      region: "national",
+      region,
       bio: bios[draw(bios.length)] ?? "",
     };
   });

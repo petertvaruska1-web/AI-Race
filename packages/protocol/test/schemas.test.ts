@@ -6,6 +6,7 @@ import {
   FeedItemView,
   GROUP_IDS,
   PLAN_IDS,
+  REGION_IDS,
   ServerMessage,
   TrainingPlan,
   type WorldView,
@@ -78,7 +79,14 @@ function sampleView(): WorldView {
       hostUserId: "u1",
       effectiveHostUserId: "u1",
       inviteCode: "ABCD-1234",
-      market: { adoption: 0.1, adoptable: 33_500_000 },
+      market: {
+        adoption: 0.1,
+        adoptable: 33_500_000,
+        regions: Object.fromEntries(REGION_IDS.map((r) => [r, { adoptable: 3_700_000 }])) as Record<
+          (typeof REGION_IDS)[number],
+          { adoptable: number }
+        >,
+      },
     },
     members: [{ userId: "u1", displayName: "Ana", online: true, companyId: "c1" }],
     companies: [
@@ -107,6 +115,10 @@ function sampleView(): WorldView {
         ],
         prices: { free: true, personal: 10, business: null },
         customers: 1230,
+        customersByRegion: Object.fromEntries(REGION_IDS.map((r) => [r, 5])) as Record<
+          (typeof REGION_IDS)[number],
+          number
+        >,
         reputation: 52,
         followers: 37,
       },
@@ -129,7 +141,7 @@ function sampleView(): WorldView {
         name: "Maya K.",
         handle: "@maya_k42",
         group: "students",
-        region: "national",
+        region: "pacific",
         bio: "Writes essays at 2 a.m.",
       },
     ],
@@ -160,6 +172,10 @@ function sampleView(): WorldView {
             (typeof GROUP_IDS)[number],
             Record<(typeof PLAN_IDS)[number], number>
           >,
+          byRegion: Object.fromEntries(REGION_IDS.map((r) => [r, zeros(GROUP_IDS)])) as Record<
+            (typeof REGION_IDS)[number],
+            Record<(typeof GROUP_IDS)[number], number>
+          >,
         },
         satisfaction: {
           p1: { ...Object.fromEntries(GROUP_IDS.map((g) => [g, 0.5])), students: 0.62 } as Record<
@@ -176,6 +192,7 @@ function sampleView(): WorldView {
               (typeof GROUP_IDS)[number],
               number
             >,
+            regions: zeros(REGION_IDS),
             paying: 6,
             followers: 37,
             reputation: 52,

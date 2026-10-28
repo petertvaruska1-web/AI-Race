@@ -1,4 +1,10 @@
-import { type GroupId, PLAN_IDS, type PostView, type WorldView } from "@airace/protocol";
+import {
+  type GroupId,
+  PLAN_IDS,
+  type PostView,
+  REGION_IDS,
+  type WorldView,
+} from "@airace/protocol";
 import { getBalance } from "@airace/sim";
 import { formatCount } from "./format.ts";
 import { CATEGORIES } from "./screens/Benchmarks.tsx";
@@ -54,10 +60,13 @@ export function groupSatisfaction(view: WorldView, g: GroupId): number | null {
   return people > 0 ? weighted / people : known.reduce((a, b) => a + b, 0) / known.length;
 }
 
-/** People in the group willing to use an AI today. */
+/** People in the group willing to use an AI today, across every region. */
 export function groupWilling(view: WorldView, g: GroupId): number {
-  const mix = getBalance(view.world.balance).economy.groupMix.national;
-  return view.world.market.adoptable * (mix[g] ?? 0);
+  const mix = getBalance(view.world.balance).economy.groupMix;
+  return REGION_IDS.reduce(
+    (n, r) => n + view.world.market.regions[r].adoptable * (mix[r][g] ?? 0),
+    0,
+  );
 }
 
 /** The player's customers in a group, over every plan. */

@@ -1,4 +1,4 @@
-import { GROUP_IDS, type GroupId } from "@airace/protocol";
+import { GROUP_IDS, type GroupId, REGION_IDS, type RegionId } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import { groupColors } from "../src/groups.ts";
 import { arrivalsFrom, type OrbInput, orbParams } from "../src/orb/params.ts";
@@ -146,6 +146,7 @@ describe("customer arrivals", () => {
       GroupId,
       number
     >,
+    regions: Object.fromEntries(REGION_IDS.map((r) => [r, 0])) as Record<RegionId, number>,
   });
 
   it("streams in the day's new customers, each group in its share and color", () => {

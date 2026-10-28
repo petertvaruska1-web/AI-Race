@@ -1,4 +1,4 @@
-import { type Command, GROUP_IDS } from "@airace/protocol";
+import { type Command, GROUP_IDS, REGION_IDS } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import {
   adoptionShare,
@@ -118,9 +118,15 @@ function launched(): WorldState {
   return ticks(s, 3);
 }
 
+/** Every group of c1's customers in every region. */
+const cells = (s: WorldState) =>
+  Object.values(s.market.customers.c1 ?? {}).flatMap((byGroup) =>
+    Object.values(byGroup ?? {}).map((byPlan) => byPlan ?? {}),
+  );
+
 const total = (s: WorldState) =>
-  Object.values(s.market.customers.c1?.national ?? {}).reduce(
-    (sum, byPlan) => sum + Object.values(byPlan).reduce((a, b) => a + b, 0),
+  cells(s).reduce(
+    (sum, byPlan) => sum + Object.values(byPlan).reduce((a, b) => a + (b ?? 0), 0),
     0,
   );
 
@@ -195,18 +201,15 @@ describe("customers", () => {
     const day6 = total(s);
     expect(day1).toBeGreaterThan(day0);
     expect(day6).toBeGreaterThan(day1);
-    const willing =
-      BALANCE_TEST.economy.population.national * adoptionShare(BALANCE_TEST.economy, s.day);
+    const e = BALANCE_TEST.economy;
+    const people = REGION_IDS.reduce((n, r) => n + e.population[r], 0);
+    const willing = people * adoptionShare(e, s.day);
     expect(day6).toBeLessThanOrEqual(willing);
   });
 
   it("loses a closed plan's customers gradually, never below zero", () => {
     let s = ticks(launched(), 10);
-    const personal = () =>
-      Object.values(s.market.customers.c1?.national ?? {}).reduce(
-        (a, g) => a + (g.personal ?? 0),
-        0,
-      );
+    const personal = () => cells(s).reduce((a, g) => a + (g.personal ?? 0), 0);
     const before = personal();
     expect(before).toBeGreaterThan(0);
     s = ok(step(s, cmd({ type: "setPlan", plan: "personal", productId: null })));
@@ -231,7 +234,7 @@ describe("spotlights", () => {
     for (const p of a) {
       expect(p.name.length).toBeGreaterThan(1);
       expect(p.handle).toMatch(/^@[a-z0-9_]+$/);
-      expect(p.region).toBe("national");
+      expect(REGION_IDS).toContain(p.region);
     }
   });
 });

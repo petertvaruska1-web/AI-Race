@@ -1,4 +1,4 @@
-import { type Command, WorldView } from "@airace/protocol";
+import { type Command, REGION_IDS, WorldView } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import {
   adoptionShare,
@@ -143,6 +143,7 @@ describe("projectView", () => {
     const acme = view.companies.find((c) => c.id === "CO_A");
     expect(Object.keys(acme ?? {}).sort()).toEqual([
       "customers",
+      "customersByRegion",
       "followers",
       "id",
       "logo",
@@ -298,7 +299,12 @@ describe("projectView: the company game", () => {
     expect(total).toBeGreaterThan(0);
     expect(me?.customers.total).toBe(Math.round(total));
     expect(me?.customers.byGroup.students.personal).toBe(
-      Math.round(customersOf(s.market, "CO_A", "national", "students", "personal")),
+      Math.round(
+        REGION_IDS.reduce(
+          (n, r) => n + customersOf(s.market, "CO_A", r, "students", "personal"),
+          0,
+        ),
+      ),
     );
     expect(me?.satisfaction.PROD_A?.students).toBeCloseTo(0.62, 9);
     expect(me?.satisfaction.PROD_A?.everyday).toBe(0.5);
@@ -342,10 +348,10 @@ describe("projectView: the company game", () => {
 
   it("rounds other companies' customers to three figures, and fame to whole numbers", () => {
     const s = world();
-    s.market.customers.CO_A = { national: { everyday: { free: 123_456.7 } } };
+    s.market.customers.CO_A = { pacific: { everyday: { free: 123_456.7 } } };
     expect(acmeFor(s).customers).toBe(123_000);
     expect(projectView(s, "u1").me.company?.customers.total).toBe(123_457);
-    s.market.customers.CO_A = { national: { everyday: { free: 56.4 } } };
+    s.market.customers.CO_A = { pacific: { everyday: { free: 56.4 } } };
     expect(acmeFor(s).customers).toBe(56);
     const fame = s.companies.CO_A?.fame;
     if (!fame) throw new Error("no fame");
@@ -381,7 +387,11 @@ describe("projectView: the company game", () => {
     const market = projectView(world(), "u1").world.market;
     const share = adoptionShare(BALANCE_V2.economy, 13);
     expect(market.adoption).toBeCloseTo(share, 12);
-    expect(market.adoptable).toBe(Math.round(BALANCE_V2.economy.population.national * share));
+    const people = REGION_IDS.reduce((n, r) => n + BALANCE_V2.economy.population[r], 0);
+    expect(market.adoptable).toBe(Math.round(people * share));
+    expect(market.regions.pacific.adoptable).toBe(
+      Math.round(BALANCE_V2.economy.population.pacific * share),
+    );
   });
 
   it("shows the owner the last 12 closed months", () => {

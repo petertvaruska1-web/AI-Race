@@ -1,4 +1,4 @@
-import { type Command, GROUP_IDS, PLAN_IDS, WorldView } from "@airace/protocol";
+import { type Command, GROUP_IDS, PLAN_IDS, REGION_IDS, WorldView } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import {
   type CompanyState,
@@ -9,7 +9,6 @@ import {
   projectView,
   type StepResult,
   step,
-  upgradeState,
   type WorldState,
 } from "../src/index.ts";
 
@@ -74,7 +73,7 @@ function world(): WorldState {
 function withCustomers(s: WorldState): WorldState {
   const next = structuredClone(s);
   next.market.customers.c1 = {
-    national: { students: { free: 10.4, personal: 2.6 }, businesses: { business: 3.5 } },
+    pacific: { students: { free: 10.4, personal: 2.6 }, businesses: { business: 3.5 } },
   };
   return next;
 }
@@ -87,7 +86,7 @@ describe("day history", () => {
     const expected = Object.fromEntries(
       GROUP_IDS.map((g) => [
         g,
-        Math.round(PLAN_IDS.reduce((n, p) => n + customersOf(s.market, "c1", "national", g, p), 0)),
+        Math.round(PLAN_IDS.reduce((n, p) => n + customersOf(s.market, "c1", "pacific", g, p), 0)),
       ]),
     );
     const paying = ["personal", "business"] as const;
@@ -95,10 +94,21 @@ describe("day history", () => {
       day: s.day,
       cash: c.cash,
       customers: expected,
+      regions: Object.fromEntries(
+        REGION_IDS.map((r) => [
+          r,
+          Math.round(
+            GROUP_IDS.reduce(
+              (n, g) => n + PLAN_IDS.reduce((m, p) => m + customersOf(s.market, "c1", r, g, p), 0),
+              0,
+            ),
+          ),
+        ]),
+      ),
       paying: Math.round(
         GROUP_IDS.reduce(
           (n, g) =>
-            n + paying.reduce((m, p) => m + customersOf(s.market, "c1", "national", g, p), 0),
+            n + paying.reduce((m, p) => m + customersOf(s.market, "c1", "pacific", g, p), 0),
           0,
         ),
       ),
@@ -117,13 +127,6 @@ describe("day history", () => {
     expect(days.at(-1)).toBe(s.day);
   });
 
-  it("opens a world saved before history existed with an empty history", () => {
-    const old = structuredClone(ticks(world(), 2)) as WorldState;
-    for (const c of Object.values(old.companies)) delete (c as Partial<CompanyState>).history;
-    const s = ticks(upgradeState(old), 1);
-    expect(company(s).history.map((h) => h.day)).toEqual([s.day]);
-  });
-
   it("shows the history keyed by day, in its owner's view only (R2)", () => {
     const s = ticks(withCustomers(world()), 3);
     const mine = WorldView.parse(projectView(s, "u1"));
@@ -133,6 +136,7 @@ describe("day history", () => {
     expect(history["3"]).toEqual({
       cash: company(s).cash,
       customers: company(s).history.at(-1)?.customers,
+      regions: company(s).history.at(-1)?.regions,
       paying: company(s).history.at(-1)?.paying,
       followers: company(s).history.at(-1)?.followers,
       reputation: company(s).history.at(-1)?.reputation,

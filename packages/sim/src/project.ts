@@ -11,6 +11,7 @@ import {
   type PublicProduct,
   type PublicVersion,
   REGION_IDS,
+  type RegionId,
   type RunView,
   type SpotlightView,
   type TrainingPlan,
@@ -19,7 +20,7 @@ import {
 } from "@airace/protocol";
 import { adoptionShare, getBalance } from "./balance.ts";
 import { dateOfDay } from "./calendar.ts";
-import { customersOf, totalCustomers } from "./market.ts";
+import { customersByRegion, customersOf, totalCustomers } from "./market.ts";
 import { liveProductFor } from "./products.ts";
 import type {
   CompanyState,
@@ -84,8 +85,12 @@ function marketView(state: WorldState): WorldView["world"]["market"] {
   const e = getBalance(state.balance).economy;
   const adoption = adoptionShare(e, state.day);
   let people = 0;
-  for (const region of REGION_IDS) people += e.population[region];
-  return { adoption, adoptable: Math.round(people * adoption) };
+  const regions = {} as WorldView["world"]["market"]["regions"];
+  for (const region of REGION_IDS) {
+    people += e.population[region];
+    regions[region] = { adoptable: Math.round(e.population[region] * adoption) };
+  }
+  return { adoption, adoptable: Math.round(people * adoption), regions };
 }
 
 function sortedIds(record: Record<string, unknown>): string[] {
@@ -111,6 +116,7 @@ function publicCompany(state: WorldState, c: CompanyState): PublicCompany {
       business: liveProductFor(c, "business") ? c.plans.business.price : null,
     },
     customers: threeFigures(totalCustomers(state.market, c.id)),
+    customersByRegion: perRegion(customersByRegion(state.market, c.id), threeFigures),
     reputation: Math.round(c.fame.reputation),
     followers: Math.round(c.fame.followers),
   };
@@ -129,6 +135,16 @@ function publicProduct(c: CompanyState, p: ProductState): PublicProduct {
 }
 
 /** Whole customers, then three significant figures: rivals see the scale, not the detail. */
+function perRegion(
+  values: Record<RegionId, number>,
+  round: (n: number) => number,
+): Record<RegionId, number> {
+  return Object.fromEntries(REGION_IDS.map((r) => [r, round(values[r])])) as Record<
+    RegionId,
+    number
+  >;
+}
+
 function threeFigures(n: number): number {
   const whole = Math.round(n);
   if (whole < 1000) return whole;
@@ -170,7 +186,7 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
     history: Object.fromEntries(
       c.history.map(({ day, ...sample }) => [
         String(day),
-        { ...sample, customers: { ...sample.customers } },
+        { ...sample, customers: { ...sample.customers }, regions: { ...sample.regions } },
       ]),
     ),
   };
@@ -199,7 +215,17 @@ function customersView(state: WorldState, c: CompanyState): PrivateCompany["cust
     }
     byGroup[group] = byPlan;
   }
-  return { total: Math.round(totalCustomers(state.market, c.id)), byGroup };
+  const byRegion = {} as PrivateCompany["customers"]["byRegion"];
+  for (const region of REGION_IDS) {
+    const groups = {} as Record<GroupId, number>;
+    for (const group of GROUP_IDS) {
+      let n = 0;
+      for (const plan of PLAN_IDS) n += customersOf(state.market, c.id, region, group, plan);
+      groups[group] = Math.round(n);
+    }
+    byRegion[region] = groups;
+  }
+  return { total: Math.round(totalCustomers(state.market, c.id)), byGroup, byRegion };
 }
 
 function satisfactionView(state: WorldState, c: CompanyState): PrivateCompany["satisfaction"] {

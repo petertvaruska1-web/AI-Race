@@ -1,4 +1,4 @@
-import type { GroupId } from "@airace/protocol";
+import { type GroupId, REGION_IDS } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import { adoptionShare, BALANCE_TEST, BALANCE_V2 } from "../src/index.ts";
 import { afterLaunch, type Report, runBot, TYPICAL_FIRST_MODEL } from "./bots.ts";
@@ -31,7 +31,9 @@ describe("balance-v2", { timeout: 60_000 }, () => {
   it("stays a small startup: under 2% of the people willing, all first year", () => {
     const e = BALANCE_V2.economy;
     for (const d of typical.days) {
-      expect(d.customers).toBeLessThan(0.02 * e.population.national * adoptionShare(e, d.day));
+      expect(d.customers).toBeLessThan(
+        0.02 * REGION_IDS.reduce((n, r) => n + e.population[r], 0) * adoptionShare(e, d.day),
+      );
     }
   });
 

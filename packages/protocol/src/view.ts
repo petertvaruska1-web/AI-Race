@@ -191,6 +191,8 @@ export const PublicCompany = z.strictObject({
   }),
   /** Rounded to three significant figures. */
   customers: Count,
+  /** Rounded to three significant figures. */
+  customersByRegion: z.record(z.enum(REGION_IDS), Count),
   reputation: Reputation,
   followers: Count,
 });
@@ -200,6 +202,7 @@ export type PublicCompany = z.infer<typeof PublicCompany>;
 export const DaySampleView = z.strictObject({
   cash: z.number().int(),
   customers: z.record(GroupId, Count),
+  regions: z.record(z.enum(REGION_IDS), Count),
   /** Customers on the personal and business plans. */
   paying: Count,
   followers: Count,
@@ -217,6 +220,7 @@ export const PrivateCompany = z.strictObject({
   customers: z.strictObject({
     total: Count,
     byGroup: z.record(GroupId, z.record(PlanId, Count)),
+    byRegion: z.record(z.enum(REGION_IDS), z.record(GroupId, Count)),
   }),
   /** Per product, each group's satisfaction (0..1). */
   satisfaction: z.record(zId, z.record(GroupId, z.number().min(0).max(1))),
@@ -245,7 +249,11 @@ export const WorldView = z.strictObject({
     effectiveHostUserId: zId.nullable(),
     inviteCode: z.string(),
     /** The share of people willing to use an AI today, and how many people that is. */
-    market: z.strictObject({ adoption: z.number().min(0).max(1), adoptable: Count }),
+    market: z.strictObject({
+      adoption: z.number().min(0).max(1),
+      adoptable: Count,
+      regions: z.record(z.enum(REGION_IDS), z.strictObject({ adoptable: Count })),
+    }),
   }),
   members: z.array(
     z.strictObject({

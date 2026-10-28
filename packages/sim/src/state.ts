@@ -166,6 +166,7 @@ export type DaySample = {
   day: number;
   cash: number;
   customers: Record<GroupId, number>;
+  regions: Record<RegionId, number>;
   /** Customers on the personal and business plans. */
   paying: number;
   followers: number;

@@ -1,4 +1,11 @@
-import type { DatasetId, GroupId, RegionId, Speed, TrainingPlan } from "@airace/protocol";
+import {
+  type DatasetId,
+  GROUP_IDS,
+  type GroupId,
+  type RegionId,
+  type Speed,
+  type TrainingPlan,
+} from "@airace/protocol";
 
 export type BalanceVersion = "balance-v2" | "balance-test";
 export type BrainSize = { id: string; nLayer: number; dModel: number };
@@ -25,6 +32,8 @@ export type Economy = {
   /** Share of people willing to use an AI: start + (end - start) / (1 + exp(-steepness * (years - midYear))). */
   adoption: { start: number; end: number; midYear: number; steepness: number };
   groupMix: Record<RegionId, Record<GroupId, number>>;
+  /** Regions that touch; word of mouth and data centers reach them. Symmetric. */
+  neighbors: Record<RegionId, readonly RegionId[]>;
   groups: Record<GroupId, GroupTraits>;
   prices: {
     personal: { default: number; min: number; max: number };
@@ -51,6 +60,8 @@ export type Economy = {
     wordOfMouth: number;
     awarenessDecay: number;
     launchBoost: number;
+    /** The share of a cell's word of mouth that also reaches each neighbouring region. */
+    neighborSpill: number;
   };
   servingCostPerCustomerDayPerMParam: number;
   fame: {
@@ -121,20 +132,63 @@ function defaultPlan(brainSize: string, attentionSpan: number, length: string): 
   };
 }
 
+/** The country's mix of groups among people willing to use an AI. */
+const NATIONAL_MIX: Record<GroupId, number> = {
+  students: 0.14,
+  creators: 0.1,
+  developers: 0.07,
+  businesses: 0.06,
+  everyday: 0.58,
+  researchers: 0.05,
+};
+
+/** The national mix tilted by a region's multipliers (unlisted groups x1), summing to 1. */
+function tilted(by: Partial<Record<GroupId, number>>): Record<GroupId, number> {
+  const raw = GROUP_IDS.map((g) => NATIONAL_MIX[g] * (by[g] ?? 1));
+  const sum = raw.reduce((a, b) => a + b, 0);
+  return Object.fromEntries(GROUP_IDS.map((g, i) => [g, (raw[i] ?? 0) / sum])) as Record<
+    GroupId,
+    number
+  >;
+}
+
 // The first model (tiny, standard length) is 0.104 PFLOP: 13 game days
 // (104 s at 1x) and $41,596, about a sixth of the founding cash.
 const ECONOMY_V2: Economy = {
-  population: { national: 335_000_000 },
+  // The census divisions' people (2023 estimates).
+  population: {
+    newEngland: 15_100_000,
+    midAtlantic: 42_000_000,
+    greatLakes: 47_200_000,
+    plains: 21_800_000,
+    southAtlantic: 68_700_000,
+    midSouth: 19_800_000,
+    southCentral: 43_000_000,
+    mountain: 25_500_000,
+    pacific: 53_000_000,
+  },
   adoption: { start: 0.1, end: 0.6, midYear: 4, steepness: 1.2 },
   groupMix: {
-    national: {
-      students: 0.14,
-      creators: 0.1,
-      developers: 0.07,
-      businesses: 0.06,
-      everyday: 0.58,
-      researchers: 0.05,
-    },
+    newEngland: tilted({ students: 1.4, researchers: 1.8, developers: 1.1 }),
+    midAtlantic: tilted({ businesses: 1.5, creators: 1.2, researchers: 1.2 }),
+    greatLakes: tilted({ businesses: 1.1 }),
+    plains: tilted({ everyday: 1.15, developers: 0.7, researchers: 0.7 }),
+    southAtlantic: tilted({ businesses: 1.1 }),
+    midSouth: tilted({ everyday: 1.2, creators: 0.9, developers: 0.6, researchers: 0.6 }),
+    southCentral: tilted({ businesses: 1.2 }),
+    mountain: tilted({ developers: 1.2 }),
+    pacific: tilted({ developers: 1.9, creators: 1.4, researchers: 1.3, everyday: 0.85 }),
+  },
+  neighbors: {
+    newEngland: ["midAtlantic"],
+    midAtlantic: ["newEngland", "greatLakes", "southAtlantic"],
+    greatLakes: ["midAtlantic", "plains", "midSouth", "southAtlantic"],
+    plains: ["greatLakes", "midSouth", "southCentral", "mountain"],
+    southAtlantic: ["midAtlantic", "greatLakes", "midSouth"],
+    midSouth: ["greatLakes", "plains", "southAtlantic", "southCentral"],
+    southCentral: ["plains", "midSouth", "mountain"],
+    mountain: ["plains", "southCentral", "pacific"],
+    pacific: ["mountain"],
   },
   groups: {
     students: {
@@ -221,6 +275,7 @@ const ECONOMY_V2: Economy = {
     wordOfMouth: 0.5,
     awarenessDecay: 0.01,
     launchBoost: 0.1,
+    neighborSpill: 0.15,
   },
   // - 0.01: serving costs a tiny AI about 5% of its income; a medium AI costs four times
   //   as much per customer, so size is a real trade-off (at 0.0004 it was free).

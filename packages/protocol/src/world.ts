@@ -56,8 +56,32 @@ export const POST_TONES = ["praise", "joke", "roast"] as const;
 export type PostTone = (typeof POST_TONES)[number];
 
 /** Market regions. Phase 1 has one; Phase 2 adds the 9 US divisions. */
-export const REGION_IDS = ["national"] as const;
+/** The nine US census divisions (game-layer design §5). */
+export const REGION_IDS = [
+  "newEngland",
+  "midAtlantic",
+  "greatLakes",
+  "plains",
+  "southAtlantic",
+  "midSouth",
+  "southCentral",
+  "mountain",
+  "pacific",
+] as const;
 export type RegionId = (typeof REGION_IDS)[number];
+
+/** The regions in plain words (R7). */
+export const REGION_NAMES: Record<RegionId, string> = {
+  newEngland: "New England",
+  midAtlantic: "Mid-Atlantic",
+  greatLakes: "Great Lakes",
+  plains: "Great Plains",
+  southAtlantic: "South Atlantic",
+  midSouth: "Mid-South",
+  southCentral: "South Central",
+  mountain: "Mountain West",
+  pacific: "Pacific",
+};
 
 export const Hex = z.string().regex(/^#[0-9a-f]{6}$/i);
 export type Hex = z.infer<typeof Hex>;

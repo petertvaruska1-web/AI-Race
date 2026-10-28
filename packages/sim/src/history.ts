@@ -1,5 +1,5 @@
 import { GROUP_IDS, type GroupId, PLAN_IDS, REGION_IDS } from "@airace/protocol";
-import { customersOf } from "./market.ts";
+import { customersByRegion, customersOf } from "./market.ts";
 import type { DaySample, WorldState } from "./state.ts";
 
 /** Days of history kept per company: four game months, day by day (immersion design I3). */
@@ -23,10 +23,13 @@ export function historyDay(s: WorldState): void {
       }
       customers[g] = Math.round(n);
     }
+    const regions = customersByRegion(s.market, id);
+    for (const r of REGION_IDS) regions[r] = Math.round(regions[r]);
     const sample: DaySample = {
       day: s.day,
       cash: c.cash,
       customers,
+      regions,
       paying: Math.round(paying),
       followers: Math.round(c.fame.followers),
       reputation: Math.round(c.fame.reputation),
@@ -34,16 +37,4 @@ export function historyDay(s: WorldState): void {
     c.history.push(sample);
     if (c.history.length > HISTORY_DAYS) c.history.splice(0, c.history.length - HISTORY_DAYS);
   }
-}
-
-/**
- * Fills fields added to sim-2 after its first worlds were saved, so they keep
- * working: day history starts on their next day (immersion design I6).
- */
-export function upgradeState(s: WorldState): WorldState {
-  for (const c of Object.values(s.companies)) {
-    const saved = c as Omit<typeof c, "history"> & { history?: DaySample[] };
-    saved.history ??= [];
-  }
-  return s;
 }

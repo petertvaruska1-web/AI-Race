@@ -151,7 +151,7 @@ const satisfaction = (s: WorldState, group: GroupId) =>
 
 /** Puts `n` customers of `group` on `plan`, replacing what the market had. */
 function give(s: WorldState, group: GroupId, plan: PlanId, n: number): void {
-  s.market.customers.c1 = { national: { [group]: { [plan]: n } } };
+  s.market.customers.c1 = { pacific: { [group]: { [plan]: n } } };
 }
 
 describe("customer feedback", () => {

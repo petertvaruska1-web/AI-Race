@@ -1,4 +1,4 @@
-import type { BalanceVersion } from "./balance.ts";
+import { type BalanceVersion, getBalance } from "./balance.ts";
 import { emptyMarket } from "./market.ts";
 import { seedRng } from "./rng.ts";
 import { drawSpotlights } from "./spotlights.ts";
@@ -13,7 +13,7 @@ export function createWorld(p: {
   balance: BalanceVersion;
   inviteCode: string;
 }): WorldState {
-  const { spotlights, rng } = drawSpotlights(seedRng(p.seed));
+  const { spotlights, rng } = drawSpotlights(seedRng(p.seed), getBalance(p.balance).economy);
   return {
     worldId: p.worldId,
     name: p.name,

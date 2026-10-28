@@ -1,4 +1,11 @@
-import { GROUP_IDS, type GroupId, PLAN_IDS, type PlanId, REGION_IDS } from "@airace/protocol";
+import {
+  GROUP_IDS,
+  type GroupId,
+  PLAN_IDS,
+  type PlanId,
+  REGION_IDS,
+  type RegionId,
+} from "@airace/protocol";
 import { adoptionShare, type Economy, getBalance } from "./balance.ts";
 import { liveProductFor } from "./products.ts";
 import { paramCount } from "./shape.ts";
@@ -73,6 +80,19 @@ export function totalCustomers(m: MarketState, companyId: string): number {
   return n;
 }
 
+/** A company's customers in each region, over every group and plan. */
+export function customersByRegion(m: MarketState, companyId: string): Record<RegionId, number> {
+  const out = {} as Record<RegionId, number>;
+  for (const region of REGION_IDS) {
+    let n = 0;
+    for (const group of GROUP_IDS) {
+      for (const plan of PLAN_IDS) n += customersOf(m, companyId, region, group, plan);
+    }
+    out[region] = n;
+  }
+  return out;
+}
+
 function setCustomers(
   m: MarketState,
   companyId: string,
@@ -135,6 +155,9 @@ export function marketDay(s: WorldState): void {
       }
     }
   }
+
+  // Word of mouth that reaches neighbouring regions, applied after every cell's own.
+  const spills: { id: string; region: RegionId; group: GroupId; spread: number }[] = [];
 
   for (const region of REGION_IDS) {
     for (const group of GROUP_IDS) {
@@ -202,7 +225,15 @@ export function marketDay(s: WorldState): void {
         const spread = people > 0 ? (e.diffusion.wordOfMouth * mine) / people : 0;
         if (a > 0 || spread > 0)
           setAwareness(m, id, region, group, a + (1 - a) * spread - a * e.diffusion.awarenessDecay);
+        if (spread > 0) spills.push({ id, region, group, spread });
       }
+    }
+  }
+
+  for (const { id, region, group, spread } of spills) {
+    for (const near of e.neighbors[region]) {
+      const a = awarenessOf(m, id, near, group);
+      setAwareness(m, id, near, group, a + (1 - a) * spread * e.diffusion.neighborSpill);
     }
   }
 }
