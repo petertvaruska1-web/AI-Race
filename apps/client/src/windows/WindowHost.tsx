@@ -5,6 +5,7 @@ import { type OpenWindow, useWindows } from "../store/windows.ts";
 import { AiWindow } from "./AiWindow.tsx";
 import { CampaignWindow } from "./CampaignWindow.tsx";
 import { CustomersWindow } from "./CustomersWindow.tsx";
+import { ComputersWindow, DataCenterWindow } from "./DataCenterWindow.tsx";
 import { GroupWindow } from "./GroupWindow.tsx";
 import { CategoryWindow, MoneyWindow, MonthWindow } from "./MoneyWindows.tsx";
 import { PostWindow } from "./PostWindow.tsx";
@@ -36,6 +37,10 @@ function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) 
       return <RegionWindow entry={entry} view={view} region={s.region} />;
     case "campaign":
       return <CampaignWindow entry={entry} view={view} region={s.region} />;
+    case "dataCenter":
+      return <DataCenterWindow entry={entry} view={view} />;
+    case "computers":
+      return <ComputersWindow entry={entry} view={view} />;
   }
 }
 

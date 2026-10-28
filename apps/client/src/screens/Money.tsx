@@ -4,12 +4,15 @@ import {
   INCOME_CATEGORIES,
   PLAN_IDS,
   type PlanId,
+  REGION_IDS,
+  REGION_NAMES,
   type WorldView,
 } from "@airace/protocol";
 import { getBalance } from "@airace/sim";
 import { useState } from "react";
 import { Bars } from "../components/Bars.tsx";
 import { Button } from "../components/Button.tsx";
+import { Computers } from "../components/Computers.tsx";
 import { MonthBars } from "../components/charts/MonthBars.tsx";
 import { INPUT } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
@@ -78,6 +81,17 @@ export function Money({ view }: { view: WorldView }) {
               onOpen: (el) => open({ kind: "group", group: g }, el),
             }))}
           />
+          <h3 className="mt-5 mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+            By region
+          </h3>
+          <Bars
+            rows={REGION_IDS.map((r) => ({
+              label: REGION_NAMES[r],
+              value: now.revenueByRegion[r],
+              color: "var(--brand-2)",
+              onOpen: (el) => open({ kind: "region", region: r }, el),
+            }))}
+          />
         </Panel>
 
         <Panel
@@ -109,6 +123,30 @@ export function Money({ view }: { view: WorldView }) {
           </p>
         </Panel>
       </div>
+
+      {(now.financing.loans > 0 || now.financing.investors > 0 || now.financing.repaid > 0) && (
+        <Panel
+          title="Loans and investors"
+          aria-label="Loans and investors"
+          hint="Money that is neither income nor a cost: rescues in, repayments out."
+        >
+          <Bars
+            rows={[
+              { label: "Loans", value: now.financing.loans, color: "var(--good)" },
+              { label: "Investors", value: now.financing.investors, color: "var(--good)" },
+              { label: "Repaid", value: now.financing.repaid, color: "var(--danger)" },
+            ].filter((r) => r.value > 0)}
+          />
+        </Panel>
+      )}
+
+      <Panel
+        title="Computers"
+        aria-label="Computers"
+        hint="Where your AIs run: your data centers first, then rented cloud."
+      >
+        <Computers view={view} />
+      </Panel>
 
       <Panel
         title="Profit by month"

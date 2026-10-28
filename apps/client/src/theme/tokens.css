@@ -314,6 +314,11 @@ h3 {
   filter: drop-shadow(0 0 0.2px var(--brand-2));
 }
 
+/* The answered ring fills smoothly as service changes. */
+.gauge {
+  transition: stroke-dashoffset 800ms ease;
+}
+
 /* A screen slides in, its parts one after another. */
 .screen-in > * > * {
   animation: rise 480ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;

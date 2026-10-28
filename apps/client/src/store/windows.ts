@@ -13,7 +13,9 @@ export type WindowSpec =
   | { kind: "cost"; category: CostCategory }
   | { kind: "post"; postId: string }
   | { kind: "region"; region: RegionId }
-  | { kind: "campaign"; region?: RegionId };
+  | { kind: "campaign"; region?: RegionId }
+  | { kind: "dataCenter" }
+  | { kind: "computers" };
 
 export type OpenWindow = {
   id: number;

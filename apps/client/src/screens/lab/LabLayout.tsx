@@ -2,6 +2,7 @@ import type { WorldView } from "@airace/protocol";
 import { getBalance, previewPlan } from "@airace/sim";
 import { useEffect, useState } from "react";
 import { Button } from "../../components/Button.tsx";
+import { lentToTraining } from "../../components/Computers.tsx";
 import { formatMoney, gameDays } from "../../format.ts";
 import { useCatalog } from "../../store/catalog.ts";
 import { usePlan } from "../../store/plan.ts";
@@ -64,7 +65,9 @@ export function Lab({ view }: { view: WorldView }) {
       {step === "prepare" && catalog && (
         <PrepareStep plan={plan} catalog={catalog} balance={balance} />
       )}
-      {step === "design" && <DesignStep plan={plan} balance={balance} versions={versions} />}
+      {step === "design" && (
+        <DesignStep plan={plan} balance={balance} versions={versions} lent={lentToTraining(view)} />
+      )}
       {step === "train" && <TrainStep view={view} />}
       {step === "versions" && <VersionsStep view={view} onTrainFurther={() => setStep("data")} />}
       {planning && <SummaryBar view={view} onStarted={() => setStep("train")} />}
@@ -81,7 +84,16 @@ function SummaryBar({ view, onStarted }: { view: WorldView; onStarted: () => voi
   const company = view.me.company;
   if (!plan || !company) return null;
   const parent = company.versions.find((v) => v.id === plan.parentVersionId)?.shape ?? null;
-  const preview = previewPlan(getBalance(view.world.balance), parent, plan);
+  const lent = lentToTraining(view);
+  const preview = previewPlan(getBalance(view.world.balance), parent, plan, lent);
+  const rented = previewPlan(getBalance(view.world.balance), parent, plan);
+  const saved =
+    lent > 0 && preview.ok && rented.ok
+      ? {
+          days: rented.preview.durationDays - preview.preview.durationDays,
+          dollars: rented.preview.cost - preview.preview.cost,
+        }
+      : null;
   const active = company.runs.some((r) => r.status === "training" || r.status === "finalizing");
   const blocked = !preview.ok
     ? preview.reason
@@ -112,6 +124,12 @@ function SummaryBar({ view, onStarted }: { view: WorldView; onStarted: () => voi
             </span>
           </p>
         ) : null}
+        {saved && (saved.days > 0 || saved.dollars > 0) && (
+          <p className="text-xs text-good">
+            Your data centers make this run {gameDays(saved.days)} faster and{" "}
+            {formatMoney(saved.dollars)} cheaper.
+          </p>
+        )}
         {(blocked ?? error) && (
           <p role="alert" className="text-sm text-danger">
             {blocked ?? error}

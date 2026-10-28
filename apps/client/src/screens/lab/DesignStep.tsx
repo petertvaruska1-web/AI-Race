@@ -40,10 +40,13 @@ export function DesignStep({
   plan,
   balance,
   versions,
+  lent = 0,
 }: {
   plan: TrainingPlan;
   balance: Balance;
   versions: VersionView[];
+  /** Data-center compute lent to training (PFLOP a day). */
+  lent?: number;
 }) {
   const update = usePlan((s) => s.update);
   const parent = versions.find((v) => v.id === plan.parentVersionId) ?? null;
@@ -85,7 +88,12 @@ export function DesignStep({
           {balance.brainSizes.map((b) => {
             const shrinks =
               parent !== null && (b.nLayer < parent.shape.nLayer || b.dModel < parent.shape.dModel);
-            const p = previewPlan(balance, parent?.shape ?? null, { ...plan, brainSize: b.id });
+            const p = previewPlan(
+              balance,
+              parent?.shape ?? null,
+              { ...plan, brainSize: b.id },
+              lent,
+            );
             return (
               <Choice
                 key={b.id}
