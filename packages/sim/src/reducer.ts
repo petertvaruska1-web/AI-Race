@@ -2,6 +2,7 @@ import { Command, TEXT_LIMITS } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
 import { fameDay } from "./fame.ts";
 import { applyFeedback, newsDay } from "./feed.ts";
+import { historyDay } from "./history.ts";
 import { bookTraining, closeMonths, ledgerDay, newLedger } from "./ledger.ts";
 import { marketDay } from "./market.ts";
 import { paletteProblem } from "./palette.ts";
@@ -60,6 +61,7 @@ function tick(s: WorldState): Handled {
   ledgerDay(s);
   newsDay(s);
   fameDay(s);
+  historyDay(s);
   return OK;
 }
 
@@ -177,6 +179,7 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
         versionSeq: 0,
         ...newCompanyBusiness(getBalance(s.balance)),
         ledger: newLedger(s.day),
+        history: [],
       };
       member.companyId = newId;
       return OK;

@@ -167,6 +167,12 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
       months: c.ledger.months.slice(-MONTHS_SHOWN).map(monthView),
     },
     fame: { reputation: Math.round(c.fame.reputation), followers: Math.round(c.fame.followers) },
+    history: Object.fromEntries(
+      c.history.map(({ day, ...sample }) => [
+        String(day),
+        { ...sample, customers: { ...sample.customers } },
+      ]),
+    ),
   };
 }
 

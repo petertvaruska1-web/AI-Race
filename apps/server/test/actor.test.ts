@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Command } from "@airace/protocol";
 import { type Input, stateHash } from "@airace/sim";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { schema } from "../src/db/index.ts";
 import { type SubmitResult, WorldActor } from "../src/worlds/actor.ts";
@@ -156,6 +156,29 @@ describe("recovery", () => {
       .set({ simVersion: "sim-0" })
       .where(eq(schema.worldSnapshots.worldId, worldId));
     await expect(server.ctx.worlds.get(worldId)).rejects.toThrow(/sim-0/);
+  });
+
+  it("opens a world saved before day history existed, starting it on the next day", async () => {
+    server = await startTestServer({ balance: "balance-v2" });
+    const { userId, worldId, actor } = await runningWorld(server);
+    await actor.snapshot("test");
+    const latest = and(
+      eq(schema.worldSnapshots.worldId, worldId),
+      eq(schema.worldSnapshots.seq, actor.state().seq),
+    );
+    const [row] = await server.ctx.db.select().from(schema.worldSnapshots).where(latest);
+    const old = structuredClone(row?.state) as { companies: Record<string, { history?: unknown }> };
+    for (const c of Object.values(old.companies)) delete c.history;
+    await server.ctx.db.update(schema.worldSnapshots).set({ state: old }).where(latest);
+    await server.ctx.worlds.evict(worldId);
+
+    const reloaded = await server.ctx.worlds.get(worldId);
+    const day = reloaded.state().day;
+    for (const c of Object.values(reloaded.state().companies)) expect(c.history).toEqual([]);
+    accepted(await reloaded.submit(presence(userId, true)));
+    await server.scheduler.advance(8000);
+    const c = Object.values(reloaded.state().companies)[0];
+    expect(c?.history.map((h) => h.day)).toEqual([day + 1]);
   });
 
   it("snapshots every world on shutdown", async () => {

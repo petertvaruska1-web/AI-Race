@@ -161,6 +161,17 @@ export type MonthLedger = {
   customersEnd: number;
 };
 
+/** One day of a company, for its charts. Whole numbers. */
+export type DaySample = {
+  day: number;
+  cash: number;
+  customers: Record<GroupId, number>;
+  /** Customers on the personal and business plans. */
+  paying: number;
+  followers: number;
+  reputation: number;
+};
+
 export type LedgerState = {
   current: MonthLedger;
   /** The last 24 closed months, newest last. */
@@ -183,6 +194,8 @@ export type CompanyState = {
   ledger: LedgerState;
   /** Milestones already in the news, so each is told once. */
   announced: { customers: number; firstPaying: boolean };
+  /** The last `HISTORY_DAYS` days, oldest first. */
+  history: DaySample[];
 };
 
 export type WorldState = {

@@ -169,6 +169,18 @@ function sampleView(): WorldView {
         },
         ledger: { current: month, months: [] },
         fame: { reputation: 52, followers: 37 },
+        history: {
+          "3": {
+            cash: 120_000,
+            customers: Object.fromEntries(GROUP_IDS.map((g) => [g, 4])) as Record<
+              (typeof GROUP_IDS)[number],
+              number
+            >,
+            paying: 6,
+            followers: 37,
+            reputation: 52,
+          },
+        },
         runs: [
           {
             id: "r1",

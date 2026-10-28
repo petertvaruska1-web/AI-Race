@@ -1,4 +1,4 @@
-import { getBalance, type Input, step, type WorldState } from "@airace/sim";
+import { getBalance, type Input, step, upgradeState, type WorldState } from "@airace/sim";
 import { and, asc, desc, eq, gt } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { SIM_VERSION } from "../config.ts";
@@ -73,7 +73,7 @@ export class WorldActor {
           "It can't be replayed safely; start it with a matching server version.",
       );
     }
-    let state = snap.state as WorldState;
+    let state = upgradeState(snap.state as WorldState);
     const inputs = await ctx.db
       .select({ seq: schema.worldInputs.seq, payload: schema.worldInputs.payload })
       .from(schema.worldInputs)

@@ -196,6 +196,17 @@ export const PublicCompany = z.strictObject({
 });
 export type PublicCompany = z.infer<typeof PublicCompany>;
 
+/** One day of the owner's company, for its charts (immersion design). */
+export const DaySampleView = z.strictObject({
+  cash: z.number().int(),
+  customers: z.record(GroupId, Count),
+  /** Customers on the personal and business plans. */
+  paying: Count,
+  followers: Count,
+  reputation: Reputation,
+});
+export type DaySampleView = z.infer<typeof DaySampleView>;
+
 export const PrivateCompany = z.strictObject({
   id: zId,
   cash: z.number().int(),
@@ -211,6 +222,11 @@ export const PrivateCompany = z.strictObject({
   satisfaction: z.record(zId, z.record(GroupId, z.number().min(0).max(1))),
   ledger: z.strictObject({ current: MonthLedgerView, months: z.array(MonthLedgerView).max(12) }),
   fame: z.strictObject({ reputation: Reputation, followers: Count }),
+  /**
+   * The last 120 days keyed by day ("37"): a new day patches as one entry, where
+   * a growing array would be resent whole (immersion design I2).
+   */
+  history: z.record(z.string().regex(/^\d+$/), DaySampleView),
 });
 export type PrivateCompany = z.infer<typeof PrivateCompany>;
 
