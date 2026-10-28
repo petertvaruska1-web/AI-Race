@@ -17,11 +17,12 @@ import { MonthBars } from "../components/charts/MonthBars.tsx";
 import { INPUT } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { Stat } from "../components/Stat.tsx";
-import { formatMoney } from "../format.ts";
+import { formatMoney, monthName } from "../format.ts";
 import { GROUPS } from "../groups.ts";
 import { COST_NAMES, INCOME_NAMES, profitOf, total } from "../money.ts";
 import { useSocket } from "../store/session.ts";
 import { useWindows } from "../store/windows.ts";
+import { gradeColor } from "../windows/ReportWindow.tsx";
 import { LaunchDialog, launchBlocked, planWords } from "./LaunchDialog.tsx";
 
 /** Where money comes from and goes, the AIs on sale, and the plans and prices (game-layer §8). */
@@ -139,6 +140,39 @@ export function Money({ view }: { view: WorldView }) {
           />
         </Panel>
       )}
+
+      <Panel
+        title="Report cards"
+        aria-label="Report cards"
+        hint="Each month after your first launch gets a grade from profit, growth and how happy customers are."
+      >
+        {company.reports.length === 0 ? (
+          <p className="text-sm text-muted">
+            Your first report card comes at the end of the month after you launch.
+          </p>
+        ) : (
+          <ul className="flex flex-wrap gap-3">
+            {[...company.reports].reverse().map((r) => (
+              <li key={r.month}>
+                <button
+                  type="button"
+                  aria-label={`${monthName(r.month)}: ${r.grade}`}
+                  onClick={(e) => open({ kind: "report", month: r.month }, e.currentTarget)}
+                  className="lift grid h-20 w-20 place-items-center rounded-xl border border-border bg-surface-2/60"
+                >
+                  <span
+                    className="font-display text-3xl font-bold"
+                    style={{ color: gradeColor(r.grade) }}
+                  >
+                    {r.grade}
+                  </span>
+                  <span className="text-[11px] text-muted">{monthName(r.month, true)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
 
       <Panel
         title="Computers"

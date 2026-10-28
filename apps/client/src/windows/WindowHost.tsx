@@ -11,6 +11,7 @@ import { CategoryWindow, MoneyWindow, MonthWindow } from "./MoneyWindows.tsx";
 import { PostWindow } from "./PostWindow.tsx";
 import { ProductWindow } from "./ProductWindow.tsx";
 import { RegionWindow } from "./RegionWindow.tsx";
+import { ReportWindow } from "./ReportWindow.tsx";
 
 function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) {
   const s = entry.spec;
@@ -41,6 +42,8 @@ function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) 
       return <DataCenterWindow entry={entry} view={view} />;
     case "computers":
       return <ComputersWindow entry={entry} view={view} />;
+    case "report":
+      return <ReportWindow entry={entry} view={view} month={s.month} />;
   }
 }
 

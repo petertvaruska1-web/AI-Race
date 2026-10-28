@@ -7,7 +7,7 @@ import { Panel } from "../components/Panel.tsx";
 import { RegionMap } from "../components/RegionMap.tsx";
 import { Stat } from "../components/Stat.tsx";
 import { monthProfit } from "../components/TopBar.tsx";
-import { formatCount, formatMoney } from "../format.ts";
+import { formatCount, formatMoney, monthName } from "../format.ts";
 import { GROUPS, groupColors } from "../groups.ts";
 import { daysOf } from "../history.ts";
 import { profitOf, total } from "../money.ts";
@@ -16,6 +16,7 @@ import { arrivalsFrom } from "../orb/params.ts";
 import { regionCustomers, shareByRegion } from "../regions.ts";
 import { go } from "../route.ts";
 import { useWindows } from "../store/windows.ts";
+import { gradeColor } from "../windows/ReportWindow.tsx";
 import { LaunchDialog, launchBlocked } from "./LaunchDialog.tsx";
 import { regionMarks } from "./Market.tsx";
 
@@ -37,6 +38,7 @@ export function Company({ view }: { view: WorldView }) {
   const startOfMonth = company.ledger.months.at(-1)?.customersEnd ?? 0;
   const byGroup = GROUP_IDS.map((g) => [g, total(company.customers.byGroup[g])] as const);
   const profits = [...company.ledger.months, company.ledger.current].map(profitOf);
+  const lastCard = company.reports.at(-1);
   const orb = (
     <Orb
       size={280}
@@ -108,6 +110,31 @@ export function Company({ view }: { view: WorldView }) {
               onClick={(e) => open({ kind: "money" }, e.currentTarget)}
             />
           </div>
+          {lastCard && (
+            <button
+              type="button"
+              aria-label={`Last report card: ${lastCard.grade}`}
+              onClick={(e) => open({ kind: "report", month: lastCard.month }, e.currentTarget)}
+              className="row-btn mt-4"
+            >
+              <span
+                className="grid h-9 w-9 place-items-center rounded-lg border-2 font-display text-lg font-bold"
+                style={{
+                  color: gradeColor(lastCard.grade),
+                  borderColor: gradeColor(lastCard.grade),
+                }}
+              >
+                {lastCard.grade}
+              </span>
+              <span>
+                <span className="block font-semibold">Report card</span>
+                <span className="block text-xs text-muted">{monthName(lastCard.month)}</span>
+              </span>
+              <span aria-hidden="true" className="ml-auto text-muted">
+                ›
+              </span>
+            </button>
+          )}
         </Panel>
       </div>
 
