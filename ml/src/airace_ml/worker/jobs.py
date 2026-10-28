@@ -5,6 +5,8 @@
 * ``eval``: score a version on bench-v1, measure its personality and describe it against the
   other AIs the server names.
 * ``generate``: one chat reply, streamed piece by piece.
+* ``feedback``: the product's AI answers customer questions from each group, and each reply is
+  scored by its question's check.
 
 The model's words are passed on exactly as generated (R1).
 """
@@ -22,7 +24,8 @@ import torch
 from airace_ml.data.identity import data_identity
 from airace_ml.evals.judge import Judge, check_judge_provenance
 from airace_ml.evals.novelty import NoveltyIndex, check_index_provenance
-from airace_ml.evals.suite import run_benchmarks
+from airace_ml.evals.suite import run_benchmarks, score_reply
+from airace_ml.feedback import pick_questions
 from airace_ml.paths import judge_dir, novelty_path, tokenizer_path
 from airace_ml.personality.fingerprint import Fingerprint, describe, measure_fingerprint
 from airace_ml.tokenizer import Tok
@@ -77,6 +80,7 @@ class JobRunner:
             "train": self.handle_train,
             "eval": self.handle_eval,
             "generate": self.handle_generate,
+            "feedback": self.handle_feedback,
         }
 
     # -- train -------------------------------------------------------------------------------------
@@ -185,3 +189,30 @@ class JobRunner:
                 on_text=ctx.chunk,
             )
         return {"text": text}
+
+    # -- feedback ----------------------------------------------------------------------------------
+
+    def handle_feedback(self, spec: dict[str, Any], ctx: JobContext) -> dict[str, Any]:
+        groups = spec.get("groups")
+        if not isinstance(groups, list) or not groups:
+            raise ValueError("the job spec needs customer groups")
+        per_group = int(spec.get("perGroup", 1))
+        seed = int(spec.get("seed", 0))
+        lm, lock = self.models.get(_spec_str(spec, "versionId"), _spec_str(spec, "modelTarUrl"))
+        results = []
+        with lock:
+            for group in groups:
+                for item in pick_questions(str(group), per_group, seed):
+                    reply = lm.chat_reply(
+                        [("user", item.prompt)], max_new_tokens=96, temperature=0.8, seed=seed
+                    )
+                    results.append(
+                        {
+                            "group": group,
+                            "questionId": item.id,
+                            "question": item.prompt,
+                            "reply": reply,
+                            "score": score_reply(item, reply),
+                        }
+                    )
+        return {"results": results}

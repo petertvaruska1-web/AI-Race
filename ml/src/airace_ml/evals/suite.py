@@ -192,6 +192,11 @@ def _judge_reply(item: ExactItem | CheckItem, reply: str) -> _Outcome:
     return _Outcome(float(passed), 0.0, reply)
 
 
+def score_reply(item: ExactItem | CheckItem, reply: str) -> float:
+    """What a free-answer item's check gives ``reply``: 1.0 if it passes, else 0.0."""
+    return _judge_reply(item, reply).score
+
+
 def _ask(lm: LanguageModel, tok: Tok, items: Sequence[BenchItem], seed: int) -> list[_Outcome]:
     """Every item's outcome, from one scoring call and one generation call per reply length."""
     outcomes: list[_Outcome | None] = [None] * len(items)

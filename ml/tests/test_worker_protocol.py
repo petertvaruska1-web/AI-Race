@@ -5,6 +5,7 @@ import pytest
 from airace_ml.paths import REPO_ROOT
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.worker.protocol import (
+    JOB_TYPES,
     Lease,
     ProtocolError,
     WHello,
@@ -45,6 +46,16 @@ def test_a_lease_carries_its_job_type_and_spec():
     assert isinstance(lease, Lease)
     assert lease.job_type == "generate"
     assert lease.spec["history"][0] == ["user", "Tell me a story <|end|>"]
+
+
+def test_a_feedback_lease_names_the_customer_groups():
+    _, message = _fixture(FIXTURES / "worker" / "lease-feedback.json")
+    lease = parse_server_message(json.dumps(message))
+    assert isinstance(lease, Lease)
+    assert lease.job_type == "feedback"
+    assert "feedback" in JOB_TYPES
+    assert lease.spec["groups"][0] == "students"
+    assert lease.spec["perGroup"] == 1
 
 
 def test_whello_names_the_capabilities_in_camel_case():

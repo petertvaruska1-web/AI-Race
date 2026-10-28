@@ -162,6 +162,31 @@ def test_generate_streams_the_reply_and_downloads_a_model_once(runner, trained, 
     assert runner.models.downloads - downloads == 1
 
 
+def test_feedback_asks_every_group_and_scores_the_real_replies(runner, trained, tmp_path):
+    url = trained[0]
+    groups = ["students", "creators", "developers", "businesses", "everyday", "researchers"]
+    spec = {
+        "productId": str(uuid.uuid4()),
+        "versionId": "v-feedback",
+        "modelTarUrl": f"{url}/blobs/a.tar?sig=1",
+        "groups": groups,
+        "perGroup": 1,
+        "seed": 11,
+    }
+    result = runner.handle_feedback(spec, Recorder(tmp_path).ctx)
+    assert [r["group"] for r in result["results"]] == groups
+    assert all(0.0 <= r["score"] <= 1.0 for r in result["results"])
+    lm, _ = runner.models.get("v-feedback", spec["modelTarUrl"])
+    for r in result["results"]:
+        # Exactly what the model says to that question with that seed (R1).
+        expected = lm.chat_reply([("user", r["question"])], max_new_tokens=96, seed=11)
+        assert r["reply"] == expected
+    fixture = json.loads((RESULT_FIXTURES / "result-feedback.json").read_text())["message"]
+    assert set(result) == set(fixture)
+    assert all(set(r) == set(fixture["results"][0]) for r in result["results"])
+    json.dumps(result, allow_nan=False)  # strict JSON for the server
+
+
 def test_the_worker_command_needs_a_token(tiny_data_root, capsys):
     from airace_ml.cli import main
 

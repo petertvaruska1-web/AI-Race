@@ -9,11 +9,12 @@
       "device": "cuda",
       "vramMb": 8192,
       "maxParams": 50000000,
-      "jobTypes": ["train", "eval", "generate"],
+      "jobTypes": ["train", "eval", "generate", "feedback"],
       "slots": {
         "train": 1,
         "eval": 1,
-        "generate": 2
+        "generate": 2,
+        "feedback": 1
       },
       "dataIdentity": "sample-0001"
     },
