@@ -8,6 +8,7 @@ export function Stat({
   delta,
   deltaLabel,
   format,
+  testId,
 }: {
   label: ReactNode;
   value: number;
@@ -15,11 +16,12 @@ export function Stat({
   /** What the change is measured over, e.g. "this week". */
   deltaLabel?: string;
   format: (n: number) => string;
+  testId?: string;
 }) {
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
-      <p className="font-display text-3xl font-bold">
+      <p className="font-display text-3xl font-bold" data-testid={testId}>
         <CountUp value={value} format={format} />
       </p>
       {delta !== undefined && (

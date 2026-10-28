@@ -73,4 +73,43 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
   await page.getByRole("link", { name: "Benchmarks" }).click();
   await expect(page.getByTestId("overall")).toBeVisible({ timeout: 300_000 });
   await expect(page.locator('[data-testid^="score-"]')).toHaveCount(8);
+
+  // 10. Launch it as "Spark" on the free and personal plans, with a 3-day countdown.
+  await page.getByRole("link", { name: "Company" }).click();
+  await page.getByRole("button", { name: "Launch", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Product name").fill("Spark");
+  await dialog.getByRole("slider").fill("3");
+  await dialog.getByRole("button", { name: "Launch", exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  // 11. Once it is live, customers arrive, the news covers the launch, and customers post
+  // about it, quoting what the AI really said.
+  const customers = async () =>
+    Number(((await page.getByTestId("customers").textContent()) ?? "").replace(/\D/g, ""));
+  await expect.poll(customers, { timeout: 60_000 }).toBeGreaterThan(0);
+  await expect(page.getByText(/Ember Labs launches Spark/)).toBeVisible();
+  const feed = page.getByRole("list", { name: "News and posts" });
+  const quote = feed.locator("blockquote").first();
+  await expect(quote).toBeVisible({ timeout: 300_000 });
+  expect(((await quote.textContent()) ?? "").trim().length).toBeGreaterThan(0);
+
+  // 12. The Money screen shows what the personal plan has earned.
+  await page.getByRole("link", { name: "Money" }).click();
+  await expect
+    .poll(async () => (await page.getByTestId("income-personal").textContent())?.trim(), {
+      timeout: 60_000,
+    })
+    .not.toBe("$0");
+
+  // 13. A reload keeps the customers and the feed.
+  await page.getByRole("link", { name: "Company" }).click();
+  await expect.poll(customers).toBeGreaterThan(0);
+  const before = await customers();
+  await page.reload();
+  await expect.poll(customers).toBeGreaterThanOrEqual(before);
+  await expect(page.getByText(/Ember Labs launches Spark/)).toBeVisible();
+  await expect(
+    page.getByRole("list", { name: "News and posts" }).locator("blockquote").first(),
+  ).toBeVisible();
 });

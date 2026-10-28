@@ -41,6 +41,7 @@ export function Company({ view }: { view: WorldView }) {
             delta={company.customers.total - startOfMonth}
             deltaLabel="this month"
             format={formatCount}
+            testId="customers"
           />
           <GroupBar groups={byGroup} palette={pub.palette} />
         </Panel>

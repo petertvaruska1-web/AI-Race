@@ -21,7 +21,11 @@ const total = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a
 const monthName = (m: MonthLedgerView) => MONTHS[Number(m.month.slice(5)) - 1] ?? m.month;
 
 /** Labelled bars, each as long as its share of the largest. */
-function Bars({ rows }: { rows: { label: string; value: number; color?: string }[] }) {
+function Bars({
+  rows,
+}: {
+  rows: { label: string; value: number; color?: string; testId?: string }[];
+}) {
   const top = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
   return (
     <ul className="space-y-2 text-sm">
@@ -29,7 +33,9 @@ function Bars({ rows }: { rows: { label: string; value: number; color?: string }
         <li key={r.label}>
           <div className="flex justify-between gap-3">
             <span className="text-muted">{r.label}</span>
-            <span className="tabular font-semibold">{formatMoney(r.value)}</span>
+            <span className="tabular font-semibold" data-testid={r.testId}>
+              {formatMoney(r.value)}
+            </span>
           </div>
           <div className="mt-1 h-1.5 rounded-full bg-surface-2">
             <div
@@ -85,7 +91,7 @@ export function Money({ view }: { view: WorldView }) {
           </h3>
           <Bars
             rows={[
-              { label: "Personal", value: now.income.personal },
+              { label: "Personal", value: now.income.personal, testId: "income-personal" },
               { label: "Business", value: now.income.business, color: "var(--brand-2)" },
             ]}
           />
