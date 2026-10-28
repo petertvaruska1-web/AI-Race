@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { AppShell } from "../components/AppShell.tsx";
-import { Panel } from "../components/Panel.tsx";
 import type { Route } from "../route.ts";
 import { useSocket } from "../store/session.ts";
 import { useWorld } from "../store/world.ts";
@@ -9,6 +8,7 @@ import { Benchmarks } from "./Benchmarks.tsx";
 import { Company } from "./Company.tsx";
 import { Lobby } from "./Lobby.tsx";
 import { Lab } from "./lab/LabLayout.tsx";
+import { Market } from "./Market.tsx";
 import { Money } from "./Money.tsx";
 import { Playground } from "./Playground.tsx";
 
@@ -44,11 +44,7 @@ export function WorldScreen({ route }: { route: WorldRoute }) {
   return (
     <AppShell view={view} tab={route.tab}>
       {route.tab === "company" && <Company view={view} />}
-      {route.tab === "market" && (
-        <Panel title="Market">
-          <p className="text-muted">This screen opens soon.</p>
-        </Panel>
-      )}
+      {route.tab === "market" && <Market view={view} />}
       {route.tab === "money" && <Money view={view} />}
       {route.tab === "lab" && <Lab view={view} />}
       {route.tab === "play" && <Playground view={view} />}
