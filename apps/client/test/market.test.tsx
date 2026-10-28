@@ -6,9 +6,15 @@ import { formatCount } from "../src/format.ts";
 import { GROUPS } from "../src/groups.ts";
 import { aboutPeople, groupCustomers } from "../src/people.ts";
 import { crowdStep, Market } from "../src/screens/Market.tsx";
+import { useSession } from "../src/store/session.ts";
 import { useWindows } from "../src/store/windows.ts";
 import { WindowHost } from "../src/windows/WindowHost.tsx";
+import { liveGame } from "./mockSocket.ts";
 import { launchedWorld, viewOf } from "./views.ts";
+
+beforeEach(async () => {
+  useSession.setState({ socket: (await liveGame()).socket });
+});
 
 describe("market screen", () => {
   it("shows six customer groups, each with its spotlight customer as text", () => {

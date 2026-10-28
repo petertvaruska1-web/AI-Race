@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import { type OpenWindow, useWindows } from "../store/windows.ts";
 import { AiWindow } from "./AiWindow.tsx";
+import { CampaignWindow } from "./CampaignWindow.tsx";
 import { CustomersWindow } from "./CustomersWindow.tsx";
 import { GroupWindow } from "./GroupWindow.tsx";
 import { CategoryWindow, MoneyWindow, MonthWindow } from "./MoneyWindows.tsx";
@@ -33,6 +34,8 @@ function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) 
       return <PostWindow entry={entry} view={view} postId={s.postId} />;
     case "region":
       return <RegionWindow entry={entry} view={view} region={s.region} />;
+    case "campaign":
+      return <CampaignWindow entry={entry} view={view} region={s.region} />;
   }
 }
 

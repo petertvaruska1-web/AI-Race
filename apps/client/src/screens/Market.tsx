@@ -1,12 +1,15 @@
-import { GROUP_IDS, PLAN_IDS, REGION_IDS, type WorldView } from "@airace/protocol";
+import { GROUP_IDS, PLAN_IDS, REGION_IDS, REGION_NAMES, type WorldView } from "@airace/protocol";
+import { AnimatePresence, motion } from "motion/react";
+import { Button } from "../components/Button.tsx";
 import { Face } from "../components/Face.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { RegionMap, type RegionMarks } from "../components/RegionMap.tsx";
 import { Stat } from "../components/Stat.tsx";
-import { formatCount } from "../format.ts";
+import { formatCount, formatMoney } from "../format.ts";
 import { GROUPS, groupColors } from "../groups.ts";
 import { aboutPeople, caresAbout, groupCustomers, groupSatisfaction } from "../people.ts";
 import { regionCustomers, shareByRegion } from "../regions.ts";
+import { useSocket } from "../store/session.ts";
 import { useWindows } from "../store/windows.ts";
 
 const PLAN_NAMES = { free: "Free", personal: "Personal", business: "Business" } as const;
@@ -132,6 +135,8 @@ export function Market({ view }: { view: WorldView }) {
         </p>
       </Panel>
 
+      <Campaigns view={view} />
+
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {GROUP_IDS.map((g) => {
           const person = view.spotlights.find((p) => p.group === g);
@@ -182,6 +187,75 @@ export function Market({ view }: { view: WorldView }) {
         })}
       </div>
     </div>
+  );
+}
+
+/** The running ad campaigns, with days left and spend, and a way to start one. */
+function Campaigns({ view }: { view: WorldView }) {
+  const open = useWindows((s) => s.open);
+  const socket = useSocket();
+  const campaigns = view.me.company?.campaigns ?? [];
+  return (
+    <Panel
+      title="Ad campaigns"
+      aria-label="Ad campaigns"
+      hint="Ads make more people aware of you in a region or group. Up to five at once."
+      actions={
+        <Button onClick={(e) => open({ kind: "campaign" }, e.currentTarget)}>
+          New ad campaign
+        </Button>
+      }
+    >
+      {campaigns.length === 0 ? (
+        <p className="text-sm text-muted">No campaigns running. Word of mouth does the work.</p>
+      ) : (
+        <ul className="space-y-3">
+          <AnimatePresence initial={false}>
+            {campaigns.map((k) => {
+              const where = k.region === "all" ? "Everywhere" : REGION_NAMES[k.region];
+              const who = k.group === "all" ? "everyone" : GROUPS[k.group].many.toLowerCase();
+              const left = Math.max(0, k.endDay - view.world.day);
+              const done = (view.world.day - k.startDay) / Math.max(1, k.endDay - k.startDay);
+              return (
+                <motion.li
+                  key={k.id}
+                  layout
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, x: 30 }}
+                  className="rounded-xl border border-border bg-surface-2/50 p-3"
+                >
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                    <span className="font-semibold">{`${where} · ${who}`}</span>
+                    <span className="text-muted">{`${formatMoney(k.budgetPerDay)} a day`}</span>
+                    <span className="text-muted">{`${formatMoney(k.spent)} spent`}</span>
+                    <span className="ml-auto text-muted">{`${left} ${left === 1 ? "day" : "days"} left`}</span>
+                    <Button
+                      variant="ghost"
+                      aria-label={`Stop the ${k.region === "all" ? "nationwide" : REGION_NAMES[k.region]} campaign`}
+                      onClick={() =>
+                        void socket.command(view.world.id, {
+                          type: "stopCampaign",
+                          campaignId: k.id,
+                        })
+                      }
+                    >
+                      Stop
+                    </Button>
+                  </div>
+                  <div className="mt-2 h-1.5 rounded-full bg-surface">
+                    <div
+                      className="h-1.5 rounded-full bg-brand transition-[width] duration-700"
+                      style={{ width: `${Math.min(100, 100 * done)}%` }}
+                    />
+                  </div>
+                </motion.li>
+              );
+            })}
+          </AnimatePresence>
+        </ul>
+      )}
+    </Panel>
   );
 }
 

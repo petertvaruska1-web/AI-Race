@@ -1,6 +1,7 @@
 import { GROUP_IDS, REGION_NAMES, REGION_PLACES, type RegionId } from "@airace/protocol";
 import { getBalance } from "@airace/sim";
 import { Bars } from "../components/Bars.tsx";
+import { Button } from "../components/Button.tsx";
 import { DayChart } from "../components/charts/DayChart.tsx";
 import { Stat } from "../components/Stat.tsx";
 import { dayLabel, formatCount, formatMoney } from "../format.ts";
@@ -106,6 +107,14 @@ export function RegionWindow({ entry, view, region }: WindowProps & { region: Re
               ))}
             </ul>
           )}
+          <div className="mt-3">
+            <Button
+              variant="secondary"
+              onClick={(e) => open({ kind: "campaign", region }, e.currentTarget)}
+            >
+              Advertise here
+            </Button>
+          </div>
         </Section>
       </div>
     </WindowFrame>
