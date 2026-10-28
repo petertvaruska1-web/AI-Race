@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "../src/components/AppShell.tsx";
 import { CountUp } from "../src/components/CountUp.tsx";
+import { Stat } from "../src/components/Stat.tsx";
 import { formatMoney } from "../src/format.ts";
 import { parseRoute } from "../src/route.ts";
 import { Home } from "../src/screens/Home.tsx";
@@ -117,5 +118,18 @@ describe("count-up", () => {
     const { rerender } = render(<CountUp value={0} format={dollars} />);
     rerender(<CountUp value={1234} format={dollars} />);
     expect(screen.queryByText("$1234")).toBeNull();
+  });
+});
+
+describe("stat", () => {
+  it("colors a change by whether it is good news", () => {
+    const { rerender } = render(
+      <Stat label="Costs" value={10} delta={5} downIsGood format={String} />,
+    );
+    expect(screen.getByText(/▲/).className).toContain("text-danger");
+    rerender(<Stat label="Costs" value={10} delta={-5} downIsGood format={String} />);
+    expect(screen.getByText(/▼/).className).toContain("text-good");
+    rerender(<Stat label="Income" value={10} delta={5} format={String} />);
+    expect(screen.getByText(/▲/).className).toContain("text-good");
   });
 });

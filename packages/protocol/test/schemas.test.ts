@@ -9,6 +9,7 @@ import {
   ServerMessage,
   TrainingPlan,
   type WorldView,
+  zId,
   zName,
 } from "../src/index.ts";
 
@@ -233,6 +234,17 @@ describe("zName", () => {
   it("accepts markup as plain text and returns the cleaned name", () => {
     expect(name.parse("<b>Acme</b>")).toBe("<b>Acme</b>");
     expect(name.parse("  Acme\u0007 ")).toBe("Acme");
+  });
+});
+
+describe("zId", () => {
+  it("refuses names of built-in object parts, which a lookup would mistake for entries", () => {
+    for (const id of ["__proto__", "constructor", "toString", "hasOwnProperty", "valueOf"]) {
+      expect(zId.safeParse(id).success, id).toBe(false);
+    }
+    for (const id of ["p1", "proto", "my_constructor", "4b0c1c1e-8d6a-4f43-9a55-6f1c8a2b9e10"]) {
+      expect(zId.safeParse(id).success, id).toBe(true);
+    }
   });
 });
 

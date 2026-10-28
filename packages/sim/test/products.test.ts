@@ -233,6 +233,35 @@ describe("plans and prices", () => {
     expect(company(s).products.p1?.status).toBe("retired");
   });
 
+  it("refuses ids named like built-in object parts, changing nothing anywhere", () => {
+    const s = ticks(ok(step(withVersion(), launch())), 3);
+    const before = stateHash(s);
+    const plan = {
+      ...BALANCE_TEST.defaultPlan,
+      mix: { ...BALANCE_TEST.defaultPlan.mix },
+      parentVersionId: "__proto__",
+    };
+    const polluted = () =>
+      "status" in Object.prototype || Object.hasOwn(Object, "status") || "status" in {};
+    for (const bad of [
+      cmd({ type: "retireProduct", productId: "__proto__" }),
+      cmd({ type: "retireProduct", productId: "constructor" }),
+      cmd({ type: "setPlan", plan: "free", productId: "__proto__" }),
+      launch({ versionId: "__proto__", name: "Ghost" }, "p2"),
+      launch({ versionId: "constructor", name: "Ghost" }, "p3"),
+      cmd({ type: "startTraining", plan }, "r9"),
+    ]) {
+      const r = step(s, bad);
+      const dirty = polluted();
+      // Clean up before asserting, so a failure here can't spill into other tests.
+      delete (Object.prototype as unknown as Record<string, unknown>).status;
+      delete (Object as unknown as Record<string, unknown>).status;
+      expect(dirty).toBe(false);
+      expect(r.ok).toBe(false);
+    }
+    expect(stateHash(s)).toBe(before);
+  });
+
   it("leaves the world untouched by every refusal", () => {
     const s = ticks(ok(step(withVersion(), launch())), 3);
     const before = stateHash(s);

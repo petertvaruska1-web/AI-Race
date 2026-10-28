@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { formatMoney } from "../src/format.ts";
 import { LaunchDialog } from "../src/screens/LaunchDialog.tsx";
@@ -47,6 +47,18 @@ describe("money screen", () => {
     expect(personal).toBeGreaterThan(0);
     render(<Money view={view} />);
     expect(screen.getAllByText(formatMoney(personal)).length).toBeGreaterThan(0);
+  });
+
+  it("colors this month's costs against last month's as good or bad news", () => {
+    const view = viewOf(launchedWorld());
+    const ledger = view.me.company?.ledger;
+    const sum = (r: Record<string, number> | undefined) =>
+      Object.values(r ?? {}).reduce((a, b) => a + b, 0);
+    const up = sum(ledger?.current.costs) > sum(ledger?.months.at(-1)?.costs);
+    render(<Money view={view} />);
+    const out = screen.getByRole("region", { name: "Going out" });
+    const change = within(out).getByText(/against last month/).parentElement;
+    expect(change?.className).toContain(up ? "text-danger" : "text-good");
   });
 
   it("sets a price within its bounds and refuses one outside them", async () => {

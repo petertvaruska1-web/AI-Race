@@ -39,11 +39,19 @@ export const TEXT_LIMITS = {
   chatMessage: [1, 500],
 } as const;
 
-/** Server-made identifiers: UUIDs in production, short names in tests. */
+/** Names every plain object already has (`__proto__`, `constructor`, …). */
+const BUILT_IN_NAMES = new Set(Object.getOwnPropertyNames(Object.prototype));
+
+/**
+ * Server-made identifiers: UUIDs in production, short names in tests. A built-in
+ * object name is refused: a lookup by it would find the object's own machinery
+ * instead of an entry (and `__proto__` would reach every object).
+ */
 export const zId = z
   .string()
   .min(1)
   .max(64)
-  .regex(/^[A-Za-z0-9_-]+$/);
+  .regex(/^[A-Za-z0-9_-]+$/)
+  .refine((id) => !BUILT_IN_NAMES.has(id), "That id is reserved.");
 
 export const Day = z.number().int().min(0);

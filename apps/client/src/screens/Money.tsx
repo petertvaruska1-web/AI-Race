@@ -103,13 +103,18 @@ export function Money({ view }: { view: WorldView }) {
           />
         </Panel>
 
-        <Panel title="Going out" hint="What running the company cost this month.">
+        <Panel
+          title="Going out"
+          aria-label="Going out"
+          hint="What running the company cost this month."
+        >
           <Stat
             label="This month"
             value={costs}
             delta={last ? costs - total(last.costs) : undefined}
             deltaLabel="against last month"
             format={formatMoney}
+            downIsGood
           />
           <div className="mt-5">
             <Bars

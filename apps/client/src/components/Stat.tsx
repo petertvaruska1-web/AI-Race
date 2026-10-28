@@ -9,6 +9,7 @@ export function Stat({
   deltaLabel,
   format,
   testId,
+  downIsGood = false,
 }: {
   label: ReactNode;
   value: number;
@@ -17,7 +18,10 @@ export function Stat({
   deltaLabel?: string;
   format: (n: number) => string;
   testId?: string;
+  /** For costs: a fall is good news (green) and a rise bad (red). */
+  downIsGood?: boolean;
 }) {
+  const good = downIsGood ? (delta ?? 0) < 0 : (delta ?? 0) > 0;
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
@@ -26,7 +30,7 @@ export function Stat({
       </p>
       {delta !== undefined && (
         <p
-          className={`text-sm font-semibold ${delta > 0 ? "text-good" : delta < 0 ? "text-danger" : "text-muted"}`}
+          className={`text-sm font-semibold ${delta === 0 ? "text-muted" : good ? "text-good" : "text-danger"}`}
         >
           {delta > 0 ? "▲ " : delta < 0 ? "▼ " : ""}
           {delta === 0 ? "no change" : format(Math.abs(delta))}
