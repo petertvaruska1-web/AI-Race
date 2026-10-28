@@ -1,4 +1,5 @@
 import {
+  COST_CATEGORIES,
   type FeedItemView,
   GROUP_IDS,
   type GroupId,
@@ -251,10 +252,17 @@ function monthView(m: MonthLedger): MonthLedgerView {
   return {
     month: m.month,
     income: { personal: m.income.personal, business: m.income.business },
-    costs: { training: m.costs.training, serving: m.costs.serving, dataChecks: m.costs.dataChecks },
+    costs: pick(COST_CATEGORIES, m.costs),
     revenueByGroup: pick(GROUP_IDS, m.revenueByGroup),
     revenueByPlan: pick(PLAN_IDS, m.revenueByPlan),
+    revenueByRegion: pick(REGION_IDS, m.revenueByRegion),
     customersEnd: m.customersEnd,
+    customersEndByGroup: pick(GROUP_IDS, m.customersEndByGroup),
+    financing: {
+      loans: m.financing.loans,
+      investors: m.financing.investors,
+      repaid: m.financing.repaid,
+    },
   };
 }
 

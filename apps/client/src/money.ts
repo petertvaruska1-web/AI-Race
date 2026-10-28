@@ -11,6 +11,10 @@ export const COST_NAMES: Record<CostCategory, string> = {
   training: "Training",
   serving: "Serving customers",
   dataChecks: "Fact-checking data",
+  marketing: "Ad campaigns",
+  dataCenterBuild: "Building data centers",
+  dataCenterUpkeep: "Data center upkeep",
+  interest: "Loan interest",
 };
 
 export const MONEY_WHAT: Record<IncomeCategory | CostCategory, string> = {
@@ -20,6 +24,10 @@ export const MONEY_WHAT: Record<IncomeCategory | CostCategory, string> = {
   serving:
     "Running your AIs for every customer, free ones too. It grows with customers and AI size.",
   dataChecks: "Fact-checking the reading of runs that asked for it.",
+  marketing: "What your ad campaigns spent, a day at a time.",
+  dataCenterBuild: "Building your own data centers, paid when building starts.",
+  dataCenterUpkeep: "Running your data centers: power, staff and repairs.",
+  interest: "Interest on an emergency loan, paid at each month's end.",
 };
 
 export const total = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);

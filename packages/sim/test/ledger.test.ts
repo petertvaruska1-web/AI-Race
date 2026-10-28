@@ -1,4 +1,4 @@
-import type { Command, GroupId, PlanId } from "@airace/protocol";
+import { type Command, GROUP_IDS, type GroupId, type PlanId } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import {
   BALANCE_TEST,
@@ -6,6 +6,7 @@ import {
   createWorld,
   emptyMarket,
   emptyMonth,
+  finance,
   type Input,
   ledgerDay,
   type MonthLedger,
@@ -260,10 +261,30 @@ describe("months", () => {
       .flatMap((byGroup) => Object.values(byGroup ?? {}))
       .reduce((total, byPlan) => total + sum(byPlan as Record<string, number>), 0);
     expect(customers).toBeGreaterThan(0);
+    const before = s;
     s = ticks(s, 1); // 2027-03-01
     const february = company(s).ledger.months.at(-1);
     expect(february?.month).toBe("2027-02");
     expect(february?.customersEnd).toBe(Math.round(customers));
+    const byGroup: Record<string, number> = february?.customersEndByGroup ?? {};
+    for (const g of GROUP_IDS) {
+      // The close counts the market as the last day of the month left it.
+      const inGroup = Object.values(before.market.customers.c1 ?? {}).reduce(
+        (n, groups) => n + sum((groups?.[g] ?? {}) as Record<string, number>),
+        0,
+      );
+      expect(byGroup[g]).toBe(Math.round(inGroup));
+    }
+    expect(Math.abs(sum(byGroup) - (february?.customersEnd ?? 0))).toBeLessThanOrEqual(6);
+  });
+
+  it("books revenue by region, adding up to the income", () => {
+    let s = live();
+    s = ticks(s, 20);
+    const m = month(s);
+    expect(sum(m.revenueByRegion)).toBe(sum(m.income));
+    expect(sum(m.revenueByPlan)).toBe(sum(m.income));
+    expect(m.revenueByRegion.pacific).toBeGreaterThan(0);
   });
 
   it("keeps the last 24 months, newest last", () => {
@@ -276,6 +297,21 @@ describe("months", () => {
   });
 });
 
+describe("financing", () => {
+  it("moves cash and the month's financing together: loans and investors in, repayments out", () => {
+    const s = fresh(live());
+    const c = company(s);
+    const cash = c.cash;
+    finance(c, "loans", 1000.4);
+    finance(c, "investors", 250);
+    finance(c, "repaid", 300);
+    expect(c.cash).toBe(cash + 1000 + 250 - 300);
+    expect(month(s).financing).toEqual({ loans: 1000, investors: 250, repaid: 300 });
+    expect(sum(month(s).income)).toBe(0);
+    expect(sum(month(s).costs)).toBe(0);
+  });
+});
+
 describe("money conservation", () => {
   it("keeps cash equal to founding cash plus every income less every cost, exactly", () => {
     let s = ticks(live(), 60);
@@ -284,7 +320,18 @@ describe("money conservation", () => {
     s = ticks(s, 40);
     const c = company(s);
     const months = [...c.ledger.months, c.ledger.current];
-    const net = months.reduce((total, m) => total + sum(m.income) - sum(m.costs), 0);
+    finance(company(s), "loans", 5000);
+    finance(company(s), "repaid", 1200);
+    const net = months.reduce(
+      (total, m) =>
+        total +
+        sum(m.income) -
+        sum(m.costs) +
+        m.financing.loans +
+        m.financing.investors -
+        m.financing.repaid,
+      0,
+    );
     expect(months.some((m) => m.income.personal > 0 && m.costs.serving > 0)).toBe(true);
     expect(Number.isInteger(c.cash)).toBe(true);
     expect(c.cash).toBe(BALANCE_TEST.foundingCash + net);

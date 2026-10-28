@@ -45,7 +45,15 @@ export type PlanId = z.infer<typeof PlanId>;
 /** Ledger categories (game-layer design §8). Marketing, data centers and interest come in Phase 2. */
 export const INCOME_CATEGORIES = ["personal", "business"] as const;
 export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
-export const COST_CATEGORIES = ["training", "serving", "dataChecks"] as const;
+export const COST_CATEGORIES = [
+  "training",
+  "serving",
+  "dataChecks",
+  "marketing",
+  "dataCenterBuild",
+  "dataCenterUpkeep",
+  "interest",
+] as const;
 export type CostCategory = (typeof COST_CATEGORIES)[number];
 
 /** News stories in Phase 1 (game-layer design §7). Later phases add more. */

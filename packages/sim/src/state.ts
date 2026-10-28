@@ -157,8 +157,12 @@ export type MonthLedger = {
   costs: Record<CostCategory, number>;
   revenueByGroup: Record<GroupId, number>;
   revenueByPlan: Record<PlanId, number>;
+  revenueByRegion: Record<RegionId, number>;
   /** Customers when the month closed (0 while it is open). */
   customersEnd: number;
+  customersEndByGroup: Record<GroupId, number>;
+  /** Money that is neither income nor a cost (rescues, Phase 2). */
+  financing: { loans: number; investors: number; repaid: number };
 };
 
 /** One day of a company, for its charts. Whole numbers. */

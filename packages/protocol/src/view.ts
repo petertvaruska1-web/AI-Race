@@ -123,7 +123,11 @@ export const MonthLedgerView = z.strictObject({
   costs: z.record(z.enum(COST_CATEGORIES), z.number().int()),
   revenueByGroup: z.record(GroupId, z.number().int()),
   revenueByPlan: z.record(PlanId, z.number().int()),
+  revenueByRegion: z.record(z.enum(REGION_IDS), z.number().int()),
   customersEnd: Count,
+  customersEndByGroup: z.record(GroupId, Count),
+  /** Money that is neither income nor a cost: rescue loans and investors in, repayments out. */
+  financing: z.strictObject({ loans: Count, investors: Count, repaid: Count }),
 });
 export type MonthLedgerView = z.infer<typeof MonthLedgerView>;
 

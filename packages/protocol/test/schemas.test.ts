@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ClientMessage,
+  COST_CATEGORIES,
   Command,
   cleanText,
   FeedItemView,
@@ -61,10 +62,13 @@ function sampleView(): WorldView {
   const month = {
     month: "2027-01",
     income: { personal: 120, business: 0 },
-    costs: { training: 42000, serving: 3, dataChecks: 0 },
+    costs: { ...zeros(COST_CATEGORIES), training: 42000, serving: 3 },
     revenueByGroup: { ...zeros(GROUP_IDS), students: 120 },
     revenueByPlan: { ...zeros(PLAN_IDS), personal: 120 },
+    revenueByRegion: { ...zeros(REGION_IDS), pacific: 120 },
     customersEnd: 0,
+    customersEndByGroup: zeros(GROUP_IDS),
+    financing: { loans: 0, investors: 0, repaid: 0 },
   };
   return {
     world: {
