@@ -183,6 +183,7 @@ describe("training flow", () => {
       scores: { language: 41.5, creativity: null },
       overall: 41.5,
       personalityWords: ["curious"],
+      traits: { curious: 0.4 },
     });
 
     // Every event reached the owner's stream by the end, and no one else's.

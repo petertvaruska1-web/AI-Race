@@ -133,6 +133,7 @@ export function applyCompletion(
     scores: null,
     overall: null,
     personalityWords: [],
+    traits: null,
     published: false,
   };
   run.status = "completed";

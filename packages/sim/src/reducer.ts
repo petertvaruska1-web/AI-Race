@@ -127,6 +127,7 @@ function system(s: WorldState, e: SystemEvent): Handled {
       version.scores = { ...e.scores };
       version.overall = e.overall;
       version.personalityWords = [...e.personalityWords];
+      version.traits = e.traits ? { ...e.traits } : null;
       return OK;
     }
     case "feedbackScored":

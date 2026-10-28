@@ -63,6 +63,8 @@ export type VersionState = {
   scores: Record<string, number | null> | null;
   overall: number | null;
   personalityWords: string[];
+  /** Measured style traits, from the same evaluation as the scores. */
+  traits: Record<string, number> | null;
   published: boolean;
 };
 
@@ -218,6 +220,7 @@ export type SystemEvent =
       scores: Record<string, number | null>;
       overall: number | null;
       personalityWords: string[];
+      traits?: Record<string, number> | null;
     }
   | {
       type: "feedbackScored";

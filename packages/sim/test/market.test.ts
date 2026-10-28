@@ -137,6 +137,7 @@ const version = (scores: Record<string, number>): VersionState => ({
   scores,
   overall: 40,
   personalityWords: [],
+  traits: null,
   published: false,
 });
 

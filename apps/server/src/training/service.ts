@@ -238,7 +238,16 @@ export class TrainingService {
         .select()
         .from(schema.evalResults)
         .where(eq(schema.evalResults.versionId, versionId));
-      if (stored) await this.applyEval(s.worldId, versionId, stored.report, null);
+      if (stored) {
+        const traits = EvalJobResult.shape.traits.safeParse(stored.fingerprint);
+        await this.applyEval(
+          s.worldId,
+          versionId,
+          stored.report,
+          null,
+          traits.success ? traits.data : null,
+        );
+      }
     }
   }
 
@@ -366,7 +375,7 @@ export class TrainingService {
         target: schema.evalResults.versionId,
         set: { report: { ...report, personalityWords }, fingerprint: traits },
       });
-    await this.applyEval(p.worldId, p.versionId, report, personalityWords);
+    await this.applyEval(p.worldId, p.versionId, report, personalityWords, traits);
   }
 
   private async applyEval(
@@ -374,6 +383,7 @@ export class TrainingService {
     versionId: string,
     report: unknown,
     words: string[] | null,
+    traits: Record<string, number> | null,
   ): Promise<void> {
     const r = report as {
       scores?: Record<string, unknown>;
@@ -399,6 +409,7 @@ export class TrainingService {
       scores,
       overall: typeof r.overall === "number" ? r.overall : null,
       personalityWords,
+      traits,
     });
   }
 

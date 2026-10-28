@@ -1,4 +1,4 @@
-import type { Command, TrainingPlan } from "@airace/protocol";
+import { type Command, GROUP_IDS, PLAN_IDS, type TrainingPlan } from "@airace/protocol";
 import fc from "fast-check";
 import {
   BALANCE_V2,
@@ -16,6 +16,10 @@ const COMPANY_IDS = ["CO_1", "CO_2", "CO_3", "CO_4", "CO_5"];
 export const RUN_IDS = ["RUN_1", "RUN_2", "RUN_3", "RUN_4", "RUN_5", "RUN_6", "RUN_7", "RUN_8"];
 export const VERSION_IDS = ["VER_1", "VER_2", "VER_3", "VER_4", "VER_5", "VER_6", "VER_7", "VER_8"];
 const NAMES = ["Acme", "acme", "Beta Labs", "Cortex", "Delta", "A"];
+export const PRODUCT_IDS = ["PROD_1", "PROD_2", "PROD_3", "PROD_4"];
+const PRODUCT_NAMES = ["Spark", "spark", "Nova", "<b>Bolt</b> 🚀", "X"];
+/** Replies a real model might write; posts must carry them unchanged. */
+const REPLIES = ["<b>x</b> <|end|>", "", "😀😀", "x".repeat(2000), "Paris."];
 
 export function newWorld(): WorldState {
   return createWorld({
@@ -106,8 +110,50 @@ const commandInput: fc.Arbitrary<Input> = user.chain((u) =>
         .map(([p, id]) => command(u, { type: "startTraining", plan: p }, id)),
       weight: 4,
     },
+    {
+      arbitrary: fc
+        .record({
+          version: fc.constantFrom(...VERSION_IDS),
+          name: fc.constantFrom(...PRODUCT_NAMES),
+          plans: fc.subarray([...PLAN_IDS]),
+          days: fc.constantFrom(3, 3, 14, 2),
+          id: fc.constantFrom(...PRODUCT_IDS),
+        })
+        .map((r) =>
+          command(
+            u,
+            {
+              type: "launchProduct",
+              versionId: r.version,
+              name: r.name,
+              plans: r.plans,
+              countdownDays: r.days,
+            },
+            r.id,
+          ),
+        ),
+      weight: 2,
+    },
+    fc
+      .record({
+        plan: fc.constantFrom(...PLAN_IDS),
+        product: fc.option(fc.constantFrom(...PRODUCT_IDS), { freq: 3 }),
+      })
+      .map((r) => command(u, { type: "setPlan", plan: r.plan, productId: r.product })),
+    fc
+      .record({
+        plan: fc.constantFrom("personal", "business"),
+        price: fc.constantFrom(1, 10, 25, 200, 201, 0, 500),
+      })
+      .map((r) => command(u, { type: "setPrice", plan: r.plan, price: r.price })),
+    fc
+      .constantFrom(...PRODUCT_IDS)
+      .map((id) => command(u, { type: "retireProduct", productId: id })),
   ),
 );
+
+const feedbackScored = (productId: string, key: string, results: unknown[]): Input =>
+  ({ kind: "system", event: { type: "feedbackScored", productId, key, results } }) as Input;
 
 const systemInput: fc.Arbitrary<Input> = fc.oneof(
   fc.tuple(user, fc.constantFrom("Ben", "Cy", "Dee")).map(
@@ -151,17 +197,108 @@ const systemInput: fc.Arbitrary<Input> = fc.oneof(
       event: {
         type: "evalCompleted",
         versionId,
-        scores: { language: overall },
+        scores: { language: overall, coding: overall / 2 },
         overall,
         personalityWords: ["curious"],
+        traits: { curious: overall / 100 },
       },
     }),
   ),
+  {
+    weight: 3,
+    arbitrary: fc
+      .record({
+        product: fc.constantFrom(...PRODUCT_IDS),
+        key: fc.constantFrom("launch", "w1", "w2", "w3", "w4"),
+        results: fc.array(
+          fc.record({
+            group: fc.constantFrom(...GROUP_IDS),
+            score: fc.oneof(fc.double({ min: 0, max: 1, noNaN: true }), fc.constantFrom(0, 1, 1.5)),
+            reply: fc.constantFrom(...REPLIES),
+          }),
+          { maxLength: 6 },
+        ),
+      })
+      .map((r) =>
+        feedbackScored(
+          r.product,
+          r.key,
+          r.results.map((x) => ({
+            group: x.group,
+            questionId: `q-${x.group}`,
+            question: "What would you ask an AI?",
+            reply: x.reply,
+            score: x.score,
+          })),
+        ),
+      ),
+  },
 );
 
 const TICK: Input = { kind: "tick" };
 
-/** Random command, tick and system sequences across 1–4 users; many are invalid. */
+/** Host Co trains, scores and launches "Spark" on PROD_1, which goes live and gets feedback. */
+const LAUNCH: Input[] = [
+  command(
+    "u1",
+    {
+      type: "startTraining",
+      plan: { ...BALANCE_V2.defaultPlan, mix: { ...BALANCE_V2.defaultPlan.mix } },
+    },
+    "RUN_1",
+  ),
+  {
+    kind: "system",
+    event: {
+      type: "trainingCompleted",
+      runId: "RUN_1",
+      versionId: "VER_1",
+      result: { steps: 100, finalLoss: 4.2, heldoutLosses: { web: 4.5 }, unstable: false },
+    },
+  },
+  ...Array.from({ length: 14 }, () => TICK),
+  {
+    kind: "system",
+    event: {
+      type: "evalCompleted",
+      versionId: "VER_1",
+      scores: { language: 60, pattern: 80, coding: 38 },
+      overall: 42,
+      personalityWords: ["curious"],
+      traits: { curious: 0.4 },
+    },
+  },
+  command(
+    "u1",
+    {
+      type: "launchProduct",
+      versionId: "VER_1",
+      name: "Spark",
+      plans: ["free", "personal"],
+      countdownDays: 3,
+    },
+    "PROD_1",
+  ),
+  TICK,
+  TICK,
+  TICK,
+  feedbackScored(
+    "PROD_1",
+    "launch",
+    GROUP_IDS.map((group, i) => ({
+      group,
+      questionId: `q-${group}`,
+      question: "What would you ask an AI?",
+      reply: REPLIES[i % REPLIES.length],
+      score: i / 5,
+    })),
+  ),
+];
+
+/**
+ * Random command, tick and system sequences across 1–4 users; many are invalid.
+ * A third of the worlds with the setup prefix also launch a product first.
+ */
 export function arbInputs(n: number): fc.Arbitrary<Input[]> {
   // A short setup prefix makes running worlds with companies common.
   const setup = fc.constant<Input[]>([
@@ -192,10 +329,13 @@ export function arbInputs(n: number): fc.Arbitrary<Input[]> {
   return fc
     .tuple(
       fc.nat(9).map((x) => x > 0),
+      fc.nat(2).map((x) => x === 0),
       setup,
       body,
     )
-    .map(([withSetup, pre, rest]) => (withSetup ? [...pre, ...rest] : rest));
+    .map(([withSetup, launched, pre, rest]) =>
+      withSetup ? [...pre, ...(launched ? LAUNCH : []), ...rest] : rest,
+    );
 }
 
 /** Applies inputs in order, skipping rejected ones. */

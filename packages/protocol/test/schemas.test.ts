@@ -3,6 +3,9 @@ import {
   ClientMessage,
   Command,
   cleanText,
+  FeedItemView,
+  GROUP_IDS,
+  PLAN_IDS,
   ServerMessage,
   TrainingPlan,
   type WorldView,
@@ -35,8 +38,32 @@ export const PLAN = {
 
 const CID = "4b0c1c1e-8d6a-4f43-9a55-6f1c8a2b9e10";
 
+const zeros = <K extends string>(keys: readonly K[]) =>
+  Object.fromEntries(keys.map((k) => [k, 0])) as Record<K, number>;
+
+const POST = {
+  id: "f1",
+  kind: "post",
+  day: 3,
+  companyId: "c1",
+  sentiment: 0.8,
+  author: { name: "Maya K.", handle: "@maya_k42", group: "students", spotlightId: "spot-1" },
+  productName: "Spark",
+  question: "What is the capital of France?",
+  reply: "  <b>Paris</b> <|end|>\u0007 ",
+  tone: "praise",
+} as const;
+
 function sampleView(): WorldView {
   const shape = { nLayer: 4, dModel: 128, ctxLen: 256 };
+  const month = {
+    month: "2027-01",
+    income: { personal: 120, business: 0 },
+    costs: { training: 42000, serving: 3, dataChecks: 0 },
+    revenueByGroup: { ...zeros(GROUP_IDS), students: 120 },
+    revenueByPlan: { ...zeros(PLAN_IDS), personal: 120 },
+    customersEnd: 0,
+  };
   return {
     world: {
       id: "w1",
@@ -50,6 +77,7 @@ function sampleView(): WorldView {
       hostUserId: "u1",
       effectiveHostUserId: "u1",
       inviteCode: "ABCD-1234",
+      market: { adoption: 0.1, adoptable: 33_500_000 },
     },
     members: [{ userId: "u1", displayName: "Ana", online: true, companyId: "c1" }],
     companies: [
@@ -60,6 +88,48 @@ function sampleView(): WorldView {
         palette: { primary: "#4f8cff", secondary: "#ffb020" },
         ownerUserId: "u1",
         publishedVersions: [],
+        products: [
+          {
+            id: "p1",
+            name: "Spark",
+            status: "live",
+            launchDay: 2,
+            version: {
+              id: "v-1",
+              label: "v1",
+              createdDay: 0,
+              scores: { language: 41.5 },
+              overall: 20.1,
+              personalityWords: ["curious"],
+            },
+          },
+        ],
+        prices: { free: true, personal: 10, business: null },
+        customers: 1230,
+        reputation: 52,
+        followers: 37,
+      },
+    ],
+    feed: [
+      POST,
+      {
+        id: "f2",
+        kind: "news",
+        day: 2,
+        companyId: "c1",
+        sentiment: 0.5,
+        topic: "launch",
+        headline: "Acme launches Spark, scoring 42 in language",
+      },
+    ],
+    spotlights: [
+      {
+        id: "spot-1",
+        name: "Maya K.",
+        handle: "@maya_k42",
+        group: "students",
+        region: "national",
+        bio: "Writes essays at 2 a.m.",
       },
     ],
     me: {
@@ -67,6 +137,37 @@ function sampleView(): WorldView {
       company: {
         id: "c1",
         cash: 208000,
+        products: [
+          {
+            id: "p1",
+            name: "Spark",
+            versionId: "v-1",
+            status: "live",
+            announcedDay: 0,
+            launchDay: 2,
+            hype: 0.1,
+          },
+        ],
+        plans: {
+          free: { productId: "p1" },
+          personal: { productId: "p1", price: 10 },
+          business: { productId: null, price: 30 },
+        },
+        customers: {
+          total: 1234,
+          byGroup: Object.fromEntries(GROUP_IDS.map((g) => [g, zeros(PLAN_IDS)])) as Record<
+            (typeof GROUP_IDS)[number],
+            Record<(typeof PLAN_IDS)[number], number>
+          >,
+        },
+        satisfaction: {
+          p1: { ...Object.fromEntries(GROUP_IDS.map((g) => [g, 0.5])), students: 0.62 } as Record<
+            (typeof GROUP_IDS)[number],
+            number
+          >,
+        },
+        ledger: { current: month, months: [] },
+        fame: { reputation: 52, followers: 37 },
         runs: [
           {
             id: "r1",
@@ -99,6 +200,7 @@ function sampleView(): WorldView {
             scores: { language: 41.5, coding: null },
             overall: 20.1,
             personalityWords: ["curious"],
+            traits: { curious: 0.4 },
             published: false,
           },
         ],
@@ -254,10 +356,27 @@ describe("ServerMessage", () => {
 
   it("refuses a public company entry with private fields", () => {
     const view = sampleView();
-    const leaky = { ...view, companies: [{ ...view.companies[0], cash: 1 }] };
-    expect(
-      ServerMessage.safeParse({ v: 1, type: "snapshot", worldId: "w1", version: 1, view: leaky })
-        .success,
-    ).toBe(false);
+    for (const leak of [{ cash: 1 }, { ledger: view.me.company?.ledger }, { satisfaction: {} }]) {
+      const leaky = { ...view, companies: [{ ...view.companies[0], ...leak }] };
+      expect(
+        ServerMessage.safeParse({ v: 1, type: "snapshot", worldId: "w1", version: 1, view: leaky })
+          .success,
+      ).toBe(false);
+    }
+  });
+});
+
+describe("FeedItemView", () => {
+  it("keeps a post's reply exactly as the AI wrote it", () => {
+    const parsed = FeedItemView.parse(JSON.parse(JSON.stringify(POST)));
+    expect(parsed).toEqual(POST);
+    expect(parsed.kind === "post" && parsed.reply).toBe("  <b>Paris</b> <|end|>\u0007 ");
+  });
+
+  it("refuses an unknown news topic or a sentiment out of range", () => {
+    const news = { id: "f2", kind: "news", day: 1, companyId: null, sentiment: 0, headline: "x" };
+    expect(FeedItemView.safeParse({ ...news, topic: "launch" }).success).toBe(true);
+    expect(FeedItemView.safeParse({ ...news, topic: "gossip" }).success).toBe(false);
+    expect(FeedItemView.safeParse({ ...POST, sentiment: 1.5 }).success).toBe(false);
   });
 });

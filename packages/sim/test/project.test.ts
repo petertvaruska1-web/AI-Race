@@ -1,11 +1,14 @@
 import { type Command, WorldView } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import {
+  adoptionShare,
   BALANCE_V2,
+  customersOf,
   type Input,
   projectView,
   type StepResult,
   step,
+  totalCustomers,
   type WorldState,
 } from "../src/index.ts";
 import { newWorld } from "./arbitraries.ts";
@@ -139,12 +142,17 @@ describe("projectView", () => {
     const view = WorldView.parse(projectView(s, "u2"));
     const acme = view.companies.find((c) => c.id === "CO_A");
     expect(Object.keys(acme ?? {}).sort()).toEqual([
+      "customers",
+      "followers",
       "id",
       "logo",
       "name",
       "ownerUserId",
       "palette",
+      "prices",
+      "products",
       "publishedVersions",
+      "reputation",
     ]);
     expect(acme?.publishedVersions).toEqual([]);
     const text = JSON.stringify(view);
@@ -184,6 +192,31 @@ describe("projectView", () => {
     expect(() => projectView(s, "u9")).toThrow();
   });
 
+  it("keeps the AI's measured traits for its owner only", () => {
+    let s = ok(
+      step(world(), {
+        kind: "system",
+        event: {
+          type: "evalCompleted",
+          versionId: "VER_A1",
+          scores: { language: 40 },
+          overall: 21,
+          personalityWords: ["curious"],
+          traits: { curious: 0.4, terse: 0.1 },
+        },
+      }),
+    );
+    expect(projectView(s, "u1").me.company?.versions[0]?.traits).toEqual({
+      curious: 0.4,
+      terse: 0.1,
+    });
+    s = structuredClone(s);
+    const v1 = s.companies.CO_A?.versions.VER_A1;
+    if (v1) v1.published = true;
+    const shared = WorldView.parse(projectView(s, "u2")).companies.find((c) => c.id === "CO_A");
+    expect(Object.keys(shared?.publishedVersions[0] ?? {})).not.toContain("traits");
+  });
+
   it("shares no objects with the state", () => {
     const s = world();
     const view = projectView(s, "u1");
@@ -191,5 +224,172 @@ describe("projectView", () => {
     if (!company?.runs[0]) throw new Error("missing run");
     company.runs[0].plan.mix.web = 99;
     expect(s.companies.CO_A?.runs.RUN_A1?.plan.mix.web).toBe(12);
+  });
+});
+
+const ticks = (s: WorldState, n: number) => {
+  let out = s;
+  for (let i = 0; i < n; i++) out = ok(step(out, { kind: "tick" }));
+  return out;
+};
+/** CO_A announces "Spark" (VER_A1) on day 13; it goes live on day 16. */
+const launch = (s: WorldState) =>
+  ok(
+    step(
+      s,
+      cmd(
+        "u1",
+        {
+          type: "launchProduct",
+          versionId: "VER_A1",
+          name: "Spark",
+          plans: ["free", "personal"],
+          countdownDays: 3,
+        },
+        "PROD_A",
+      ),
+    ),
+  );
+const feedback = (key: string, scores: [string, number][]): Input =>
+  ({
+    kind: "system",
+    event: {
+      type: "feedbackScored",
+      productId: "PROD_A",
+      key,
+      results: scores.map(([group, score]) => ({
+        group,
+        questionId: `q-${group}`,
+        question: "What is 2 + 2?",
+        reply: "<b>x</b> <|end|>",
+        score,
+      })),
+    },
+  }) as Input;
+const acmeFor = (s: WorldState, userId = "u2") => {
+  const acme = WorldView.parse(projectView(s, userId)).companies.find((c) => c.id === "CO_A");
+  if (!acme) throw new Error("no CO_A");
+  return acme;
+};
+
+describe("projectView: the company game", () => {
+  it("shows the owner its products, plans, customers, satisfaction, ledger and fame", () => {
+    let s = ticks(launch(world()), 10);
+    s = ok(step(s, feedback("w3", [["students", 0.9]])));
+    const company = s.companies.CO_A;
+    const me = WorldView.parse(projectView(s, "u1")).me.company;
+    expect(me?.products).toEqual([
+      {
+        id: "PROD_A",
+        name: "Spark",
+        versionId: "VER_A1",
+        status: "live",
+        announcedDay: 13,
+        launchDay: 16,
+        hype: company?.products.PROD_A?.hype,
+      },
+    ]);
+    expect(me?.plans).toEqual({
+      free: { productId: "PROD_A" },
+      personal: { productId: "PROD_A", price: 10 },
+      business: { productId: null, price: 30 },
+    });
+    const total = totalCustomers(s.market, "CO_A");
+    expect(total).toBeGreaterThan(0);
+    expect(me?.customers.total).toBe(Math.round(total));
+    expect(me?.customers.byGroup.students.personal).toBe(
+      Math.round(customersOf(s.market, "CO_A", "national", "students", "personal")),
+    );
+    expect(me?.satisfaction.PROD_A?.students).toBeCloseTo(0.62, 9);
+    expect(me?.satisfaction.PROD_A?.everyday).toBe(0.5);
+    expect(me?.ledger.current.month).toBe("2027-01");
+    expect(me?.ledger.current.costs.training).toBe(2 * 41_596);
+    expect(me?.fame).toEqual({
+      reputation: Math.round(company?.fame.reputation ?? -1),
+      followers: Math.round(company?.fame.followers ?? -1),
+    });
+  });
+
+  it("shows another company's product once announced, and its AI only from launch day", () => {
+    let s = launch(world());
+    expect(acmeFor(s).products).toEqual([
+      { id: "PROD_A", name: "Spark", status: "countdown", launchDay: 16, version: null },
+    ]);
+    expect(acmeFor(s).prices).toEqual({ free: false, personal: null, business: null });
+    expect(JSON.stringify(projectView(s, "u2"))).not.toContain("VER_A1");
+    s = ticks(s, 3);
+    expect(acmeFor(s).products[0]).toEqual({
+      id: "PROD_A",
+      name: "Spark",
+      status: "live",
+      launchDay: 16,
+      version: {
+        id: "VER_A1",
+        label: "v1",
+        createdDay: 13,
+        scores: { language: 40 },
+        overall: 21,
+        personalityWords: ["curious"],
+      },
+    });
+    expect(acmeFor(s).prices).toEqual({ free: true, personal: 10, business: null });
+    s = ok(step(s, cmd("u1", { type: "setPlan", plan: "free", productId: null })));
+    s = ok(step(s, cmd("u1", { type: "setPlan", plan: "personal", productId: null })));
+    s = ok(step(s, cmd("u1", { type: "retireProduct", productId: "PROD_A" })));
+    expect(acmeFor(s).products).toEqual([]);
+    expect(acmeFor(s).prices).toEqual({ free: false, personal: null, business: null });
+  });
+
+  it("rounds other companies' customers to three figures, and fame to whole numbers", () => {
+    const s = world();
+    s.market.customers.CO_A = { national: { everyday: { free: 123_456.7 } } };
+    expect(acmeFor(s).customers).toBe(123_000);
+    expect(projectView(s, "u1").me.company?.customers.total).toBe(123_457);
+    s.market.customers.CO_A = { national: { everyday: { free: 56.4 } } };
+    expect(acmeFor(s).customers).toBe(56);
+    const fame = s.companies.CO_A?.fame;
+    if (!fame) throw new Error("no fame");
+    fame.reputation = 61.7;
+    fame.followers = 1234.4;
+    expect(acmeFor(s)).toMatchObject({ reputation: 62, followers: 1234 });
+  });
+
+  it("shows everyone the last 50 feed items, replies verbatim, and the spotlights", () => {
+    let s = ticks(launch(world()), 3);
+    for (let w = 0; w < 30; w++) {
+      s = ok(
+        step(
+          s,
+          feedback(`w${w}`, [
+            ["students", 0.9],
+            ["developers", 0.1],
+          ]),
+        ),
+      );
+    }
+    expect(s.feed.length).toBeGreaterThan(50);
+    for (const user of ["u1", "u2"]) {
+      const view = WorldView.parse(projectView(s, user));
+      expect(view.feed.map((i) => i.id)).toEqual(s.feed.slice(-50).map((i) => i.id));
+      const post = view.feed.find((i) => i.kind === "post");
+      expect(post?.kind === "post" && post.reply).toBe("<b>x</b> <|end|>");
+      expect(view.spotlights).toEqual(s.spotlights);
+    }
+  });
+
+  it("shows the market's size", () => {
+    const market = projectView(world(), "u1").world.market;
+    const share = adoptionShare(BALANCE_V2.economy, 13);
+    expect(market.adoption).toBeCloseTo(share, 12);
+    expect(market.adoptable).toBe(Math.round(BALANCE_V2.economy.population.national * share));
+  });
+
+  it("shows the owner the last 12 closed months", () => {
+    const s = ticks(world(), 400); // 2028-02-17
+    expect(s.companies.CO_A?.ledger.months).toHaveLength(13);
+    const months = WorldView.parse(projectView(s, "u1")).me.company?.ledger.months ?? [];
+    expect(months.map((m) => m.month)).toHaveLength(12);
+    expect(months[0]?.month).toBe("2027-02");
+    expect(months.at(-1)?.month).toBe("2028-01");
   });
 });
