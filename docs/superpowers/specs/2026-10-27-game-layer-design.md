@@ -37,6 +37,7 @@
 | C27 | Extras | **Battles vs rivals, interviews, discoveries, the player's own writing** (notebook, C2). |
 | C28 | Later | Onboarding and tutorial (near launch; the owner asks questions meanwhile), sound and music, team hiring. |
 | C29 | Demo worlds | Worlds from the M2 demo **do not carry over**; new games start fresh. |
+| C30 | Immersion | **Engaging and alive, not just graphs** (2026-10-28, after playing Phase 1): motion, transitions, windows that open, things to click, charts that expand, more visuals. Applied to Phase 1's screens first, then to every new screen. |
 
 ---
 

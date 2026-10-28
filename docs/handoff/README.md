@@ -69,7 +69,11 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
 - **Stage 1 is complete** (2026-10-27): `npm run dev` plays the single-player game; `npm run e2e` passes. Stop and report to the owner before Stage 2.
 - **The single-player game layer** (owner request, 2026-10-27): design `docs/superpowers/specs/2026-10-27-game-layer-design.md` (decisions C7–C29, four phases).
   - **Phase 1 "A real company" is complete** (2026-10-28; plan `docs/superpowers/plans/2026-10-27-game-layer-phase1.md`, 15 tasks): launch day, plans and prices, a national market of six customer groups, real-reply customer posts, news, reputation and followers, the money ledger, the new look with the orb, and the Company, Money and Market screens. Record: `docs/handoff/sdd/ledger-game-layer-phase1.md`.
-  - **Next: Phase 2 "A growing business"** on the owner's go: write its plan from the design (the 9-region map, ad campaigns, data centers, the monthly report card, rescue), then execute it inline like Phase 1. Phases 3 (rivals) and 4 (surprises and goals) follow; M2 Stage 2 (Tasks 25–28, friends) comes after the whole game layer.
+  - **Owner feedback after playing Phase 1 (2026-10-28, decision C30):** make the game engaging and immersive, not "looking at graphs": motion, transitions, windows that open (detail pop-ups), things to click, charts that expand, more visuals.
+  - **Next, in order, without stopping for review (the owner's explicit go):**
+    1. **An immersion pass** on the Phase 1 screens (Company, Money, Market, the shell, the Lab's train step): a short design, then build it with tests, and check it in the browser.
+    2. **Phase 2 "A growing business":** write its plan from the design (the 9-region map, ad campaigns, data centers, the monthly report card, rescue), with the same immersive feel in every new screen, then execute it inline like Phase 1.
+  - Phases 3 (rivals) and 4 (surprises and goals) follow; M2 Stage 2 (Tasks 25–28, friends) comes after the whole game layer.
 
 ## 5. Local GPU session checklist (Windows 11 + RTX 3050)
 `data/` is gitignored and large, so it never travels through git. Commands are in CLAUDE.md "Commands"; every corpus build needs `--extra content`.

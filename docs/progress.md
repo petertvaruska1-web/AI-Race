@@ -11,7 +11,8 @@ Newest entries first. Each entry: date, what changed, what's next, open issues.
   - Web app: the design system and app shell, the orb, and the Company, Money and Market screens with the launch dialog.
 - **Verified:** TypeScript 319 tests; Python 1,616 tests (2 min 45 s); lint and type checks clean; the end-to-end game (now with launch, customers, posts and money) passed three times. On the RTX 3050 a first AI trained in about 80 s and was scored in 15 s (overall 43); launched as "Wave", it had 5,555 customers two days later, posts quoted its real replies ("Phiated.", "BYetch"), and chat answered within a second while feedback batches ran (1–2 s each).
 - **Final review** (a self-review, by the owner's wish for no helper agents this milestone): fixed one serious hole (an id named like a built-in object part, such as `__proto__`, could reach every object on the server) and the Money screen showing rising costs in green. Seven small items are deferred in `docs/handoff/sdd/ledger-game-layer-phase1.md`.
-- **Next:** the owner's look at Phase 1; then Phase 2 "A growing business" (regions map, ad campaigns, data centers, report card, rescue).
+- **Owner feedback after playing it (C30):** make it engaging and immersive (motion, transitions, windows that open, things to click, expanding charts, visuals), not just graphs.
+- **Next:** an immersion pass on these screens, then straight into Phase 2 "A growing business" (regions map, ad campaigns, data centers, report card, rescue).
 
 ## 2026-10-27 — Game-layer design interview ("Open for Business", single player)
 - The owner judged the Stage 1 build a good demo but far from the game they want, and asked for a full design of the playable game before multiplayer.
