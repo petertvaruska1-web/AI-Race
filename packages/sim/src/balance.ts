@@ -356,11 +356,14 @@ const ECONOMY_V2: Economy = {
     investorStake: 0.25,
     decideDays: 14,
   },
+  // - costPerReach 0.15: ads pay back in about 3 months (a $350k blitz in about 87 days) and a
+  //   30-day Pacific campaign lifts the Pacific's share 1.34 times; at 0.05 one blitz left a
+  //   company $633k richer within 110 days, so advertising was free money.
   campaigns: {
     budget: { min: 100, max: 100_000 },
     days: { min: 7, max: 90 },
     maxRunning: 5,
-    costPerReach: 0.05,
+    costPerReach: 0.15,
     awarenessPerReach: 0.5,
     hypePerDollar: 0.000002,
   },

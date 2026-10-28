@@ -6,13 +6,16 @@ import {
   PLAN_IDS,
   type PlanId,
   REGION_IDS,
+  type RegionId,
 } from "@airace/protocol";
 import {
   type Balance,
   type CompanyState,
   createWorld,
+  customersByRegion,
   customersOf,
   type Input,
+  type ReportCard,
   step,
   totalCustomers,
   type WorldState,
@@ -42,6 +45,16 @@ export type BotScript = {
   countdownDays?: number;
   /** A second, better model launched as another product this many days after the first launch. */
   retrain?: { afterDays: number; scores: Record<string, number> };
+  /** Ad campaigns, each started this many days after launch. */
+  campaigns?: {
+    afterDays: number;
+    region: RegionId | "all";
+    group: GroupId | "all";
+    budgetPerDay: number;
+    days: number;
+  }[];
+  /** On this day after launch every customer is multiplied by `factor` (a viral spike). */
+  spike?: { afterDays: number; factor: number };
 };
 
 export type DayReport = {
@@ -56,9 +69,21 @@ export type DayReport = {
   income: number;
   serving: number;
   costs: number;
+  byRegion: Record<RegionId, number>;
+  /** The share of the day's questions answered. */
+  served: number;
+  /** What is still owed on rescue loans. */
+  loan: number;
+  rescueOffered: boolean;
 };
-
-export type Report = { launchDay: number; days: DayReport[] };
+export type Report = {
+  launchDay: number;
+  days: DayReport[];
+  /** The company's report cards at the end. */
+  reports: ReportCard[];
+  /** The world at the end, for follow-up experiments. */
+  final: WorldState;
+};
 
 const USER = "bot";
 const COMPANY = "c1";
@@ -89,7 +114,7 @@ function totals(c: CompanyState): { income: number; serving: number; costs: numb
   for (const m of [...c.ledger.months, c.ledger.current]) {
     income += m.income.personal + m.income.business;
     serving += m.costs.serving;
-    costs += m.costs.training + m.costs.serving + m.costs.dataChecks;
+    costs += Object.values(m.costs).reduce((a, b) => a + b, 0);
   }
   return { income, serving, costs };
 }
@@ -179,13 +204,28 @@ export function runBot(balance: Balance, script: BotScript, days: number, seed =
     cmd({ type: "launchProduct", versionId: "v1", name: "Bot One", plans, countdownDays }, "p1"),
   );
   const launchDay = s.day + countdownDays;
-  const report: Report = { launchDay, days: [] };
+  const report: Report = { launchDay, days: [], reports: [], final: s };
   let before = totals(company(s));
   let modelScores: Record<string, number> = scores;
   let liveProduct = "p1";
   let week = -1;
   while (s.day < launchDay + days) {
     s = apply(s, { kind: "tick" });
+    for (const [i, k] of (script.campaigns ?? []).entries()) {
+      if (s.day !== launchDay + k.afterDays) continue;
+      const { afterDays: _, ...campaign } = k;
+      s = apply(s, cmd({ type: "startCampaign", ...campaign }, `ad${i}`));
+    }
+    if (script.spike && s.day === launchDay + script.spike.afterDays) {
+      const factor = script.spike.factor;
+      s = structuredClone(s);
+      for (const byGroup of Object.values(s.market.customers[COMPANY] ?? {})) {
+        for (const byPlan of Object.values(byGroup ?? {})) {
+          for (const plan of PLAN_IDS) if (byPlan?.[plan]) byPlan[plan] *= factor;
+        }
+      }
+    }
+    // A bot never chooses a rescue: at the deadline the game takes the loan.
     const retrain = script.retrain;
     if (retrain && s.day === launchDay + retrain.afterDays) {
       s = trainAndScore(s, balance, "r2", "v2", "v1", retrain.scores);
@@ -239,9 +279,15 @@ export function runBot(balance: Balance, script: BotScript, days: number, seed =
       income: now.income - before.income,
       serving: now.serving - before.serving,
       costs: now.costs - before.costs,
+      byRegion: customersByRegion(s.market, COMPANY),
+      served: c.compute.served,
+      loan: c.loan?.balance ?? 0,
+      rescueOffered: c.rescue !== null,
     });
     before = now;
   }
+  report.reports = company(s).reports;
+  report.final = s;
   return report;
 }
 
