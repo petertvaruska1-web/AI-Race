@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { BalanceVersion } from "@airace/sim";
 import { buildApp } from "./app.ts";
+import { lockData } from "./dataLock.ts";
 import { realScheduler } from "./scheduler.ts";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -27,6 +28,11 @@ if (balance !== "balance-v2" && balance !== "balance-test") {
   throw new Error(`AIRACE_BALANCE must be balance-v2 or balance-test, got ${balance}`);
 }
 const catalog = join(data, "catalog", "v1", "catalog.json");
+
+// Two servers on one save folder corrupt its database: claim it before opening it.
+mkdirSync(serverDir, { recursive: true });
+const unlock = lockData(serverDir);
+process.once("exit", unlock);
 
 const { app, close } = await buildApp({
   dbDir: join(serverDir, "db"),
