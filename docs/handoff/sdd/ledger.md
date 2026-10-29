@@ -435,3 +435,6 @@ NEXT STEP ON RESUME (supersedes the lines above): first an immersion pass on the
 
 Immersion pass (C30) complete 2026-10-28: design docs/superpowers/specs/2026-10-28-immersion-design.md (decisions I1-I6), commits 63dda05 (sim history), 3f68090 (windows and charts), a0c22e5 (screens), plus the browser-check fixes (rounder crowd steps, clicks pass through a closing window, e2e news check scoped to the feed). Ruling: no sim version bump for history; saved sim-2 worlds get an empty history on load (upgradeState) - cost if wrong: one compatibility function to keep until sim-3. Ruling: the owner's go covers the design without a review stop (CLAUDE.md: decide and proceed) - cost if wrong: a redesign of how windows look.
 NEXT STEP ON RESUME (supersedes the lines above): write the Phase 2 plan ("A growing business") from docs/superpowers/specs/2026-10-27-game-layer-design.md with the immersion rules, then execute it inline without stopping for review.
+
+Game layer Phase 2 complete 2026-10-29 (commits 1b7f282..9c73b79); full record docs/handoff/sdd/ledger-game-layer-phase2.md.
+NEXT STEP ON RESUME (supersedes the lines above): report Phase 2 to the owner; on their go, write the Phase 3 "Rivals" plan from docs/superpowers/specs/2026-10-27-game-layer-design.md (§9, §12, §15) and execute it inline.
