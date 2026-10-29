@@ -180,3 +180,9 @@ Newest entries first. Each entry: date, what changed, what's next, open issues.
 - Environment: Windows 11, Node 24.20, npm 11.19, Python 3.14 (system), git 2.55, RTX 3050 8 GB (CUDA cc 8.6), Ryzen 5 5500, 32 GB RAM. No Docker or Postgres; dev setup must not need them.
 - Creative decisions: C1 shared session clock; C2 small Notebook dataset (spec §0).
 - Architecture spec written: `docs/superpowers/specs/2026-10-06-ai-race-architecture-design.md`.
+
+## 2026-10-29 — Save-folder lock after a damaged database
+
+- The game database in `data/server/db` was damaged: a second server (started for a check while the owner's game ran) opened it before failing on the busy port, so two processes wrote to it. PGlite then aborted on every start.
+- The damaged copy is kept at `data/server/db-damaged-2026-10-29`, and a full backup of `data/server` at `data/server-backup-2026-10-29`. The game starts with a fresh database (the old worlds were Phase 1 worlds, which sim-3 can't open anyway).
+- The server now claims `data/server/server.lock` before opening the database and refuses while another running server holds it (`apps/server/src/dataLock.ts`, 4b056ec). A lock left by a stopped server is taken over.
