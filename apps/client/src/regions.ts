@@ -70,7 +70,10 @@ export const REGION_CENTERS: Record<RegionId, { x: number; y: number }> = Object
   }),
 ) as Record<RegionId, { x: number; y: number }>;
 
-/** The player's share of each region's willing people, scaled so the best region is 1. */
+/**
+ * The player's share of each region's willing people, spread from the weakest
+ * region (0.25) to the strongest (1), so differences show even when shares are close.
+ */
 export function shareByRegion(view: WorldView): Record<RegionId, number> {
   const mine = view.me.company?.customers.byRegion;
   const share = REGION_IDS.map((r) => {
@@ -79,9 +82,13 @@ export function shareByRegion(view: WorldView): Record<RegionId, number> {
     return people > 0 ? n / people : 0;
   });
   const top = Math.max(...share);
-  return Object.fromEntries(
-    REGION_IDS.map((r, i) => [r, top > 0 ? (share[i] ?? 0) / top : 0]),
-  ) as Record<RegionId, number>;
+  const low = Math.min(...share);
+  const spread = (x: number) =>
+    top <= 0 ? 0 : top === low ? 1 : 0.25 + (0.75 * (x - low)) / (top - low);
+  return Object.fromEntries(REGION_IDS.map((r, i) => [r, spread(share[i] ?? 0)])) as Record<
+    RegionId,
+    number
+  >;
 }
 
 /** The player's customers in a region, over every group. */

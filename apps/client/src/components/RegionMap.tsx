@@ -38,7 +38,7 @@ export function RegionMap({
       <div className="relative">
         <svg
           viewBox="-0.3 -0.3 12.6 8.6"
-          className={`block w-full ${small ? "max-h-40" : ""}`}
+          className={`mx-auto block w-full ${small ? "max-h-40" : "max-w-2xl"}`}
           aria-hidden="true"
           onPointerLeave={() => setHover(null)}
         >
