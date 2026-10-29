@@ -115,6 +115,7 @@ export function Money({ view }: { view: WorldView }) {
                 label: COST_NAMES[c],
                 value: now.costs[c],
                 color: "var(--danger)",
+                testId: `cost-${c}`,
                 onOpen: (el) => open({ kind: "cost", category: c }, el),
               }))}
             />

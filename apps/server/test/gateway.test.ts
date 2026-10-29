@@ -98,6 +98,30 @@ describe("world views", () => {
     expect(Object.keys(actor.state().companies)).toHaveLength(1);
   });
 
+  it("gives new campaigns and data centers an id, so the rules can judge them", async () => {
+    server = await startTestServer();
+    const { cookie, worldId } = await createGuestWorld(server);
+    const ws = await connect(server, cookie);
+    ws.send({ v: 1, type: "watch", worldId });
+    await ws.next("snapshot");
+    for (const cmd of [COMPANY, { type: "startWorld" }]) {
+      const cid = randomUUID();
+      ws.send(command(worldId, cmd, cid));
+      await ws.next("ack", (m) => m.cid === cid);
+    }
+    const reasons: string[] = [];
+    for (const cmd of [
+      { type: "startCampaign", region: "pacific", group: "all", budgetPerDay: 500, days: 7 },
+      { type: "buildDataCenter", region: "pacific" },
+    ]) {
+      const cid = randomUUID();
+      ws.send(command(worldId, cmd, cid));
+      reasons.push((await ws.next("reject", (m) => m.cid === cid)).reason);
+    }
+    expect(reasons[0]).toBe("Launch an AI before advertising it.");
+    expect(reasons[1]).toMatch(/^A data center costs \$1,500,000\./);
+  });
+
   it("answers resync with a fresh snapshot", async () => {
     server = await startTestServer();
     const { cookie, worldId } = await createGuestWorld(server);

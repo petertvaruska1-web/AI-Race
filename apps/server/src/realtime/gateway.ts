@@ -32,10 +32,17 @@ export type ChatHandler = (
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Commands that create something get their id from the server, inside the logged input. */
+/** Commands that create something the rules name with a fresh id. */
+const NEEDS_ID: ReadonlySet<Command["type"]> = new Set([
+  "createCompany",
+  "startTraining",
+  "launchProduct",
+  "startCampaign",
+  "buildDataCenter",
+]);
+
 function needsId(cmd: Command): boolean {
-  return (
-    cmd.type === "createCompany" || cmd.type === "startTraining" || cmd.type === "launchProduct"
-  );
+  return NEEDS_ID.has(cmd.type);
 }
 
 /**

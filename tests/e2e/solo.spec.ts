@@ -113,4 +113,46 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
   await expect(
     page.getByRole("list", { name: "News and posts" }).locator("blockquote").first(),
   ).toBeVisible();
+
+  // 14. Phase 2: customers spread over the regions on the map; each region opens its window.
+  await page.getByRole("link", { name: "Market" }).click();
+  const map = page.getByRole("group", { name: "Your customers by region" });
+  const regionCustomers = async (name: string) => {
+    await map.getByRole("button", { name: `Open ${name}` }).click();
+    const n = Number(
+      ((await page.getByTestId("region-customers").textContent()) ?? "").replace(/\D/g, ""),
+    );
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    return n;
+  };
+  expect(await regionCustomers("Pacific")).toBeGreaterThan(0);
+  expect(await regionCustomers("Mid-Atlantic")).toBeGreaterThan(0);
+
+  // 15. An ad campaign in the Pacific, listed on the Market and paid for on the Money screen.
+  await page.getByRole("button", { name: "New ad campaign" }).click();
+  const ad = page.getByRole("dialog", { name: "New ad campaign" });
+  await ad.getByLabel("Where").selectOption("pacific");
+  await ad.getByRole("button", { name: "Start the campaign" }).click();
+  await expect(ad).toHaveCount(0);
+  const campaigns = page.getByRole("region", { name: "Ad campaigns" });
+  await expect(campaigns.getByText("Pacific · everyone")).toBeVisible();
+  await page.getByRole("link", { name: "Money" }).click();
+  await expect
+    .poll(async () => (await page.getByTestId("cost-marketing").textContent())?.trim(), {
+      timeout: 30_000,
+    })
+    .not.toBe("$0");
+
+  // 16. Months close in seconds on the test balance: a report card opens with its grade.
+  const cards = page.getByRole("region", { name: "Report cards" });
+  await expect(cards.getByRole("button").first()).toBeVisible({ timeout: 60_000 });
+  await cards.getByRole("button").first().click();
+  await expect(page.getByRole("dialog", { name: /report card$/ })).toBeVisible();
+  await expect(page.getByTestId("grade")).toHaveText(/^[A-F]$/);
+  await page.keyboard.press("Escape");
+
+  // 17. The computers say how many questions get answered.
+  const computers = page.getByRole("region", { name: "Computers" });
+  await expect(computers.getByText("of questions answered")).toBeVisible();
 });
