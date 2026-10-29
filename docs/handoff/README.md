@@ -72,8 +72,22 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
   - **Owner feedback after playing Phase 1 (2026-10-28, decision C30):** make the game engaging and immersive, not "looking at graphs": motion, transitions, windows that open (detail pop-ups), things to click, charts that expand, more visuals.
   - **The immersion pass is complete** (2026-10-28; design `docs/superpowers/specs/2026-10-28-immersion-design.md`): windows for every number (customers, groups, products, the AI, money, months, money lines, posts), day and month charts, 120 days of history per company, motion (screen slides, a day bar, floating changes, toasts with bursts, customers streaming into the orb, a crowd of dots per group), expanding training charts. Every new screen follows its rules.
   - **Phase 2 "A growing business" is complete** (2026-10-29; plan `docs/superpowers/plans/2026-10-28-game-layer-phase2.md`, record `docs/handoff/sdd/ledger-game-layer-phase2.md`): sim-3 with 9 regions, ad campaigns, cloud capacity and overload, data centers and the share for training, monthly report cards, rescue by loan or investor; their screens and windows.
-  - **Next: Phase 3 "Rivals"** (design §9, §15), after reporting Phase 2 to the owner.
-  - Phases 3 (rivals) and 4 (surprises and goals) follow; M2 Stage 2 (Tasks 25–28, friends) comes after the whole game layer.
+  - **Phases 3 and 4 are planned, not started** (2026-10-29). The owner asked for the plans without starting work.
+    - Phase 3 "Rivals": `docs/superpowers/plans/2026-10-29-game-layer-phase3.md` (16 tasks).
+    - Phase 4 "Surprises and goals": `docs/superpowers/plans/2026-10-29-game-layer-phase4.md` (15 tasks).
+  - **How to resume them:**
+    1. **Wait for the owner's go** to start Phase 3. When it comes, tell them first:
+       - Their current Phase 2 world carries over (the sim-3 → sim-4 upgrade in Phase 3 Task 4), and rivals join it once the rival AIs are built.
+       - Building the rival AIs needs about two quiet hours on the graphics card (Phase 3 Task 16). Ask when that suits them.
+    2. **Execute inline** (`superpowers:executing-plans`), as Phases 1 and 2 were:
+       - Open a ledger `docs/handoff/sdd/ledger-game-layer-phase3.md` in the Phase 2 ledger's format: plan line, pre-flight rows, one line per task, rulings.
+       - Commit and push after every task.
+       - End with one whole-branch self-review (the owner prefers no helper agents this milestone), then report.
+    3. **Phase 3 order:** Part A, the ML (battle challenges, `build-rivals`, the battle job), comes first. Parts B–D use quick packs and fixtures, so no long GPU run is needed until Task 16.
+    4. **GPU runs:** never run a second `npm run dev` or server on `data/` while the owner's game runs. The save folder is now locked (`data/server/server.lock`); for checks, use a second game with its own data root (CLAUDE.md). Keep a Monitor heartbeat on the long `build-rivals` run.
+    5. **After Phase 3:** report it, with the plan's "Decisions made in this plan" list plus the rulings and deferred minors from the ledger, and let the owner play. Start Phase 4 on their go, unless they ask to go straight through. Phase 4 upgrades sim-4 worlds to sim-5, so their world carries over again.
+    6. **After Phase 4:** M2 Stage 2 (friends, Tasks 25–28 of `docs/superpowers/plans/2026-10-22-m2-two-friends.md`), on the owner's go.
+  - **If a plan step proves wrong while executing:** rule on it against the design (`docs/superpowers/specs/2026-10-27-game-layer-design.md`), record the ruling in the phase ledger, and keep going (CLAUDE.md: decide and proceed; ask the owner only creative questions).
 
 ## 5. Local GPU session checklist (Windows 11 + RTX 3050)
 `data/` is gitignored and large, so it never travels through git. Commands are in CLAUDE.md "Commands"; every corpus build needs `--extra content`.

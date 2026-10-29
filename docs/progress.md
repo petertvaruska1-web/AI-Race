@@ -2,6 +2,18 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-10-29 — Phase 3 and Phase 4 planned (nothing built yet)
+- **Owner request:** plan Phases 3 and 4 without starting them, with instructions for a later session.
+- **Plans:** `docs/superpowers/plans/2026-10-29-game-layer-phase3.md` ("Rivals", 16 tasks: the rival pack built once on the GPU, rivals as companies without an owner, releases and business habits, league tables, battles with ranking points, trash-talk, the rival and battle services, the Rivals and Arena screens) and `docs/superpowers/plans/2026-10-29-game-layer-phase4.md` ("Surprises and goals", 15 tasks: milestone signals and discoveries from evals, interview prompt cards and scoring, the notebook as a ninth share, milestones and the trophy shelf, interviews, the goal and victory screen, the data-quality scandal deferred from Phase 2).
+- **Decisions recorded in the plans** (each plan ends with its list for the owner report). The main ones: rivals are ordinary companies without an owner; one logged `rivalsJoined` input carries the pack's measurements and releases follow on game days; rivals also join existing worlds once the pack exists, and sim-3 and sim-4 worlds upgrade, so the owner's Phase 2 world carries into Phases 3 and 4; battles cost $5,000 and use the five skills with written replies; the goal is chosen when a world is created; interviews are published through a server service so only real answers can be published.
+- **Next:** on the owner's go, execute Phase 3 (resume guide `docs/handoff/README.md` §4).
+
+## 2026-10-29 — Save-folder lock after a damaged database
+
+- The game database in `data/server/db` was damaged: a second server (started for a check while the owner's game ran) opened it before failing on the busy port, so two processes wrote to it. PGlite then aborted on every start.
+- The damaged copy is kept at `data/server/db-damaged-2026-10-29`, and a full backup of `data/server` at `data/server-backup-2026-10-29`. The game starts with a fresh database (the old worlds were Phase 1 worlds, which sim-3 can't open anyway).
+- The server now claims `data/server/server.lock` before opening the database and refuses while another running server holds it (`apps/server/src/dataLock.ts`, 4b056ec). A lock left by a stopped server is taken over.
+
 ## 2026-10-29 — Game layer Phase 2: "A growing business"
 - **What a player can now do:** see customers spread over the 9 US regions on a glowing tile map (brighter where more of the willing people use your AI), open any region; run ad campaigns by region and group; watch serving capacity (the cloud grows a fifth a day, so a viral spike overloads it: fewer answers, unhappier customers, a warning and the news); build data centers (60 game days, $1.5M) that answer faster nearby, serve at 30% of cloud prices and can lend compute to training; read a monthly report card with a grade from A to F and the month's best and worst posts; and, when cash runs out at a month end, choose an emergency loan or an investor (or the game takes the loan after 14 days).
 - **Built** (`docs/superpowers/plans/2026-10-28-game-layer-phase2.md`, 14 tasks): sim-3 with regions, campaigns, compute, data centers, report cards, rescue and financing in the ledger; balance targets for each; the map, campaign, data-center, computers, report-card and rescue windows; the overload warning and rescue banner. The full record and every ruling: `docs/handoff/sdd/ledger-game-layer-phase2.md`.
@@ -180,9 +192,3 @@ Newest entries first. Each entry: date, what changed, what's next, open issues.
 - Environment: Windows 11, Node 24.20, npm 11.19, Python 3.14 (system), git 2.55, RTX 3050 8 GB (CUDA cc 8.6), Ryzen 5 5500, 32 GB RAM. No Docker or Postgres; dev setup must not need them.
 - Creative decisions: C1 shared session clock; C2 small Notebook dataset (spec §0).
 - Architecture spec written: `docs/superpowers/specs/2026-10-06-ai-race-architecture-design.md`.
-
-## 2026-10-29 — Save-folder lock after a damaged database
-
-- The game database in `data/server/db` was damaged: a second server (started for a check while the owner's game ran) opened it before failing on the busy port, so two processes wrote to it. PGlite then aborted on every start.
-- The damaged copy is kept at `data/server/db-damaged-2026-10-29`, and a full backup of `data/server` at `data/server-backup-2026-10-29`. The game starts with a fresh database (the old worlds were Phase 1 worlds, which sim-3 can't open anyway).
-- The server now claims `data/server/server.lock` before opening the database and refuses while another running server holds it (`apps/server/src/dataLock.ts`, 4b056ec). A lock left by a stopped server is taken over.
