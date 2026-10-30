@@ -1,4 +1,4 @@
-import { type GroupId, PLAN_IDS, REGION_IDS, type RegionId } from "@airace/protocol";
+import { GROUP_IDS, type GroupId, PLAN_IDS, REGION_IDS, type RegionId } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import {
   adoptionShare,
@@ -6,6 +6,7 @@ import {
   BALANCE_V2,
   computeDay,
   customersByRegion,
+  customersOf,
   dataCentersDay,
   emptyMonth,
   servingLoad,
@@ -210,5 +211,98 @@ describe("balance-v2: a growing business", { timeout: 120_000 }, () => {
     expect(r.days[loaned]?.cash ?? -1).toBeGreaterThanOrEqual(0);
     const owed = r.days.filter((_, i) => i >= loaned).map((d) => d.loan);
     expect(owed.at(-1) ?? 0).toBeLessThan(owed[0] ?? 0);
+  });
+});
+
+describe("balance-v2 with an arch-rival and three rivals", { timeout: 300_000 }, () => {
+  const typical = runBot(BALANCE_V2, { rivals: true }, 365);
+  const rivals = () => Object.values(typical.final.companies).filter((c) => c.rival !== null);
+
+  it("still brings the first paying customer within 7 days and covers serving by day 60", () => {
+    expect(firstPayingDay(typical)).toBeLessThanOrEqual(7);
+    const month = typical.days.filter(
+      (d) => d.day > typical.launchDay + 30 && d.day <= typical.launchDay + 60,
+    );
+    expect(sum(month.map((d) => d.income))).toBeGreaterThan(sum(month.map((d) => d.serving)));
+  });
+
+  // A free crowd-pleaser gathers most free users (about 47% of all AI users in a year),
+  // so the cap on all users is half; paying customers stay spread (at most about a third).
+  it("keeps rivals alive and in check after a year: under half of all users, 40% of paying", () => {
+    const s = typical.final;
+    const ids = Object.keys(s.companies);
+    const paying = (id: string) =>
+      REGION_IDS.reduce(
+        (n, r) =>
+          n +
+          GROUP_IDS.reduce(
+            (m, g) =>
+              m +
+              customersOf(s.market, id, r, g, "personal") +
+              customersOf(s.market, id, r, g, "business"),
+            0,
+          ),
+        0,
+      );
+    const all = ids.reduce((n, id) => n + totalCustomers(s.market, id), 0);
+    const allPaying = ids.reduce((n, id) => n + paying(id), 0);
+    for (const c of rivals()) {
+      const share = totalCustomers(s.market, c.id) / all;
+      const payingShare = paying(c.id) / allPaying;
+      expect(share, `${c.name} ${share}`).toBeGreaterThanOrEqual(0.005);
+      expect(share, `${c.name} ${share}`).toBeLessThanOrEqual(0.5);
+      expect(payingShare, `${c.name} paying ${payingShare}`).toBeLessThanOrEqual(0.4);
+      expect(c.rival?.released).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("meets the arch-rival early: its first AI is on sale before day 30", () => {
+    const arch = typical.final.companies[typical.final.rivals?.archId ?? ""];
+    const first = Object.values(arch?.products ?? {}).sort((a, b) => a.launchDay - b.launchDay)[0];
+    expect(first?.launchDay).toBeLessThan(30);
+  });
+
+  it("leaves three ways to win: premium, budget and specialist players all turn a profit", () => {
+    const coder = { ...TYPICAL_FIRST_MODEL, coding: 80, instruction: 75 };
+    const strategies = {
+      premium: runBot(
+        BALANCE_V2,
+        { rivals: true, scores: twiceAsGood, prices: { personal: 30, business: 90 } },
+        365,
+      ),
+      budget: runBot(
+        BALANCE_V2,
+        { rivals: true, plans: ["free", "personal"], prices: { personal: 4 } },
+        365,
+      ),
+      specialist: runBot(
+        BALANCE_V2,
+        { rivals: true, scores: coder, plans: ["business"], prices: { business: 60 } },
+        365,
+      ),
+    };
+    for (const [name, r] of Object.entries(strategies)) {
+      const profits = r.reports.slice(-3).map((c) => c.profit);
+      expect(Math.max(...profits), `${name}: ${profits.join(", ")}`).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps ads an investment with rivals advertising too: a blitz takes two months to pay back", () => {
+    const plain = runBot(BALANCE_V2, { rivals: true }, 150);
+    const blitz = runBot(
+      BALANCE_V2,
+      {
+        rivals: true,
+        campaigns: [0, 1, 2, 3, 4].map(() => ({
+          afterDays: 0,
+          region: "all" as const,
+          group: "all" as const,
+          budgetPerDay: 10_000,
+          days: 7,
+        })),
+      },
+      150,
+    );
+    expect(afterLaunch(blitz, 60).cash).toBeLessThan(afterLaunch(plain, 60).cash);
   });
 });

@@ -20,6 +20,7 @@ import {
   totalCustomers,
   type WorldState,
 } from "../src/index.ts";
+import { SYNTHETIC_PACK } from "./pack.ts";
 
 // Headless companies for the balance harness: each feeds `step` the inputs a
 // simple player would send, with fake training results, scores and weekly
@@ -55,6 +56,8 @@ export type BotScript = {
   }[];
   /** On this day after launch every customer is multiplied by `factor` (a viral spike). */
   spike?: { afterDays: number; factor: number };
+  /** Rivals from the synthetic pack join when the world starts; their AIs get weekly feedback. */
+  rivals?: boolean;
 };
 
 export type DayReport = {
@@ -190,6 +193,7 @@ export function runBot(balance: Balance, script: BotScript, days: number, seed =
     ),
   );
   s = apply(s, cmd({ type: "startWorld" }));
+  if (script.rivals) s = apply(s, sys({ type: "rivalsJoined", pack: SYNTHETIC_PACK }));
   s = trainAndScore(s, balance, "r1", "v1", null, scores);
   if (script.prices?.personal !== undefined) {
     s = apply(s, cmd({ type: "setPrice", plan: "personal", price: script.prices.personal }));
@@ -209,6 +213,7 @@ export function runBot(balance: Balance, script: BotScript, days: number, seed =
   let modelScores: Record<string, number> = scores;
   let liveProduct = "p1";
   let week = -1;
+  let rivalWeek = -1;
   while (s.day < launchDay + days) {
     s = apply(s, { kind: "tick" });
     for (const [i, k] of (script.campaigns ?? []).entries()) {
@@ -255,6 +260,10 @@ export function runBot(balance: Balance, script: BotScript, days: number, seed =
         sys({ type: "feedbackScored", productId: liveProduct, key: `w${thisWeek}`, results }),
       );
     }
+    if (script.rivals && thisWeek !== rivalWeek) {
+      rivalWeek = thisWeek;
+      s = rivalFeedback(s, balance, `w${thisWeek}`);
+    }
     const c = company(s);
     const now = totals(c);
     const byGroup = {} as Record<GroupId, Record<PlanId, number>>;
@@ -289,6 +298,30 @@ export function runBot(balance: Balance, script: BotScript, days: number, seed =
   report.reports = company(s).reports;
   report.final = s;
   return report;
+}
+
+/** Every live rival AI answers its weekly questions, scored from its measured skills. */
+function rivalFeedback(s0: WorldState, balance: Balance, key: string): WorldState {
+  let s = s0;
+  for (const c of Object.values(s0.companies)) {
+    if (!c.rival) continue;
+    for (const p of Object.values(c.products)) {
+      const scores = c.versions[p.versionId]?.scores;
+      if (p.status !== "live" || !scores) continue;
+      const known = Object.fromEntries(
+        Object.entries(scores).filter((e): e is [string, number] => typeof e[1] === "number"),
+      );
+      const results = GROUP_IDS.map((group) => ({
+        group,
+        questionId: `q-${group}`,
+        question: "A customer question",
+        reply: "A reply.",
+        score: feedbackScore(balance, group, known),
+      }));
+      s = apply(s, sys({ type: "feedbackScored", productId: p.id, key, results }));
+    }
+  }
+  return s;
 }
 
 /** The report's day `launchDay + n`. */

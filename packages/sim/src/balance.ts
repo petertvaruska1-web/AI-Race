@@ -444,7 +444,9 @@ const ECONOMY_V2: Economy = {
     priceStep: 0.1,
     ad: {
       shareOfCash: 0.01,
-      maxPerDay: { premium: 3000, budget: 500, specialist: 1000, consumer: 4000 },
+      // Tuned by the rival balance targets: the crowd-pleaser's ads at $4,000 a day pushed
+      // it to 48% of all AI users within a year; $2,000 keeps it under half.
+      maxPerDay: { premium: 3000, budget: 500, specialist: 1000, consumer: 2000 },
       days: 30,
       minCash: 200_000,
     },
