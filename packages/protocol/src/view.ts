@@ -318,6 +318,8 @@ export const BattleView = z.strictObject({
     .array(z.strictObject({ prompt: z.string(), mine: BattleAnswerView, theirs: BattleAnswerView }))
     .nullable(),
   outcome: z.enum(["win", "draw", "loss"]).nullable(),
+  /** Ranking points won or lost by it. */
+  pointsChange: z.number().int().nullable(),
 });
 export type BattleView = z.infer<typeof BattleView>;
 

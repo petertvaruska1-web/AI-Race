@@ -292,6 +292,8 @@ export type BattleState = {
   status: "running" | "done" | "calledOff";
   rounds: BattleRound[] | null;
   outcome: "win" | "draw" | "loss" | null;
+  /** The player's ranking points won (or lost) by this battle. */
+  pointsChange: number | null;
 };
 
 export type CompanyState = {

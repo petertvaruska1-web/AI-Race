@@ -104,6 +104,7 @@ export function battleCommand(
     status: "running",
     rounds: null,
     outcome: null,
+    pointsChange: null,
   });
   if (company.battles.length > b.kept) company.battles.splice(0, company.battles.length - b.kept);
   return OK;
@@ -183,6 +184,7 @@ export function applyBattle(
   const theirs = table[rival.id] ?? b.pointsStart;
   const score = outcome === "win" ? 1 : outcome === "loss" ? 0 : 0.5;
   table[company.id] = Math.round(mine + b.pointsK * (score - expectedScore(mine, theirs)));
+  battle.pointsChange = (table[company.id] ?? mine) - mine;
   table[rival.id] = Math.round(theirs + b.pointsK * (1 - score - expectedScore(theirs, mine)));
   s.points[battle.skill] = table;
 

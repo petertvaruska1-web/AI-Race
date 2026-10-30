@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import { type OpenWindow, useWindows } from "../store/windows.ts";
 import { AiWindow } from "./AiWindow.tsx";
+import { BattleWindow, NewBattleWindow } from "./BattleWindows.tsx";
 import { CampaignWindow } from "./CampaignWindow.tsx";
 import { CustomersWindow } from "./CustomersWindow.tsx";
 import { ComputersWindow, DataCenterWindow } from "./DataCenterWindow.tsx";
@@ -50,6 +51,10 @@ function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) 
       return <RescueWindow entry={entry} view={view} />;
     case "rival":
       return <RivalWindow entry={entry} view={view} companyId={s.companyId} />;
+    case "newBattle":
+      return <NewBattleWindow entry={entry} view={view} rivalProductId={s.rivalProductId} />;
+    case "battle":
+      return <BattleWindow entry={entry} view={view} battleId={s.battleId} />;
   }
 }
 

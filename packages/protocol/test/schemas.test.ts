@@ -230,6 +230,7 @@ function sampleView(): WorldView {
               },
             ],
             outcome: "win",
+            pointsChange: 16,
           },
         ],
         reports: [

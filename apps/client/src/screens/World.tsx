@@ -4,6 +4,7 @@ import type { Route } from "../route.ts";
 import { useSocket } from "../store/session.ts";
 import { useWorld } from "../store/world.ts";
 import { applyCompanyTheme } from "../theme/palette.ts";
+import { Arena } from "./Arena.tsx";
 import { Benchmarks } from "./Benchmarks.tsx";
 import { Company } from "./Company.tsx";
 import { Lobby } from "./Lobby.tsx";
@@ -51,6 +52,7 @@ export function WorldScreen({ route }: { route: WorldRoute }) {
       {route.tab === "play" && <Playground view={view} />}
       {route.tab === "bench" && <Benchmarks view={view} />}
       {route.tab === "rivals" && <Rivals view={view} />}
+      {route.tab === "arena" && <Arena view={view} />}
     </AppShell>
   );
 }
