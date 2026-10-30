@@ -34,7 +34,7 @@ describe("rivals join a world", () => {
       }));
     expect(cast(a)).toEqual(cast(b));
     expect(rivalsOf(a).map((c) => c.id)).toEqual(["rival-1", "rival-2", "rival-3", "rival-4"]);
-    expect(a.rivals).toEqual({ joinedDay: a.day, archId: "rival-1" });
+    expect(a.rivals).toEqual({ joinedDay: a.day, archId: "rival-1", archPassed: false });
   });
 
   it("draws different archetypes across seeds, each with its own style", () => {
