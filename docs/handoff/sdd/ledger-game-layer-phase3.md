@@ -41,3 +41,5 @@ Task 9: complete (commits 8be60a3..07d5d7f, tests: npm test -> Tests  481 passed
 Task 10: Ruling: rival feedback batches are weekly only (no launch batch) and keep no request row - the request table's product id is a uuid column and rival products have readable ids; the sim refuses a week it already applied, so a restart cannot double a batch - cost if wrong: rivals get no launch-day posts.
 Task 10: Ruling: the training service skips rival companies entirely (their AIs come measured; nothing to store or score) - found by the new tests - cost if wrong: none.
 Task 10: complete (commits e2cb134..eee66fc, tests: npm test -> 488 passed; npm run check clean)
+Task 11: Ruling: chat_threads.version_id becomes text (migration 0004) so a thread can be with a rival's AI - cost if wrong: none.
+Task 11: complete (commits 06d3374..b6cf674, tests: npm test -> 490 passed; npm run check clean)
