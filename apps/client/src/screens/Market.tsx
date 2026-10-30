@@ -1,10 +1,19 @@
-import { GROUP_IDS, PLAN_IDS, REGION_IDS, REGION_NAMES, type WorldView } from "@airace/protocol";
+import {
+  GROUP_IDS,
+  PLAN_IDS,
+  REGION_IDS,
+  REGION_NAMES,
+  type RegionId,
+  type WorldView,
+} from "@airace/protocol";
 import { AnimatePresence, motion } from "motion/react";
+import { useState } from "react";
 import { Button } from "../components/Button.tsx";
 import { Face } from "../components/Face.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { RegionMap, type RegionMarks } from "../components/RegionMap.tsx";
 import { Stat } from "../components/Stat.tsx";
+import { Toggle } from "../components/Toggle.tsx";
 import { formatCount, formatMoney } from "../format.ts";
 import { GROUPS, groupColors } from "../groups.ts";
 import { aboutPeople, caresAbout, groupCustomers, groupSatisfaction } from "../people.ts";
@@ -66,13 +75,38 @@ function Crowd({ people, step, color }: { people: number; step: number; color: s
  * The market (game-layer design §5, national in Phase 1): who could buy, who
  * does, and why. Each group's customers show as a crowd; a card opens its group.
  */
+/** Each region's leader (most customers; ties to the lower id) and its tint by share. */
+function leaders(view: WorldView): {
+  colors: Record<RegionId, string>;
+  values: Record<RegionId, number>;
+} {
+  const colors = {} as Record<RegionId, string>;
+  const shares = {} as Record<RegionId, number>;
+  for (const r of REGION_IDS) {
+    const top = [...view.companies].sort(
+      (a, b) => b.customersByRegion[r] - a.customersByRegion[r] || a.id.localeCompare(b.id),
+    )[0];
+    colors[r] = top?.palette.primary ?? "#888888";
+    const people = view.world.market.regions[r].adoptable;
+    shares[r] = top && people > 0 ? top.customersByRegion[r] / people : 0;
+  }
+  const most = Math.max(...Object.values(shares));
+  const values = Object.fromEntries(
+    REGION_IDS.map((r) => [r, most > 0 ? 0.25 + (0.75 * shares[r]) / most : 0]),
+  ) as Record<RegionId, number>;
+  return { colors, values };
+}
+
 export function Market({ view }: { view: WorldView }) {
   const open = useWindows((s) => s.open);
+  const [byLeader, setByLeader] = useState(false);
   const company = view.me.company;
   const pub = view.companies.find((c) => c.id === company?.id);
   if (!company || !pub) return null;
   const { adoptable, adoption } = view.world.market;
   const yours = company.customers.total;
+  const rivalsHere = view.companies.some((c) => c.rival !== null);
+  const lead = leaders(view);
   const history = [...company.ledger.months.map((m) => m.customersEnd), yours];
   const colors = groupColors(pub.palette);
   const step = crowdStep(Math.max(0, ...GROUP_IDS.map((g) => groupCustomers(view, g))));
@@ -108,9 +142,21 @@ export function Market({ view }: { view: WorldView }) {
           </div>
         </div>
         <div className="mt-5">
+          {rivalsHere && (
+            <Toggle
+              legend="Color the map by"
+              options={[
+                { label: "You", value: "you" },
+                { label: "Leaders", value: "leaders" },
+              ]}
+              value={byLeader ? "leaders" : "you"}
+              onChange={(v) => setByLeader(v === "leaders")}
+            />
+          )}
           <RegionMap
-            label="Your customers by region"
-            values={shareByRegion(view)}
+            label={byLeader ? "Who leads each region" : "Your customers by region"}
+            values={byLeader ? lead.values : shareByRegion(view)}
+            colors={byLeader ? lead.colors : undefined}
             color={pub.palette.primary}
             marks={regionMarks(view)}
             onOpen={(region, el) => open({ kind: "region", region }, el)}

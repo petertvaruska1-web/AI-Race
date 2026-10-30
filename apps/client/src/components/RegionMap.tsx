@@ -22,6 +22,7 @@ export function RegionMap({
   readout,
   marks = {},
   small = false,
+  colors,
 }: {
   label: string;
   values: Record<RegionId, number>;
@@ -30,6 +31,8 @@ export function RegionMap({
   readout?: (region: RegionId) => ReactNode;
   marks?: RegionMarks;
   small?: boolean;
+  /** A color per region (e.g. each region's leader), instead of `color`. */
+  colors?: Partial<Record<RegionId, string>>;
 }) {
   const [hover, setHover] = useState<RegionId | null>(null);
   const at = hover ? REGION_CENTERS[hover] : null;
@@ -60,9 +63,9 @@ export function RegionMap({
                   width={1 - GAP}
                   height={1 - GAP}
                   rx={0.18}
-                  fill={color}
+                  fill={colors?.[r] ?? color}
                   fillOpacity={0.12 + 0.88 * Math.min(1, Math.max(0, values[r]))}
-                  stroke={color}
+                  stroke={colors?.[r] ?? color}
                   strokeOpacity={hover === r ? 0.9 : 0.25}
                   strokeWidth={0.04}
                   className="region-tile"

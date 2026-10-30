@@ -139,6 +139,17 @@ export function ReportWindow({ entry, view, month }: WindowProps & { month: stri
           </div>
         </Section>
       )}
+      {card.ranks && (
+        <Section title="Against your rivals">
+          <ul className="space-y-1 text-sm">
+            {card.ranks.map((r) => (
+              <li key={r.table}>
+                {`${RANK_TABLES[r.table]}: ${r.from === null ? "" : `${ordinal(r.from)} → `}${ordinal(r.to)}`}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
       {card.headline && (
         <Section title="The month's biggest story">
           <p className="player-text rounded-xl border border-border bg-surface/40 px-4 py-3 font-display font-semibold">
@@ -148,4 +159,13 @@ export function ReportWindow({ entry, view, month }: WindowProps & { month: stri
       )}
     </WindowFrame>
   );
+}
+
+const RANK_TABLES = { customers: "Customers", revenue: "Revenue", overall: "Overall" } as const;
+
+/** 1st, 2nd, 3rd, 4th... */
+export function ordinal(n: number): string {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th");
+  return `${n}${suffix}`;
 }

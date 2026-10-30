@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button } from "../components/Button.tsx";
 import { Feed } from "../components/Feed.tsx";
 import { FloatDelta } from "../components/FloatDelta.tsx";
+import { Logo } from "../components/Logo.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { RegionMap } from "../components/RegionMap.tsx";
 import { Stat } from "../components/Stat.tsx";
@@ -192,11 +193,12 @@ export function Company({ view }: { view: WorldView }) {
         </div>
         {blocked && latest && <p className="text-xs text-muted">{blocked}</p>}
         <Lineup view={view} />
+        <ArchStrip view={view} />
       </Panel>
 
       <Panel title="What people are saying" className="lg:order-2 lg:col-span-2 xl:col-span-1">
         <div className="max-h-[70vh] overflow-y-auto pr-1">
-          <Feed items={view.feed} companyId={company.id} />
+          <Feed items={view.feed} companyId={company.id} companies={view.companies} />
         </div>
       </Panel>
       {launching && <LaunchDialog view={view} onClose={() => setLaunching(false)} />}
@@ -310,5 +312,31 @@ function Lineup({ view }: { view: WorldView }) {
         );
       })}
     </ul>
+  );
+}
+
+/** The arch-rival against you, in one line; it opens the Rivals screen. */
+function ArchStrip({ view }: { view: WorldView }) {
+  const arch = view.companies.find((c) => c.rival?.archetype);
+  const me = view.companies.find((c) => c.id === view.me.company?.id);
+  if (!arch || !me) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => go({ screen: "world", worldId: view.world.id, tab: "rivals" })}
+      className="lift mt-4 flex w-full items-center gap-3 rounded-xl border border-border px-3 py-2 text-left text-sm"
+    >
+      <Logo logo={arch.logo} palette={arch.palette} size={28} />
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs text-muted">Your arch-rival</span>
+        <span className="font-semibold" style={{ color: arch.palette.primary }}>
+          {arch.name}
+        </span>
+      </span>
+      <span className="tabular text-right text-xs">
+        {formatCount(arch.customers)} customers
+        <span className="block text-muted">you: {formatCount(me.customers)}</span>
+      </span>
+    </button>
   );
 }

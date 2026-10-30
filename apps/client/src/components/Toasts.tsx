@@ -29,6 +29,18 @@ function newsToast(n: NewsView): Toast {
   };
 }
 
+/** A rival's story that concerns the player; it opens that rival. */
+function rivalToast(n: NewsView): Toast {
+  return {
+    id: n.id,
+    label: n.topic === "trashTalk" ? "Rival" : "Rival launch",
+    headline: n.headline,
+    good: true,
+    burst: false,
+    opens: { kind: "rival", companyId: n.companyId ?? "" },
+  };
+}
+
 const SPARKS = Array.from({ length: 14 }, (_, i) => {
   const a = (i / 14) * Math.PI * 2;
   const d = 34 + 18 * ((i * 7) % 3);
@@ -60,14 +72,22 @@ function Burst({ color }: { color: string }) {
 export function Toasts({ view }: { view: WorldView }) {
   const open = useWindows((s) => s.open);
   const mine = view.me.company?.id;
+  const myName = view.companies.find((c) => c.id === mine)?.name ?? null;
+  const archId = view.companies.find((c) => c.rival?.archetype)?.id ?? null;
   const reports = view.me.company?.reports;
+  const battles = view.me.company?.battles;
   const seen = useRef<Set<string> | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   useEffect(() => {
     const news = view.feed.filter((f): f is NewsView => f.kind === "news");
     const cards = reports ?? [];
-    const keys = [...news.map((n) => n.id), ...cards.map((r) => `report-${r.month}`)];
+    const fought = (battles ?? []).filter((b) => b.status === "done");
+    const keys = [
+      ...news.map((n) => n.id),
+      ...cards.map((r) => `report-${r.month}`),
+      ...fought.map((b) => `battle-${b.id}`),
+    ];
     if (seen.current === null) {
       // What was already there when the world opened is old news.
       seen.current = new Set(keys);
@@ -75,7 +95,33 @@ export function Toasts({ view }: { view: WorldView }) {
     }
     const known = seen.current;
     const fresh: Toast[] = [
-      ...news.filter((n) => !known.has(n.id) && n.companyId === mine).map(newsToast),
+      // Your own news (a battle's comes as its own toast below), the arch-rival's
+      // launches, and trash-talk that names you.
+      ...news
+        .filter(
+          (n) =>
+            !known.has(n.id) &&
+            ((n.companyId === mine && n.topic !== "battle") ||
+              (n.companyId === archId && n.topic === "launch") ||
+              (n.topic === "trashTalk" && myName !== null && n.headline.includes(myName))),
+        )
+        .map((n) => (n.companyId === mine ? newsToast(n) : rivalToast(n))),
+      ...fought
+        .filter((b) => !known.has(`battle-${b.id}`))
+        .map((b) => {
+          const rival = view.companies.find((c) => c.id === b.rivalId)?.name ?? "a rival";
+          const w = (b.rounds ?? []).filter((r) => r.mine.score > r.theirs.score).length;
+          const l = (b.rounds ?? []).filter((r) => r.mine.score < r.theirs.score).length;
+          const verb = b.outcome === "win" ? "won" : b.outcome === "loss" ? "lost" : "drew";
+          return {
+            id: `battle-${b.id}`,
+            label: "Battle",
+            headline: `You ${verb} the ${b.skill} battle against ${rival}, ${w}–${l}`,
+            good: b.outcome !== "loss",
+            burst: b.outcome === "win",
+            opens: { kind: "battle", battleId: b.id } as WindowSpec,
+          };
+        }),
       ...cards
         .filter((r) => !known.has(`report-${r.month}`))
         .map((r) => ({
@@ -89,7 +135,7 @@ export function Toasts({ view }: { view: WorldView }) {
     ];
     for (const k of keys) known.add(k);
     if (fresh.length > 0) setToasts((t) => [...t, ...fresh].slice(-MOST));
-  }, [view.feed, mine, reports]);
+  }, [view.feed, view.companies, mine, myName, archId, reports, battles]);
 
   useEffect(() => {
     if (toasts.length === 0) return;
