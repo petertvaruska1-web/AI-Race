@@ -54,3 +54,11 @@ Task 14: correction - the run above had 1 timing failure in gateway.test (presen
 Task 15: Ruling: the feed filter and the map switch are native radio buttons in a shared Toggle (the linter's accessibility rule) - cost if wrong: none.
 Task 15: Ruling: your own battle stories toast as "You won the coding battle against X, 2-1" (opening the battle) instead of as plain news, so a battle never toasts twice - cost if wrong: none.
 Task 15: complete (commits a47b545..db85427, tests: npm test -> Tests  507 passed (507); npm run check clean)
+Task 16: e2e extended (steps 18-22: four rivals with the arch first, a rival launch in the news, Try it streams a rival's reply, a knowledge battle streams and stamps with ranking points, the report card places the company); build-rivals --quick runs in the e2e setup. First run: steps 1-21 passed; step 22's check matched two "Customers:" lines - tightened (cd26c6c).
+Final review: self-review (the owner prefers no helper agents this milestone), against the plan's Review Focus and the whole range 2f4bd9e..HEAD.
+Final: fixed battle fees booked as marketing showed as "Ad campaigns" on the Money screen (a player who never advertised saw $5,000 there) - computers.test 'shows income by region and the new cost lines' RED->GREEN with the line renamed "Ads and battles", suite 507/507 (cd26c6c).
+Final: minor (deferred): the Money screen's marketing explanation names the $5,000 battle fee as text; it would go stale if the fee is retuned.
+Final: minor (deferred): rival AIs get no launch-day feedback burst (weekly batches only), so their first posts come up to a week after launch.
+Final: minor (deferred): a table's first-ever leader makes no #1 story, so a skill nobody had measured before gets no headline when the player first leads it.
+Final: minor (deferred): the quick rival build adds about half a minute to the e2e setup.
+Task 16: e2e passed twice (2.1 min each) after the fix. Remaining: build the real pack on the GPU (owner's time) and play it in the browser.

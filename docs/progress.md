@@ -2,6 +2,12 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-10-30 — Game layer Phase 3: "Rivals" (built; real rival AIs not yet trained)
+- **What a player can now do:** meet an arch-rival (a tech giant, a cheeky upstart or a mysterious lab) and three rivals in every world; watch them launch real AIs over the game year, price, advertise and build data centers by their style, and trash-talk in the news (labelled game commentary); try any rival AI on sale in the Playground; battle a rival AI in knowledge, coding, instructions, patterns or creativity, with both answers streaming side by side, for ranking points; follow league tables (customers, revenue as places only, overall, each skill, ranking points); see the regions' leaders on the map and rank changes on report cards.
+- **Built** (`docs/superpowers/plans/2026-10-29-game-layer-phase3.md`, 16 tasks): `airace-ml build-rivals` (8 lineages, 3 versions each, resumable), the worker's battle job, sim-4 (rivals, league, battles, trash-talk; sim-3 worlds upgrade, so the Phase 2 world carries over), the rival and battle services, rival chats, the Rivals and Arena screens. Every ruling: `docs/handoff/sdd/ledger-game-layer-phase3.md`.
+- **Verified:** TypeScript 507 tests, ML 1632, checks clean; the end-to-end game (now with rivals, Try it and a battle, on tiny rivals) passed twice.
+- **Next:** build the real rival AIs on the GPU (about 1.5 hours, when the owner isn't playing), play it in the browser, then report; Phase 4 on the owner's go.
+
 ## 2026-10-29 — Phase 3 and Phase 4 planned (nothing built yet)
 - **Owner request:** plan Phases 3 and 4 without starting them, with instructions for a later session.
 - **Plans:** `docs/superpowers/plans/2026-10-29-game-layer-phase3.md` ("Rivals", 16 tasks: the rival pack built once on the GPU, rivals as companies without an owner, releases and business habits, league tables, battles with ranking points, trash-talk, the rival and battle services, the Rivals and Arena screens) and `docs/superpowers/plans/2026-10-29-game-layer-phase4.md` ("Surprises and goals", 15 tasks: milestone signals and discoveries from evals, interview prompt cards and scoring, the notebook as a ninth share, milestones and the trophy shelf, interviews, the goal and victory screen, the data-quality scandal deferred from Phase 2).
