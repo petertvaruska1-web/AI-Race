@@ -62,3 +62,7 @@ Final: minor (deferred): rival AIs get no launch-day feedback burst (weekly batc
 Final: minor (deferred): a table's first-ever leader makes no #1 story, so a skill nobody had measured before gets no headline when the player first leads it.
 Final: minor (deferred): the quick rival build adds about half a minute to the e2e setup.
 Task 16: e2e passed twice (2.1 min each) after the fix. Remaining: build the real pack on the GPU (owner's time) and play it in the browser.
+Task 16: real pack built on the RTX 3050 in about 60 minutes (24 versions; creativity measured; specialist-stories leads creativity at 40; premium-a grows 50 -> 60 overall). Played in the browser on the GPU with a fresh test world ("Rival check", guest "Claude Check"): four rivals joined, three launched within the first weeks (arch-rival launch toast shown), a knowledge battle against the arch-rival streamed and ended in a 0-0 draw (both early AIs got the five trivia questions wrong), Try it with Ridge Logic's Muse streamed a real short story.
+Final: minor (deferred): possessives of names ending in s read "Sable Dynamics's"; "Sable Dynamics'" would read better.
+Final: minor (deferred): early knowledge battles between small AIs often end 0-0 (neither gets trivia right); coding or patterns battles may feel more decisive early on - watch how it plays.
+Task 16: complete (commits 941919b..HEAD, tests: npm test -> 507 passed; ML 1632 passed; e2e passed twice; npm run check clean)

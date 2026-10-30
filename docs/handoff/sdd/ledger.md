@@ -445,3 +445,5 @@ NEXT STEP ON RESUME (supersedes the lines above): on the owner's go, execute Pha
 
 Game layer Phase 3 built 2026-10-30 (commits 941919b..HEAD); full record docs/handoff/sdd/ledger-game-layer-phase3.md. e2e passed twice; self-review fixed one finding.
 NEXT STEP ON RESUME (supersedes the lines above): build the real rival pack on the GPU at a time the owner agrees (cd ml && python -m uv run airace-ml build-rivals, with a Monitor heartbeat), restart the owner's game so the server loads it, play it in the browser (rivals join the upgraded Phase 2 world), then report Phase 3; Phase 4 on the owner's go.
+Phase 3 complete 2026-10-30: real rival pack built (about 60 min) and played in the browser.
+NEXT STEP ON RESUME (supersedes the lines above): Phase 3 is reported to the owner; on their go, execute Phase 4 inline from docs/superpowers/plans/2026-10-29-game-layer-phase4.md (README section 4).
