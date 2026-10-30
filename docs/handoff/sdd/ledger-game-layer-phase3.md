@@ -24,3 +24,5 @@ Task 4: Ruling: the property tests' exploration guard moved from seed 1 to seed 
 Task 4: complete (commits b7476df..c5337fb, tests: npm test -> 448 passed; npm run check clean)
 Task 5: Ruling: rivals set their style's prices when they join (not on their first launch day) - prices only matter once plans open, and no extra flag is needed - cost if wrong: none.
 Task 5: complete (commits abffaa6..8dea905, tests: npm test -> 455 passed; npm run check clean)
+Task 6: Ruling: a table's first leader is not news (only a change of leader is), and at most one ranking story runs a day - otherwise the first launch in a world with rivals made ten #1 stories at once (C13: rare and meaningful) - cost if wrong: fewer ranking headlines.
+Task 6: complete (commits fbc051b..9f754d3, tests: npm test -> 461 passed; npm run check clean)
