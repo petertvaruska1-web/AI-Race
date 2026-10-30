@@ -11,3 +11,6 @@ Pre-flight:
 - T10 -> T11/T12: RivalService.modelUrl(packKey): consistent.
 Task 1: Ruling: battle challenges also skip any prompt the benchmark, customer pools or story prompts ask (the generators can repeat a prompt across streams) - the plan's 'fresh, never from the scored suite' - cost if wrong: a slightly smaller pool.
 Task 1: complete (commits 2f4bd9e..941919b, tests: ml pytest -> 1623 passed, 5 skipped; ruff clean)
+Task 2: Ruling: a quick pack scores 40 items per skill, not 8 - with 8 no tag reaches MIN_TAG_ITEMS (10), so quick packs had empty breakdowns, which Phase 4's discoveries compare against - cost if wrong: a quick build takes about 25 s instead of 15 s.
+Task 2: Ruling: training reuse uses the gate's GateRuns (finished runs reused, unfinished resumed) and measurements are cached per training token - the plan's 'resumable' - cost if wrong: none.
+Task 2: complete (commits 921958f..9ab08f6, tests: ml pytest -> 1627 passed, 5 skipped; slow quick build passed; vitest protocol 58 passed; npm run check clean)
