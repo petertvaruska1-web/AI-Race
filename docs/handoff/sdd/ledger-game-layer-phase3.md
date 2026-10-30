@@ -51,3 +51,6 @@ Task 14: Ruling: a battle records pointsChange (the player's ranking points won 
 Task 14: Ruling: the battle-result toast moves to Task 15 with the other new toasts - cost if wrong: none.
 Task 14: complete (commits 86d55fc..f8093c3, tests: npm test -> Tests  1 failed | 502 passed (503); npm run check clean)
 Task 14: correction - the run above had 1 timing failure in gateway.test (presence across a quick reconnect) while the owner's game ran on the same PC; it passed 3 times alone and the full rerun gave 503 passed - recorded as a timing flake, not a defect.
+Task 15: Ruling: the feed filter and the map switch are native radio buttons in a shared Toggle (the linter's accessibility rule) - cost if wrong: none.
+Task 15: Ruling: your own battle stories toast as "You won the coding battle against X, 2-1" (opening the battle) instead of as plain news, so a battle never toasts twice - cost if wrong: none.
+Task 15: complete (commits a47b545..db85427, tests: npm test -> Tests  507 passed (507); npm run check clean)
