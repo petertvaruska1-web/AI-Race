@@ -450,12 +450,15 @@ def test_a_missing_model_folder_is_named(command, tiny_data_root, tmp_path):
     assert err.startswith("error: ") and str(missing) in err and "airace-ml train" in err
 
 
-@pytest.mark.parametrize("command", ["train", "chat", "bench", "fingerprint", "build-judge"])
+@pytest.mark.parametrize(
+    "command", ["train", "chat", "bench", "fingerprint", "build-judge", "build-rivals"]
+)
 def test_a_missing_tokenizer_is_named_and_exit_2(command, trained, tmp_path):
     empty = tmp_path / "empty-root"
     extra = {
         "train": ["--config", str(trained.config), "--out", str(tmp_path / "o")],
         "build-judge": [],
+        "build-rivals": [],
     }.get(command, ["--model", str(trained.dir)])
     code, _, err = _run([command, *extra, *_common(empty)])
     assert code == 2
@@ -1433,12 +1436,15 @@ def test_a_novelty_folder_that_cannot_be_written_is_a_plain_error(data_root_copy
     assert "could not read or write files" in err and str(novelty.parent) in err
 
 
-@pytest.mark.parametrize("command", ["train", "chat", "bench", "fingerprint", "build-judge"])
+@pytest.mark.parametrize(
+    "command", ["train", "chat", "bench", "fingerprint", "build-judge", "build-rivals"]
+)
 def test_a_damaged_tokenizer_file_is_a_plain_error(command, trained, data_root_copy, tmp_path):
     _cut_in_half(tokenizer_path(data_root_copy))
     extra = {
         "train": ["--config", str(trained.config), "--out", str(tmp_path / "o")],
         "build-judge": [],
+        "build-rivals": [],
     }.get(command, ["--model", str(trained.dir)])
     code, _, err = _run([command, *extra, *_common(data_root_copy)])
     assert code == 2

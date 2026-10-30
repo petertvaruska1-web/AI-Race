@@ -30,3 +30,7 @@ def novelty_path(root: Path | None = None) -> Path:
 
 def judge_dir(root: Path | None = None) -> Path:
     return (root or data_root()) / "judge" / "v1"
+
+
+def rivals_dir(root: Path | None = None) -> Path:
+    return (root or data_root()) / "rivals" / "v1"

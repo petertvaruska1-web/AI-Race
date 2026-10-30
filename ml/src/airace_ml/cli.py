@@ -6,6 +6,7 @@
     airace-ml fingerprint --model DIR [--k N] [--seed N]
     airace-ml build-novelty-index
     airace-ml build-judge [--budget-tokens N]
+    airace-ml build-rivals [--out DIR] [--quick]
     airace-ml gate --out DIR [--seeds 1,2,3] [--cpu-speed] [--quick]
 
 Every command also takes ``--data-root PATH`` (default: ``AIRACE_DATA`` or ``<repo>/data``) and
@@ -61,8 +62,9 @@ from airace_ml.experiments.gate import GateOutcome, GateSetupError, run_gate
 from airace_ml.experiments.report import write_gate_report
 from airace_ml.infer.lm import TorchLM
 from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME, load_checkpoint
-from airace_ml.paths import data_root, judge_dir, novelty_path, tokenizer_path
+from airace_ml.paths import data_root, judge_dir, novelty_path, rivals_dir, tokenizer_path
 from airace_ml.personality.fingerprint import TRAITS, measure_fingerprint
+from airace_ml.rivals.build import build_rival_pack
 from airace_ml.tokenizer import Role, Tok
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.train.events import (
@@ -276,6 +278,23 @@ def _parser() -> argparse.ArgumentParser:
         metavar="N",
         help="train on N tokens instead of the full recipe (for a quick test: bench and the gate "
         "do not accept such a judge)",
+    )
+
+    rivals = add(
+        "build-rivals",
+        _cmd_build_rivals,
+        "train, measure and pre-answer the rival AIs the game's rivals sell (about 75-90 minutes "
+        "on an RTX 3050)",
+        "Run the same command again: finished versions are reused and an unfinished one carries "
+        "on from its last saved point.",
+    )
+    rivals.add_argument(
+        "--out", type=Path, help="where to write the pack (default: <data root>/rivals/v1)"
+    )
+    rivals.add_argument(
+        "--quick",
+        action="store_true",
+        help="tiny rivals in minutes, for checking the setup (the game warns about such a pack)",
     )
 
     gate = add(
@@ -1002,6 +1021,29 @@ def _cmd_build_judge(args: argparse.Namespace) -> int:
     except ValueError as e:  # a corpus cut short, or no text to calibrate the judge on
         raise _damaged_data(root, e) from e
     print(f"\nreference judge ready in {path}", flush=True)
+    return EXIT_OK
+
+
+def _cmd_build_rivals(args: argparse.Namespace) -> int:
+    device = _device(args)
+    if not args.quick:
+        _require_gpu_unless_cpu_asked(args, device, "building the rival AIs")
+    root = _data_root(args)
+    _require_tokenizer(root)
+    _announce_device(args, device)
+    out = args.out if args.out is not None else rivals_dir(root)
+    _require_folder_path(out, "--out")
+    if not args.quick:
+        print("Building 8 rival lineages, 24 versions: about 75-90 minutes on an RTX 3050.")
+    try:
+        index = build_rival_pack(root, out, device, quick=args.quick, on_status=print)
+    except FileNotFoundError as e:
+        raise _UsageError(_missing(e)) from e
+    except OSError as e:
+        raise _files_problem(e) from e
+    except ValueError as e:
+        raise _damaged_data(root, e) from e
+    print(f"\nrival pack ready in {index}", flush=True)
     return EXIT_OK
 
 

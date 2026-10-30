@@ -1,0 +1,625 @@
+{
+  "version": "rivals-v1",
+  "dataIdentity": "fixture-data-identity",
+  "tokenizer": "tok-v1",
+  "suite": "bench-v1",
+  "quick": true,
+  "lineages": [
+    {
+      "id": "premium-a",
+      "style": "premium",
+      "focus": "businesses",
+      "versions": [
+        {
+          "key": "premium-a-v1",
+          "nLayer": 4,
+          "dModel": 128,
+          "ctxLen": 256,
+          "trainedTokens": 12582912,
+          "scores": {
+            "language": 20,
+            "reasoning": 31,
+            "pattern": 42,
+            "knowledge": 53,
+            "coding": 64,
+            "creativity": null,
+            "consistency": 36,
+            "instruction": 47
+          },
+          "overall": 41.9,
+          "traits": {
+            "verbosity": 0,
+            "confidence": 0.14285714285714285,
+            "inventiveness": 0.2857142857142857,
+            "steadiness": 0.42857142857142855,
+            "precision": 0.5714285714285714,
+            "boldness": 0.7142857142857143,
+            "slip_rate": 0.8571428571428571,
+            "register": 0,
+            "warmth": 0.14285714285714285,
+            "repetitiveness": 0.2857142857142857
+          },
+          "personalityWords": [],
+          "breakdown": {
+            "knowledge/topic:animals": [40, 12],
+            "coding/fmt:function": [20, 10]
+          }
+        },
+        {
+          "key": "premium-a-v2",
+          "nLayer": 6,
+          "dModel": 192,
+          "ctxLen": 256,
+          "trainedTokens": 25165824,
+          "scores": {
+            "language": 33,
+            "reasoning": 44,
+            "pattern": 55,
+            "knowledge": 66,
+            "coding": 27,
+            "creativity": null,
+            "consistency": 49,
+            "instruction": 60
+          },
+          "overall": 47.7,
+          "traits": {
+            "verbosity": 0.14285714285714285,
+            "confidence": 0.2857142857142857,
+            "inventiveness": 0.42857142857142855,
+            "steadiness": 0.5714285714285714,
+            "precision": 0.7142857142857143,
+            "boldness": 0.8571428571428571,
+            "slip_rate": 0,
+            "register": 0.14285714285714285,
+            "warmth": 0.2857142857142857,
+            "repetitiveness": 0.42857142857142855
+          },
+          "personalityWords": ["talkative"],
+          "breakdown": {
+            "knowledge/topic:animals": [50, 12],
+            "coding/fmt:function": [20, 10]
+          }
+        }
+      ]
+    },
+    {
+      "id": "premium-b",
+      "style": "premium",
+      "focus": "researchers",
+      "versions": [
+        {
+          "key": "premium-b-v1",
+          "nLayer": 4,
+          "dModel": 128,
+          "ctxLen": 256,
+          "trainedTokens": 12582912,
+          "scores": {
+            "language": 27,
+            "reasoning": 38,
+            "pattern": 49,
+            "knowledge": 60,
+            "coding": 21,
+            "creativity": null,
+            "consistency": 43,
+            "instruction": 54
+          },
+          "overall": 41.7,
+          "traits": {
+            "verbosity": 0.14285714285714285,
+            "confidence": 0.2857142857142857,
+            "inventiveness": 0.42857142857142855,
+            "steadiness": 0.5714285714285714,
+            "precision": 0.7142857142857143,
+            "boldness": 0.8571428571428571,
+            "slip_rate": 0,
+            "register": 0.14285714285714285,
+            "warmth": 0.2857142857142857,
+            "repetitiveness": 0.42857142857142855
+          },
+          "personalityWords": [],
+          "breakdown": {
+            "knowledge/topic:animals": [41, 12],
+            "coding/fmt:function": [23, 10]
+          }
+        },
+        {
+          "key": "premium-b-v2",
+          "nLayer": 6,
+          "dModel": 192,
+          "ctxLen": 256,
+          "trainedTokens": 25165824,
+          "scores": {
+            "language": 40,
+            "reasoning": 51,
+            "pattern": 62,
+            "knowledge": 23,
+            "coding": 34,
+            "creativity": null,
+            "consistency": 56,
+            "instruction": 67
+          },
+          "overall": 47.6,
+          "traits": {
+            "verbosity": 0.2857142857142857,
+            "confidence": 0.42857142857142855,
+            "inventiveness": 0.5714285714285714,
+            "steadiness": 0.7142857142857143,
+            "precision": 0.8571428571428571,
+            "boldness": 0,
+            "slip_rate": 0.14285714285714285,
+            "register": 0.2857142857142857,
+            "warmth": 0.42857142857142855,
+            "repetitiveness": 0.5714285714285714
+          },
+          "personalityWords": ["talkative"],
+          "breakdown": {
+            "knowledge/topic:animals": [51, 12],
+            "coding/fmt:function": [23, 10]
+          }
+        }
+      ]
+    },
+    {
+      "id": "budget-a",
+      "style": "budget",
+      "focus": "everyday",
+      "versions": [
+        {
+          "key": "budget-a-v1",
+          "nLayer": 4,
+          "dModel": 128,
+          "ctxLen": 256,
+          "trainedTokens": 12582912,
+          "scores": {
+            "language": 34,
+            "reasoning": 45,
+            "pattern": 56,
+            "knowledge": 67,
+            "coding": 28,
+            "creativity": null,
+            "consistency": 50,
+            "instruction": 61
+          },
+          "overall": 48.7,
+          "traits": {
+            "verbosity": 0.2857142857142857,
+            "confidence": 0.42857142857142855,
+            "inventiveness": 0.5714285714285714,
+            "steadiness": 0.7142857142857143,
+            "precision": 0.8571428571428571,
+            "boldness": 0,
+            "slip_rate": 0.14285714285714285,
+            "register": 0.2857142857142857,
+            "warmth": 0.42857142857142855,
+            "repetitiveness": 0.5714285714285714
+          },
+          "personalityWords": [],
+          "breakdown": {
+            "knowledge/topic:animals": [42, 12],
+            "coding/fmt:function": [26, 10]
+          }
+        },
+        {
+          "key": "budget-a-v2",
+          "nLayer": 6,
+          "dModel": 192,
+          "ctxLen": 256,
+          "trainedTokens": 25165824,
+          "scores": {
+            "language": 47,
+            "reasoning": 58,
+            "pattern": 69,
+            "knowledge": 30,
+            "coding": 41,
+            "creativity": null,
+            "consistency": 63,
+            "instruction": 24
+          },
+          "overall": 47.4,
+          "traits": {
+            "verbosity": 0.42857142857142855,
+            "confidence": 0.5714285714285714,
+            "inventiveness": 0.7142857142857143,
+            "steadiness": 0.8571428571428571,
+            "precision": 0,
+            "boldness": 0.14285714285714285,
+            "slip_rate": 0.2857142857142857,
+            "register": 0.42857142857142855,
+            "warmth": 0.5714285714285714,
+            "repetitiveness": 0.7142857142857143
+          },
+          "personalityWords": ["talkative"],
+          "breakdown": {
+            "knowledge/topic:animals": [52, 12],
+            "coding/fmt:function": [26, 10]
+          }
+        }
+      ]
+    },
+    {
+      "id": "budget-b",
+      "style": "budget",
+      "focus": "students",
+      "versions": [
+        {
+          "key": "budget-b-v1",
+          "nLayer": 4,
+          "dModel": 128,
+          "ctxLen": 256,
+          "trainedTokens": 12582912,
+          "scores": {
+            "language": 41,
+            "reasoning": 52,
+            "pattern": 63,
+            "knowledge": 24,
+            "coding": 35,
+            "creativity": null,
+            "consistency": 57,
+            "instruction": 68
+          },
+          "overall": 48.6,
+          "traits": {
+            "verbosity": 0.42857142857142855,
+            "confidence": 0.5714285714285714,
+            "inventiveness": 0.7142857142857143,
+            "steadiness": 0.8571428571428571,
+            "precision": 0,
+            "boldness": 0.14285714285714285,
+            "slip_rate": 0.2857142857142857,
+            "register": 0.42857142857142855,
+            "warmth": 0.5714285714285714,
+            "repetitiveness": 0.7142857142857143
+          },
+          "personalityWords": [],
+          "breakdown": {
+            "knowledge/topic:animals": [43, 12],
+            "coding/fmt:function": [29, 10]
+          }
+        },
+        {
+          "key": "budget-b-v2",
+          "nLayer": 6,
+          "dModel": 192,
+          "ctxLen": 256,
+          "trainedTokens": 25165824,
+          "scores": {
+            "language": 54,
+            "reasoning": 65,
+            "pattern": 26,
+            "knowledge": 37,
+            "coding": 48,
+            "creativity": null,
+            "consistency": 20,
+            "instruction": 31
+          },
+          "overall": 40.1,
+          "traits": {
+            "verbosity": 0.5714285714285714,
+            "confidence": 0.7142857142857143,
+            "inventiveness": 0.8571428571428571,
+            "steadiness": 0,
+            "precision": 0.14285714285714285,
+            "boldness": 0.2857142857142857,
+            "slip_rate": 0.42857142857142855,
+            "register": 0.5714285714285714,
+            "warmth": 0.7142857142857143,
+            "repetitiveness": 0.8571428571428571
+          },
+          "personalityWords": ["talkative"],
+          "breakdown": {
+            "knowledge/topic:animals": [53, 12],
+            "coding/fmt:function": [29, 10]
+          }
+        }
+      ]
+    },
+    {
+      "id": "specialist-code",
+      "style": "specialist",
+      "focus": "developers",
+      "versions": [
+        {
+          "key": "specialist-code-v1",
+          "nLayer": 4,
+          "dModel": 128,
+          "ctxLen": 256,
+          "trainedTokens": 12582912,
+          "scores": {
+            "language": 48,
+            "reasoning": 59,
+            "pattern": 20,
+            "knowledge": 31,
+            "coding": 42,
+            "creativity": null,
+            "consistency": 64,
+            "instruction": 25
+          },
+          "overall": 41.3,
+          "traits": {
+            "verbosity": 0.5714285714285714,
+            "confidence": 0.7142857142857143,
+            "inventiveness": 0.8571428571428571,
+            "steadiness": 0,
+            "precision": 0.14285714285714285,
+            "boldness": 0.2857142857142857,
+            "slip_rate": 0.42857142857142855,
+            "register": 0.5714285714285714,
+            "warmth": 0.7142857142857143,
+            "repetitiveness": 0.8571428571428571
+          },
+          "personalityWords": [],
+          "breakdown": {
+            "knowledge/topic:animals": [44, 12],
+            "coding/fmt:function": [32, 10]
+          }
+        },
+        {
+          "key": "specialist-code-v2",
+          "nLayer": 6,
+          "dModel": 192,
+          "ctxLen": 256,
+          "trainedTokens": 25165824,
+          "scores": {
+            "language": 61,
+            "reasoning": 22,
+            "pattern": 33,
+            "knowledge": 44,
+            "coding": 55,
+            "creativity": null,
+            "consistency": 27,
+            "instruction": 38
+          },
+          "overall": 40,
+          "traits": {
+            "verbosity": 0.7142857142857143,
+            "confidence": 0.8571428571428571,
+            "inventiveness": 0,
+            "steadiness": 0.14285714285714285,
+            "precision": 0.2857142857142857,
+            "boldness": 0.42857142857142855,
+            "slip_rate": 0.5714285714285714,
+            "register": 0.7142857142857143,
+            "warmth": 0.8571428571428571,
+            "repetitiveness": 0
+          },
+          "personalityWords": ["talkative"],
+          "breakdown": {
+            "knowledge/topic:animals": [54, 12],
+            "coding/fmt:function": [32, 10]
+          }
+        }
+      ]
+    },
+    {
+      "id": "specialist-stories",
+      "style": "specialist",
+      "focus": "creators",
+      "versions": [
+        {
+          "key": "specialist-stories-v1",
+          "nLayer": 4,
+          "dModel": 128,
+          "ctxLen": 256,
+          "trainedTokens": 12582912,
+          "scores": {
+            "language": 55,
+            "reasoning": 66,
+            "pattern": 27,
+            "knowledge": 38,
+            "coding": 49,
+            "creativity": null,
+            "consistency": 21,
+            "instruction": 32
+          },
+          "overall": 41.1,
+          "traits": {
+            "verbosity": 0.7142857142857143,
+            "confidence": 0.8571428571428571,
+            "inventiveness": 0,
+            "steadiness": 0.14285714285714285,
+            "precision": 0.2857142857142857,
+            "boldness": 0.42857142857142855,
+            "slip_rate": 0.5714285714285714,
+            "register": 0.7142857142857143,
+            "warmth": 0.8571428571428571,
+            "repetitiveness": 0
+          },
+          "personalityWords": [],
+          "breakdown": {
+            "knowledge/topic:animals": [45, 12],
+            "coding/fmt:function": [35, 10]
+          }
+        },
+        {
+          "key": "specialist-stories-v2",
+          "nLayer": 6,
+          "dModel": 192,
+          "ctxLen": 256,
+          "trainedTokens": 25165824,
+          "scores": {
+            "language": 68,
+            "reasoning": 29,
+            "pattern": 40,
+            "knowledge": 51,
+            "coding": 62,
+            "creativity": null,
+            "consistency": 34,
+            "instruction": 45
+          },
+          "overall": 47,
+          "traits": {
+            "verbosity": 0.8571428571428571,
+            "confidence": 0,
+            "inventiveness": 0.14285714285714285,
+            "steadiness": 0.2857142857142857,
+            "precision": 0.42857142857142855,
+            "boldness": 0.5714285714285714,
+            "slip_rate": 0.7142857142857143,
+            "register": 0.8571428571428571,
+            "warmth": 0,
+            "repetitiveness": 0.14285714285714285
+          },
+          "personalityWords": ["talkative"],
+          "breakdown": {
+            "knowledge/topic:animals": [55, 12],
+            "coding/fmt:function": [35, 10]
+          }
+        }
+      ]
+    },
+    {
+      "id": "consumer-a",
+      "style": "consumer",
+      "focus": "everyday",
+      "versions": [
+        {
+          "key": "consumer-a-v1",
+          "nLayer": 4,
+          "dModel": 128,
+          "ctxLen": 256,
+          "trainedTokens": 12582912,
+          "scores": {
+            "language": 62,
+            "reasoning": 23,
+            "pattern": 34,
+            "knowledge": 45,
+            "coding": 56,
+            "creativity": null,
+            "consistency": 28,
+            "instruction": 39
+          },
+          "overall": 41,
+          "traits": {
+            "verbosity": 0.8571428571428571,
+            "confidence": 0,
+            "inventiveness": 0.14285714285714285,
+            "steadiness": 0.2857142857142857,
+            "precision": 0.42857142857142855,
+            "boldness": 0.5714285714285714,
+            "slip_rate": 0.7142857142857143,
+            "register": 0.8571428571428571,
+            "warmth": 0,
+            "repetitiveness": 0.14285714285714285
+          },
+          "personalityWords": [],
+          "breakdown": {
+            "knowledge/topic:animals": [46, 12],
+            "coding/fmt:function": [38, 10]
+          }
+        },
+        {
+          "key": "consumer-a-v2",
+          "nLayer": 6,
+          "dModel": 192,
+          "ctxLen": 256,
+          "trainedTokens": 25165824,
+          "scores": {
+            "language": 25,
+            "reasoning": 36,
+            "pattern": 47,
+            "knowledge": 58,
+            "coding": 69,
+            "creativity": null,
+            "consistency": 41,
+            "instruction": 52
+          },
+          "overall": 46.9,
+          "traits": {
+            "verbosity": 0,
+            "confidence": 0.14285714285714285,
+            "inventiveness": 0.2857142857142857,
+            "steadiness": 0.42857142857142855,
+            "precision": 0.5714285714285714,
+            "boldness": 0.7142857142857143,
+            "slip_rate": 0.8571428571428571,
+            "register": 0,
+            "warmth": 0.14285714285714285,
+            "repetitiveness": 0.2857142857142857
+          },
+          "personalityWords": ["talkative"],
+          "breakdown": {
+            "knowledge/topic:animals": [56, 12],
+            "coding/fmt:function": [38, 10]
+          }
+        }
+      ]
+    },
+    {
+      "id": "consumer-b",
+      "style": "consumer",
+      "focus": "creators",
+      "versions": [
+        {
+          "key": "consumer-b-v1",
+          "nLayer": 4,
+          "dModel": 128,
+          "ctxLen": 256,
+          "trainedTokens": 12582912,
+          "scores": {
+            "language": 69,
+            "reasoning": 30,
+            "pattern": 41,
+            "knowledge": 52,
+            "coding": 63,
+            "creativity": null,
+            "consistency": 35,
+            "instruction": 46
+          },
+          "overall": 48,
+          "traits": {
+            "verbosity": 0,
+            "confidence": 0.14285714285714285,
+            "inventiveness": 0.2857142857142857,
+            "steadiness": 0.42857142857142855,
+            "precision": 0.5714285714285714,
+            "boldness": 0.7142857142857143,
+            "slip_rate": 0.8571428571428571,
+            "register": 0,
+            "warmth": 0.14285714285714285,
+            "repetitiveness": 0.2857142857142857
+          },
+          "personalityWords": [],
+          "breakdown": {
+            "knowledge/topic:animals": [47, 12],
+            "coding/fmt:function": [41, 10]
+          }
+        },
+        {
+          "key": "consumer-b-v2",
+          "nLayer": 6,
+          "dModel": 192,
+          "ctxLen": 256,
+          "trainedTokens": 25165824,
+          "scores": {
+            "language": 32,
+            "reasoning": 43,
+            "pattern": 54,
+            "knowledge": 65,
+            "coding": 26,
+            "creativity": null,
+            "consistency": 48,
+            "instruction": 59
+          },
+          "overall": 46.7,
+          "traits": {
+            "verbosity": 0.14285714285714285,
+            "confidence": 0.2857142857142857,
+            "inventiveness": 0.42857142857142855,
+            "steadiness": 0.5714285714285714,
+            "precision": 0.7142857142857143,
+            "boldness": 0.8571428571428571,
+            "slip_rate": 0,
+            "register": 0.14285714285714285,
+            "warmth": 0.2857142857142857,
+            "repetitiveness": 0.42857142857142855
+          },
+          "personalityWords": ["talkative"],
+          "breakdown": {
+            "knowledge/topic:animals": [57, 12],
+            "coding/fmt:function": [41, 10]
+          }
+        }
+      ]
+    }
+  ]
+}
