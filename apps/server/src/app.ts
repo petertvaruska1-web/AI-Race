@@ -13,6 +13,7 @@ import { JobBroker } from "./jobs/broker.ts";
 import { registerWorkerRoutes } from "./jobs/workerGateway.ts";
 import { createLogger, type Logger } from "./log.ts";
 import { Gateway } from "./realtime/gateway.ts";
+import { RivalService } from "./rivals/service.ts";
 import { TrainingService } from "./training/service.ts";
 import { WorldRegistry } from "./worlds/registry.ts";
 import { registerWorldRoutes } from "./worlds/routes.ts";
@@ -28,6 +29,7 @@ export type AppContext = {
   training: TrainingService;
   chat: ChatService;
   feedback: FeedbackService;
+  rivals: RivalService;
   blobs: BlobStore;
   /** Null until the training data is installed. */
   catalog: Catalog | null;
@@ -53,6 +55,7 @@ export async function buildApp(
     training: undefined as unknown as TrainingService,
     chat: undefined as unknown as ChatService,
     feedback: undefined as unknown as FeedbackService,
+    rivals: undefined as unknown as RivalService,
     blobs: new LocalFsBlobStore(opts.blobDir),
     catalog: loadCatalog(opts.catalogPath, log),
     onClose: (fn) => {
@@ -67,6 +70,7 @@ export async function buildApp(
   ctx.onClose(() => ctx.broker.close());
   ctx.training = new TrainingService(ctx);
   ctx.onClose(() => ctx.training.close());
+  ctx.rivals = new RivalService(ctx);
   ctx.chat = new ChatService(ctx);
   ctx.feedback = new FeedbackService(ctx);
   ctx.onClose(() => ctx.feedback.close());

@@ -106,7 +106,8 @@ export class TrainingService {
     const s = actor.state();
     for (const companyId of Object.keys(s.companies).sort()) {
       const company = s.companies[companyId];
-      if (!company) continue;
+      // A rival's AIs come measured from the rival pack: nothing to train, store or score here.
+      if (!company || company.rival) continue;
       for (const run of Object.values(company.runs)) {
         if (run.status === "training" || run.status === "finalizing") {
           this.track(s.worldId, run);
@@ -343,8 +344,11 @@ export class TrainingService {
       .where(
         and(eq(schema.modelVersions.worldId, p.worldId), ne(schema.modelVersions.id, p.versionId)),
       );
+    const actor = ctx.worlds.peek(p.worldId) ?? (await ctx.worlds.get(p.worldId));
     const population = [
       ...others.map((o) => o.fingerprint).filter((f): f is Record<string, number> => !!f),
+      // Rivals' AIs are part of the world too (game-layer design §9).
+      ...ctx.rivals.traitsIn(actor.state()),
       ...(ctx.catalog?.referenceTraits ?? []),
     ];
     return {

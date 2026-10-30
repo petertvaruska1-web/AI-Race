@@ -38,6 +38,7 @@ const { app, close } = await buildApp({
   dbDir: join(serverDir, "db"),
   blobDir: join(serverDir, "blobs"),
   catalogPath: existsSync(catalog) ? catalog : null,
+  rivalsDir: join(data, "rivals", "v1"),
   secret: secretFrom("AIRACE_SECRET", join(serverDir, "secret")),
   // The local worker reads the same file, so `npm run dev` needs no setup.
   workerToken: secretFrom("AIRACE_WORKER_TOKEN", join(serverDir, "worker-token")),

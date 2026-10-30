@@ -63,6 +63,11 @@ export class FeedbackService {
       for (const productId of Object.keys(company.products).sort()) {
         const product = company.products[productId];
         if (product?.status !== "live") continue;
+        const packKey = company.rival ? company.versions[product.versionId]?.packKey : null;
+        if (packKey) {
+          await this.answerFromPack(actor, productId, packKey, week);
+          continue;
+        }
         for (const key of ["launch", week])
           await this.request(s, productId, product.versionId, key);
       }
@@ -98,6 +103,31 @@ export class FeedbackService {
       .where(
         and(eq(schema.feedbackRequests.productId, productId), eq(schema.feedbackRequests.key, key)),
       );
+  }
+
+  /**
+   * A rival's weekly batch comes from the replies its AI wrote when the pack was
+   * built: no job and no request row (the sim refuses a week it already has).
+   */
+  private async answerFromPack(
+    actor: WorldActor,
+    productId: string,
+    packKey: string,
+    key: string,
+  ): Promise<void> {
+    const memo = `${productId}|${key}`;
+    if (this.known.has(memo)) return;
+    this.known.add(memo);
+    const s = actor.state();
+    const perGroup = getBalance(s.balance).economy.feedback.perGroup;
+    const results = this.ctx.rivals.feedbackFor(productId, packKey, key, perGroup);
+    if (results.length === 0) return;
+    const r = await actor.submit({
+      kind: "system",
+      event: { type: "feedbackScored", productId, key, results },
+    });
+    if (!r.ok)
+      this.ctx.log.debug({ productId, key, reason: r.reason }, "rival feedback not applied");
   }
 
   private async spec(p: FeedbackPayload): Promise<unknown> {
@@ -143,6 +173,6 @@ export class FeedbackService {
 }
 
 /** The same seed for the same batch, so a retried job asks the same questions. */
-function seedOf(productId: string, key: string): number {
+export function seedOf(productId: string, key: string): number {
   return createHash("sha256").update(`${productId}:${key}`).digest().readUInt32BE(0) & 0x7fffffff;
 }

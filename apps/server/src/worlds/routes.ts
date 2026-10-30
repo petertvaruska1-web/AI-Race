@@ -83,6 +83,16 @@ export function registerWorldRoutes(app: FastifyInstance, ctx: AppContext): void
     }
   });
 
+  /** What this computer has installed: the training data and the rival AIs. */
+  app.get("/api/setup", async (req, reply) => {
+    try {
+      await requireUser(ctx, req);
+      return { trainingData: ctx.catalog !== null, rivals: ctx.rivals.installed };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
   app.get("/api/worlds", async (req, reply) => {
     try {
       const user = await requireUser(ctx, req);

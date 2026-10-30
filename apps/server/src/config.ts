@@ -11,6 +11,8 @@ export type ServerOptions = {
   dbDir: string | null;
   blobDir: string;
   catalogPath: string | null;
+  /** The rival pack's folder (`data/rivals/v1`); null or missing runs worlds without rivals. */
+  rivalsDir?: string | null;
   /** Signs cookies, ws tokens and blob URLs. */
   secret: string;
   /** Shared secret ML workers present when they connect. */
