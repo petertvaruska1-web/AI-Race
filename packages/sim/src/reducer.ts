@@ -10,7 +10,7 @@ import { marketDay } from "./market.ts";
 import { paletteProblem } from "./palette.ts";
 import { newCompanyBusiness, productCommand, productsDay } from "./products.ts";
 import { rescueCommand, rescueDay } from "./rescue.ts";
-import { joinRivals } from "./rivals.ts";
+import { joinRivals, rivalsDay } from "./rivals.ts";
 import { rngInt } from "./rng.ts";
 import type { Input, StepResult, SystemEvent, WorldState } from "./state.ts";
 import {
@@ -60,6 +60,7 @@ function tick(s: WorldState): Handled {
   s.day += 1;
   closeMonths(s);
   settleRuns(s);
+  rivalsDay(s);
   campaignsDay(s);
   productsDay(s);
   marketDay(s);

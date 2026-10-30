@@ -1,6 +1,15 @@
-import { ARCHETYPE_STYLE, RIVAL_STYLES } from "@airace/protocol";
+import { ARCHETYPE_STYLE, REGION_IDS, RIVAL_STYLES } from "@airace/protocol";
 import { describe, expect, it } from "vitest";
-import { getBalance, paletteProblem, projectView, step, type WorldState } from "../src/index.ts";
+import {
+  adoptable,
+  type CompanyState,
+  getBalance,
+  paletteProblem,
+  projectView,
+  step,
+  totalCustomers,
+  type WorldState,
+} from "../src/index.ts";
 import { cmd, ok, rejected, runningWorld, SYNTHETIC_PACK, sys, ticks, withRivals } from "./pack.ts";
 
 const rivalsOf = (s: WorldState) =>
@@ -152,5 +161,171 @@ describe("rivals join a world", () => {
   it("still lets the player act after rivals join", () => {
     const s = withRivals();
     expect(ok(step(s, cmd({ type: "setPaused", paused: true }))).paused).toBe(true);
+  });
+});
+
+const sumCustomers = (s: WorldState, id: string) => totalCustomers(s.market, id);
+const onSale = (c: CompanyState) => Object.values(c.products).filter((p) => p.status !== "retired");
+const rivalById = (s: WorldState, id: string) => s.companies[id] as CompanyState;
+
+describe("rivals run their businesses", () => {
+  it("launch the arch-rival's first AI on schedule, with the pack's scores, and win customers", () => {
+    let s = withRivals();
+    const arch = rivalById(s, "rival-1");
+    const first = arch.rival?.upcoming[0];
+    if (!first) throw new Error("nothing scheduled");
+    const countdown =
+      getBalance("balance-v2").economy.rivals.countdownDays[arch.rival?.style ?? "premium"];
+    s = ticks(s, first.releaseDay - s.day);
+    const v = rivalById(s, "rival-1").versions["rival-1-v1"];
+    expect(v?.packKey).toBe(first.key);
+    expect(v?.scores).toEqual(first.scores);
+    expect(v?.runId).toBe("pack");
+    const p = rivalById(s, "rival-1").products["rival-1-p1"];
+    expect(p?.status).toBe("countdown");
+    expect(p?.launchDay).toBe(first.releaseDay + countdown);
+    s = ticks(s, countdown);
+    expect(rivalById(s, "rival-1").products["rival-1-p1"]?.status).toBe("live");
+    s = ticks(s, 20);
+    expect(sumCustomers(s, "rival-1")).toBeGreaterThan(0);
+  });
+
+  it("release every version within a year, never sell more than three, and keep prices in range", () => {
+    let s = withRivals();
+    const e = getBalance("balance-v2").economy;
+    for (let d = 0; d < 365; d++) {
+      s = ticks(s, 1);
+      for (const c of rivalsOf(s)) {
+        expect(onSale(c).length).toBeLessThanOrEqual(3);
+        for (const plan of ["personal", "business"] as const) {
+          const { min, max } = e.prices[plan];
+          expect(c.plans[plan].price).toBeGreaterThanOrEqual(min);
+          expect(c.plans[plan].price).toBeLessThanOrEqual(max);
+        }
+      }
+    }
+    for (const c of rivalsOf(s)) {
+      expect(c.rival?.upcoming).toEqual([]);
+      expect(c.rival?.released).toBe(3);
+      expect(Number.isFinite(c.cash)).toBe(true);
+    }
+  });
+
+  it("retires a product that powers no plan the day after", () => {
+    let s = withRivals("balance-test");
+    let idle: { company: string; product: string }[] = [];
+    for (let d = 0; d < 60; d++) {
+      s = ticks(s, 1);
+      // Yesterday's idle AIs are gone today.
+      for (const x of idle)
+        expect(s.companies[x.company]?.products[x.product]?.status).toBe("retired");
+      idle = [];
+      for (const c of rivalsOf(s)) {
+        const powered = new Set(
+          (["free", "personal", "business"] as const).map((p) => c.plans[p].productId),
+        );
+        for (const p of Object.values(c.products)) {
+          if (p.status === "live" && !powered.has(p.id))
+            idle.push({ company: c.id, product: p.id });
+        }
+      }
+    }
+    const retired = rivalsOf(s).flatMap((c) =>
+      Object.values(c.products).filter((p) => p.status === "retired"),
+    );
+    expect(retired.length).toBeGreaterThan(0);
+  });
+
+  it("take the emergency loan the day cash runs out", () => {
+    let s = withRivals();
+    const r = rivalById(s, "rival-2");
+    r.cash = -1_000_000;
+    r.startCash -= 1_000_000 + r.startCash; // keep the money identity: start below zero
+    s = ticks(s, 31);
+    const after = rivalById(s, "rival-2");
+    expect(after.rescue).toBeNull();
+    expect(after.loan?.balance).toBeGreaterThan(0);
+    expect(after.cash).toBeGreaterThanOrEqual(0);
+  });
+
+  it("advertise to their focus group where most of them live, and build a data center when serving is costly", () => {
+    let s = withRivals();
+    const id = "rival-1";
+    const c = rivalById(s, id);
+    c.cash = 50_000_000;
+    s = ticks(s, 120);
+    const after = rivalById(s, id);
+    const e = getBalance("balance-v2").economy;
+    const focus = after.rival?.focus ?? "everyday";
+    const campaigns = Object.values(after.campaigns);
+    const started = after.ledger.months.some((m) => m.costs.marketing > 0) || campaigns.length > 0;
+    expect(started).toBe(true);
+    const best = REGION_IDS.reduce((a, b) =>
+      adoptable(e, s.day, b, focus) > adoptable(e, s.day, a, focus) ? b : a,
+    );
+    for (const k of campaigns) {
+      expect(k.group).toBe(focus);
+      expect(k.region).toBe(best);
+    }
+    // A big serving bill and plenty of cash bring a data center at the next review.
+    const before = Object.keys(after.dataCenters).length;
+    const last = after.ledger.months.at(-1);
+    if (last) last.costs.serving = e.rivals.dataCenterAtServingPerMonth;
+    after.cash = 50_000_000;
+    s = ticks(s, e.rivals.reviewEveryDays);
+    expect(Object.keys(rivalById(s, id).dataCenters).length).toBeGreaterThan(before);
+  });
+});
+
+describe("rivals over the years", { timeout: 60_000 }, () => {
+  it("never go below zero customers, keep cash finite and prices in range, whatever the seed", () => {
+    const e = getBalance("balance-v2").economy;
+    for (const seed of [2, 3, 4]) {
+      let s = withRivals("balance-v2", seed);
+      for (let d = 0; d < 400; d += 10) {
+        s = ticks(s, 10);
+        for (const c of Object.values(s.companies)) {
+          expect(Number.isFinite(c.cash)).toBe(true);
+          for (const byRegion of Object.values(s.market.customers[c.id] ?? {})) {
+            for (const byGroup of Object.values(byRegion ?? {})) {
+              for (const n of Object.values(byGroup ?? {})) expect(n).toBeGreaterThanOrEqual(0);
+            }
+          }
+          for (const plan of ["personal", "business"] as const) {
+            expect(c.plans[plan].price).toBeGreaterThanOrEqual(e.prices[plan].min);
+            expect(c.plans[plan].price).toBeLessThanOrEqual(e.prices[plan].max);
+          }
+        }
+      }
+    }
+  });
+});
+
+describe("rival customer posts", () => {
+  const batch = (productId: string, key: string) =>
+    sys({
+      type: "feedbackScored",
+      productId,
+      key,
+      results: [
+        { group: "students", questionId: "q1", question: "Q1?", reply: "fine", score: 0.6 },
+        { group: "creators", questionId: "q2", question: "Q2?", reply: "<b>bad</b>", score: 0.05 },
+        { group: "everyday", questionId: "q3", question: "Q3?", reply: "great", score: 0.9 },
+      ],
+    });
+
+  it("make one post per batch, the most extreme reply, and never go viral", () => {
+    let s = ticks(withRivals("balance-test"), 10);
+    const product = Object.values(rivalById(s, "rival-1").products).find(
+      (p) => p.status === "live",
+    );
+    if (!product) throw new Error("no live rival product");
+    rivalById(s, "rival-1").fame.followers = 1_000_000;
+    const before = s.feed.length;
+    s = ok(step(s, batch(product.id, "w99")));
+    const added = s.feed.slice(before);
+    expect(added).toHaveLength(1);
+    const post = added[0];
+    expect(post?.kind === "post" && post.reply).toBe("<b>bad</b>");
   });
 });

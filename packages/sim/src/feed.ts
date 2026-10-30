@@ -132,6 +132,8 @@ function updateSatisfaction(
 /**
  * The best and the worst reply become posts. With enough followers, the more
  * extreme of them goes viral (a roast wins a tie: bad news travels faster).
+ * A rival's batch makes one post, its most extreme reply, and never goes viral,
+ * so four rivals don't flood the feed.
  */
 function postBestAndWorst(
   s: WorldState,
@@ -148,8 +150,14 @@ function postBestAndWorst(
     if (r.score > best.score) best = r;
     if (r.score < worst.score) worst = r;
   }
+  const extremity = (score: number) => Math.abs(score - 0.5);
+  const rival = company.rival !== null;
+  let chosen = best === worst ? [best] : [best, worst];
+  if (rival) {
+    chosen = [results.reduce((a, b) => (extremity(b.score) > extremity(a.score) ? b : a), first)];
+  }
   const made: { post: Omit<PostItem, "id">; score: number }[] = [];
-  for (const r of best === worst ? [best] : [best, worst]) {
+  for (const r of chosen) {
     const post: Omit<PostItem, "id"> = {
       kind: "post",
       day: s.day,
@@ -165,8 +173,7 @@ function postBestAndWorst(
     made.push({ post, score: r.score });
   }
   const { viralScore, viralFollowers } = economy.fame;
-  if (company.fame.followers < viralFollowers) return;
-  const extremity = (score: number) => Math.abs(score - 0.5);
+  if (rival || company.fame.followers < viralFollowers) return;
   const viral = made
     .filter((m) => m.score >= viralScore || 1 - m.score >= viralScore)
     .sort((a, b) => extremity(b.score) - extremity(a.score) || a.score - b.score)[0]?.post;
