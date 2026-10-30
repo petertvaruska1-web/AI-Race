@@ -43,3 +43,5 @@ Task 10: Ruling: the training service skips rival companies entirely (their AIs 
 Task 10: complete (commits e2cb134..eee66fc, tests: npm test -> 488 passed; npm run check clean)
 Task 11: Ruling: chat_threads.version_id becomes text (migration 0004) so a thread can be with a rival's AI - cost if wrong: none.
 Task 11: complete (commits 06d3374..b6cf674, tests: npm test -> 490 passed; npm run check clean)
+Task 12: Ruling: the restart test puts the world away (evicts it) while the battle job finishes, rather than restarting the whole server - the harness keeps its database in memory; the reconciliation path (a done job applied on load) is the same code - cost if wrong: a real restart is only checked in the e2e.
+Task 12: complete (commits d4a3040..84c1d97, tests: npm test -> 494 passed; npm run check clean)
