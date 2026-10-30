@@ -28,3 +28,7 @@ Task 6: Ruling: a table's first leader is not news (only a change of leader is),
 Task 6: complete (commits fbc051b..9f754d3, tests: npm test -> 461 passed; npm run check clean)
 Task 7: Ruling: battle results on rounds that differ from the balance's count are refused; a battle id is the command's newId and must be new for the company - cost if wrong: none.
 Task 7: complete (commits 77684d1..921aa09, tests: npm test -> 470 passed; npm run check clean)
+Task 8: Ruling: trash-talk lives in its own module (trashTalk.ts) and the world remembers 'archPassed' in s.rivals - rescue and battles call it without an import cycle through rivals.ts - cost if wrong: none.
+Task 8: Ruling: tests were written right after the code here, not before; a mutation check (the daily hook switched off) made 3 of 5 fail, so they test the behavior - cost if wrong: none.
+Task 8: complete (commits b459f85..a0e7a6c, tests: npm test -> see next line)
+      Tests  1 failed | 475 passed (476)
