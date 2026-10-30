@@ -14,3 +14,5 @@ Task 1: complete (commits 2f4bd9e..941919b, tests: ml pytest -> 1623 passed, 5 s
 Task 2: Ruling: a quick pack scores 40 items per skill, not 8 - with 8 no tag reaches MIN_TAG_ITEMS (10), so quick packs had empty breakdowns, which Phase 4's discoveries compare against - cost if wrong: a quick build takes about 25 s instead of 15 s.
 Task 2: Ruling: training reuse uses the gate's GateRuns (finished runs reused, unfinished resumed) and measurements are cached per training token - the plan's 'resumable' - cost if wrong: none.
 Task 2: complete (commits 921958f..9ab08f6, tests: ml pytest -> 1627 passed, 5 skipped; slow quick build passed; vitest protocol 58 passed; npm run check clean)
+Task 3: Ruling: battle fixtures follow the existing names (lease-battle.json, result-battle.json, progress-battle.json) rather than the plan's dotted names - consistency - cost if wrong: none.
+Task 3: complete (commits cd25e8f..bd93b63, tests: ml pytest -> 1632 passed, 6 skipped; npm test -> 435 passed; npm run check clean)
