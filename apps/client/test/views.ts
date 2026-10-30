@@ -1,4 +1,4 @@
-import type { Command, WorldView } from "@airace/protocol";
+import { type Command, RivalPack, type WorldView } from "@airace/protocol";
 import {
   BALANCE_TEST,
   type BalanceVersion,
@@ -8,6 +8,7 @@ import {
   step,
   type WorldState,
 } from "@airace/sim";
+import RIVAL_PACK_JSON from "../../../packages/protocol/fixtures/rivals/rivals.json";
 
 // Real world views, made by the sim, for the client tests.
 
@@ -143,4 +144,16 @@ export function feedback(key: string, replies: [string, number, string][]): Inpu
       })),
     },
   } as Input;
+}
+
+/** The shared rival pack fixture, on the test world's balance. */
+export const RIVAL_PACK = RivalPack.parse(RIVAL_PACK_JSON);
+
+/** `launchedWorld` with the fixture's rivals joined and `days` more days, so their first AIs are on sale. */
+export function rivalWorld(days = 10): WorldState {
+  const s = apply(launchedWorld(), {
+    kind: "system",
+    event: { type: "rivalsJoined", pack: RIVAL_PACK },
+  });
+  return ticks(s, days);
 }

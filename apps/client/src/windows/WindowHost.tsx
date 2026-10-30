@@ -13,6 +13,7 @@ import { ProductWindow } from "./ProductWindow.tsx";
 import { RegionWindow } from "./RegionWindow.tsx";
 import { ReportWindow } from "./ReportWindow.tsx";
 import { RescueWindow } from "./RescueWindow.tsx";
+import { RivalWindow } from "./RivalWindow.tsx";
 
 function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) {
   const s = entry.spec;
@@ -47,6 +48,8 @@ function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) 
       return <ReportWindow entry={entry} view={view} month={s.month} />;
     case "rescue":
       return <RescueWindow entry={entry} view={view} />;
+    case "rival":
+      return <RivalWindow entry={entry} view={view} companyId={s.companyId} />;
   }
 }
 

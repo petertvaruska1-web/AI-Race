@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const TABS = ["company", "market", "money", "lab", "play", "bench"] as const;
+const TABS = ["company", "market", "money", "lab", "play", "bench", "rivals", "arena"] as const;
 export type Tab = (typeof TABS)[number];
 
 /** Screens are addressed by the URL hash, so a reload returns to the same screen. */

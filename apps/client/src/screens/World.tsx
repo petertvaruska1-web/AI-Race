@@ -11,6 +11,7 @@ import { Lab } from "./lab/LabLayout.tsx";
 import { Market } from "./Market.tsx";
 import { Money } from "./Money.tsx";
 import { Playground } from "./Playground.tsx";
+import { Rivals } from "./Rivals.tsx";
 
 type WorldRoute = Extract<Route, { screen: "world" }>;
 
@@ -49,6 +50,7 @@ export function WorldScreen({ route }: { route: WorldRoute }) {
       {route.tab === "lab" && <Lab view={view} />}
       {route.tab === "play" && <Playground view={view} />}
       {route.tab === "bench" && <Benchmarks view={view} />}
+      {route.tab === "rivals" && <Rivals view={view} />}
     </AppShell>
   );
 }

@@ -10,7 +10,7 @@ const stroke = {
   strokeLinejoin: "round",
 } as const;
 
-/** The game's screens, with small line icons. Arena and Rivals join in Phase 3. */
+/** The game's screens, with small line icons. */
 export const SCREENS: { id: Tab; label: string; icon: ReactNode }[] = [
   {
     id: "company",
@@ -60,6 +60,22 @@ export const SCREENS: { id: Tab; label: string; icon: ReactNode }[] = [
     id: "bench",
     label: "Benchmarks",
     icon: <path d="M5 20V12M10 20V6M15 20v-9M20 20V4" {...stroke} />,
+  },
+  {
+    id: "rivals",
+    label: "Rivals",
+    icon: (
+      <>
+        <circle cx="8" cy="9" r="3" {...stroke} />
+        <circle cx="16" cy="9" r="3" {...stroke} />
+        <path d="M3.5 19c.6-3 2.4-4.5 4.5-4.5M20.5 19c-.6-3-2.4-4.5-4.5-4.5M12 13v6" {...stroke} />
+      </>
+    ),
+  },
+  {
+    id: "arena",
+    label: "Arena",
+    icon: <path d="M5 19l10-10M9 5l10 10M4 14l6 6M14 4l6 6" {...stroke} />,
   },
 ];
 

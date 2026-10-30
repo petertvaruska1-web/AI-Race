@@ -17,7 +17,10 @@ export type WindowSpec =
   | { kind: "dataCenter" }
   | { kind: "computers" }
   | { kind: "report"; month: string }
-  | { kind: "rescue" };
+  | { kind: "rescue" }
+  | { kind: "rival"; companyId: string }
+  | { kind: "newBattle"; rivalProductId?: string }
+  | { kind: "battle"; battleId: string };
 
 export type OpenWindow = {
   id: number;

@@ -4,6 +4,7 @@ import { Button } from "../components/Button.tsx";
 import { ChatLog, type ChatMessage } from "../components/ChatLog.tsx";
 import { INPUT } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
+import { rivalAis } from "../rivals.ts";
 import { usePlayground } from "../store/playground.ts";
 import { useSocket } from "../store/session.ts";
 
@@ -42,7 +43,13 @@ export function Playground({ view }: { view: WorldView }) {
   const versions = view.me.company?.versions ?? [];
   const chosen = usePlayground((s) => s.versionId);
   const setVersion = usePlayground((s) => s.setVersion);
-  const version = versions.find((v) => v.id === chosen) ?? versions.at(-1);
+  const rivals = rivalAis(view);
+  const rival = rivals.find((r) => r.versionId === chosen) ?? null;
+  // A rival's AI is talked to like your own, by its version id (the server checks it is on sale).
+  const version: Pick<VersionView, "id" | "label"> | undefined = rival
+    ? { id: rival.versionId, label: `${rival.companyName}'s ${rival.productName}` }
+    : (versions.find((v) => v.id === chosen) ?? versions.at(-1));
+  const own = rival ? null : (versions.find((v) => v.id === version?.id) ?? null);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -136,11 +143,22 @@ export function Playground({ view }: { view: WorldView }) {
               setMessages([]);
             }}
           >
-            {[...versions].reverse().map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.label}
-              </option>
-            ))}
+            <optgroup label="Your AIs">
+              {[...versions].reverse().map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.label}
+                </option>
+              ))}
+            </optgroup>
+            {rivals.length > 0 && (
+              <optgroup label="Rivals' AIs">
+                {rivals.map((r) => (
+                  <option key={r.versionId} value={r.versionId}>
+                    {`${r.companyName}'s ${r.productName}`}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </label>
         <Button
@@ -170,7 +188,7 @@ export function Playground({ view }: { view: WorldView }) {
         </ul>
       </aside>
       <Panel>
-        {neverSawConversation(view, version) && (
+        {own && neverSawConversation(view, own) && (
           <p className="mb-3 rounded-lg bg-brand-soft p-3 text-sm">
             This AI never saw a conversation, so it may just continue your text.
           </p>
