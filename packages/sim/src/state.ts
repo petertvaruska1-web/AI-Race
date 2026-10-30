@@ -348,7 +348,7 @@ export type WorldState = {
   /** Accepted inputs so far. */
   seq: number;
   /** Null until rivals join (they need the rival pack). */
-  rivals: { joinedDay: number; archId: string } | null;
+  rivals: { joinedDay: number; archId: string; archPassed: boolean } | null;
   /** Each league table's leader, and the day its last #1 story ran. */
   leaders: Partial<Record<LeagueTable, string>>;
   lastRankingNews: Partial<Record<LeagueTable, number>>;

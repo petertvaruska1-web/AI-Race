@@ -23,5 +23,6 @@ export * from "./shape.ts";
 export * from "./spotlights.ts";
 export * from "./state.ts";
 export * from "./training.ts";
+export * from "./trashTalk.ts";
 export * from "./upgrade.ts";
 export * from "./world.ts";

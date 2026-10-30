@@ -3,6 +3,7 @@ import { getBalance } from "./balance.ts";
 import { tellNews } from "./feed.ts";
 import { book, finance } from "./ledger.ts";
 import type { CompanyState, WorldState } from "./state.ts";
+import { trashTalk } from "./trashTalk.ts";
 
 // The rescue (game-layer design §8, C19). A month that ends with cash below zero
 // opens an offer: an emergency loan with heavy interest, or an investor who takes
@@ -19,6 +20,7 @@ function rescue(s: WorldState, company: CompanyState, kind: "loan" | "investor")
   company.rescue = null;
   const amount = Math.max(0, Math.round(r.cushion - company.cash));
   if (amount === 0) return;
+  if (!company.rival) trashTalk(s, "playerRescued", { player: company.name });
   if (kind === "loan") {
     finance(company, "loans", amount);
     const balance = (company.loan?.balance ?? 0) + amount;

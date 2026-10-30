@@ -100,3 +100,80 @@ export function drawLook(
     rng: r,
   };
 }
+
+export type TrashEvent =
+  | "playerLaunch"
+  | "playerWinsBattle"
+  | "playerPassesArch"
+  | "playerRescued"
+  | "archLaunch";
+
+/** The arch-rival founder's lines, in its archetype's voice (game text, never an AI's words). */
+export const TRASH_TALK: Record<Archetype, Record<TrashEvent, readonly [string, string]>> = {
+  giant: {
+    playerLaunch: [
+      "Cute launch, {player}. Call us when {product} can count.",
+      "{product}? We had something like that in a drawer years ago.",
+    ],
+    playerWinsBattle: [
+      "One battle. We have a whole building of engineers who will remember it, {player}.",
+      "Beginner's luck. Enjoy it while {player} still can.",
+    ],
+    playerPassesArch: [
+      "More customers than us? Temporary. Everything about {player} is.",
+      "Let {player} have the crowd. We have the contracts.",
+    ],
+    playerRescued: [
+      "Out of money already, {player}? Our coffee budget is bigger.",
+      "Rescued. That is the word we use for small companies, {player}.",
+    ],
+    archLaunch: [
+      "{product} is here. The rest of you can stop trying now.",
+      "We launched {product}. Our competitors launched excuses.",
+    ],
+  },
+  upstart: {
+    playerLaunch: [
+      "Welcome to the party, {player}. We brought snacks; you brought {product}.",
+      "{product}, huh? Bold name. Let's see if it's bold at anything else.",
+    ],
+    playerWinsBattle: [
+      "Okay, okay, {player} won that one. Rematch. Loser buys pizza.",
+      "Fine, {player}. Even our AI needs a nap sometimes.",
+    ],
+    playerPassesArch: [
+      "{player} has more customers than us? We're writing that on the fridge as motivation.",
+      "Congrats, {player}. Now everybody's watching you, not us. Perfect.",
+    ],
+    playerRescued: [
+      "Hey {player}, need a loan? Just kidding, so do we.",
+      "Rough month, {player}? Happens to the best of us. And to you.",
+    ],
+    archLaunch: [
+      "{product} just dropped and it's honestly kind of amazing. We'd know.",
+      "New AI who dis? {product} is live.",
+    ],
+  },
+  lab: {
+    playerLaunch: [
+      "{product}. Interesting. We have notes.",
+      "We observed the launch of {product}. The data will speak.",
+    ],
+    playerWinsBattle: [
+      "A result is a result. We are already studying it, {player}.",
+      "{player} won this round. We are measuring why.",
+    ],
+    playerPassesArch: [
+      "Customers are a noisy measure. {player} will learn this.",
+      "We note that {player} is ahead. We note everything.",
+    ],
+    playerRescued: [
+      "Funding is a hypothesis. {player}'s was disproved.",
+      "We wish {player} well. Our models predicted this.",
+    ],
+    archLaunch: [
+      "{product} leaves the lab today. You will not understand it at first.",
+      "We release {product}. Ask it something difficult.",
+    ],
+  },
+};

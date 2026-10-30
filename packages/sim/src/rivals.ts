@@ -123,7 +123,7 @@ export function joinRivals(s: WorldState, raw: unknown): Handled {
   });
 
   const arch = s.companies[ids[0] as string] as CompanyState;
-  s.rivals = { joinedDay: s.day, archId: arch.id };
+  s.rivals = { joinedDay: s.day, archId: arch.id, archPassed: false };
   const headline =
     s.day <= EARLY_DAYS
       ? `${arch.name}, ${ARCHETYPE_WORDS[archetype]}, enters the AI race`

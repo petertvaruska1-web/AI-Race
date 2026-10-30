@@ -13,6 +13,7 @@ import type {
   WorldState,
 } from "./state.ts";
 import { formatMoney } from "./training.ts";
+import { trashTalk } from "./trashTalk.ts";
 
 // Battles (game-layer design §10): the player's AI and a rival's answer the same
 // fresh challenges; real replies decide the result, which moves ranking points
@@ -200,5 +201,8 @@ export function applyBattle(
         ? `${them} beats ${me} in a ${skill} battle, ${losses}–${wins}`
         : `${me} and ${them} draw in a ${skill} battle, ${wins}–${losses}`;
   tellNews(s, company, "battle", headline, b.sentiment[outcome]);
+  if (outcome === "win" && rival.id === s.rivals?.archId) {
+    trashTalk(s, "playerWinsBattle", { player: company.name });
+  }
   return OK;
 }

@@ -25,6 +25,7 @@ import {
   settleRuns,
   versionIdTaken,
 } from "./training.ts";
+import { trashTalkDay } from "./trashTalk.ts";
 import { effectiveHost } from "./world.ts";
 
 type Handled = { ok: true } | { ok: false; reason: string };
@@ -72,6 +73,7 @@ function tick(s: WorldState): Handled {
   rescueDay(s);
   newsDay(s);
   leagueDay(s);
+  trashTalkDay(s);
   fameDay(s);
   historyDay(s);
   return OK;
