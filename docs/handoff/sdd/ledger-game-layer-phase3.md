@@ -26,3 +26,5 @@ Task 5: Ruling: rivals set their style's prices when they join (not on their fir
 Task 5: complete (commits abffaa6..8dea905, tests: npm test -> 455 passed; npm run check clean)
 Task 6: Ruling: a table's first leader is not news (only a change of leader is), and at most one ranking story runs a day - otherwise the first launch in a world with rivals made ten #1 stories at once (C13: rare and meaningful) - cost if wrong: fewer ranking headlines.
 Task 6: complete (commits fbc051b..9f754d3, tests: npm test -> 461 passed; npm run check clean)
+Task 7: Ruling: battle results on rounds that differ from the balance's count are refused; a battle id is the command's newId and must be new for the company - cost if wrong: none.
+Task 7: complete (commits 77684d1..921aa09, tests: npm test -> 470 passed; npm run check clean)
