@@ -120,8 +120,8 @@ describe("money screen, growing", () => {
     await userEvent.click(screen.getByRole("button", { name: "Close all windows" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     const out = screen.getByRole("region", { name: "Going out" });
-    await userEvent.click(within(out).getByRole("button", { name: "Open Ad campaigns" }));
-    expect(await screen.findByRole("dialog", { name: "Ad campaigns" })).toBeTruthy();
+    await userEvent.click(within(out).getByRole("button", { name: "Open Ads and battles" }));
+    expect(await screen.findByRole("dialog", { name: "Ads and battles" })).toBeTruthy();
   });
 
   it("shows money that is neither income nor a cost under the month", () => {

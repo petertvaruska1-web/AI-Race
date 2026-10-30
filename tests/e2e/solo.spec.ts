@@ -155,4 +155,42 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
   // 17. The computers say how many questions get answered.
   const computers = page.getByRole("region", { name: "Computers" });
   await expect(computers.getByText("of questions answered")).toBeVisible();
+
+  // 18. Phase 3: four rivals, the arch-rival first.
+  await page.getByRole("link", { name: "Rivals" }).click();
+  const rivalCards = page.getByRole("article");
+  await expect(rivalCards).toHaveCount(4);
+  await expect(rivalCards.first()).toContainText("Arch-rival ·");
+
+  // 19. A rival's launch is in the news.
+  await page.getByRole("link", { name: "Company" }).click();
+  await expect(feed.getByText(/launches/)).not.toHaveCount(1, { timeout: 60_000 });
+
+  // 20. Try it: a rival's AI answers in the Playground, streamed.
+  await page.getByRole("link", { name: "Rivals" }).click();
+  await page.getByRole("button", { name: /^Try / }).first().click();
+  await expect(page.getByText(/Say something to .+'s /)).toBeVisible();
+  await page.getByLabel("Your message").fill("Who are you?");
+  await page.getByRole("button", { name: "Send" }).click();
+  const rivalReply = page.getByTestId("chat-log").getByRole("listitem").nth(1);
+  await expect(rivalReply).not.toContainText("Thinking…", { timeout: 120_000 });
+
+  // 21. A knowledge battle: both columns fill, then the result and the ranking points.
+  await page.getByRole("link", { name: "Arena" }).click();
+  await page.getByRole("button", { name: "Start a battle" }).click();
+  const start = page.getByRole("dialog", { name: "Start a battle" });
+  await start.getByRole("button", { name: "Start the battle" }).click();
+  await expect(start).toHaveCount(0);
+  await page.getByRole("button", { name: /^Open the knowledge battle/ }).click();
+  const battle = page.getByRole("dialog", { name: /battle/ });
+  await expect(battle.getByText(/^(Win|Loss|Draw) \d–\d$/)).toBeVisible({ timeout: 180_000 });
+  await expect(battle.getByText(/ranking points$/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("table", { name: "Customers" }).getByRole("row")).toHaveCount(6);
+
+  // 22. The next report card places the company against its rivals.
+  await page.getByRole("link", { name: "Money" }).click();
+  await page.getByRole("region", { name: "Report cards" }).getByRole("button").first().click();
+  const place = /^Customers: (\d+(st|nd|rd|th) → )?\d+(st|nd|rd|th)$/;
+  await expect(page.getByRole("dialog").getByText(place)).toBeVisible({ timeout: 60_000 });
 });

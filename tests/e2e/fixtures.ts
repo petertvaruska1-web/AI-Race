@@ -56,6 +56,8 @@ export const test = base.extend<{ stack: Stack }>({
       data,
     ]);
     uv(["airace-ml", "export-catalog", "--data-root", data]);
+    // Tiny rivals (Phase 3): the server seats them in the new world.
+    uv(["airace-ml", "build-rivals", "--data-root", data, "--quick", "--device", "cpu"]);
     const serverUrl = `http://127.0.0.1:${SERVER_PORT}`;
     const env = {
       AIRACE_DATA: data,

@@ -11,7 +11,7 @@ export const COST_NAMES: Record<CostCategory, string> = {
   training: "Training",
   serving: "Serving customers",
   dataChecks: "Fact-checking data",
-  marketing: "Ad campaigns",
+  marketing: "Ads and battles",
   dataCenterBuild: "Building data centers",
   dataCenterUpkeep: "Data center upkeep",
   interest: "Loan interest",
@@ -24,7 +24,7 @@ export const MONEY_WHAT: Record<IncomeCategory | CostCategory, string> = {
   serving:
     "Running your AIs for every customer, free ones too. It grows with customers and AI size.",
   dataChecks: "Fact-checking the reading of runs that asked for it.",
-  marketing: "What your ad campaigns spent, a day at a time.",
+  marketing: "What your ad campaigns spent, a day at a time, and each battle's $5,000 fee.",
   dataCenterBuild: "Building your own data centers, paid when building starts.",
   dataCenterUpkeep: "Running your data centers: power, staff and repairs.",
   interest: "Interest on an emergency loan, paid at each month's end.",
