@@ -118,6 +118,28 @@ def _coherence(nll: float, calibration: JudgeCalibration) -> float:
     return 0.0 if math.isnan(value) else min(max(value, 0.0), 1.0)
 
 
+def _story_score(
+    story: str, prompt: str, nll: float, tok: Tok, judge: Judge, novelty: NoveltyIndex
+) -> float:
+    if not words(story):
+        return 0.0
+    new = novelty.novelty(tok.encode(story), seen=tok.encode(prompt))
+    return (
+        _coherence(nll, judge.calibration)
+        * (NOVELTY_FLOOR + (1 - NOVELTY_FLOOR) * new)
+        * (1 - repetitiveness(story))
+    )
+
+
+def score_story(story: str, prompt: str, tok: Tok, judge: Judge, novelty: NoveltyIndex) -> float:
+    """One story's score (0-1), as :func:`score_creativity` scores each of its stories: coherence
+    under the judge, times novelty against the corpora and the prompt, less repetition. Battles
+    score single stories with it."""
+    story = story.strip()
+    nll = judge.nll_per_token([judge.tok.encode(story)])[0]
+    return _story_score(story, prompt, nll, tok, judge, novelty)
+
+
 def score_creativity(
     lm: LanguageModel,
     tok: Tok,
@@ -144,14 +166,7 @@ def score_creativity(
     losses = judge.nll_per_token([judge.tok.encode(story) for story in stories])
     results = []
     for k, ((topic, prompt), story, nll) in enumerate(zip(_STORIES, stories, losses, strict=True)):
-        score = 0.0
-        if words(story):
-            new = novelty.novelty(tok.encode(story), seen=tok.encode(prompt))
-            score = (
-                _coherence(nll, judge.calibration)
-                * (NOVELTY_FLOOR + (1 - NOVELTY_FLOOR) * new)
-                * (1 - repetitiveness(story))
-            )
+        score = _story_score(story, prompt, nll, tok, judge, novelty)
         results.append(
             ItemResult(f"story-{k:02d}", CATEGORY, score, ("fmt:story", f"topic:{topic}"), story)
         )

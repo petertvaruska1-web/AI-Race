@@ -1391,3 +1391,21 @@ def test_run_benchmarks_measures_creativity_with_a_real_judge(tiny_lm, tiny_tok,
     assert stories == [
         (r.item_id, r.score, r.output) for r in b.items if r.category == "creativity"
     ]
+
+
+def test_score_story_is_the_per_story_score_of_score_creativity(tiny_tok):
+    from airace_ml.evals.creativity import score_story
+
+    prompt_index = {
+        tuple(encode_chat(tiny_tok, [("user", p)], add_generation_prompt=True)): k
+        for k, p in enumerate(STORY_PROMPTS)
+    }
+    lm = RecordingLM(tiny_tok, reply=lambda prompt: _story(prompt_index[tuple(prompt)]))
+    idx = NoveltyIndex.build([np.array(tiny_tok.encode(CORPUS_TEXT * 3), np.uint16)], sample_mod=1)
+    judge = StubJudge(tiny_tok, lambda ids: 3.0)
+    _, items = score_creativity(lm, tiny_tok, judge, idx, seed=7)
+    for k, item in enumerate(items):
+        assert score_story(item.output, STORY_PROMPTS[k], tiny_tok, judge, idx) == pytest.approx(
+            item.score
+        )
+    assert score_story("", STORY_PROMPTS[0], tiny_tok, judge, idx) == 0.0
