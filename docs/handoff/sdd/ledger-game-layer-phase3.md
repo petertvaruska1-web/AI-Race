@@ -32,3 +32,4 @@ Task 8: Ruling: trash-talk lives in its own module (trashTalk.ts) and the world 
 Task 8: Ruling: tests were written right after the code here, not before; a mutation check (the daily hook switched off) made 3 of 5 fail, so they test the behavior - cost if wrong: none.
 Task 8: complete (commits b459f85..a0e7a6c, tests: npm test -> see next line)
       Tests  1 failed | 475 passed (476)
+Task 8: correction - the line above recorded a red run (1 failed: a Task 4 test expecting the old rival record); fixed in 9ee1d38, npm test -> Tests  476 passed (476)
