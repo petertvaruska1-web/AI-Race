@@ -45,3 +45,5 @@ Task 11: Ruling: chat_threads.version_id becomes text (migration 0004) so a thre
 Task 11: complete (commits 06d3374..b6cf674, tests: npm test -> 490 passed; npm run check clean)
 Task 12: Ruling: the restart test puts the world away (evicts it) while the battle job finishes, rather than restarting the whole server - the harness keeps its database in memory; the reconciliation path (a done job applied on load) is the same code - cost if wrong: a real restart is only checked in the e2e.
 Task 12: complete (commits d4a3040..84c1d97, tests: npm test -> 494 passed; npm run check clean)
+Task 13: Ruling: the Playground lists rivals' AIs on sale in a second group of its picker ("Rivals' AIs"); a rival's AI is named "{Rival}'s {Product}" - cost if wrong: naming only.
+Task 13: complete (commits 96513c0..79494f5, tests: npm test -> Tests  499 passed (499); npm run check clean)
