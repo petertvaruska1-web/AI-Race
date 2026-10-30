@@ -17,6 +17,7 @@ export const Query = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("runTelemetry"), worldId: zId, runId: zId }),
   z.object({ kind: z.literal("chatThreads"), worldId: zId }),
   z.object({ kind: z.literal("chatThread"), worldId: zId, threadId: zId }),
+  z.object({ kind: z.literal("battle"), worldId: zId, battleId: zId }),
 ]);
 export type Query = z.infer<typeof Query>;
 

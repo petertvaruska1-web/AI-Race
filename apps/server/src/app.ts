@@ -3,6 +3,7 @@ import type { Catalog } from "@airace/protocol";
 import cookie from "@fastify/cookie";
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from "fastify";
 import { HttpError, registerAuthRoutes } from "./auth.ts";
+import { BattleService } from "./battles/service.ts";
 import { type BlobStore, LocalFsBlobStore, registerBlobRoutes } from "./blobs.ts";
 import { loadCatalog, NO_TRAINING_DATA, publicCatalog } from "./catalog.ts";
 import { ChatService } from "./chat/service.ts";
@@ -30,6 +31,7 @@ export type AppContext = {
   chat: ChatService;
   feedback: FeedbackService;
   rivals: RivalService;
+  battles: BattleService;
   blobs: BlobStore;
   /** Null until the training data is installed. */
   catalog: Catalog | null;
@@ -56,6 +58,7 @@ export async function buildApp(
     chat: undefined as unknown as ChatService,
     feedback: undefined as unknown as FeedbackService,
     rivals: undefined as unknown as RivalService,
+    battles: undefined as unknown as BattleService,
     blobs: new LocalFsBlobStore(opts.blobDir),
     catalog: loadCatalog(opts.catalogPath, log),
     onClose: (fn) => {
@@ -74,6 +77,8 @@ export async function buildApp(
   ctx.chat = new ChatService(ctx);
   ctx.feedback = new FeedbackService(ctx);
   ctx.onClose(() => ctx.feedback.close());
+  ctx.battles = new BattleService(ctx);
+  ctx.onClose(() => ctx.battles.close());
   ctx.gateway.registerQuery("catalog", async () => {
     if (!ctx.catalog) throw new HttpError(503, NO_TRAINING_DATA);
     return publicCatalog(ctx.catalog);

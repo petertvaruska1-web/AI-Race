@@ -225,3 +225,10 @@ export const TABLE_NAMES = [
   "chat_messages",
   "feedback_requests",
 ] as const;
+
+/** One job per battle: a restart never runs a battle twice. */
+export const battleRequests = pgTable("battle_requests", {
+  battleId: text("battle_id").primaryKey(),
+  worldId: uuid("world_id").notNull(),
+  jobId: uuid("job_id"),
+});
