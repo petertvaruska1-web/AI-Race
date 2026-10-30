@@ -4,7 +4,7 @@ import type { Scheduler } from "./scheduler.ts";
 export type { Scheduler } from "./scheduler.ts";
 
 /** The deterministic sim's version; snapshots from another version are refused. */
-export const SIM_VERSION = "sim-3";
+export const SIM_VERSION = "sim-4";
 
 export type ServerOptions = {
   /** PGlite data directory; null keeps the database in memory (tests). */

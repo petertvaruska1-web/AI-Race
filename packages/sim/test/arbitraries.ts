@@ -8,6 +8,7 @@ import {
   step,
   type WorldState,
 } from "../src/index.ts";
+import { SYNTHETIC_PACK } from "./pack.ts";
 
 // Small id pools make collisions (rejected inputs) and hits (completions of
 // real runs) both common. Ids are distinctive so a text search finds only them.
@@ -350,6 +351,9 @@ export function arbInputs(n: number): fc.Arbitrary<Input[]> {
     { kind: "system", event: { type: "memberJoined", userId: "u2", displayName: "Ben" } },
     command("u1", { type: "startWorld" }),
   ]);
+  const rivals: Input[] = [
+    { kind: "system", event: { type: "rivalsJoined", pack: SYNTHETIC_PACK } },
+  ];
   const body = fc.array(
     fc.oneof(
       { arbitrary: fc.constant(TICK), weight: 4 },
@@ -365,11 +369,14 @@ export function arbInputs(n: number): fc.Arbitrary<Input[]> {
     .tuple(
       fc.nat(9).map((x) => x > 0),
       fc.nat(2).map((x) => x === 0),
+      fc.boolean(),
       setup,
       body,
     )
-    .map(([withSetup, launched, pre, rest]) =>
-      withSetup ? [...pre, ...(launched ? LAUNCH : []), ...rest] : rest,
+    .map(([withSetup, launched, withRivals, pre, rest]) =>
+      withSetup
+        ? [...pre, ...(withRivals ? rivals : []), ...(launched ? LAUNCH : []), ...rest]
+        : rest,
     );
 }
 

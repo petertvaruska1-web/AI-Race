@@ -75,6 +75,9 @@ export const NEWS_TOPICS = [
   "overload",
   "dataCenter",
   "rescue",
+  "battle",
+  "ranking",
+  "trashTalk",
 ] as const;
 export type NewsTopic = (typeof NEWS_TOPICS)[number];
 /** A customer post's tone, picked from its reply's score. */

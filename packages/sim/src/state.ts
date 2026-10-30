@@ -1,4 +1,5 @@
 import type {
+  Archetype,
   Command,
   CostCategory,
   GroupId,
@@ -9,6 +10,9 @@ import type {
   PlanId,
   PostTone,
   RegionId,
+  RivalPack,
+  RivalPackVersion,
+  RivalStyle,
   RunStatus,
   Speed,
   TrainingPlan,
@@ -66,6 +70,8 @@ export type VersionState = {
   /** Measured style traits, from the same evaluation as the scores. */
   traits: Record<string, number> | null;
   published: boolean;
+  /** A rival's version: its key in the rival pack (its `runId` is "pack"). Null for players. */
+  packKey: string | null;
 };
 
 export type ProductState = {
@@ -241,9 +247,34 @@ export type CampaignState = {
   spent: number;
 };
 
+/** A rival version waiting for its release day (the pack's measurements, R5). */
+export type PackRelease = RivalPackVersion & { releaseDay: number };
+
+/** What makes a company a rival: its pack lineage and business style (game-layer design §9). */
+export type RivalState = {
+  lineageId: string;
+  style: RivalStyle;
+  focus: GroupId;
+  /** Set only for the arch-rival. */
+  archetype: Archetype | null;
+  /** Which of its style's product words names its AIs. */
+  productWord: number;
+  upcoming: PackRelease[];
+  /** Versions released so far. */
+  released: number;
+  lastReviewDay: number;
+  lastTrashTalkDay: number | null;
+  /** Numbers the ids of its campaigns and data centers. */
+  counters: { campaigns: number; dataCenters: number };
+};
+
 export type CompanyState = {
   id: string;
-  ownerUserId: string;
+  /** Null for a rival: no player owns it. */
+  ownerUserId: string | null;
+  /** Cash at founding; the money identity starts from it. */
+  startCash: number;
+  rival: RivalState | null;
   name: string;
   logo: Logo;
   palette: Palette;
@@ -286,6 +317,8 @@ export type WorldState = {
   inviteCode: string;
   /** Accepted inputs so far. */
   seq: number;
+  /** Null until rivals join (they need the rival pack). */
+  rivals: { joinedDay: number; archId: string } | null;
   market: MarketState;
   spotlights: Spotlight[];
   /** Posts and news, oldest first, capped at the balance's `feedCap`. */
@@ -308,6 +341,7 @@ export type SystemEvent =
       personalityWords: string[];
       traits?: Record<string, number> | null;
     }
+  | { type: "rivalsJoined"; pack: RivalPack }
   | {
       type: "feedbackScored";
       productId: string;

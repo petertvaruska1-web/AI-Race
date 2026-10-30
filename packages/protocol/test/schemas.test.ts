@@ -91,6 +91,7 @@ function sampleView(): WorldView {
           { adoptable: number }
         >,
       },
+      rivals: "none",
     },
     members: [{ userId: "u1", displayName: "Ana", online: true, companyId: "c1" }],
     companies: [
@@ -100,6 +101,7 @@ function sampleView(): WorldView {
         logo: { shape: "circle", symbol: "spark", initials: "AC" },
         palette: { primary: "#4f8cff", secondary: "#ffb020" },
         ownerUserId: "u1",
+        rival: null,
         publishedVersions: [],
         products: [
           {

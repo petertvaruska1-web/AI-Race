@@ -2,7 +2,9 @@ import {
   type DatasetId,
   GROUP_IDS,
   type GroupId,
+  type PlanId,
   type RegionId,
+  type RivalStyle,
   type Speed,
   type TrainingPlan,
 } from "@airace/protocol";
@@ -133,6 +135,32 @@ export type Economy = {
   hypePerDay: number;
   maxProducts: number;
   countdown: { min: number; max: number };
+  /** Rival companies (game-layer design §9): their money, release schedule and habits. */
+  rivals: RivalBalance;
+};
+
+export type RivalBalance = {
+  /** Times the founding cash, by style; the arch-rival gets `archBonus` times more. */
+  startCash: Record<RivalStyle, number>;
+  archBonus: number;
+  /** Days after joining of each rival's first release (the arch-rival first). */
+  firstRelease: readonly [number, number, number, number];
+  releaseGapDays: number;
+  jitterDays: number;
+  countdownDays: Record<RivalStyle, number>;
+  plans: Record<RivalStyle, readonly PlanId[]>;
+  /** Times each plan's default price. */
+  priceFactor: Record<RivalStyle, number>;
+  reviewEveryDays: number;
+  priceStep: number;
+  ad: {
+    shareOfCash: number;
+    maxPerDay: Record<RivalStyle, number>;
+    days: number;
+    minCash: number;
+  };
+  dataCenterAtServingPerMonth: number;
+  trashTalkGapDays: number;
 };
 
 /** Every tunable number of the economy. A world records its version (replay). */
@@ -383,6 +411,31 @@ const ECONOMY_V2: Economy = {
   hypePerDay: 0.05,
   maxProducts: 3,
   countdown: { min: 3, max: 14 },
+  rivals: {
+    startCash: { premium: 3, budget: 1, specialist: 1.5, consumer: 2 },
+    archBonus: 1.5,
+    firstRelease: [12, 25, 40, 55],
+    releaseGapDays: 110,
+    jitterDays: 10,
+    countdownDays: { premium: 10, budget: 3, specialist: 7, consumer: 5 },
+    plans: {
+      premium: ["personal", "business"],
+      budget: ["free", "personal"],
+      specialist: ["personal", "business"],
+      consumer: ["free", "personal", "business"],
+    },
+    priceFactor: { premium: 1.5, budget: 0.5, specialist: 1.1, consumer: 0.8 },
+    reviewEveryDays: 30,
+    priceStep: 0.1,
+    ad: {
+      shareOfCash: 0.01,
+      maxPerDay: { premium: 3000, budget: 500, specialist: 1000, consumer: 4000 },
+      days: 30,
+      minCash: 200_000,
+    },
+    dataCenterAtServingPerMonth: 60_000,
+    trashTalkGapDays: 21,
+  },
 };
 
 export const BALANCE_V2: Balance = {
@@ -423,6 +476,15 @@ export const BALANCE_TEST: Balance = {
   economy: {
     ...ECONOMY_V2,
     diffusion: { ...ECONOMY_V2.diffusion, adoptRate: 0.5, launchBoost: 0.2 },
+    // Rivals release within days, so end-to-end tests meet them; countdowns are the shortest allowed.
+    rivals: {
+      ...ECONOMY_V2.rivals,
+      firstRelease: [1, 2, 3, 4],
+      releaseGapDays: 20,
+      jitterDays: 0,
+      countdownDays: { premium: 3, budget: 3, specialist: 3, consumer: 3 },
+      trashTalkGapDays: 2,
+    },
   },
 };
 

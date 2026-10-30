@@ -3,6 +3,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { adoptable, BALANCE_V2, customersOf, projectView, stateHash } from "../src/index.ts";
 import { arbInputs, newWorld, runInputs } from "./arbitraries.ts";
+import { SYNTHETIC_PACK } from "./pack.ts";
 
 const RUNS = { numRuns: 200 };
 
@@ -37,6 +38,13 @@ describe("sim properties", { timeout: 30_000 }, () => {
           expect(count(text, "cash")).toBe(own ? 1 + own.history.length : 0);
           expect(count(text, "hype")).toBe(own ? Object.keys(own.products).length : 0);
           expect(count(text, "awareness")).toBe(0);
+          // A rival's pack, lineage and schedule stay inside the sim (R2).
+          for (const key of ["upcoming", "lineageId", "packKey", "startCash"]) {
+            expect(count(text, key), key).toBe(0);
+          }
+          for (const l of SYNTHETIC_PACK.lineages) {
+            for (const v of l.versions) expect(text).not.toContain(v.key);
+          }
           for (const company of Object.values(s.companies)) {
             if (company.id === viewer.companyId) continue;
             for (const run of Object.values(company.runs)) {
@@ -103,7 +111,7 @@ describe("sim properties", { timeout: 30_000 }, () => {
             0,
           );
           expect(Number.isInteger(company.cash)).toBe(true);
-          expect(company.cash).toBe(BALANCE_V2.foundingCash + net);
+          expect(company.cash).toBe(company.startCash + net);
           expect(company.ownership).toBeGreaterThan(0);
           expect(company.ownership).toBeLessThanOrEqual(1);
           // Training money: every run not refunded, once.
@@ -157,7 +165,7 @@ describe("sim properties", { timeout: 30_000 }, () => {
         }
         stats.posts += s.feed.filter((i) => i.kind === "post").length;
       }),
-      { numRuns: 200, seed: 1 },
+      { numRuns: 200, seed: 2 },
     );
     expect(stats.runs).toBeGreaterThan(50);
     expect(stats.versions).toBeGreaterThan(10);

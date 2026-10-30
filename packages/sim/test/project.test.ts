@@ -155,6 +155,7 @@ describe("projectView", () => {
       "products",
       "publishedVersions",
       "reputation",
+      "rival",
     ]);
     expect(acme?.publishedVersions).toEqual([]);
     const text = JSON.stringify(view);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ARCHETYPES, RIVAL_STYLES } from "./rivals.ts";
 import { Day, zId } from "./text.ts";
 import {
   COST_CATEGORIES,
@@ -184,7 +185,12 @@ export const PublicCompany = z.strictObject({
   name: z.string(),
   logo: Logo,
   palette: Palette,
-  ownerUserId: zId,
+  /** Null for a rival company: no player owns it. */
+  ownerUserId: zId.nullable(),
+  /** What kind of rival it is; null for a player's company. The archetype is the arch-rival's only. */
+  rival: z
+    .strictObject({ style: z.enum(RIVAL_STYLES), archetype: z.enum(ARCHETYPES).nullable() })
+    .nullable(),
   publishedVersions: z.array(PublicVersion),
   products: z.array(PublicProduct),
   /** Prices of the open plans; null (or false) for a closed plan. */
@@ -330,6 +336,8 @@ export const WorldView = z.strictObject({
       adoptable: Count,
       regions: z.record(z.enum(REGION_IDS), z.strictObject({ adoptable: Count })),
     }),
+    /** Whether rivals have joined this world (they need the rival pack). */
+    rivals: z.enum(["joined", "none"]),
   }),
   members: z.array(
     z.strictObject({

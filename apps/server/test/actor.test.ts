@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Command } from "@airace/protocol";
 import { type Input, stateHash } from "@airace/sim";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { schema } from "../src/db/index.ts";
 import { type SubmitResult, WorldActor } from "../src/worlds/actor.ts";
@@ -146,6 +146,51 @@ describe("recovery", () => {
     accepted(await again.submit(presence(userId, true)));
     await server.scheduler.advance(2000);
     expect(again.state().day).toBe(live.day + 1);
+  });
+
+  it("upgrades a world saved by sim-3 (Phase 2), replays it and saves it as sim-4", async () => {
+    server = await startTestServer({ balance: "balance-v2" });
+    const { userId, worldId, actor } = await runningWorld(server);
+    await actor.snapshot("test");
+    accepted(await actor.submit(command(userId, { type: "setSpeed", speed: 2 })));
+    // What sim-3 saved: no rival fields anywhere.
+    const rows = await server.ctx.db
+      .select()
+      .from(schema.worldSnapshots)
+      .where(eq(schema.worldSnapshots.worldId, worldId));
+    const row = rows.sort((x, y) => y.seq - x.seq)[0];
+    const old = structuredClone(row?.state) as Record<string, unknown> & {
+      companies: Record<string, Record<string, unknown>>;
+    };
+    delete old.rivals;
+    for (const c of Object.values(old.companies)) {
+      delete c.rival;
+      delete c.startCash;
+    }
+    await server.ctx.db
+      .update(schema.worldSnapshots)
+      .set({ simVersion: "sim-3", state: old })
+      .where(
+        and(
+          eq(schema.worldSnapshots.worldId, worldId),
+          eq(schema.worldSnapshots.seq, row?.seq ?? 0),
+        ),
+      );
+    await server.ctx.worlds.evict(worldId);
+
+    const loaded = await server.ctx.worlds.get(worldId);
+    const s = loaded.state();
+    expect(s.rivals).toBeNull();
+    expect(s.speed).toBe(2);
+    for (const c of Object.values(s.companies)) {
+      expect(c.rival).toBeNull();
+      expect(c.startCash).toBe(250_000);
+    }
+    const versions = await server.ctx.db
+      .select({ v: schema.worldSnapshots.simVersion })
+      .from(schema.worldSnapshots)
+      .where(eq(schema.worldSnapshots.worldId, worldId));
+    expect(versions.map((r) => r.v)).toContain("sim-4");
   });
 
   it("refuses a snapshot from another simulation version", async () => {

@@ -10,6 +10,7 @@ import { marketDay } from "./market.ts";
 import { paletteProblem } from "./palette.ts";
 import { newCompanyBusiness, productCommand, productsDay } from "./products.ts";
 import { rescueCommand, rescueDay } from "./rescue.ts";
+import { joinRivals } from "./rivals.ts";
 import { rngInt } from "./rng.ts";
 import type { Input, StepResult, SystemEvent, WorldState } from "./state.ts";
 import {
@@ -141,6 +142,8 @@ function system(s: WorldState, e: SystemEvent): Handled {
     }
     case "feedbackScored":
       return applyFeedback(s, e);
+    case "rivalsJoined":
+      return joinRivals(s, e.pack);
     default:
       return no("This event isn't supported yet.");
   }
@@ -177,6 +180,8 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       s.companies[newId] = {
         id: newId,
         ownerUserId: userId,
+        startCash: getBalance(s.balance).foundingCash,
+        rival: null,
         name: cmd.name,
         logo: cmd.logo,
         palette: cmd.palette,

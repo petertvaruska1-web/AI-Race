@@ -134,6 +134,7 @@ const version = (scores: Record<string, number>): VersionState => ({
   id: "v",
   label: "v1",
   runId: "r",
+  packKey: null,
   parentId: null,
   nLayer: 4,
   dModel: 128,

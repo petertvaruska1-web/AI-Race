@@ -143,6 +143,7 @@ export function applyCompletion(
     personalityWords: [],
     traits: null,
     published: false,
+    packKey: null,
   };
   run.status = "completed";
   run.versionId = versionId;

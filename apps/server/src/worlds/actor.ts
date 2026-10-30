@@ -1,4 +1,12 @@
-import { getBalance, type Input, step, type WorldState } from "@airace/sim";
+import {
+  getBalance,
+  type Input,
+  step,
+  UPGRADABLE,
+  type UpgradableVersion,
+  upgradeState,
+  type WorldState,
+} from "@airace/sim";
 import { and, asc, desc, eq, gt } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { SIM_VERSION } from "../config.ts";
@@ -67,13 +75,16 @@ export class WorldActor {
       .orderBy(desc(schema.worldSnapshots.seq))
       .limit(1);
     if (!snap) throw new Error(`World ${worldId} not found.`);
-    if (snap.simVersion !== SIM_VERSION) {
+    const upgradable = (UPGRADABLE as readonly string[]).includes(snap.simVersion);
+    if (snap.simVersion !== SIM_VERSION && !upgradable) {
       throw new OutdatedWorldError(
         `World ${worldId} was saved by simulation ${snap.simVersion}, but this server runs ${SIM_VERSION}. ` +
           "It can't be replayed safely; start it with a matching server version.",
       );
     }
-    let state = snap.state as WorldState;
+    let state = upgradable
+      ? upgradeState(snap.state, snap.simVersion as UpgradableVersion)
+      : (snap.state as WorldState);
     const inputs = await ctx.db
       .select({ seq: schema.worldInputs.seq, payload: schema.worldInputs.payload })
       .from(schema.worldInputs)
@@ -87,6 +98,8 @@ export class WorldActor {
       state = r.state;
     }
     const actor = new WorldActor(ctx, worldId, state, snap.seq, onUnload);
+    // An upgraded world is saved at once in this version, so it is upgraded only once.
+    if (upgradable) await actor.snapshot("upgrade", { replace: true });
     actor.reschedule();
     return actor;
   }
@@ -217,19 +230,23 @@ export class WorldActor {
   }
 
   /** Saves the current state; a no-op when nothing changed since the last one. */
-  async snapshot(reason: string): Promise<void> {
+  async snapshot(reason: string, opts: { replace?: boolean } = {}): Promise<void> {
     const s = this.current;
-    if (s.seq === this.lastSnapshotSeq) return;
-    await this.ctx.db
-      .insert(schema.worldSnapshots)
-      .values({
-        worldId: this.worldId,
-        seq: s.seq,
-        simVersion: SIM_VERSION,
-        state: s,
-        at: this.ctx.opts.scheduler.now(),
-      })
-      .onConflictDoNothing();
+    if (s.seq === this.lastSnapshotSeq && !opts.replace) return;
+    const row = {
+      worldId: this.worldId,
+      seq: s.seq,
+      simVersion: SIM_VERSION,
+      state: s,
+      at: this.ctx.opts.scheduler.now(),
+    };
+    const insert = this.ctx.db.insert(schema.worldSnapshots).values(row);
+    await (opts.replace
+      ? insert.onConflictDoUpdate({
+          target: [schema.worldSnapshots.worldId, schema.worldSnapshots.seq],
+          set: { simVersion: row.simVersion, state: row.state, at: row.at },
+        })
+      : insert.onConflictDoNothing());
     this.lastSnapshotSeq = s.seq;
     this.log.debug({ seq: s.seq, reason }, "world snapshot");
   }

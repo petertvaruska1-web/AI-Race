@@ -65,6 +65,7 @@ export function projectView(state: WorldState, viewerUserId: string): WorldView 
       effectiveHostUserId: effectiveHost(state),
       inviteCode: state.inviteCode,
       market: marketView(state),
+      rivals: state.rivals ? "joined" : "none",
     },
     members: Object.values(state.members)
       .sort((a, b) => a.joinedSeq - b.joinedSeq)
@@ -106,6 +107,7 @@ function publicCompany(state: WorldState, c: CompanyState): PublicCompany {
     logo: { shape: c.logo.shape, symbol: c.logo.symbol, initials: c.logo.initials },
     palette: { primary: c.palette.primary, secondary: c.palette.secondary },
     ownerUserId: c.ownerUserId,
+    rival: c.rival ? { style: c.rival.style, archetype: c.rival.archetype } : null,
     publishedVersions: versionsInOrder(c)
       .filter((v) => v.published)
       .map(publicVersion),
