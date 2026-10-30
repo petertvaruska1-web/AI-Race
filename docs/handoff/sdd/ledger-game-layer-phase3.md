@@ -22,3 +22,5 @@ Task 4: Ruling: RivalState also keeps productWord (which of its style's product 
 Task 4: Ruling: an upgraded world's snapshot is replaced in place (same seq) so it is upgraded once - cost if wrong: none.
 Task 4: Ruling: the property tests' exploration guard moved from seed 1 to seed 2 - adding rivals to the generator shifted seed 1 to only 1 failed run (seeds 2-4 give 7-11) - cost if wrong: none (a coverage guard).
 Task 4: complete (commits b7476df..c5337fb, tests: npm test -> 448 passed; npm run check clean)
+Task 5: Ruling: rivals set their style's prices when they join (not on their first launch day) - prices only matter once plans open, and no extra flag is needed - cost if wrong: none.
+Task 5: complete (commits abffaa6..8dea905, tests: npm test -> 455 passed; npm run check clean)
