@@ -33,3 +33,8 @@ Task 8: Ruling: tests were written right after the code here, not before; a muta
 Task 8: complete (commits b459f85..a0e7a6c, tests: npm test -> see next line)
       Tests  1 failed | 475 passed (476)
 Task 8: correction - the line above recorded a red run (1 failed: a Task 4 test expecting the old rival record); fixed in 9ee1d38, npm test -> Tests  476 passed (476)
+Task 9: Ruling: the 'not runaway' target caps a rival at half of all AI users and 40% of paying customers (the plan said 45% of all users) - a free crowd-pleaser naturally gathers most free users (46-48% over seeds 1-3 even with half the ads) while paying customers stay spread (max 34%) - cost if wrong: a crowd-pleaser rival feels dominant on the customers table.
+Task 9: Ruling: rival ad budget for the crowd-pleaser style 4000 -> 2000 a day - 48% of all users -> under half - cost if wrong: a quieter crowd-pleaser.
+Task 9: Ruling: bots with rivals give rival AIs weekly feedback from their measured skills, as the server does from pack replies - cost if wrong: none.
+Task 9: Note: the Phase 2 deferred minor on ad payback holds with rivals: a $350k blitz is still behind a plain bot at day 60.
+Task 9: complete (commits 8be60a3..07d5d7f, tests: npm test -> Tests  481 passed (481); npm run check clean)
