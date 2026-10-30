@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { GroupId } from "./world.ts";
+import { zId } from "./text.ts";
+import { BATTLE_SKILLS, GroupId } from "./world.ts";
 
 // Messages between the server and ML workers (plan Task 13). The Python worker
 // (ml/, Task 17) loads the fixtures in fixtures/worker/ to check it speaks the
@@ -8,7 +9,7 @@ import { GroupId } from "./world.ts";
 
 const v = z.literal(1);
 
-export const JOB_TYPES = ["train", "eval", "generate", "feedback"] as const;
+export const JOB_TYPES = ["train", "eval", "generate", "feedback", "battle"] as const;
 export const JobType = z.enum(JOB_TYPES);
 export type JobType = z.infer<typeof JobType>;
 
@@ -20,8 +21,14 @@ export const WorkerCapabilities = z.object({
   vramMb: z.number().int().min(0),
   maxParams: z.number().int().positive(),
   jobTypes: z.array(JobType).min(1),
-  /** A worker from before feedback jobs sends no feedback slot: it gets none. */
-  slots: z.object({ train: Slots, eval: Slots, generate: Slots, feedback: Slots.default(0) }),
+  /** A worker from before feedback or battle jobs sends no slot for them: it gets none. */
+  slots: z.object({
+    train: Slots,
+    eval: Slots,
+    generate: Slots,
+    feedback: Slots.default(0),
+    battle: Slots.default(0),
+  }),
   /** Which corpus, tokenizer and evaluators the worker has installed (ADR 0008 item 2). */
   dataIdentity: z.string().min(1),
 });
@@ -101,7 +108,8 @@ export const EvalJobResult = z.object({
 export type EvalJobResult = z.infer<typeof EvalJobResult>;
 
 export const GenerateJobSpec = z.object({
-  versionId: z.uuid(),
+  /** A player version's id, or a rival AI's pack key. */
+  versionId: zId,
   modelTarUrl: Url,
   history: z.array(z.tuple([z.enum(["user", "ai"]), z.string()])),
   maxNewTokens: z.number().int().positive(),
@@ -140,6 +148,39 @@ export const FeedbackJobResult = z.object({
 });
 export type FeedbackJobResult = z.infer<typeof FeedbackJobResult>;
 
+const BattleSide = z.object({ versionId: zId, modelTarUrl: Url });
+
+/** Two AIs answer the same fresh challenges (game-layer design §10); `b` is the rival. */
+export const BattleJobSpec = z.object({
+  battleId: zId,
+  skill: z.enum(BATTLE_SKILLS),
+  rounds: z.number().int().min(1).max(5),
+  seed: z.number().int().min(0),
+  a: BattleSide,
+  b: BattleSide,
+});
+export type BattleJobSpec = z.infer<typeof BattleJobSpec>;
+
+/** A piece of a battle reply, sent as a `progress` event while it is written. */
+export const BattleTextEvent = z.object({
+  kind: z.literal("battleText"),
+  round: z.number().int().min(0),
+  side: z.enum(["a", "b"]),
+  text: z.string(),
+});
+export type BattleTextEvent = z.infer<typeof BattleTextEvent>;
+
+const BattleAnswer = z.object({
+  /** Real model output, exactly as generated (R1). */
+  reply: z.string(),
+  score: z.number().min(0).max(1),
+});
+
+export const BattleJobResult = z.object({
+  rounds: z.array(z.object({ prompt: z.string(), a: BattleAnswer, b: BattleAnswer })).min(1),
+});
+export type BattleJobResult = z.infer<typeof BattleJobResult>;
+
 /** Schemas by name, for the shared fixtures (`{schema, message}`). */
 export const WORKER_SCHEMAS = {
   WorkerMessage,
@@ -152,4 +193,6 @@ export const WORKER_SCHEMAS = {
   GenerateJobResult,
   FeedbackJobSpec,
   FeedbackJobResult,
+  BattleJobSpec,
+  BattleJobResult,
 } as const;

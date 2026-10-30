@@ -1,0 +1,18 @@
+{
+  "schema": "BattleJobResult",
+  "message": {
+    "rounds": [
+      {
+        "prompt": "What is the capital of France?",
+        "a": {
+          "reply": "Paris.",
+          "score": 1
+        },
+        "b": {
+          "reply": "<b>x</b> <|end|>",
+          "score": 0
+        }
+      }
+    ]
+  }
+}

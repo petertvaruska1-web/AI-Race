@@ -1,0 +1,14 @@
+{
+  "schema": "WorkerMessage",
+  "message": {
+    "v": 1,
+    "type": "progress",
+    "jobId": "5f0c2b1e-3a4d-4e5f-8a9b-0c1d2e3f4a5b",
+    "event": {
+      "kind": "battleText",
+      "round": 0,
+      "side": "a",
+      "text": "Par"
+    }
+  }
+}

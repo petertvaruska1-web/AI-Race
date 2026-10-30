@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { JOB_PRIORITY } from "../src/jobs/broker.ts";
 import { CLOSE_BAD_WORKER } from "../src/jobs/workerGateway.ts";
 import { eventually, FakeWorker, type FakeWorkerOptions } from "./fakeWorker.ts";
 import { SAMPLE_CATALOG, startTestServer, type TestServer } from "./harness.ts";
@@ -68,6 +69,21 @@ describe("leasing", () => {
     expect((await w.nextLease()).jobId).toBe(g);
     w.done(a, RESULT);
     expect((await w.nextLease()).jobId).toBe(b);
+  });
+
+  it("runs battles right after chats, and a rival chat last", async () => {
+    expect(JOB_PRIORITY).toEqual({ generate: 0, battle: 1, train: 2, eval: 3, feedback: 4 });
+    server = await start();
+    const rival = await server.ctx.broker.enqueue("generate", { text: "r" }, null, { priority: 5 });
+    const mine = await server.ctx.broker.enqueue("generate", { text: "m" }, null);
+    expect((await server.ctx.broker.getJob(rival))?.priority).toBe(5);
+    const w = await worker(server, {
+      jobTypes: ["generate"],
+      slots: { train: 0, eval: 0, generate: 1 },
+    });
+    expect((await w.nextLease()).jobId).toBe(mine);
+    w.done(mine, { text: "ok" });
+    expect((await w.nextLease()).jobId).toBe(rival);
   });
 
   it("gives nothing to a worker with other training data", async () => {

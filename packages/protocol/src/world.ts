@@ -26,6 +26,16 @@ export const BENCH_CATEGORIES = [
 ] as const;
 export type BenchCategory = (typeof BENCH_CATEGORIES)[number];
 
+/** Skills two AIs can battle in: their replies are written text a check or the judge scores. */
+export const BATTLE_SKILLS = [
+  "knowledge",
+  "coding",
+  "instruction",
+  "pattern",
+  "creativity",
+] as const;
+export type BattleSkill = (typeof BATTLE_SKILLS)[number];
+
 /** Customer groups (game-layer design §5). */
 export const GROUP_IDS = [
   "students",

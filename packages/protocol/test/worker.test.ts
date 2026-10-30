@@ -28,9 +28,24 @@ describe("worker protocol fixtures", () => {
         eval: WORKER_SCHEMAS.EvalJobSpec,
         generate: WORKER_SCHEMAS.GenerateJobSpec,
         feedback: WORKER_SCHEMAS.FeedbackJobSpec,
+        battle: WORKER_SCHEMAS.BattleJobSpec,
       }[lease.jobType];
       expect(spec.safeParse(lease.spec).error).toBeUndefined();
     }
+  });
+
+  it("gives an older worker no battle slot", () => {
+    const { message } = JSON.parse(readFileSync(new URL("whello.json", DIR), "utf8"));
+    delete message.capabilities.slots.battle;
+    const hello = WorkerMessage.parse(message);
+    if (hello.type !== "whello") throw new Error("not a hello");
+    expect(hello.capabilities.slots.battle).toBe(0);
+  });
+
+  it("lets a chat name a rival AI by its pack key", () => {
+    const { message } = JSON.parse(readFileSync(new URL("lease-generate.json", DIR), "utf8"));
+    const spec = { ...message.spec, versionId: "budget-a-v2" };
+    expect(WORKER_SCHEMAS.GenerateJobSpec.safeParse(spec).success).toBe(true);
   });
 
   it("rejects a worker message without a job id or version", () => {

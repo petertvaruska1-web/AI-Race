@@ -1,0 +1,24 @@
+{
+  "schema": "ServerToWorker",
+  "message": {
+    "v": 1,
+    "type": "lease",
+    "jobId": "5f0c2b1e-3a4d-4e5f-8a9b-0c1d2e3f4a5b",
+    "jobType": "battle",
+    "leaseMs": 30000,
+    "spec": {
+      "battleId": "b-1",
+      "skill": "knowledge",
+      "rounds": 3,
+      "seed": 42,
+      "a": {
+        "versionId": "6fa459ea-ee8a-4ca4-894e-db77e160355e",
+        "modelTarUrl": "http://127.0.0.1:8787/blobs/checkpoints/6fa459ea-ee8a-4ca4-894e-db77e160355e.tar?exp=1&sig=abc"
+      },
+      "b": {
+        "versionId": "budget-a-v2",
+        "modelTarUrl": "http://127.0.0.1:8787/blobs/rivals/0123456789ab/budget-a-v2.tar?exp=1&sig=def"
+      }
+    }
+  }
+}

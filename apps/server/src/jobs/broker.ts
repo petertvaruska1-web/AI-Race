@@ -11,10 +11,12 @@ type Handler<T> = (job: JobRow, value: T) => void | Promise<void>;
 
 /**
  * Lower runs first (game-layer design §12): a player waiting on a chat reply, then
- * the player's training, then scoring, then weekly customer feedback.
+ * a battle, the player's training, scoring, weekly customer feedback, and last a
+ * chat with a rival's AI (a `generate` job enqueued with priority 5).
  */
 export const JOB_PRIORITY: Record<JobType, number> = {
   generate: 0,
+  battle: 1,
   train: 2,
   eval: 3,
   feedback: 4,
@@ -92,13 +94,18 @@ export class JobBroker {
     this.prepare.set(type, fn);
   }
 
-  async enqueue(type: JobType, payload: unknown, worldId: string | null): Promise<string> {
+  async enqueue(
+    type: JobType,
+    payload: unknown,
+    worldId: string | null,
+    opts: { priority?: number } = {},
+  ): Promise<string> {
     const id = randomUUID();
     const now = this.ctx.opts.scheduler.now();
     await this.ctx.db.insert(schema.jobs).values({
       id,
       type,
-      priority: JOB_PRIORITY[type],
+      priority: opts.priority ?? JOB_PRIORITY[type],
       worldId,
       payload,
       status: "queued",

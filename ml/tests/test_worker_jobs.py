@@ -192,3 +192,52 @@ def test_the_worker_command_needs_a_token(tiny_data_root, capsys):
 
     assert main(["worker", "--data-root", str(tiny_data_root)]) == 2
     assert "no worker token" in capsys.readouterr().err
+
+
+def _battle_spec(url: str, skill: str = "knowledge", rounds: int = 3) -> dict:
+    return {
+        "battleId": "b-1",
+        "skill": skill,
+        "rounds": rounds,
+        "seed": 5,
+        "a": {"versionId": "v-battle-a", "modelTarUrl": f"{url}/blobs/a.tar?sig=1"},
+        "b": {"versionId": "rival-v1", "modelTarUrl": f"{url}/blobs/a.tar?sig=1"},
+    }
+
+
+def test_a_battle_streams_both_sides_round_by_round_and_scores_them(runner, trained, tmp_path):
+    rec = Recorder(tmp_path)
+    result = runner.handle_battle(_battle_spec(trained[0]), rec.ctx)
+    assert len(result["rounds"]) == 3
+    order = []
+    for e in rec.events:
+        assert e["kind"] == "battleText" and isinstance(e["text"], str)
+        if not order or order[-1] != (e["round"], e["side"]):
+            order.append((e["round"], e["side"]))
+    assert order == [(r, s) for r in range(3) for s in ("a", "b")]
+    for k, r in enumerate(result["rounds"]):
+        for side in ("a", "b"):
+            assert 0.0 <= r[side]["score"] <= 1.0
+            # The streamed pieces add up to the reply (R1: real, unchanged).
+            text = "".join(e["text"] for e in rec.events if e["round"] == k and e["side"] == side)
+            assert text == r[side]["reply"]
+    fixture = json.loads((RESULT_FIXTURES / "result-battle.json").read_text())["message"]
+    assert set(result["rounds"][0]) == set(fixture["rounds"][0])
+    json.dumps(result, allow_nan=False)
+
+
+def test_a_creativity_battle_needs_the_judge(runner, trained, tmp_path):
+    with pytest.raises(ValueError, match="judge"):
+        runner.handle_battle(_battle_spec(trained[0], "creativity", 1), Recorder(tmp_path).ctx)
+
+
+def test_rival_models_leave_the_cache_first(trained, tmp_path, tiny_tok):
+    from airace_ml.worker.models import ModelCache
+
+    cache = ModelCache(tmp_path / "models", tiny_tok, "cpu", capacity=1)
+    url = f"{trained[0]}/blobs/a.tar?sig=1"
+    cache.get("a", url)
+    cache.get("b", url, transient=True)
+    cache.get("c", url)
+    assert "a" in cache._on_cpu
+    assert "b" not in cache._on_cpu and "b" not in cache._on_device
