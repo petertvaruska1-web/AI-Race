@@ -50,3 +50,4 @@ Task 13: complete (commits 96513c0..79494f5, tests: npm test -> Tests  499 passe
 Task 14: Ruling: a battle records pointsChange (the player's ranking points won or lost) in the sim and its view - the battle window shows it and the current points alone can't tell it - cost if wrong: one number per battle.
 Task 14: Ruling: the battle-result toast moves to Task 15 with the other new toasts - cost if wrong: none.
 Task 14: complete (commits 86d55fc..f8093c3, tests: npm test -> Tests  1 failed | 502 passed (503); npm run check clean)
+Task 14: correction - the run above had 1 timing failure in gateway.test (presence across a quick reconnect) while the owner's game ran on the same PC; it passed 3 times alone and the full rerun gave 503 passed - recorded as a timing flake, not a defect.
