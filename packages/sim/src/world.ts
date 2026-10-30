@@ -39,6 +39,7 @@ export function createWorld(p: {
     rivals: null,
     leaders: {},
     lastRankingNews: {},
+    points: {},
     market: emptyMarket(),
     spotlights,
     feed: [],

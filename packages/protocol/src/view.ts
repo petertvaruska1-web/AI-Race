@@ -298,6 +298,29 @@ export const ReportCardView = z.strictObject({
 });
 export type ReportCardView = z.infer<typeof ReportCardView>;
 
+const BattleSideView = z.strictObject({ productId: zId, versionId: zId, productName: z.string() });
+const BattleAnswerView = z.strictObject({
+  /** Real model output, exactly as written (R1). */
+  reply: z.string(),
+  score: z.number().min(0).max(1),
+});
+
+/** A battle against a rival (its owner's only); the replies are real, verbatim. */
+export const BattleView = z.strictObject({
+  id: zId,
+  day: Day,
+  skill: z.enum(BATTLE_SKILLS),
+  rivalId: zId,
+  mine: BattleSideView,
+  theirs: BattleSideView,
+  status: z.enum(["running", "done", "calledOff"]),
+  rounds: z
+    .array(z.strictObject({ prompt: z.string(), mine: BattleAnswerView, theirs: BattleAnswerView }))
+    .nullable(),
+  outcome: z.enum(["win", "draw", "loss"]).nullable(),
+});
+export type BattleView = z.infer<typeof BattleView>;
+
 export const PrivateCompany = z.strictObject({
   id: zId,
   cash: z.number().int(),
@@ -321,6 +344,8 @@ export const PrivateCompany = z.strictObject({
   history: z.record(z.string().regex(/^\d+$/), DaySampleView),
   campaigns: z.array(CampaignView),
   dataCenters: z.array(DataCenterView),
+  /** The last 20 battles, newest last. */
+  battles: z.array(BattleView),
   /** The last 12 report cards, newest last. */
   reports: z.array(ReportCardView).max(12),
   /** A rescue offer waiting for a choice, until its deadline. */

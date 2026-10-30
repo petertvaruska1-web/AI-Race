@@ -1,5 +1,6 @@
 import { Command, TEXT_LIMITS } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
+import { applyBattle, battleCommand } from "./battles.ts";
 import { campaignCommand, campaignsDay } from "./campaigns.ts";
 import { computeCommand, computeDay, dataCentersDay, newCompute } from "./compute.ts";
 import { fameDay } from "./fame.ts";
@@ -147,6 +148,8 @@ function system(s: WorldState, e: SystemEvent): Handled {
       return applyFeedback(s, e);
     case "rivalsJoined":
       return joinRivals(s, e.pack);
+    case "battleResolved":
+      return applyBattle(s, e);
     default:
       return no("This event isn't supported yet.");
   }
@@ -186,6 +189,7 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
         startCash: getBalance(s.balance).foundingCash,
         rival: null,
         lastRanks: null,
+        battles: [],
         name: cmd.name,
         logo: cmd.logo,
         palette: cmd.palette,
@@ -278,6 +282,11 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       const company = member.companyId ? s.companies[member.companyId] : undefined;
       if (!company) return no("Found your company first.");
       return computeCommand(s, company, cmd, newId);
+    }
+    case "startBattle": {
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("Found your company first.");
+      return battleCommand(s, company, cmd, newId);
     }
     case "chooseRescue": {
       const company = member.companyId ? s.companies[member.companyId] : undefined;

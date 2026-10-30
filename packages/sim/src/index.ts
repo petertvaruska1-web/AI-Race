@@ -1,4 +1,5 @@
 export * from "./balance.ts";
+export * from "./battles.ts";
 export * from "./calendar.ts";
 export * from "./campaigns.ts";
 export * from "./compute.ts";

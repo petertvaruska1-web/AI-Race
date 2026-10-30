@@ -118,9 +118,13 @@ function leagueView(
       return { companyId: row.companyId, rank: i + 1, value };
     });
   }
-  const points = Object.fromEntries(
-    BATTLE_SKILLS.map((k) => [k, []]),
-  ) as unknown as WorldView["world"]["league"]["points"];
+  const points = {} as WorldView["world"]["league"]["points"];
+  for (const skill of BATTLE_SKILLS) {
+    const table = state.points[skill] ?? {};
+    points[skill] = Object.entries(table)
+      .sort(([a, x], [b, y]) => y - x || a.localeCompare(b))
+      .map(([companyId, p], i) => ({ companyId, rank: i + 1, points: p }));
+  }
   return { tables: out, points };
 }
 
@@ -231,6 +235,24 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
           monthlyRate: getBalance(state.balance).economy.rescue.loanMonthlyRate,
         }
       : null,
+    // The seed and the rival's pack key stay in the sim (R2).
+    battles: c.battles.map((x) => ({
+      id: x.id,
+      day: x.day,
+      skill: x.skill,
+      rivalId: x.rivalId,
+      mine: { ...x.mine },
+      theirs: {
+        productId: x.theirs.productId,
+        versionId: x.theirs.versionId,
+        productName: x.theirs.productName,
+      },
+      status: x.status,
+      rounds: x.rounds
+        ? x.rounds.map((r) => ({ prompt: r.prompt, mine: { ...r.mine }, theirs: { ...r.theirs } }))
+        : null,
+      outcome: x.outcome,
+    })),
     reports: c.reports.slice(-MONTHS_SHOWN).map((r) => ({
       ...r,
       growthByGroup: pick(GROUP_IDS, r.growthByGroup),

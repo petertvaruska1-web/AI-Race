@@ -18,12 +18,14 @@ function fromSim3(s: Loose): Loose {
     c.rival ??= null;
     c.startCash ??= founding;
     c.lastRanks ??= null;
+    c.battles ??= [];
     for (const r of c.reports as Loose[]) r.ranks ??= null;
     for (const v of Object.values(c.versions as Record<string, Loose>)) v.packKey ??= null;
   }
   s.rivals ??= null;
   s.leaders ??= {};
   s.lastRankingNews ??= {};
+  s.points ??= {};
   return s;
 }
 

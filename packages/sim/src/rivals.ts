@@ -98,6 +98,7 @@ export function joinRivals(s: WorldState, raw: unknown): Handled {
         counters: { campaigns: 0, dataCenters: 0 },
       },
       lastRanks: null,
+      battles: [],
       name: drawn.look.name,
       logo: drawn.look.logo,
       palette: drawn.look.palette,

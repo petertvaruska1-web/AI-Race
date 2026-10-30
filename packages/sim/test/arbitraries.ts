@@ -19,6 +19,9 @@ export const VERSION_IDS = ["VER_1", "VER_2", "VER_3", "VER_4", "VER_5", "VER_6"
 const NAMES = ["Acme", "acme", "Beta Labs", "Cortex", "Delta", "A"];
 export const PRODUCT_IDS = ["PROD_1", "PROD_2", "PROD_3", "PROD_4"];
 export const CAMPAIGN_IDS = ["AD_1", "AD_2"];
+const BATTLE_IDS = ["BAT_1", "BAT_2"];
+/** Rival products as rivals name them: the arch-rival's first two launches and another's. */
+const RIVAL_PRODUCT_IDS = ["rival-1-p1", "rival-1-p2", "rival-2-p1", "PROD_1"];
 const PRODUCT_NAMES = ["Spark", "spark", "Nova", "<b>Bolt</b> 🚀", "X"];
 /** Replies a real model might write; posts must carry them unchanged. */
 const REPLIES = ["<b>x</b> <|end|>", "", "😀😀", "x".repeat(2000), "Paris."];
@@ -185,13 +188,42 @@ const commandInput: fc.Arbitrary<Input> = user.chain((u) =>
       .constantFrom(0, 0.5, 1, -1, 2)
       .map((share) => command(u, { type: "setTrainingShare", share })),
     fc.constantFrom("loan", "investor").map((kind) => command(u, { type: "chooseRescue", kind })),
+    fc
+      .record({
+        product: fc.constantFrom(...RIVAL_PRODUCT_IDS),
+        skill: fc.constantFrom("knowledge", "coding", "creativity"),
+        id: fc.constantFrom(...BATTLE_IDS),
+      })
+      .map((r) =>
+        command(u, { type: "startBattle", rivalProductId: r.product, skill: r.skill }, r.id),
+      ),
   ),
 );
 
 const feedbackScored = (productId: string, key: string, results: unknown[]): Input =>
   ({ kind: "system", event: { type: "feedbackScored", productId, key, results } }) as Input;
 
+const battleResolved: fc.Arbitrary<Input> = fc
+  .record({
+    id: fc.constantFrom(...BATTLE_IDS),
+    failed: fc.boolean(),
+    count: fc.constantFrom(3, 5, 5),
+    scores: fc.array(fc.constantFrom(0, 0.25, 1), { minLength: 10, maxLength: 10 }),
+  })
+  .map(({ id, failed, count, scores }) => {
+    const rounds = Array.from({ length: count }, (_, i) => ({
+      prompt: "What is 2 + 2?",
+      mine: { reply: REPLIES[i % REPLIES.length], score: scores[i] ?? 0 },
+      theirs: { reply: REPLIES[(i + 1) % REPLIES.length], score: scores[i + 5] ?? 0 },
+    }));
+    const event = failed
+      ? { type: "battleResolved", battleId: id, failed: true }
+      : { type: "battleResolved", battleId: id, rounds };
+    return { kind: "system", event } as Input;
+  });
+
 const systemInput: fc.Arbitrary<Input> = fc.oneof(
+  battleResolved,
   fc.tuple(user, fc.constantFrom("Ben", "Cy", "Dee")).map(
     ([userId, displayName]): Input => ({
       kind: "system",

@@ -213,6 +213,25 @@ function sampleView(): WorldView {
         },
         rescue: { deadlineDay: 45 },
         loan: { balance: 120_000, principalPerMonth: 5000, monthlyRate: 0.04 },
+        battles: [
+          {
+            id: "b1",
+            day: 9,
+            skill: "coding",
+            rivalId: "rival-1",
+            mine: { productId: "p1", versionId: "v1", productName: "Spark" },
+            theirs: { productId: "rival-1-p1", versionId: "rival-1-v1", productName: "Titan" },
+            status: "done",
+            rounds: [
+              {
+                prompt: "Add two numbers.",
+                mine: { reply: "<b>x</b> <|end|>", score: 1 },
+                theirs: { reply: "", score: 0 },
+              },
+            ],
+            outcome: "win",
+          },
+        ],
         reports: [
           {
             month: "2027-02",

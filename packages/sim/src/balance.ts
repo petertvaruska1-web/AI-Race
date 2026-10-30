@@ -139,6 +139,19 @@ export type Economy = {
   rivals: RivalBalance;
   /** A table's #1 makes news at most once in this many days. */
   league: { newsGapDays: number };
+  /** Battles against rivals (game-layer design §10): fee, rounds, cooldown and ranking points. */
+  battles: {
+    fee: number;
+    rounds: number;
+    cooldownDays: number;
+    /** A total score difference within this is a draw. */
+    drawMargin: number;
+    pointsStart: number;
+    pointsK: number;
+    sentiment: { win: number; draw: number; loss: number };
+    followers: { win: number; loss: number };
+    kept: number;
+  };
 };
 
 export type RivalBalance = {
@@ -439,6 +452,17 @@ const ECONOMY_V2: Economy = {
     trashTalkGapDays: 21,
   },
   league: { newsGapDays: 14 },
+  battles: {
+    fee: 5_000,
+    rounds: 5,
+    cooldownDays: 7,
+    drawMargin: 0.25,
+    pointsStart: 1000,
+    pointsK: 32,
+    sentiment: { win: 0.4, draw: 0.1, loss: -0.3 },
+    followers: { win: 0.05, loss: -0.02 },
+    kept: 20,
+  },
 };
 
 export const BALANCE_V2: Balance = {
@@ -488,6 +512,7 @@ export const BALANCE_TEST: Balance = {
       countdownDays: { premium: 3, budget: 3, specialist: 3, consumer: 3 },
       trashTalkGapDays: 2,
     },
+    battles: { ...ECONOMY_V2.battles, rounds: 3, cooldownDays: 2 },
   },
 };
 

@@ -1,5 +1,6 @@
 import type {
   Archetype,
+  BattleSkill,
   Command,
   CostCategory,
   GroupId,
@@ -271,6 +272,28 @@ export type RivalState = {
   counters: { campaigns: number; dataCenters: number };
 };
 
+/** One round of a battle: the challenge and both AIs' real replies with their scores (R1). */
+export type BattleRound = {
+  prompt: string;
+  mine: { reply: string; score: number };
+  theirs: { reply: string; score: number };
+};
+
+/** A battle between the player's AI and a rival's (game-layer design §10). */
+export type BattleState = {
+  id: string;
+  day: number;
+  skill: BattleSkill;
+  rivalId: string;
+  mine: { productId: string; versionId: string; productName: string };
+  theirs: { productId: string; versionId: string; productName: string; packKey: string };
+  /** Picks the challenges, so a retried battle asks the same ones. */
+  seed: number;
+  status: "running" | "done" | "calledOff";
+  rounds: BattleRound[] | null;
+  outcome: "win" | "draw" | "loss" | null;
+};
+
 export type CompanyState = {
   id: string;
   /** Null for a rival: no player owns it. */
@@ -278,6 +301,8 @@ export type CompanyState = {
   /** Cash at founding; the money identity starts from it. */
   startCash: number;
   rival: RivalState | null;
+  /** The last battles, newest last. */
+  battles: BattleState[];
   /** League places at the last report card (for its rank changes). */
   lastRanks: { customers: number; revenue: number; overall: number } | null;
   name: string;
@@ -327,6 +352,8 @@ export type WorldState = {
   /** Each league table's leader, and the day its last #1 story ran. */
   leaders: Partial<Record<LeagueTable, string>>;
   lastRankingNews: Partial<Record<LeagueTable, number>>;
+  /** Ranking points per battle skill (Elo), by company. */
+  points: Partial<Record<BattleSkill, Record<string, number>>>;
   market: MarketState;
   spotlights: Spotlight[];
   /** Posts and news, oldest first, capped at the balance's `feedCap`. */
@@ -350,6 +377,8 @@ export type SystemEvent =
       traits?: Record<string, number> | null;
     }
   | { type: "rivalsJoined"; pack: RivalPack }
+  | { type: "battleResolved"; battleId: string; rounds: BattleRound[] }
+  | { type: "battleResolved"; battleId: string; failed: true }
   | {
       type: "feedbackScored";
       productId: string;

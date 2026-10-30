@@ -151,12 +151,13 @@ describe("sim properties", { timeout: 30_000 }, () => {
 
   it("explores worlds where training, launches and customer posts happen", () => {
     // Guards the generator: the properties above mean little if nothing ever happens.
-    const stats = { runs: 0, versions: 0, failed: 0, launches: 0, posts: 0 };
+    const stats = { runs: 0, versions: 0, failed: 0, launches: 0, posts: 0, battles: 0 };
     fc.assert(
       fc.property(arbInputs(100), (inputs) => {
         const s = runInputs(newWorld(), inputs);
         for (const c of Object.values(s.companies)) {
           stats.runs += Object.keys(c.runs).length;
+          stats.battles += c.battles.filter((b) => b.status !== "running").length;
           stats.versions += Object.keys(c.versions).length;
           stats.failed += Object.values(c.runs).filter((r) => r.status === "failed").length;
           stats.launches += Object.values(c.products).filter(
@@ -172,5 +173,6 @@ describe("sim properties", { timeout: 30_000 }, () => {
     expect(stats.failed).toBeGreaterThan(5);
     expect(stats.launches).toBeGreaterThan(0);
     expect(stats.posts).toBeGreaterThan(0);
+    expect(stats.battles).toBeGreaterThan(0);
   });
 });

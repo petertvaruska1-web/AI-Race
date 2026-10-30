@@ -37,6 +37,7 @@ const NEEDS_ID: ReadonlySet<Command["type"]> = new Set([
   "createCompany",
   "startTraining",
   "launchProduct",
+  "startBattle",
   "startCampaign",
   "buildDataCenter",
 ]);

@@ -226,6 +226,11 @@ export const Command = z.discriminatedUnion("type", [
   z.object({ type: z.literal("buildDataCenter"), region: z.enum(REGION_IDS) }),
   z.object({ type: z.literal("setTrainingShare"), share: z.number() }),
   z.object({ type: z.literal("chooseRescue"), kind: z.enum(["loan", "investor"]) }),
+  z.object({
+    type: z.literal("startBattle"),
+    rivalProductId: zId,
+    skill: z.enum(BATTLE_SKILLS),
+  }),
 ]);
 export type Command = z.infer<typeof Command>;
 export type CommandType = Command["type"];
