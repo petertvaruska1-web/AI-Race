@@ -1,0 +1,1 @@
+ALTER TABLE "chat_threads" ALTER COLUMN "version_id" SET DATA TYPE text;

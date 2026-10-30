@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { GenerateJobResult, type Query } from "@airace/protocol";
+import type { WorldState } from "@airace/sim";
 import { and, asc, desc, eq } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { HttpError } from "../auth.ts";
@@ -21,7 +22,13 @@ type GeneratePayload = {
   versionId: string;
   history: ["user" | "ai", string][];
   seed: number;
+  /** Set when the AI is a rival's: its model comes from the rival pack. */
+  packKey?: string;
 };
+
+/** Rival chats wait behind everything the player is doing (game-layer design §12). */
+const RIVAL_CHAT_PRIORITY = 5;
+export const NOT_YOURS = "You can only talk to your own AIs and rivals' AIs on sale.";
 type ChatResult =
   | { ok: true; duplicate: boolean; data: { threadId: string } }
   | { ok: false; reason: string };
@@ -74,9 +81,10 @@ export class ChatService {
     const companyId = s.members[userId]?.companyId;
     if (!s.members[userId])
       return { ok: false, reason: "That world doesn't exist or you're not in it." };
-    // Stage 1: only your own AIs. Stage 2 adds the AIs other companies share (Task 26).
+    // Your own AIs, or a rival's AI while it is on sale. Stage 2 adds the AIs other players share.
     const version = companyId ? s.companies[companyId]?.versions[msg.versionId] : undefined;
-    if (!version) return { ok: false, reason: "You can only talk to your own AIs for now." };
+    const packKey = version ? undefined : rivalOnSale(s, msg.versionId);
+    if (!version && !packKey) return { ok: false, reason: NOT_YOURS };
 
     let threadId = msg.threadId;
     if (threadId) {
@@ -131,9 +139,15 @@ export class ChatService {
       versionId: msg.versionId,
       history,
       seed: randomInt(2 ** 31),
+      ...(packKey ? { packKey } : {}),
     };
     this.inFlight.set(threadId, "pending");
-    const jobId = await ctx.broker.enqueue("generate", payload, msg.worldId);
+    const jobId = await ctx.broker.enqueue(
+      "generate",
+      payload,
+      msg.worldId,
+      packKey ? { priority: RIVAL_CHAT_PRIORITY } : {},
+    );
     this.inFlight.set(threadId, jobId);
     this.remember(seenKey, threadId);
     return { ok: true, duplicate: false, data: { threadId } };
@@ -141,8 +155,10 @@ export class ChatService {
 
   private async spec(p: GeneratePayload): Promise<unknown> {
     return {
-      versionId: p.versionId,
-      modelTarUrl: signBlobUrl(this.ctx, checkpointKey(p.versionId), "GET", MODEL_URL_TTL_MS),
+      versionId: p.packKey ?? p.versionId,
+      modelTarUrl: p.packKey
+        ? await this.ctx.rivals.modelUrl(p.packKey)
+        : signBlobUrl(this.ctx, checkpointKey(p.versionId), "GET", MODEL_URL_TTL_MS),
       history: p.history,
       maxNewTokens: 96,
       temperature: 0.8,
@@ -237,4 +253,17 @@ export class ChatService {
 
 function stream(p: { worldId: string; threadId: string }): string {
   return `chat:${p.worldId}:${p.threadId}`;
+}
+
+/** The pack key of a rival's AI that is on sale under `versionId`, else undefined. */
+function rivalOnSale(s: WorldState, versionId: string): string | undefined {
+  for (const c of Object.values(s.companies)) {
+    if (!c.rival) continue;
+    const onSale = Object.values(c.products).some(
+      (p) => p.status === "live" && p.versionId === versionId,
+    );
+    const key = c.versions[versionId]?.packKey;
+    if (onSale && key) return key;
+  }
+  return undefined;
 }

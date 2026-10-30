@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { rmSync } from "node:fs";
 import { GenerateJobSpec } from "@airace/protocol";
 import { asc, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { REPLY_FAILED } from "../src/chat/service.ts";
 import { schema } from "../src/db/index.ts";
-import type { FakeWorker } from "./fakeWorker.ts";
+import { eventually, type FakeWorker } from "./fakeWorker.ts";
 import {
   closeSockets,
   openSockets,
@@ -12,10 +13,12 @@ import {
   send,
   setup,
   start,
+  toDay,
   trainVersion,
   worker,
 } from "./flows.ts";
 import { createGuest, type TestServer } from "./harness.ts";
+import { writeFixturePack } from "./rivalPack.ts";
 import { connectAs, type WsClient } from "./wsClient.ts";
 
 let server: TestServer | null = null;
@@ -174,5 +177,60 @@ describe("playground chat", () => {
     expect((await chat(o.ws, o.worldId, o.versionId, "Again?", threadId ?? null)).threadId).toBe(
       threadId,
     );
+  });
+});
+
+describe("chatting with a rival's AI", () => {
+  const temps: string[] = [];
+  afterEach(() => {
+    for (const t of temps.splice(0)) rmSync(t, { recursive: true, force: true });
+  });
+
+  async function rivalWorld(s: TestServer) {
+    const w: FakeWorker = await worker(s, {
+      jobTypes: ["generate"],
+      slots: { train: 0, eval: 0, generate: 1 },
+    });
+    const o = await setup(s);
+    await eventually(() => o.actor.state().rivals);
+    const arch = () => o.actor.state().companies["rival-1"];
+    const first = arch()?.rival?.upcoming[0];
+    if (!first) throw new Error("nothing scheduled");
+    await toDay(s, o.actor, first.releaseDay + 4);
+    const product = await eventually(() =>
+      Object.values(arch()?.products ?? {}).find((p) => p.status === "live"),
+    );
+    return { ...o, w, product, packKey: first.key };
+  }
+
+  it("streams a rival AI's reply at the lowest priority, from its pack model", async () => {
+    const pack = writeFixturePack();
+    temps.push(pack.dir);
+    server = await start({ rivalsDir: pack.dir });
+    const o = await rivalWorld(server);
+    const sent = await chat(o.ws, o.worldId, o.product.versionId, "Who are you?");
+    expect(sent.threadId).toBeTruthy();
+    const lease = await o.w.nextLease();
+    const spec = GenerateJobSpec.parse(lease.spec);
+    expect(spec.versionId).toBe(o.packKey);
+    expect(await (await fetch(spec.modelTarUrl)).text()).toBe(`fake-rival-${o.packKey}`);
+    expect((await server.ctx.broker.getJob(lease.jobId))?.priority).toBe(5);
+    o.ws.send({ v: 1, type: "subscribe", sub: `chat:${o.worldId}:${sent.threadId}` });
+    expect((await query(o.ws, { kind: "ping" })).ok).toBe(true);
+    o.w.done(lease.jobId, { text: "A rival." });
+    expect((await o.ws.next("stream")).data).toEqual({ kind: "done", text: "A rival." });
+  });
+
+  it("refuses a rival AI that is no longer on sale", async () => {
+    const pack = writeFixturePack();
+    temps.push(pack.dir);
+    server = await start({ rivalsDir: pack.dir });
+    const o = await rivalWorld(server);
+    const sent = await chat(o.ws, o.worldId, o.product.versionId, "Hi");
+    o.w.done((await o.w.nextLease()).jobId, { text: "Hello." });
+    const live = o.actor.state().companies["rival-1"]?.products[o.product.id];
+    if (live) live.status = "retired";
+    const again = await chat(o.ws, o.worldId, o.product.versionId, "Still there?", sent.threadId);
+    expect(again.reason).toBe("You can only talk to your own AIs and rivals' AIs on sale.");
   });
 });

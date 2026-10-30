@@ -179,7 +179,8 @@ export const chatThreads = pgTable("chat_threads", {
   id: uuid("id").primaryKey(),
   worldId: uuid("world_id").notNull(),
   userId: uuid("user_id").notNull(),
-  versionId: uuid("version_id").notNull(),
+  /** A player's version (a uuid) or a rival's (e.g. "rival-1-v2"). */
+  versionId: text("version_id").notNull(),
   createdAt: ms("created_at").notNull(),
 });
 
