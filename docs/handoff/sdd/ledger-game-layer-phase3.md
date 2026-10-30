@@ -16,3 +16,9 @@ Task 2: Ruling: training reuse uses the gate's GateRuns (finished runs reused, u
 Task 2: complete (commits 921958f..9ab08f6, tests: ml pytest -> 1627 passed, 5 skipped; slow quick build passed; vitest protocol 58 passed; npm run check clean)
 Task 3: Ruling: battle fixtures follow the existing names (lease-battle.json, result-battle.json, progress-battle.json) rather than the plan's dotted names - consistency - cost if wrong: none.
 Task 3: complete (commits cd25e8f..bd93b63, tests: ml pytest -> 1632 passed, 6 skipped; npm test -> 435 passed; npm run check clean)
+Task 4: Ruling: the test balance's rival countdowns are 3 days, not the plan's 1 - the economy's launch countdown minimum is 3 and rivals launch through the same rules - cost if wrong: rivals reach the e2e market two days later.
+Task 4: Ruling: rival palettes reuse the 12 PALETTE_PRESETS (all pass paletteProblem) instead of a separate list - cost if wrong: rivals look like the presets players can pick.
+Task 4: Ruling: RivalState also keeps productWord (which of its style's product words names its AIs) - the plan's product names need it - cost if wrong: none.
+Task 4: Ruling: an upgraded world's snapshot is replaced in place (same seq) so it is upgraded once - cost if wrong: none.
+Task 4: Ruling: the property tests' exploration guard moved from seed 1 to seed 2 - adding rivals to the generator shifted seed 1 to only 1 failed run (seeds 2-4 give 7-11) - cost if wrong: none (a coverage guard).
+Task 4: complete (commits b7476df..c5337fb, tests: npm test -> 448 passed; npm run check clean)
