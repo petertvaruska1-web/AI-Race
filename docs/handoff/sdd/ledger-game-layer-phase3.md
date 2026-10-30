@@ -47,3 +47,6 @@ Task 12: Ruling: the restart test puts the world away (evicts it) while the batt
 Task 12: complete (commits d4a3040..84c1d97, tests: npm test -> 494 passed; npm run check clean)
 Task 13: Ruling: the Playground lists rivals' AIs on sale in a second group of its picker ("Rivals' AIs"); a rival's AI is named "{Rival}'s {Product}" - cost if wrong: naming only.
 Task 13: complete (commits 96513c0..79494f5, tests: npm test -> Tests  499 passed (499); npm run check clean)
+Task 14: Ruling: a battle records pointsChange (the player's ranking points won or lost) in the sim and its view - the battle window shows it and the current points alone can't tell it - cost if wrong: one number per battle.
+Task 14: Ruling: the battle-result toast moves to Task 15 with the other new toasts - cost if wrong: none.
+Task 14: complete (commits 86d55fc..f8093c3, tests: npm test -> Tests  1 failed | 502 passed (503); npm run check clean)
