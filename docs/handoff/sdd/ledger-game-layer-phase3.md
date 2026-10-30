@@ -38,3 +38,6 @@ Task 9: Ruling: rival ad budget for the crowd-pleaser style 4000 -> 2000 a day -
 Task 9: Ruling: bots with rivals give rival AIs weekly feedback from their measured skills, as the server does from pack replies - cost if wrong: none.
 Task 9: Note: the Phase 2 deferred minor on ad payback holds with rivals: a $350k blitz is still behind a plain bot at day 60.
 Task 9: complete (commits 8be60a3..07d5d7f, tests: npm test -> Tests  481 passed (481); npm run check clean)
+Task 10: Ruling: rival feedback batches are weekly only (no launch batch) and keep no request row - the request table's product id is a uuid column and rival products have readable ids; the sim refuses a week it already applied, so a restart cannot double a batch - cost if wrong: rivals get no launch-day posts.
+Task 10: Ruling: the training service skips rival companies entirely (their AIs come measured; nothing to store or score) - found by the new tests - cost if wrong: none.
+Task 10: complete (commits e2cb134..eee66fc, tests: npm test -> 488 passed; npm run check clean)
