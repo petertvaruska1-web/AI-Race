@@ -6,6 +6,7 @@ export * from "./fame.ts";
 export * from "./feed.ts";
 export * from "./hash.ts";
 export * from "./history.ts";
+export * from "./league.ts";
 export * from "./ledger.ts";
 export * from "./market.ts";
 export * from "./palette.ts";

@@ -37,6 +37,8 @@ export function createWorld(p: {
     inviteCode: p.inviteCode,
     seq: 0,
     rivals: null,
+    leaders: {},
+    lastRankingNews: {},
     market: emptyMarket(),
     spotlights,
     feed: [],

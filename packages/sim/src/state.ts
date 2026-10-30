@@ -4,6 +4,7 @@ import type {
   CostCategory,
   GroupId,
   IncomeCategory,
+  LeagueTable,
   Logo,
   NewsTopic,
   Palette,
@@ -225,6 +226,8 @@ export type ReportCard = {
   worst: MomentPost | null;
   headline: string | null;
   grade: "A" | "B" | "C" | "D" | "F";
+  /** Places against rivals, last card to this one; null without rivals. */
+  ranks: { table: "customers" | "revenue" | "overall"; from: number | null; to: number }[] | null;
 };
 
 /** A data center: it serves (and trains) from `openDay` with its capacity. */
@@ -275,6 +278,8 @@ export type CompanyState = {
   /** Cash at founding; the money identity starts from it. */
   startCash: number;
   rival: RivalState | null;
+  /** League places at the last report card (for its rank changes). */
+  lastRanks: { customers: number; revenue: number; overall: number } | null;
   name: string;
   logo: Logo;
   palette: Palette;
@@ -319,6 +324,9 @@ export type WorldState = {
   seq: number;
   /** Null until rivals join (they need the rival pack). */
   rivals: { joinedDay: number; archId: string } | null;
+  /** Each league table's leader, and the day its last #1 story ran. */
+  leaders: Partial<Record<LeagueTable, string>>;
+  lastRankingNews: Partial<Record<LeagueTable, number>>;
   market: MarketState;
   spotlights: Spotlight[];
   /** Posts and news, oldest first, capped at the balance's `feedCap`. */

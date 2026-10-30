@@ -5,6 +5,7 @@ import { computeCommand, computeDay, dataCentersDay, newCompute } from "./comput
 import { fameDay } from "./fame.ts";
 import { applyFeedback, newsDay } from "./feed.ts";
 import { historyDay } from "./history.ts";
+import { leagueDay } from "./league.ts";
 import { bookTraining, closeMonths, ledgerDay, newLedger } from "./ledger.ts";
 import { marketDay } from "./market.ts";
 import { paletteProblem } from "./palette.ts";
@@ -69,6 +70,7 @@ function tick(s: WorldState): Handled {
   ledgerDay(s);
   rescueDay(s);
   newsDay(s);
+  leagueDay(s);
   fameDay(s);
   historyDay(s);
   return OK;
@@ -183,6 +185,7 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
         ownerUserId: userId,
         startCash: getBalance(s.balance).foundingCash,
         rival: null,
+        lastRanks: null,
         name: cmd.name,
         logo: cmd.logo,
         palette: cmd.palette,

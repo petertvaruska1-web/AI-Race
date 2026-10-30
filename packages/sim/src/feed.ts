@@ -37,7 +37,7 @@ const KEYS_KEPT = 20;
 /** Customer counts that make the news, once each. */
 const CUSTOMER_MARKS = [1_000, 10_000, 100_000, 1_000_000];
 /** The bench categories in plain words (R7). */
-const SKILL_WORDS: Record<BenchCategory, string> = {
+export const SKILL_WORDS: Record<BenchCategory, string> = {
   language: "language",
   reasoning: "reasoning",
   pattern: "patterns",

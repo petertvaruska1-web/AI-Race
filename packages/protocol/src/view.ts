@@ -2,9 +2,11 @@ import { z } from "zod";
 import { ARCHETYPES, RIVAL_STYLES } from "./rivals.ts";
 import { Day, zId } from "./text.ts";
 import {
+  BATTLE_SKILLS,
   COST_CATEGORIES,
   GroupId,
   INCOME_CATEGORIES,
+  LEAGUE_TABLES,
   Logo,
   NEWS_TOPICS,
   Palette,
@@ -179,6 +181,21 @@ export type NewsView = z.infer<typeof NewsView>;
 export const FeedItemView = z.discriminatedUnion("kind", [PostView, NewsView]);
 export type FeedItemView = z.infer<typeof FeedItemView>;
 
+export const LeagueRowView = z.strictObject({
+  companyId: zId,
+  rank: z.number().int().positive(),
+  value: z.number().nullable(),
+});
+export type LeagueRowView = z.infer<typeof LeagueRowView>;
+
+/** Ranking points from battles (an Elo rating per skill). */
+export const PointsRowView = z.strictObject({
+  companyId: zId,
+  rank: z.number().int().positive(),
+  points: z.number().int(),
+});
+export type PointsRowView = z.infer<typeof PointsRowView>;
+
 /** All another player may see of a company (R2, spec §6.4 and game-layer §13.2). */
 export const PublicCompany = z.strictObject({
   id: zId,
@@ -268,6 +285,16 @@ export const ReportCardView = z.strictObject({
   worst: MomentPostView.nullable(),
   headline: z.string().nullable(),
   grade: z.enum(["A", "B", "C", "D", "F"]),
+  /** Places against rivals from last month's card to this one; null in a world without rivals. */
+  ranks: z
+    .array(
+      z.strictObject({
+        table: z.enum(["customers", "revenue", "overall"]),
+        from: z.number().int().positive().nullable(),
+        to: z.number().int().positive(),
+      }),
+    )
+    .nullable(),
 });
 export type ReportCardView = z.infer<typeof ReportCardView>;
 
@@ -338,6 +365,11 @@ export const WorldView = z.strictObject({
     }),
     /** Whether rivals have joined this world (they need the rival pack). */
     rivals: z.enum(["joined", "none"]),
+    /** Every company's place in each table; other companies' revenue shows as a place only (R2). */
+    league: z.strictObject({
+      tables: z.record(z.enum(LEAGUE_TABLES), z.array(LeagueRowView)),
+      points: z.record(z.enum(BATTLE_SKILLS), z.array(PointsRowView)),
+    }),
   }),
   members: z.array(
     z.strictObject({

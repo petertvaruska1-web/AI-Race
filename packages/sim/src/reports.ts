@@ -1,6 +1,7 @@
 import { GROUP_IDS, type GroupId, PLAN_IDS, REGION_IDS } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
 import { monthOfDay } from "./calendar.ts";
+import { CARD_TABLES, cardRanks } from "./league.ts";
 import { customersOf } from "./market.ts";
 import { liveProductFor } from "./products.ts";
 import type {
@@ -82,6 +83,15 @@ function moment(p: PostItem): MomentPost {
  * the close. Call at the month close, after the ledger moved `closed` into its
  * history; `previous` is the month before it, if any.
  */
+/** Places against rivals since the last card; null in a world without rivals. */
+function rankChanges(s: WorldState, company: CompanyState): ReportCard["ranks"] {
+  if (!s.rivals) return null;
+  const now = cardRanks(s, company.id);
+  const before = company.lastRanks;
+  company.lastRanks = now;
+  return CARD_TABLES.map((table) => ({ table, from: before?.[table] ?? null, to: now[table] }));
+}
+
 export function reportMonth(
   s: WorldState,
   company: CompanyState,
@@ -139,6 +149,7 @@ export function reportMonth(
     worst: worst ? moment(worst) : null,
     headline: headline?.text ?? null,
     grade: gradeFor({ profit, lastProfit, start, end: closed.customersEnd, mood }),
+    ranks: rankChanges(s, company),
   });
   if (company.reports.length > REPORTS_KEPT) {
     company.reports.splice(0, company.reports.length - REPORTS_KEPT);

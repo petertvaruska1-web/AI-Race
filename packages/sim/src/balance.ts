@@ -137,6 +137,8 @@ export type Economy = {
   countdown: { min: number; max: number };
   /** Rival companies (game-layer design §9): their money, release schedule and habits. */
   rivals: RivalBalance;
+  /** A table's #1 makes news at most once in this many days. */
+  league: { newsGapDays: number };
 };
 
 export type RivalBalance = {
@@ -436,6 +438,7 @@ const ECONOMY_V2: Economy = {
     dataCenterAtServingPerMonth: 60_000,
     trashTalkGapDays: 21,
   },
+  league: { newsGapDays: 14 },
 };
 
 export const BALANCE_V2: Balance = {

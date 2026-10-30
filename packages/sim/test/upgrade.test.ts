@@ -8,9 +8,12 @@ function sim3() {
     companies: Record<string, Record<string, unknown> & { versions: Record<string, object> }>;
   };
   delete s.rivals;
+  delete s.leaders;
+  delete s.lastRankingNews;
   for (const c of Object.values(s.companies)) {
     delete c.rival;
     delete c.startCash;
+    delete c.lastRanks;
     for (const v of Object.values(c.versions)) delete (v as { packKey?: unknown }).packKey;
   }
   return s;
@@ -22,6 +25,9 @@ describe("upgrading saved worlds", () => {
     expect(up.rivals).toBeNull();
     expect(up.companies.c1?.rival).toBeNull();
     expect(up.companies.c1?.startCash).toBe(250_000);
+    expect(up.companies.c1?.lastRanks).toBeNull();
+    expect(up.leaders).toEqual({});
+    expect(up.lastRankingNews).toEqual({});
     const next = step(up, TICK);
     expect(next.ok).toBe(true);
   });

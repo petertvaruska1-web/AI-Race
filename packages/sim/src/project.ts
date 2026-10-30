@@ -1,8 +1,10 @@
 import {
+  BATTLE_SKILLS,
   COST_CATEGORIES,
   type FeedItemView,
   GROUP_IDS,
   type GroupId,
+  LEAGUE_TABLES,
   type MonthLedgerView,
   PLAN_IDS,
   type PlanId,
@@ -22,6 +24,7 @@ import {
 import { adoptionShare, getBalance } from "./balance.ts";
 import { dateOfDay } from "./calendar.ts";
 import { ownedPflops } from "./compute.ts";
+import { leagueTables } from "./league.ts";
 import { customersByRegion, customersOf, totalCustomers } from "./market.ts";
 import { liveProductFor } from "./products.ts";
 import type {
@@ -66,6 +69,7 @@ export function projectView(state: WorldState, viewerUserId: string): WorldView 
       inviteCode: state.inviteCode,
       market: marketView(state),
       rivals: state.rivals ? "joined" : "none",
+      league: leagueView(state, viewer.companyId),
     },
     members: Object.values(state.members)
       .sort((a, b) => a.joinedSeq - b.joinedSeq)
@@ -94,6 +98,30 @@ function marketView(state: WorldState): WorldView["world"]["market"] {
     regions[region] = { adoptable: Math.round(e.population[region] * adoption) };
   }
   return { adoption, adoptable: Math.round(people * adoption), regions };
+}
+
+function leagueView(
+  state: WorldState,
+  viewerCompanyId: string | null,
+): WorldView["world"]["league"] {
+  const tables = leagueTables(state);
+  const out = {} as WorldView["world"]["league"]["tables"];
+  for (const table of LEAGUE_TABLES) {
+    out[table] = tables[table].map((row, i) => {
+      const own = row.companyId === viewerCompanyId;
+      let value = row.value;
+      // Others' revenue is a place only (R2); others' customers show at three figures.
+      if (table === "revenue" && !own) value = null;
+      else if (table === "customers" && value !== null) {
+        value = own ? Math.round(value) : threeFigures(value);
+      }
+      return { companyId: row.companyId, rank: i + 1, value };
+    });
+  }
+  const points = Object.fromEntries(
+    BATTLE_SKILLS.map((k) => [k, []]),
+  ) as unknown as WorldView["world"]["league"]["points"];
+  return { tables: out, points };
 }
 
 function sortedIds(record: Record<string, unknown>): string[] {

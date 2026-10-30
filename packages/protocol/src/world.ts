@@ -26,6 +26,10 @@ export const BENCH_CATEGORIES = [
 ] as const;
 export type BenchCategory = (typeof BENCH_CATEGORIES)[number];
 
+/** League tables (game-layer design §7): customers, last month's revenue, overall and each skill. */
+export const LEAGUE_TABLES = ["customers", "revenue", "overall", ...BENCH_CATEGORIES] as const;
+export type LeagueTable = (typeof LEAGUE_TABLES)[number];
+
 /** Skills two AIs can battle in: their replies are written text a check or the judge scores. */
 export const BATTLE_SKILLS = [
   "knowledge",

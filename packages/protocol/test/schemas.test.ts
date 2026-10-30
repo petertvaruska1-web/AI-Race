@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  BATTLE_SKILLS,
   ClientMessage,
   COST_CATEGORIES,
   Command,
   cleanText,
   FeedItemView,
   GROUP_IDS,
+  LEAGUE_TABLES,
   PLAN_IDS,
   REGION_IDS,
   ServerMessage,
@@ -92,6 +94,16 @@ function sampleView(): WorldView {
         >,
       },
       rivals: "none",
+      league: {
+        tables: Object.fromEntries(LEAGUE_TABLES.map((t) => [t, []])) as Record<
+          (typeof LEAGUE_TABLES)[number],
+          []
+        >,
+        points: Object.fromEntries(BATTLE_SKILLS.map((k) => [k, []])) as Record<
+          (typeof BATTLE_SKILLS)[number],
+          []
+        >,
+      },
     },
     members: [{ userId: "u1", displayName: "Ana", online: true, companyId: "c1" }],
     companies: [
@@ -222,6 +234,7 @@ function sampleView(): WorldView {
             worst: null,
             headline: "Acme launches Spark",
             grade: "B",
+            ranks: [{ table: "customers", from: 3, to: 1 }],
           },
         ],
         dataCenters: [{ id: "dc1", region: "pacific", startDay: 1, openDay: 61, open: false }],
