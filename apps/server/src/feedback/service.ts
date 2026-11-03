@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { FeedbackJobResult, GROUP_IDS } from "@airace/protocol";
 import { getBalance, type WorldState } from "@airace/sim";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { schema } from "../db/index.ts";
@@ -162,7 +162,47 @@ export class FeedbackService {
         { worldId: p.worldId, productId: p.productId, key: p.key, reason: r.reason },
         "customer feedback not applied",
       );
+      return;
     }
+    await this.keepLoved(actor, p.productId, parsed.data.results);
+  }
+
+  /** The replies customers loved, kept (newest `lovedMax`) as the company's training text (R2). */
+  private async keepLoved(
+    actor: WorldActor,
+    productId: string,
+    results: FeedbackJobResult["results"],
+  ): Promise<void> {
+    const s = actor.state();
+    const e = getBalance(s.balance).economy;
+    const company = Object.values(s.companies).find((c) => c.products[productId]);
+    if (!company || company.ownerUserId === null) return;
+    const loved = results.filter((r) => r.score >= e.lovedScore);
+    if (loved.length === 0) return;
+    const at = this.ctx.opts.scheduler.now();
+    await this.ctx.db.insert(schema.lovedReplies).values(
+      loved.map((r) => ({
+        worldId: s.worldId,
+        companyId: company.id,
+        question: r.question,
+        reply: r.reply,
+        score: r.score,
+        at,
+      })),
+    );
+    const kept = await this.ctx.db
+      .select({ id: schema.lovedReplies.id })
+      .from(schema.lovedReplies)
+      .where(
+        and(
+          eq(schema.lovedReplies.worldId, s.worldId),
+          eq(schema.lovedReplies.companyId, company.id),
+        ),
+      )
+      .orderBy(desc(schema.lovedReplies.id));
+    const old = kept.slice(e.lovedMax).map((r) => r.id);
+    if (old.length > 0)
+      await this.ctx.db.delete(schema.lovedReplies).where(inArray(schema.lovedReplies.id, old));
   }
 
   private serial<T>(fn: () => Promise<T>): Promise<T> {

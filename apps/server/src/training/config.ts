@@ -10,21 +10,49 @@ export const BATCH_TOKENS = 8192;
  * real setting (R7). Fields Python defaults (purchases, notebook, coaching,
  * finishing mix) are left out until the game offers them (M3).
  */
+/** "Learn from customers": the loved conversations' share of the run's text. */
+export const COACHING_SHARE = 0.05;
+
 export function toTrainRunConfig(
   plan: TrainingPlan,
-  o: { runId: string; seed: number; balance: Balance; parent: { dir: string } | null },
+  o: {
+    runId: string;
+    seed: number;
+    balance: Balance;
+    parent: { dir: string } | null;
+    /** The conversations customers loved, for a plan that learns from them. */
+    coaching?: [string, string][];
+  },
 ): Record<string, unknown> {
   const brain = o.balance.brainSizes.find((b) => b.id === plan.brainSize);
   const length = o.balance.lengths.find((l) => l.id === plan.length);
   if (!brain || !length) throw new Error(`plan names an unknown brain size or length`);
-  const mixture: Record<string, number> = {};
+  let mixture: Record<string, number> = {};
   for (const id of DATASET_IDS) if (plan.mix[id] > 0) mixture[id] = plan.mix[id];
+  // Tutoring packs: extra tokens on top of the length, all from one dataset (as `previewPlan`).
+  const packs = plan.tutoring?.packs ?? 0;
+  const budget = Math.round(length.tokens * (1 + o.balance.economy.tutoring.packShare * packs));
+  const coaching = plan.learnFromCustomers ? (o.coaching ?? []) : [];
+  if (packs > 0 || coaching.length > 0) {
+    const total = Object.values(mixture).reduce((a, b) => a + b, 0);
+    const own = coaching.length > 0 ? 1 - COACHING_SHARE : 1;
+    const base = length.tokens / budget;
+    mixture = Object.fromEntries(
+      Object.entries(mixture).map(([k, w]) => [k, (own * base * w) / total]),
+    );
+    if (plan.tutoring && packs > 0) {
+      const id = plan.tutoring.dataset;
+      mixture[id] = (mixture[id] ?? 0) + own * (1 - base);
+    }
+    if (coaching.length > 0) mixture.coaching = COACHING_SHARE;
+  }
   return {
     run_id: o.runId,
     seed: o.seed,
     shape: { n_layer: brain.nLayer, d_model: brain.dModel, ctx_len: plan.attentionSpan },
-    token_budget: length.tokens,
+    token_budget: budget,
     mixture,
+    ...(coaching.length > 0 ? { coaching } : {}),
     replay: plan.review,
     prep: {
       cleaning: plan.cleaning,

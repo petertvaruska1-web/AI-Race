@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import type { Catalog } from "@airace/protocol";
 import cookie from "@fastify/cookie";
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from "fastify";
+import { AppReviewService } from "./apps/service.ts";
 import { HttpError, registerAuthRoutes } from "./auth.ts";
 import { BattleService } from "./battles/service.ts";
 import { type BlobStore, LocalFsBlobStore, registerBlobRoutes } from "./blobs.ts";
@@ -12,6 +13,7 @@ import { type Db, openDb } from "./db/index.ts";
 import { FeedbackService } from "./feedback/service.ts";
 import { JobBroker } from "./jobs/broker.ts";
 import { registerWorkerRoutes } from "./jobs/workerGateway.ts";
+import { KeynoteService } from "./keynotes/service.ts";
 import { createLogger, type Logger } from "./log.ts";
 import { MinigameService } from "./minigames/service.ts";
 import { Gateway } from "./realtime/gateway.ts";
@@ -34,6 +36,8 @@ export type AppContext = {
   rivals: RivalService;
   battles: BattleService;
   minigames: MinigameService;
+  keynotes: KeynoteService;
+  appReviews: AppReviewService;
   blobs: BlobStore;
   /** Null until the training data is installed. */
   catalog: Catalog | null;
@@ -62,6 +66,8 @@ export async function buildApp(
     rivals: undefined as unknown as RivalService,
     battles: undefined as unknown as BattleService,
     minigames: undefined as unknown as MinigameService,
+    keynotes: undefined as unknown as KeynoteService,
+    appReviews: undefined as unknown as AppReviewService,
     blobs: new LocalFsBlobStore(opts.blobDir),
     catalog: loadCatalog(opts.catalogPath, log),
     onClose: (fn) => {
@@ -85,6 +91,10 @@ export async function buildApp(
   ctx.onClose(() => ctx.battles.close());
   ctx.minigames = new MinigameService(ctx);
   ctx.onClose(() => ctx.minigames.close());
+  ctx.keynotes = new KeynoteService(ctx);
+  ctx.onClose(() => ctx.keynotes.close());
+  ctx.appReviews = new AppReviewService(ctx);
+  ctx.onClose(() => ctx.appReviews.close());
   ctx.gateway.registerQuery("catalog", async () => {
     if (!ctx.catalog) throw new HttpError(503, NO_TRAINING_DATA);
     return publicCatalog(ctx.catalog);

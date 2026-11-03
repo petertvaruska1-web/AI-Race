@@ -30,7 +30,7 @@ const SWEEP_MS = 5_000;
 /** How long a "the player is in the Playground" sign lasts (the client sends one every 15 s). */
 export const PLAYGROUND_MS = 30_000;
 /** Jobs that wait while their world's player is in the Playground, so the AI answers them first. */
-export const HELD_IN_PLAYGROUND: JobType[] = ["feedback"];
+export const HELD_IN_PLAYGROUND: JobType[] = ["feedback", "appReview"];
 export const LOST_WORKER = "The computer running it stopped responding.";
 
 /** A connected worker, as the broker sees it. */

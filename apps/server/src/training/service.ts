@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { EvalJobResult, type Query, TrainJobResult } from "@airace/protocol";
 import { getBalance, type RunState, type SystemEvent, type WorldState } from "@airace/sim";
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { HttpError } from "../auth.ts";
 import { signBlobUrl } from "../blobs.ts";
@@ -179,6 +179,7 @@ export class TrainingService {
           seed: run.seed,
           balance: getBalance(s.balance),
           parent: run.plan.parentVersionId ? { dir: "parent" } : null,
+          coaching: run.plan.learnFromCustomers ? await this.loved(s.worldId, companyId) : [],
         }),
       };
       const jobId = await broker.enqueue("train", payload, s.worldId);
@@ -191,6 +192,18 @@ export class TrainingService {
     if (job?.status === "failed" || job?.status === "cancelled") {
       await this.trainFailed(job.payload as TrainPayload, TRAINING_STOPPED);
     }
+  }
+
+  /** The conversations the company's customers loved, newest first (private, R2). */
+  private async loved(worldId: string, companyId: string): Promise<[string, string][]> {
+    const rows = await this.ctx.db
+      .select({ question: schema.lovedReplies.question, reply: schema.lovedReplies.reply })
+      .from(schema.lovedReplies)
+      .where(
+        and(eq(schema.lovedReplies.worldId, worldId), eq(schema.lovedReplies.companyId, companyId)),
+      )
+      .orderBy(desc(schema.lovedReplies.id));
+    return rows.map((r) => [r.question, r.reply]);
   }
 
   private async ensureVersion(

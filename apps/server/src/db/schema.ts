@@ -262,3 +262,25 @@ export const minigameRuns = pgTable(
   },
   (t) => [index("minigame_runs_world_user").on(t.worldId, t.userId)],
 );
+
+/** Feedback replies customers loved (playtest pack §5): private training text for their company (R2). */
+export const lovedReplies = pgTable(
+  "loved_replies",
+  {
+    id: serial("id").primaryKey(),
+    worldId: uuid("world_id").notNull(),
+    companyId: text("company_id").notNull(),
+    question: text("question").notNull(),
+    reply: text("reply").notNull(),
+    score: doublePrecision("score").notNull(),
+    at: bigint("at", { mode: "number" }).notNull(),
+  },
+  (t) => [index("loved_replies_company").on(t.worldId, t.companyId)],
+);
+
+/** Jobs asked for once per thing: a keynote (`keynote:<product>`), a week of app reviews. */
+export const gameRequests = pgTable("game_requests", {
+  key: text("key").primaryKey(),
+  worldId: uuid("world_id").notNull(),
+  jobId: uuid("job_id"),
+});
