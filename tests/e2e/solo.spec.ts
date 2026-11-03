@@ -216,7 +216,8 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
 
   // 25. A practice Pattern Bridge: the real AI picks every tile; the run ends with a score.
   await page.getByRole("link", { name: "Playground" }).click();
-  await page.getByRole("radio", { name: "Games" }).click();
+  // The pill's label covers its hidden radio, so the label is what a player clicks.
+  await page.getByRole("group", { name: "Playground mode" }).getByText("Games").click();
   await page.getByRole("button", { name: "Play Pattern Bridge" }).click();
   await page.getByRole("button", { name: "Practice (free)" }).click();
   await expect(page.getByText("What comes next?")).toBeVisible({ timeout: 120_000 });

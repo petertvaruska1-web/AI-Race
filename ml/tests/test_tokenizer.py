@@ -135,3 +135,10 @@ def test_training_is_deterministic(tmp_path, fixture_texts):
     b = train_tokenizer(fixture_texts, tmp_path / "b.json", vocab_size=400)
     assert (tmp_path / "a.json").read_bytes() == (tmp_path / "b.json").read_bytes()
     assert a.encode("the cat sat") == b.encode("the cat sat")
+
+
+def test_a_null_character_decodes_as_the_unknown_character(tiny_tok):
+    """A model can write the byte 0, but the game's database can't store it in text; it reads
+    as the same unknown-character mark as any other byte that isn't a letter."""
+    ids = tiny_tok.encode("a\x00b")
+    assert tiny_tok.decode(ids) == "a�b"

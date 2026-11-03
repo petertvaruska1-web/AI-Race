@@ -76,7 +76,10 @@ class Tok:
         return self._tk.encode(text, add_special_tokens=False).ids
 
     def decode(self, ids: Sequence[int], skip_special: bool = True) -> str:
-        return self._tk.decode(list(ids), skip_special_tokens=skip_special)
+        """The text of ``ids``. The byte 0 reads as U+FFFD, the mark every undecodable byte
+        already gets: no text column (PostgreSQL's ``text`` and ``jsonb``) can store it, so a
+        reply holding one could never be saved, shown or published."""
+        return self._tk.decode(list(ids), skip_special_tokens=skip_special).replace("\x00", "\ufffd")
 
     def id_of(self, token: str) -> int:
         token_id = self._tk.token_to_id(token)
