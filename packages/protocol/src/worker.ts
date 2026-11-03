@@ -177,7 +177,17 @@ const BattleAnswer = z.object({
 });
 
 export const BattleJobResult = z.object({
-  rounds: z.array(z.object({ prompt: z.string(), a: BattleAnswer, b: BattleAnswer })).min(1),
+  rounds: z
+    .array(
+      z.object({
+        prompt: z.string(),
+        /** The right answer, or null for a story. */
+        expected: z.string().nullable().default(null),
+        a: BattleAnswer,
+        b: BattleAnswer,
+      }),
+    )
+    .min(1),
 });
 export type BattleJobResult = z.infer<typeof BattleJobResult>;
 

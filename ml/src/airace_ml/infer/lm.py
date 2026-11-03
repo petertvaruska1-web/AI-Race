@@ -216,6 +216,57 @@ class TorchLM:
         """
         reserve = min(max_new_tokens, self.ctx_len // 2)
         prompt = build_chat_prompt(self.tok, history, self.ctx_len, reserve)
+        return self.stream_ids(
+            prompt,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            seed=seed,
+            on_text=on_text,
+        )
+
+    def stream_reply(
+        self,
+        prompt: str,
+        *,
+        chat: bool,
+        max_new_tokens: int = 96,
+        temperature: float = 0.8,
+        top_p: float = 0.95,
+        seed: int = 0,
+        on_text: Callable[[str], None],
+    ) -> str:
+        """One reply to ``prompt``, streamed: as a chat turn, or (``chat=False``) as the
+        continuation of a plain document, the way the benchmark asks non-chat items."""
+        if chat:
+            return self.stream_chat_reply(
+                [("user", prompt)],
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                seed=seed,
+                on_text=on_text,
+            )
+        return self.stream_ids(
+            encode_doc(self.tok, prompt),
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            seed=seed,
+            on_text=on_text,
+        )
+
+    def stream_ids(
+        self,
+        prompt: list[int],
+        *,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        seed: int,
+        on_text: Callable[[str], None],
+    ) -> str:
+        """Generate after ``prompt`` (token ids), calling ``on_text`` with each new piece."""
         tokens: list[int] = []
         sent = ""
 

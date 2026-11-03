@@ -4,6 +4,7 @@
     "rounds": [
       {
         "prompt": "What is the capital of France?",
+        "expected": "Paris",
         "a": {
           "reply": "Paris.",
           "score": 1

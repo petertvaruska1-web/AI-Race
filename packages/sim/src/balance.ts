@@ -458,7 +458,8 @@ const ECONOMY_V2: Economy = {
     fee: 5_000,
     rounds: 5,
     cooldownDays: 7,
-    drawMargin: 0.25,
+    // 0.1: with partial credit for near misses, only almost equal totals are a draw.
+    drawMargin: 0.1,
     pointsStart: 1000,
     pointsK: 32,
     sentiment: { win: 0.4, draw: 0.1, loss: -0.3 },

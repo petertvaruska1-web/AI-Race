@@ -275,6 +275,8 @@ export type RivalState = {
 /** One round of a battle: the challenge and both AIs' real replies with their scores (R1). */
 export type BattleRound = {
   prompt: string;
+  /** The right answer, shown under the replies (none for a story; absent before sim-5). */
+  expected?: string | null;
   mine: { reply: string; score: number };
   theirs: { reply: string; score: number };
 };

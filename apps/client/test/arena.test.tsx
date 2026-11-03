@@ -50,6 +50,7 @@ function battleWorld(resolved: boolean) {
         battleId: "b1",
         rounds: [0, 1, 2].map((k) => ({
           prompt: `Question ${k}?`,
+          expected: `Answer ${k}`,
           mine: { reply: k === 0 ? "<b>x</b> <|end|>" : "yes", score: k < 2 ? 1 : 0 },
           theirs: { reply: "no", score: k < 2 ? 0 : 1 },
         })),
@@ -110,6 +111,8 @@ describe("the Arena", () => {
     expect(within(w).getByText("Win 2–1")).toBeTruthy();
     expect(within(w).getByText("<b>x</b> <|end|>")).toBeTruthy();
     expect(within(w).getByText("+16 ranking points")).toBeTruthy();
+    expect(within(w).getByText("Right answer: Answer 0")).toBeTruthy();
+    expect(within(w).getAllByText("Right").length).toBeGreaterThan(0);
   });
 
   it("ranks every company and hides other companies' revenue", async () => {

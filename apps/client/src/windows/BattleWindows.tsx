@@ -191,6 +191,7 @@ export function BattleWindow({ entry, view, battleId }: WindowProps & { battleId
     ? battle.rounds.map((r, round) => ({
         round,
         prompt: r.prompt,
+        expected: r.expected,
         mine: r.mine.reply,
         theirs: r.theirs.reply,
         scores: [r.mine.score, r.theirs.score] as const,
@@ -198,6 +199,7 @@ export function BattleWindow({ entry, view, battleId }: WindowProps & { battleId
     : live.map((r, round) => ({
         round,
         prompt: null,
+        expected: null,
         mine: r.mine,
         theirs: r.theirs,
         scores: null,
@@ -240,7 +242,9 @@ export function BattleWindow({ entry, view, battleId }: WindowProps & { battleId
       <ol className="mt-3 space-y-4">
         {rounds.map((r) => (
           <li key={r.round} className="rounded-xl border border-border p-3">
-            {r.prompt && <p className="mb-2 text-sm font-semibold">{r.prompt}</p>}
+            {r.prompt && (
+              <p className="mb-2 whitespace-pre-wrap text-sm font-semibold">{r.prompt}</p>
+            )}
             <div className="grid grid-cols-2 gap-4 text-sm">
               {(["mine", "theirs"] as const).map((side, i) => (
                 <div key={side}>
@@ -248,8 +252,14 @@ export function BattleWindow({ entry, view, battleId }: WindowProps & { battleId
                     data-testid={`round-${r.round}-${side}`}
                     className="whitespace-pre-wrap break-words"
                   >
-                    {r[side]}
+                    {r[side] ||
+                      (r.scores && <span className="italic text-muted">(no answer)</span>)}
                   </p>
+                  {r.scores && (
+                    <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                      {verdict(r.scores[i] ?? 0)}
+                    </p>
+                  )}
                   {r.scores && (
                     <div className="mt-2 h-1.5 rounded-full bg-surface-2">
                       <motion.div
@@ -265,9 +275,18 @@ export function BattleWindow({ entry, view, battleId }: WindowProps & { battleId
                 </div>
               ))}
             </div>
+            {r.expected && (
+              <p className="mt-2 whitespace-pre-wrap text-xs text-muted">{`Right answer: ${r.expected.trim()}`}</p>
+            )}
           </li>
         ))}
       </ol>
     </WindowFrame>
   );
+}
+
+/** A round's score in words: right (1), close (partly right) or a miss. */
+function verdict(score: number): string {
+  if (score >= 1) return "Right";
+  return score > 0 ? `Close (${Math.round(100 * score)}%)` : "Miss";
 }

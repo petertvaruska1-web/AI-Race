@@ -225,6 +225,7 @@ function sampleView(): WorldView {
             rounds: [
               {
                 prompt: "Add two numbers.",
+                expected: "5",
                 mine: { reply: "<b>x</b> <|end|>", score: 1 },
                 theirs: { reply: "", score: 0 },
               },

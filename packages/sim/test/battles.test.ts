@@ -156,6 +156,16 @@ describe("a battle's result", () => {
     expect(done.points.knowledge).toEqual({ c1: 1000, "rival-1": 1000 });
   });
 
+  it("a lead just over the margin wins, and the right answers are kept", () => {
+    const { s, target } = ready();
+    const r = rounds([1, 0, 0.5], [0, 1, 0.3]).map((x) => ({ ...x, expected: "14" }));
+    const done = ok(resolve(ok(start(s, target)), "b1", r));
+    expect(battleOf(done)?.outcome).toBe("win");
+    expect(battleOf(done)?.rounds?.[0]?.expected).toBe("14");
+    const view = projectView(done, "u1");
+    expect(view.me.company?.battles[0]?.rounds?.[0]?.expected).toBe("14");
+  });
+
   it("keeps replies exactly as the AIs wrote them", () => {
     const { s, target } = ready();
     const hostile = "<b>x</b> <|end|> 😀";

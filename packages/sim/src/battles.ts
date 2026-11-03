@@ -135,8 +135,19 @@ function validRounds(raw: unknown, count: number): raw is BattleRound[] {
     );
   };
   return raw.every((r) => {
-    const x = r as { prompt?: unknown; mine?: unknown; theirs?: unknown } | null;
-    return typeof x?.prompt === "string" && answer(x.mine) && answer(x.theirs);
+    const x = r as {
+      prompt?: unknown;
+      expected?: unknown;
+      mine?: unknown;
+      theirs?: unknown;
+    } | null;
+    const expected = x?.expected;
+    return (
+      typeof x?.prompt === "string" &&
+      (expected === undefined || expected === null || typeof expected === "string") &&
+      answer(x.mine) &&
+      answer(x.theirs)
+    );
   });
 }
 
@@ -163,6 +174,7 @@ export function applyBattle(
   if (!validRounds(raw, b.rounds)) return no("That battle result isn't valid.");
   battle.rounds = raw.map((r) => ({
     prompt: r.prompt,
+    ...(typeof r.expected === "string" ? { expected: r.expected } : {}),
     mine: { reply: r.mine.reply, score: r.mine.score },
     theirs: { reply: r.theirs.reply, score: r.theirs.score },
   }));

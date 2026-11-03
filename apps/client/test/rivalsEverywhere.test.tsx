@@ -139,6 +139,7 @@ describe("rival toasts", () => {
               status: "done",
               rounds: [0, 1, 2].map((k) => ({
                 prompt: "Q",
+                expected: null,
                 mine: { reply: "a", score: k < 2 ? 1 : 0 },
                 theirs: { reply: "b", score: k < 2 ? 0 : 1 },
               })),

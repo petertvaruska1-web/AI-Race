@@ -315,7 +315,15 @@ export const BattleView = z.strictObject({
   theirs: BattleSideView,
   status: z.enum(["running", "done", "calledOff"]),
   rounds: z
-    .array(z.strictObject({ prompt: z.string(), mine: BattleAnswerView, theirs: BattleAnswerView }))
+    .array(
+      z.strictObject({
+        prompt: z.string(),
+        /** The right answer (none for a story). */
+        expected: z.string().nullable(),
+        mine: BattleAnswerView,
+        theirs: BattleAnswerView,
+      }),
+    )
     .nullable(),
   outcome: z.enum(["win", "draw", "loss"]).nullable(),
   /** Ranking points won or lost by it. */

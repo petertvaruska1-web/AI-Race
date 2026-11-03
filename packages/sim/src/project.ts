@@ -249,7 +249,12 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
       },
       status: x.status,
       rounds: x.rounds
-        ? x.rounds.map((r) => ({ prompt: r.prompt, mine: { ...r.mine }, theirs: { ...r.theirs } }))
+        ? x.rounds.map((r) => ({
+            prompt: r.prompt,
+            expected: r.expected ?? null,
+            mine: { ...r.mine },
+            theirs: { ...r.theirs },
+          }))
         : null,
       outcome: x.outcome,
       pointsChange: x.pointsChange,

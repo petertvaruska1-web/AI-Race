@@ -49,7 +49,7 @@
   - `test_score_round_partial_credit_orders_replies`: for a numeric exact item with answer 14, the reply "13" scores above "pigmpton." and "14" scores 1.
   - `test_code_shaped_reply_beats_chatter`: for the coding CheckItem "def front(seq)", the reply `return seq[1]` scores above `Great!`.
   - `test_battle_asks_like_the_benchmark`: an ExactItem with `chat=False` is asked without the chat wrapper, greedily, at the item's length.
-  - Sim test: totals 2.3 vs 2.25 → win at margin 0.1... no, they differ by 0.05, so the result is a draw; totals 2.3 vs 2.1 → win.
+  - Sim test: totals 0.05 apart → draw; 0.2 apart → win (margin 0.1).
   - Client test: the window shows "Right answer: 14".
 - [ ] Implement, run `cd ml && python -m uv run pytest tests/test_battles.py` and `npm test`, commit.
 

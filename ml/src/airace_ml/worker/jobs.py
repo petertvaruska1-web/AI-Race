@@ -21,7 +21,7 @@ from typing import Any
 
 import torch
 
-from airace_ml.battles import battle_challenges, score_challenge
+from airace_ml.battles import battle_challenges, battle_prompt, expected_answer, score_challenge
 from airace_ml.data.identity import data_identity
 from airace_ml.evals.judge import Judge, check_judge_provenance
 from airace_ml.evals.novelty import NoveltyIndex, check_index_provenance
@@ -239,18 +239,20 @@ class JobRunner:
             judge, index = self.creativity_tools()
             if judge is None or index is None:
                 raise ValueError("creativity battles need the judge and the novelty index")
-        story = skill == "creativity"
         out = []
         for k, item in enumerate(challenges):
+            # Asked as the benchmark asks its kind, so each AI shows what it can really do.
+            prompt, chat, max_new_tokens, temperature = battle_prompt(item)
             answers = {}
             for side in ("a", "b"):
                 version_id, url = sides[side]
                 lm, lock = self.models.get(version_id, url, transient=side == "b")
                 with lock:
-                    reply = lm.stream_chat_reply(
-                        [("user", item.prompt)],
-                        max_new_tokens=96,
-                        temperature=0.9 if story else 0.8,
+                    reply = lm.stream_reply(
+                        prompt,
+                        chat=chat,
+                        max_new_tokens=max_new_tokens,
+                        temperature=temperature,
                         top_p=0.95,
                         seed=seed + k,
                         on_text=lambda t, k=k, side=side: ctx.progress(
@@ -259,5 +261,5 @@ class JobRunner:
                     )
                 score = score_challenge(item, reply, tok=lm.tok, judge=judge, novelty=index)
                 answers[side] = {"reply": reply, "score": float(score)}
-            out.append({"prompt": item.prompt, **answers})
+            out.append({"prompt": item.prompt, "expected": expected_answer(item), **answers})
         return {"rounds": out}

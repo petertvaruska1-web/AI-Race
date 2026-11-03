@@ -11,6 +11,8 @@ word lists, scored like one story of the creativity eval (judge and novelty inde
 from __future__ import annotations
 
 import dataclasses
+import re
+from collections import Counter
 from dataclasses import dataclass
 from functools import cache
 from typing import TYPE_CHECKING
@@ -18,8 +20,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from airace_ml.evals.creativity import STORY_PROMPTS, score_story
+from airace_ml.evals.scoring import extract_answer, normalize_answer
 from airace_ml.evals.suite import build_suite, score_reply
 from airace_ml.feedback import GROUPS, customer_pool
+from airace_ml.skills.checkers import CHECKERS
 from airace_ml.skills.code import code_bench_items
 from airace_ml.skills.facts import knowledge_bench_items
 from airace_ml.skills.instructions import instruction_bench_items
@@ -141,6 +145,83 @@ def battle_challenges(skill: str, n: int, seed: int) -> list[Challenge]:
     return [pool[int(k)] for k in rng.choice(len(pool), size=min(n, len(pool)), replace=False)]
 
 
+def battle_prompt(item: Challenge) -> tuple[str, bool, int, float]:
+    """How a battle asks ``item``: (prompt, as a chat?, reply length, temperature).
+
+    A checked challenge is asked exactly as the benchmark asks its kind (its own chat flag and
+    reply length, greedily), so each AI shows what it can really do; a story as the creativity
+    eval asks one.
+    """
+    if isinstance(item, StoryPrompt):
+        return item.prompt, True, 96, 0.9
+    return item.prompt, item.chat, item.max_new_tokens, 0.0
+
+
+def expected_answer(item: Challenge) -> str | None:
+    """The right answer a battle shows under the two replies (none for a story)."""
+    if isinstance(item, ExactItem):
+        return item.answers[0]
+    if isinstance(item, CheckItem):
+        return item.reference
+    return None
+
+
+_WORD = re.compile(r"\w+")
+
+
+def _number(text: str) -> float | None:
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _overlap(said: str, right: str) -> float:
+    """The F1 of the words two texts share (case-folded, punctuation ignored)."""
+    a, b = Counter(_WORD.findall(said.casefold())), Counter(_WORD.findall(right.casefold()))
+    common = sum((a & b).values())
+    if common == 0:
+        return 0.0
+    precision, recall = common / sum(a.values()), common / sum(b.values())
+    return 2 * precision * recall / (precision + recall)
+
+
+def _closeness_to(said: str, right: str) -> float:
+    a, b = _number(said), _number(right)
+    if a is not None and b is not None:
+        return max(0.0, 1.0 - abs(a - b) / max(1.0, abs(b)))
+    return _overlap(said, right)
+
+
+def _tests_passed(item: CheckItem, reply: str) -> float:
+    """The share of a function challenge's tests the reply passes (other checks have no parts)."""
+    if item.check != "minipy_function_tests":
+        return 0.0
+    tests = item.check_args["tests"]
+    passed = sum(
+        CHECKERS["minipy_function_tests"](reply, {**item.check_args, "tests": [test]})
+        for test in tests
+    )
+    return passed / len(tests)
+
+
+def closeness(item: ExactItem | CheckItem, reply: str) -> float:
+    """How near a reply that fails its check came to the right answer (0-1).
+
+    The best of: number distance (both answers numbers), the words it shares with the right
+    answer or the reference reply, and the share of a function's tests it passes. It measures the
+    reply against the answer; the reply itself is never changed (R1).
+    """
+    if isinstance(item, ExactItem):
+        said = normalize_answer(extract_answer(reply, item.extract))
+        if not said:
+            return 0.0
+        return max(_closeness_to(said, normalize_answer(answer)) for answer in item.answers)
+    if not reply.strip():
+        return 0.0
+    return max(_overlap(reply, item.reference), _tests_passed(item, reply))
+
+
 def score_challenge(
     item: Challenge,
     reply: str,
@@ -149,9 +230,15 @@ def score_challenge(
     judge: Judge | None = None,
     novelty: NoveltyIndex | None = None,
 ) -> float:
-    """How well ``reply`` meets the challenge (0-1): its check, or for a story the judge."""
+    """How well ``reply`` meets the challenge (0-1).
+
+    A story: the judge. A checked challenge: 1 if it passes its check, otherwise half its
+    :func:`closeness`, so of two wrong answers the nearer one wins the round.
+    """
     if isinstance(item, StoryPrompt):
         if tok is None or judge is None or novelty is None:
             raise ValueError("creativity needs the judge and the novelty index")
         return score_story(reply, item.prompt, tok, judge, novelty)
-    return score_reply(item, reply)
+    if score_reply(item, reply) == 1.0:
+        return 1.0
+    return 0.5 * closeness(item, reply)

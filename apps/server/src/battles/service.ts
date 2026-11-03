@@ -148,7 +148,12 @@ export class BattleService {
       );
       return this.resolve(p, { failed: true });
     }
-    const rounds = parsed.data.rounds.map((r) => ({ prompt: r.prompt, mine: r.a, theirs: r.b }));
+    const rounds = parsed.data.rounds.map((r) => ({
+      prompt: r.prompt,
+      expected: r.expected,
+      mine: r.a,
+      theirs: r.b,
+    }));
     await this.resolve(p, { rounds });
   }
 
