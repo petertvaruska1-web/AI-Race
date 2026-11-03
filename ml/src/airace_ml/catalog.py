@@ -24,12 +24,14 @@ from airace_ml.evals.suite import SUITE_VERSION
 from airace_ml.paths import TOKENIZER_VERSION, corpus_dir, tokenizer_path
 from airace_ml.tokenizer import Tok
 
-CATALOG_VERSION = "catalog-v1"
+CATALOG_VERSION = "catalog-v2"  # v2: Fact-check plus pools, keynote questions
 FINGERPRINT_FILE = "gate_fingerprint.json"
 MAX_SAMPLE_CHARS = 600
 SAMPLES = 5
 REMOVED_EXAMPLES = 3
-CLEANING_LEVELS = ("light", "standard", "thorough")
+CLEANING_LEVELS = ("light", "standard", "thorough", "expert")
+KEYNOTE_QUESTIONS_PER_GROUP = 4
+KEYNOTE_SEED = 2026
 
 # Player-facing names (D2 is open: these are the temporary assumption, the same as the
 # game's DATASET_TITLES).
@@ -174,6 +176,7 @@ def build_catalog(root: Path, population_dirs: Sequence[Path] = ()) -> dict:
     ]
     return {
         "version": CATALOG_VERSION,
+        "keynoteQuestions": keynote_questions(),
         "dataIdentity": data_identity(root),
         "tokenizer": TOKENIZER_VERSION,
         "suite": SUITE_VERSION,
@@ -202,3 +205,14 @@ def write_catalog(
     )
     tmp.replace(out)
     return out
+
+
+def keynote_questions() -> list[dict]:
+    """The demo questions a launch keynote can be asked (customer questions, a few per group)."""
+    from airace_ml.feedback import GROUPS, pick_questions
+
+    return [
+        {"id": q.id, "group": group, "prompt": q.prompt}
+        for group in GROUPS
+        for q in pick_questions(group, KEYNOTE_QUESTIONS_PER_GROUP, KEYNOTE_SEED)
+    ]

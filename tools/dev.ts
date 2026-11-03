@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { CATALOG_VERSION } from "@airace/protocol";
 import {
   healthy,
   type Proc,
@@ -23,7 +24,16 @@ const server = `http://127.0.0.1:${port}`;
 // A second game can run beside the first, with its own ports and data root.
 const webPort = Number(process.env.AIRACE_WEB_PORT ?? 5173);
 
-if (!existsSync(join(data, "catalog", "v1", "catalog.json"))) {
+const catalogPath = join(data, "catalog", "v1", "catalog.json");
+// Missing, or written by an older export (a catalog version the server no longer reads).
+const stale = () => {
+  try {
+    return JSON.parse(readFileSync(catalogPath, "utf8")).version !== CATALOG_VERSION;
+  } catch {
+    return true;
+  }
+};
+if (!existsSync(catalogPath) || stale()) {
   console.log("Writing the dataset catalog for the game server…");
   const [cmd, ...pre] = uvCommand();
   const population = join(REPO, "ml", "runs", "gate-1", "runs");

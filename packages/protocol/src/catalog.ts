@@ -1,11 +1,13 @@
 import { z } from "zod";
-import { DATASET_IDS, type DatasetId } from "./world.ts";
+import { DATASET_IDS, type DatasetId, GroupId } from "./world.ts";
 
 // The server's facts about the training data, exported by the ML project
 // (ADR 0008 item 3). Players see titles, sizes, samples and what preparation
 // removes; never the data itself.
 
-export const CLEANING_LEVELS = ["light", "standard", "thorough"] as const;
+export const CLEANING_LEVELS = ["light", "standard", "thorough", "expert"] as const;
+/** The catalog version the server reads (the dev launcher rewrites an older one). */
+export const CATALOG_VERSION = "catalog-v2";
 
 /** One way to prepare a dataset: `${cleaning}|${dedup ? 1 : 0}|${factCheck ? 1 : 0}`. */
 export const PREP_KEYS = CLEANING_LEVELS.flatMap((c) =>
@@ -54,11 +56,15 @@ export type CatalogDataset = z.infer<typeof CatalogDataset>;
 
 export const Catalog = z
   .object({
-    version: z.literal("catalog-v1"),
+    version: z.literal(CATALOG_VERSION),
     dataIdentity: z.string().min(1),
     tokenizer: z.literal("tok-v1"),
     suite: z.literal("bench-v1"),
     datasets: z.array(CatalogDataset),
+    /** Customer questions a launch keynote's live demo can ask. */
+    keynoteQuestions: z
+      .array(z.object({ id: z.string().min(1), group: GroupId, prompt: z.string().min(1) }))
+      .min(1),
     referenceTraits: z.array(z.record(z.string(), z.number())),
   })
   .refine(

@@ -12,9 +12,10 @@ describe("Catalog", () => {
     expect(c.datasets.map((d) => d.title)).toEqual(DATASET_IDS.map((id) => DATASET_TITLES[id]));
   });
 
-  it("knows the 12 ways to prepare a dataset", () => {
-    expect(PREP_KEYS).toHaveLength(12);
-    expect(new Set(PREP_KEYS).size).toBe(12);
+  it("knows the 16 ways to prepare a dataset (Fact-check plus among them)", () => {
+    expect(PREP_KEYS).toHaveLength(16);
+    expect(new Set(PREP_KEYS).size).toBe(16);
+    expect(PREP_KEYS).toContain(prepKey("expert", true, true));
     expect(prepKey("thorough", true, false)).toBe("thorough|1|0");
     expect(PREP_KEYS).toContain(prepKey("light", false, true));
   });
@@ -22,7 +23,7 @@ describe("Catalog", () => {
   it("refuses a dataset missing one of its preparation pools", () => {
     const c = sample();
     delete c.datasets[0].pools["light|0|0"];
-    expect(Object.keys(c.datasets[0].pools)).toHaveLength(11);
+    expect(Object.keys(c.datasets[0].pools)).toHaveLength(15);
     expect(Catalog.safeParse(c).success).toBe(false);
   });
 

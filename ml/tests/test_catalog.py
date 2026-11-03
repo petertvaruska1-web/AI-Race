@@ -123,7 +123,7 @@ def test_conversations_read_as_turns(tiny_tok):
 def test_writes_to_the_data_root_by_default(tiny_data_root):
     path = write_catalog(tiny_data_root)
     assert path == Path(tiny_data_root) / "catalog" / "v1" / "catalog.json"
-    assert json.loads(path.read_text(encoding="utf-8"))["version"] == "catalog-v1"
+    assert json.loads(path.read_text(encoding="utf-8"))["version"] == "catalog-v2"
 
 
 def test_cli_exports_the_catalog(tiny_data_root, tmp_path, capsys):
@@ -135,3 +135,35 @@ def test_cli_exports_the_catalog(tiny_data_root, tmp_path, capsys):
     assert json.loads(out.read_text(encoding="utf-8"))["dataIdentity"] == data_identity(
         tiny_data_root
     )
+
+
+def test_the_catalog_describes_fact_check_plus_and_keynote_questions(tiny_data_root):
+    from airace_ml.feedback import GROUPS
+
+    catalog = json.loads(write_catalog(tiny_data_root).read_text(encoding="utf-8"))
+    for d in catalog["datasets"]:
+        expert = d["pools"]["expert|1|1"]
+        assert expert["docs"] <= d["pools"]["thorough|1|1"]["docs"]
+        # Fact-check plus removes duplicates and false facts whatever the switches say.
+        assert d["pools"]["expert|0|0"] == expert
+        assert "expert" in d["removedExamples"]["cleaning"]
+    cards = catalog["keynoteQuestions"]
+    assert {c["group"] for c in cards} == set(GROUPS)
+    assert all(c["id"] and c["prompt"] for c in cards)
+
+
+def test_fact_check_plus_keeps_less_than_thorough_cleaning_and_forces_both_checks(tiny_data_root):
+    from airace_ml.data.corpus import DATASET_IDS, Corpus
+    from airace_ml.data.prep import PrepConfig, eligible_docs
+    from airace_ml.paths import corpus_dir
+
+    for name in DATASET_IDS:
+        corpus = Corpus.open(corpus_dir(tiny_data_root) / name)
+        expert = set(eligible_docs(corpus, PrepConfig("expert")).tolist())
+        thorough = set(
+            eligible_docs(corpus, PrepConfig("thorough", dedup=True, fact_check=True)).tolist()
+        )
+        assert expert <= thorough, name
+        assert expert == set(
+            eligible_docs(corpus, PrepConfig("expert", dedup=True, fact_check=True)).tolist()
+        )

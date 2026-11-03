@@ -27,5 +27,6 @@ export function publicCatalog(c: Catalog): PublicCatalog {
     tokenizer: c.tokenizer,
     suite: c.suite,
     datasets: c.datasets,
+    keynoteQuestions: c.keynoteQuestions,
   };
 }

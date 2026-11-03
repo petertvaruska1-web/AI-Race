@@ -1,5 +1,5 @@
 {
-  "version": "catalog-v1",
+  "version": "catalog-v2",
   "dataIdentity": "sample-0001",
   "tokenizer": "tok-v1",
   "suite": "bench-v1",
@@ -58,6 +58,22 @@
         "thorough|1|1": {
           "docs": 850,
           "tokens": 102000
+        },
+        "expert|0|0": {
+          "docs": 850,
+          "tokens": 102000
+        },
+        "expert|0|1": {
+          "docs": 850,
+          "tokens": 102000
+        },
+        "expert|1|0": {
+          "docs": 850,
+          "tokens": 102000
+        },
+        "expert|1|1": {
+          "docs": 850,
+          "tokens": 102000
         }
       },
       "samples": ["How to keep basil fresh: trim the stems and stand them in a glass of water."],
@@ -65,7 +81,8 @@
         "cleaning": {
           "light": ["BUY NOW!!! cheap cheap cheap"],
           "standard": ["click here click here to win"],
-          "thorough": ["teh cat sat onn the mat"]
+          "thorough": ["teh cat sat onn the mat"],
+          "expert": ["teh cat sat onn the mat"]
         },
         "duplicates": [
           "How to keep basil fresh: trim the stems and stand them in a glass of water."
@@ -127,6 +144,22 @@
         "thorough|1|1": {
           "docs": 1700,
           "tokens": 204000
+        },
+        "expert|0|0": {
+          "docs": 1700,
+          "tokens": 204000
+        },
+        "expert|0|1": {
+          "docs": 1700,
+          "tokens": 204000
+        },
+        "expert|1|0": {
+          "docs": 1700,
+          "tokens": 204000
+        },
+        "expert|1|1": {
+          "docs": 1700,
+          "tokens": 204000
         }
       },
       "samples": [
@@ -136,7 +169,8 @@
         "cleaning": {
           "light": ["BUY NOW!!! cheap cheap cheap"],
           "standard": ["click here click here to win"],
-          "thorough": ["teh cat sat onn the mat"]
+          "thorough": ["teh cat sat onn the mat"],
+          "expert": ["teh cat sat onn the mat"]
         },
         "duplicates": [
           "The old house stood at the end of the lane, and nobody had lived there for years."
@@ -198,6 +232,22 @@
         "thorough|1|1": {
           "docs": 2550,
           "tokens": 306000
+        },
+        "expert|0|0": {
+          "docs": 2550,
+          "tokens": 306000
+        },
+        "expert|0|1": {
+          "docs": 2550,
+          "tokens": 306000
+        },
+        "expert|1|0": {
+          "docs": 2550,
+          "tokens": 306000
+        },
+        "expert|1|1": {
+          "docs": 2550,
+          "tokens": 306000
         }
       },
       "samples": ["Plants make their food from sunlight. This is called photosynthesis."],
@@ -205,7 +255,8 @@
         "cleaning": {
           "light": ["BUY NOW!!! cheap cheap cheap"],
           "standard": ["click here click here to win"],
-          "thorough": ["teh cat sat onn the mat"]
+          "thorough": ["teh cat sat onn the mat"],
+          "expert": ["teh cat sat onn the mat"]
         },
         "duplicates": ["Plants make their food from sunlight. This is called photosynthesis."],
         "factCheck": []
@@ -265,6 +316,22 @@
         "thorough|1|1": {
           "docs": 3400,
           "tokens": 408000
+        },
+        "expert|0|0": {
+          "docs": 3400,
+          "tokens": 408000
+        },
+        "expert|0|1": {
+          "docs": 3400,
+          "tokens": 408000
+        },
+        "expert|1|0": {
+          "docs": 3400,
+          "tokens": 408000
+        },
+        "expert|1|1": {
+          "docs": 3400,
+          "tokens": 408000
         }
       },
       "samples": ["A: Did you finish the book?\nB: Almost! Two chapters left."],
@@ -272,7 +339,8 @@
         "cleaning": {
           "light": ["BUY NOW!!! cheap cheap cheap"],
           "standard": ["click here click here to win"],
-          "thorough": ["teh cat sat onn the mat"]
+          "thorough": ["teh cat sat onn the mat"],
+          "expert": ["teh cat sat onn the mat"]
         },
         "duplicates": ["A: Did you finish the book?\nB: Almost! Two chapters left."],
         "factCheck": []
@@ -332,6 +400,22 @@
         "thorough|1|1": {
           "docs": 4250,
           "tokens": 510000
+        },
+        "expert|0|0": {
+          "docs": 4250,
+          "tokens": 510000
+        },
+        "expert|0|1": {
+          "docs": 4250,
+          "tokens": 510000
+        },
+        "expert|1|0": {
+          "docs": 4250,
+          "tokens": 510000
+        },
+        "expert|1|1": {
+          "docs": 4250,
+          "tokens": 510000
         }
       },
       "samples": ["def add(a, b):\n    return a + b"],
@@ -339,7 +423,8 @@
         "cleaning": {
           "light": ["BUY NOW!!! cheap cheap cheap"],
           "standard": ["click here click here to win"],
-          "thorough": ["teh cat sat onn the mat"]
+          "thorough": ["teh cat sat onn the mat"],
+          "expert": ["teh cat sat onn the mat"]
         },
         "duplicates": ["def add(a, b):\n    return a + b"],
         "factCheck": []
@@ -399,6 +484,22 @@
         "thorough|1|1": {
           "docs": 5100,
           "tokens": 612000
+        },
+        "expert|0|0": {
+          "docs": 5100,
+          "tokens": 612000
+        },
+        "expert|0|1": {
+          "docs": 5100,
+          "tokens": 612000
+        },
+        "expert|1|0": {
+          "docs": 5100,
+          "tokens": 612000
+        },
+        "expert|1|1": {
+          "docs": 5100,
+          "tokens": 612000
         }
       },
       "samples": ["Tom has 3 apples and buys 2 more. How many does he have? 3 + 2 = 5."],
@@ -406,7 +507,8 @@
         "cleaning": {
           "light": ["BUY NOW!!! cheap cheap cheap"],
           "standard": ["click here click here to win"],
-          "thorough": ["teh cat sat onn the mat"]
+          "thorough": ["teh cat sat onn the mat"],
+          "expert": ["teh cat sat onn the mat"]
         },
         "duplicates": ["Tom has 3 apples and buys 2 more. How many does he have? 3 + 2 = 5."],
         "factCheck": []
@@ -466,6 +568,22 @@
         "thorough|1|1": {
           "docs": 5950,
           "tokens": 714000
+        },
+        "expert|0|0": {
+          "docs": 5950,
+          "tokens": 714000
+        },
+        "expert|0|1": {
+          "docs": 5950,
+          "tokens": 714000
+        },
+        "expert|1|0": {
+          "docs": 5950,
+          "tokens": 714000
+        },
+        "expert|1|1": {
+          "docs": 5950,
+          "tokens": 714000
         }
       },
       "samples": ["Question: What is the capital of France?\nAnswer: Paris."],
@@ -473,7 +591,8 @@
         "cleaning": {
           "light": ["BUY NOW!!! cheap cheap cheap"],
           "standard": ["click here click here to win"],
-          "thorough": ["teh cat sat onn the mat"]
+          "thorough": ["teh cat sat onn the mat"],
+          "expert": ["teh cat sat onn the mat"]
         },
         "duplicates": ["Question: What is the capital of France?\nAnswer: Paris."],
         "factCheck": ["The moon is made of cheese."]
@@ -533,6 +652,22 @@
         "thorough|1|1": {
           "docs": 6800,
           "tokens": 816000
+        },
+        "expert|0|0": {
+          "docs": 6800,
+          "tokens": 816000
+        },
+        "expert|0|1": {
+          "docs": 6800,
+          "tokens": 816000
+        },
+        "expert|1|0": {
+          "docs": 6800,
+          "tokens": 816000
+        },
+        "expert|1|1": {
+          "docs": 6800,
+          "tokens": 816000
         }
       },
       "samples": ["Once upon a time, a small dragon was afraid of the dark."],
@@ -540,7 +675,8 @@
         "cleaning": {
           "light": ["BUY NOW!!! cheap cheap cheap"],
           "standard": ["click here click here to win"],
-          "thorough": ["teh cat sat onn the mat"]
+          "thorough": ["teh cat sat onn the mat"],
+          "expert": ["teh cat sat onn the mat"]
         },
         "duplicates": ["Once upon a time, a small dragon was afraid of the dark."],
         "factCheck": []
@@ -555,6 +691,18 @@
     {
       "curious": 0.18,
       "brief": 0.66
+    }
+  ],
+  "keynoteQuestions": [
+    {
+      "id": "knowledge-customer-0003",
+      "group": "students",
+      "prompt": "What is the capital of France?"
+    },
+    {
+      "id": "coding-customer-0001",
+      "group": "developers",
+      "prompt": "Program: x = 2 print(x + 1) Output:"
     }
   ]
 }

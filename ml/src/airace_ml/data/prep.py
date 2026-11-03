@@ -1,4 +1,8 @@
-"""Data preparation: the player's cleaning, dedup, fact-check and variety choices as real filters."""
+"""Data preparation: the player's cleaning, dedup, fact-check and variety choices as real filters.
+
+"expert" cleaning is Fact-check plus (playtest pack §5): the strictest quality bar, and it always
+removes duplicates and false facts.
+"""
 
 from dataclasses import asdict, dataclass
 from typing import Literal
@@ -7,13 +11,20 @@ import numpy as np
 
 from airace_ml.data.corpus import Corpus
 
-CLEANING_THRESHOLDS: dict[str, float] = {"light": 0.15, "standard": 0.40, "thorough": 0.65}
+# expert 0.80: every dataset keeps at least what thorough + both checks keep, and the web crawl
+# drops from 44% to 34% of its documents (measured on the full corpus, 2026-11-03).
+CLEANING_THRESHOLDS: dict[str, float] = {
+    "light": 0.15,
+    "standard": 0.40,
+    "thorough": 0.65,
+    "expert": 0.80,
+}
 VARIETIES: tuple[str, ...] = ("natural", "balanced")
 
 
 @dataclass(frozen=True)
 class PrepConfig:
-    cleaning: Literal["light", "standard", "thorough"] = "standard"
+    cleaning: Literal["light", "standard", "thorough", "expert"] = "standard"
     dedup: bool = False
     fact_check: bool = False
     variety: Literal["natural", "balanced"] = "natural"
@@ -40,9 +51,10 @@ def eligible_docs(corpus: Corpus, prep: PrepConfig, purchase_fraction: float = 1
     # Qualities are stored as float16, so compare against the threshold at the same precision.
     keep = tags.quality >= np.float16(CLEANING_THRESHOLDS[prep.cleaning])
     keep &= ~tags.heldout
-    if prep.dedup:
+    expert = prep.cleaning == "expert"
+    if prep.dedup or expert:
         keep &= (tags.dup_cluster < 0) | tags.dup_canonical
-    if prep.fact_check:
+    if prep.fact_check or expert:
         keep &= ~tags.false_fact
     keep &= tags.purchase_rank < np.float32(purchase_fraction)
     return np.flatnonzero(keep).astype(np.int64)
