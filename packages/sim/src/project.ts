@@ -1,4 +1,5 @@
 import {
+  APP_KINDS,
   BATTLE_SKILLS,
   COST_CATEGORIES,
   type FeedItemView,
@@ -271,6 +272,24 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
     sponsorships: Object.values(c.sponsorships)
       .sort((a, b) => a.startDay - b.startDay || (a.id < b.id ? -1 : 1))
       .map((x) => ({ ...x })),
+    apps: Object.values(c.apps)
+      .sort((a, b) => a.startDay - b.startDay || (a.id < b.id ? -1 : 1))
+      .map((a) => ({
+        id: a.id,
+        kind: a.kind,
+        productId: a.productId,
+        productName: c.products[a.productId]?.name ?? "",
+        startDay: a.startDay,
+        users: Math.round(a.users),
+        rating: Math.round(a.rating * 10) / 10,
+        status: a.status,
+        reviews: a.reviews.map((r) => ({
+          day: r.day,
+          prompt: r.prompt,
+          reply: r.reply,
+          stars: r.stars,
+        })),
+      })),
     fund: { balance: c.fund.balance },
     showcases: c.showcases.map((x) => ({
       id: x.id,
@@ -409,6 +428,7 @@ function feedItemView(i: FeedItem): FeedItemView {
     question: i.question,
     reply: i.reply,
     tone: i.tone,
+    ...(i.stars ? { stars: i.stars } : {}),
   };
 }
 
@@ -507,5 +527,12 @@ function shopView(b: Balance): ShopView {
       groups: [...e.sponsorships.kinds[kind].groups],
     })),
     looks: Object.entries(e.looks).map(([id, price]) => ({ id, price })),
+    apps: APP_KINDS.map((kind) => ({
+      kind,
+      skill: e.apps.kinds[kind].skill,
+      group: e.apps.kinds[kind].group,
+      setup: e.apps.kinds[kind].setup,
+      upkeep: e.apps.kinds[kind].upkeep,
+    })),
   };
 }

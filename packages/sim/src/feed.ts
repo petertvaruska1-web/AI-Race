@@ -65,6 +65,30 @@ function addItem(s: WorldState, item: NewFeedItem): void {
   if (s.feed.length > cap) s.feed.splice(0, s.feed.length - cap);
 }
 
+/** A partner app's review as a post: a real reply to a fresh question, with its stars. */
+export function postAppReview(
+  s: WorldState,
+  company: CompanyState,
+  appName: string,
+  group: GroupId,
+  question: string,
+  reply: string,
+  score: number,
+): void {
+  addItem(s, {
+    kind: "post",
+    day: s.day,
+    companyId: company.id,
+    sentiment: 2 * score - 1,
+    author: postAuthor(s, group),
+    productName: appName,
+    question,
+    reply,
+    tone: toneOf(score),
+    stars: Math.round(1 + 4 * score),
+  });
+}
+
 /** Adds a news story about a company, and lets it move the company's news mood. */
 export function tellNews(
   s: WorldState,

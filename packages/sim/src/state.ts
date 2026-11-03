@@ -157,6 +157,8 @@ export type PostItem = FeedBase & {
   question: string;
   reply: string;
   tone: PostTone;
+  /** A partner app's review: its stars (1-5). */
+  stars?: number;
 };
 
 /** A news story: game commentary over real events, never an AI's words. */

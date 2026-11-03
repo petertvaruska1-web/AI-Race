@@ -1,3 +1,4 @@
+export * from "./apps.ts";
 export * from "./balance.ts";
 export * from "./battles.ts";
 export * from "./calendar.ts";

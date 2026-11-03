@@ -222,6 +222,13 @@ export type SponsorKind = (typeof SPONSOR_KINDS)[number];
 /** Partner apps built on the player's AI, each betting on one skill. */
 export const APP_KINDS = ["homework", "stories", "code", "puzzles", "office"] as const;
 export type AppKind = (typeof APP_KINDS)[number];
+export const APP_NAMES: Record<AppKind, string> = {
+  homework: "Homework Helper",
+  stories: "Story Time",
+  code: "Code Buddy",
+  puzzles: "Puzzle Pal",
+  office: "Office Assistant",
+};
 
 /** A look's id: `orb:<style>` or `logo:<motion>` (the sim's catalog says which exist). */
 export const LookId = z.string().regex(/^(orb|logo):[a-z]{2,20}$/);

@@ -3,6 +3,7 @@ import { Difficulty, GameId } from "./minigames.ts";
 import { ARCHETYPES, RIVAL_STYLES } from "./rivals.ts";
 import { Day, zId } from "./text.ts";
 import {
+  APP_KINDS,
   BATTLE_SKILLS,
   COST_CATEGORIES,
   GroupId,
@@ -168,6 +169,8 @@ export const PostView = z.strictObject({
   /** Real model output, exactly as written (R1). Clients render it as text. */
   reply: z.string(),
   tone: z.enum(POST_TONES),
+  /** A partner app's review: its stars. */
+  stars: z.number().int().min(1).max(5).optional(),
 });
 export type PostView = z.infer<typeof PostView>;
 
@@ -366,6 +369,15 @@ export const ShopView = z.strictObject({
     }),
   ),
   looks: z.array(z.strictObject({ id: z.string(), price: z.number().int() })),
+  apps: z.array(
+    z.strictObject({
+      kind: z.enum(APP_KINDS),
+      skill: z.enum(BATTLE_SKILLS),
+      group: GroupId,
+      setup: z.number().int(),
+      upkeep: z.number().int(),
+    }),
+  ),
 });
 export type ShopView = z.infer<typeof ShopView>;
 
@@ -403,6 +415,28 @@ export const PrivateCompany = z.strictObject({
       kind: z.enum(SPONSOR_KINDS),
       startDay: Day,
       endDay: Day,
+    }),
+  ),
+  /** Partner apps, running or closed. */
+  apps: z.array(
+    z.strictObject({
+      id: zId,
+      kind: z.enum(APP_KINDS),
+      productId: zId,
+      productName: z.string(),
+      startDay: Day,
+      users: z.number().int(),
+      rating: z.number().min(1).max(5),
+      status: z.enum(["live", "closed"]),
+      reviews: z.array(
+        z.strictObject({
+          day: Day,
+          prompt: z.string(),
+          /** Real model output, exactly as written (R1). */
+          reply: z.string(),
+          stars: z.number().int().min(1).max(5),
+        }),
+      ),
     }),
   ),
   /** The investment fund (it counts toward the company's value). */

@@ -1,4 +1,5 @@
 import { Command, TEXT_LIMITS } from "@airace/protocol";
+import { appCommand, applyAppReviews, appsDay } from "./apps.ts";
 import { getBalance } from "./balance.ts";
 import { applyBattle, battleCommand } from "./battles.ts";
 import { campaignCommand, campaignsDay } from "./campaigns.ts";
@@ -72,6 +73,7 @@ function tick(s: WorldState): Handled {
   campaignsDay(s);
   sponsorshipsDay(s);
   productsDay(s);
+  appsDay(s);
   marketDay(s);
   dataCentersDay(s);
   computeDay(s);
@@ -160,6 +162,8 @@ function system(s: WorldState, e: SystemEvent): Handled {
       return applyBattle(s, e);
     case "showcaseResolved":
       return applyShowcase(s, e);
+    case "appReviewed":
+      return applyAppReviews(s, e);
     default:
       return no("This event isn't supported yet.");
   }
@@ -293,6 +297,12 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       const company = member.companyId ? s.companies[member.companyId] : undefined;
       if (!company) return no("Found your company first.");
       return computeCommand(s, company, cmd, newId);
+    }
+    case "fundApp":
+    case "closeApp": {
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("Found your company first.");
+      return appCommand(s, company, cmd, newId);
     }
     case "sponsor": {
       const company = member.companyId ? s.companies[member.companyId] : undefined;

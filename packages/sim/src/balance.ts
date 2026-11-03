@@ -1,4 +1,6 @@
 import {
+  type AppKind,
+  type BattleSkill,
   type DatasetId,
   GROUP_IDS,
   type GroupId,
@@ -167,6 +169,27 @@ export type Economy = {
   /** Sponsorships: what each kind of event costs, how long it runs, whose awareness it lifts. */
   sponsorships: {
     kinds: Record<SponsorKind, { price: number; days: number; groups: GroupId[]; rate: number }>;
+  };
+  /** Partner apps: what each costs and earns, and how its users follow the AI's measured skill. */
+  apps: {
+    kinds: Record<
+      AppKind,
+      {
+        skill: BattleSkill;
+        group: GroupId;
+        setup: number;
+        upkeep: number;
+        /** Users a perfect AI with a 3-star rating settles at. */
+        capacity: number;
+        revenuePerUser: number;
+      }
+    >;
+    /** Users close this share of the gap to their target each day. */
+    dailyGrowth: number;
+    /** fit = (score/100)^fitPower; an unmeasured skill fits at unmeasuredFit. */
+    fitPower: number;
+    unmeasuredFit: number;
+    reviewsKept: number;
   };
   /** Looks by id, with their price (the free ones cost 0). */
   looks: Record<string, number>;
@@ -515,6 +538,55 @@ const ECONOMY_V2: Economy = {
       },
       festival: { price: 100_000, days: 60, groups: ["creators", "everyday"], rate: 0.005 },
     },
+  },
+  // A good app pays back its setup in about 6-12 months; a weak AI's app never does.
+  apps: {
+    kinds: {
+      homework: {
+        skill: "knowledge",
+        group: "students",
+        setup: 250_000,
+        upkeep: 20_000,
+        capacity: 60_000,
+        revenuePerUser: 2,
+      },
+      stories: {
+        skill: "creativity",
+        group: "everyday",
+        setup: 200_000,
+        upkeep: 15_000,
+        capacity: 80_000,
+        revenuePerUser: 1.5,
+      },
+      code: {
+        skill: "coding",
+        group: "developers",
+        setup: 300_000,
+        upkeep: 25_000,
+        capacity: 25_000,
+        revenuePerUser: 5,
+      },
+      puzzles: {
+        skill: "pattern",
+        group: "students",
+        setup: 150_000,
+        upkeep: 10_000,
+        capacity: 40_000,
+        revenuePerUser: 1.2,
+      },
+      office: {
+        skill: "instruction",
+        group: "businesses",
+        setup: 400_000,
+        upkeep: 30_000,
+        capacity: 20_000,
+        revenuePerUser: 8,
+      },
+    },
+    dailyGrowth: 0.03,
+    fitPower: 1.5,
+    unmeasuredFit: 0.1,
+    reviewsKept: 6,
   },
   // Status for the rich: a supernova orb is more than a month of a typical company's revenue.
   looks: {
