@@ -5,11 +5,13 @@ import type {
   Command,
   CostCategory,
   Difficulty,
+  EvalSignals,
   GameId,
   GroupId,
   IncomeCategory,
   LeagueTable,
   Logo,
+  MilestoneId,
   MinigameSettings,
   NewsTopic,
   Palette,
@@ -59,6 +61,8 @@ export type RunState = {
   held: { versionId: string; result: TrainingResult } | null;
   failure: string | null;
   versionId: string | null;
+  /** The notebook the run trains on (its text's sha256), when the plan has a notebook share. */
+  notebookHash: string | null;
 };
 
 export type VersionState = {
@@ -412,6 +416,10 @@ export type CompanyState = {
   fund: { balance: number };
   /** Feedback replies customers loved (score 0.75 or more), up to 400; the server keeps their text. */
   loved: number;
+  /** The player's notebook: the server keeps its text; the world only its fingerprint (R2). */
+  notebook: { hash: string; words: number; savedDay: number } | null;
+  /** Milestones earned, oldest first; each once (players only). */
+  milestones: { id: MilestoneId; day: number; detail: string | null }[];
 };
 
 export type WorldState = {
@@ -462,6 +470,8 @@ export type SystemEvent =
       overall: number | null;
       personalityWords: string[];
       traits?: Record<string, number> | null;
+      /** What the milestones need (absent from evals logged before sim-6). */
+      signals?: EvalSignals | null;
     }
   | { type: "rivalsJoined"; pack: RivalPack }
   | { type: "battleResolved"; battleId: string; rounds: BattleRound[] }
@@ -470,6 +480,8 @@ export type SystemEvent =
   | { type: "showcaseResolved"; showcaseId: string; failed: true }
   | { type: "keynoteResolved"; productId: string; prompt: string; reply: string; score: number }
   | { type: "keynoteResolved"; productId: string; failed: true }
+  /** The server stored a notebook's text; only its sha256 and word count enter the world. */
+  | { type: "notebookSaved"; companyId: string; hash: string; words: number }
   | {
       type: "appReviewed";
       appId: string;

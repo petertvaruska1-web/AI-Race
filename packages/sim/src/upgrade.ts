@@ -7,7 +7,7 @@ import type { WorldState } from "./state.ts";
 // Each step only adds the newer fields with their starting values.
 
 /** The simulation versions `upgradeState` can bring forward. */
-export const UPGRADABLE = ["sim-3", "sim-4"] as const;
+export const UPGRADABLE = ["sim-3", "sim-4", "sim-5"] as const;
 export type UpgradableVersion = (typeof UPGRADABLE)[number];
 
 type Loose = Record<string, unknown>;
@@ -53,6 +53,24 @@ function fromSim4(s: Loose, legacyUntilSeq: number): Loose {
 }
 
 /**
+ * A world saved by sim-5 (the playtest pack) as sim-6 (Phase 4): the notebook joins every
+ * plan with a share of 0, and every company starts without one.
+ */
+function fromSim5(s: Loose): Loose {
+  const companies = s.companies as Record<string, Loose>;
+  for (const c of Object.values(companies)) {
+    const extras = newCompanyExtras() as unknown as Loose;
+    for (const [k, v] of Object.entries(extras)) c[k] ??= v;
+    for (const r of Object.values(c.runs as Record<string, Loose>)) {
+      const plan = r.plan as { mix: Record<string, number> };
+      plan.mix.notebook ??= 0;
+      r.notebookHash ??= null;
+    }
+  }
+  return s;
+}
+
+/**
  * Brings an older world forward. `legacyUntilSeq` is the last logged input that will be
  * replayed on it: those inputs keep the old rules where the new ones would change money
  * (they were accepted under them), so replay can't diverge.
@@ -64,6 +82,7 @@ export function upgradeState(
 ): WorldState {
   const s = structuredClone(state) as Loose;
   if (from === "sim-3") fromSim3(s);
-  fromSim4(s, legacyUntilSeq ?? (s.seq as number));
+  if (from !== "sim-5") fromSim4(s, legacyUntilSeq ?? (s.seq as number));
+  fromSim5(s);
   return s as unknown as WorldState;
 }

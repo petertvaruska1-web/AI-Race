@@ -14,6 +14,8 @@ export * from "./league.ts";
 export * from "./ledger.ts";
 export * from "./looks.ts";
 export * from "./market.ts";
+export * from "./milestones.ts";
+export * from "./notebook.ts";
 export * from "./overhead.ts";
 export * from "./palette.ts";
 export * from "./products.ts";

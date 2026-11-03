@@ -10,6 +10,7 @@ import {
   INCOME_CATEGORIES,
   LEAGUE_TABLES,
   Logo,
+  MILESTONE_IDS,
   NEWS_TOPICS,
   Palette,
   PlanId,
@@ -443,6 +444,12 @@ export const PrivateCompany = z.strictObject({
   ),
   /** Feedback replies customers loved, which "Learn from customers" can train on. */
   loved: z.number().int().min(0),
+  /** The notebook's size and when it was saved; its text stays on the server. */
+  notebook: z.strictObject({ words: z.number().int().min(0), savedDay: Day }).nullable(),
+  /** The trophy shelf: milestones earned, oldest first (never a list of what is left). */
+  milestones: z.array(
+    z.strictObject({ id: z.enum(MILESTONE_IDS), day: Day, detail: z.string().nullable() }),
+  ),
   /** The investment fund (it counts toward the company's value). */
   fund: z.strictObject({ balance: z.number().int() }),
   /** The last 20 showcases, newest last. */

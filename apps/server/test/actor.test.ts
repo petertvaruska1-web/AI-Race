@@ -148,7 +148,7 @@ describe("recovery", () => {
     expect(again.state().day).toBe(live.day + 1);
   });
 
-  it("upgrades a world saved by sim-3 (Phase 2), replays it and saves it as sim-5", async () => {
+  it("upgrades a world saved by sim-3 (Phase 2), replays it and saves it as sim-6", async () => {
     server = await startTestServer({ balance: "balance-v2" });
     const { userId, worldId, actor } = await runningWorld(server);
     await actor.snapshot("test");
@@ -191,9 +191,36 @@ describe("recovery", () => {
       .select({ v: schema.worldSnapshots.simVersion })
       .from(schema.worldSnapshots)
       .where(eq(schema.worldSnapshots.worldId, worldId));
-    expect(versions.map((r) => r.v)).toContain("sim-5");
+    expect(versions.map((r) => r.v)).toContain("sim-6");
     // The input logged after the old snapshot replayed on the old rules.
     expect(s.legacyUntilSeq).toBeGreaterThan(row?.seq ?? 0);
+  });
+
+  it("upgrades a world saved by sim-5 (the playtest pack): no notebook yet", async () => {
+    server = await startTestServer({ balance: "balance-v2" });
+    const { worldId, actor } = await runningWorld(server);
+    await actor.snapshot("test");
+    const rows = await server.ctx.db
+      .select()
+      .from(schema.worldSnapshots)
+      .where(eq(schema.worldSnapshots.worldId, worldId));
+    const row = rows.sort((x, y) => y.seq - x.seq)[0];
+    const old = structuredClone(row?.state) as {
+      companies: Record<string, Record<string, unknown>>;
+    };
+    for (const c of Object.values(old.companies)) delete c.notebook;
+    await server.ctx.db
+      .update(schema.worldSnapshots)
+      .set({ simVersion: "sim-5", state: old })
+      .where(
+        and(
+          eq(schema.worldSnapshots.worldId, worldId),
+          eq(schema.worldSnapshots.seq, row?.seq ?? 0),
+        ),
+      );
+    await server.ctx.worlds.evict(worldId);
+    const s = (await server.ctx.worlds.get(worldId)).state();
+    for (const c of Object.values(s.companies)) expect(c.notebook).toBeNull();
   });
 
   it("refuses a snapshot from another simulation version", async () => {

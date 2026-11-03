@@ -19,7 +19,7 @@ describe("server scaffold", () => {
     server = await startTestServer();
     const res = await fetch(`${server.url}/api/health`);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, sim: "sim-5" });
+    expect(await res.json()).toEqual({ ok: true, sim: "sim-6" });
   });
 
   it("creates every table", async () => {

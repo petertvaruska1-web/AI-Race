@@ -291,6 +291,8 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
         })),
       })),
     loved: c.loved,
+    notebook: c.notebook ? { words: c.notebook.words, savedDay: c.notebook.savedDay } : null,
+    milestones: c.milestones.map((m) => ({ id: m.id, day: m.day, detail: m.detail })),
     fund: { balance: c.fund.balance },
     showcases: c.showcases.map((x) => ({
       id: x.id,

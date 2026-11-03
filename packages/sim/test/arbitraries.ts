@@ -64,6 +64,7 @@ const plan = (userId: string): fc.Arbitrary<TrainingPlan> =>
             reasoning: 0,
             facts: 0,
             creative: 0,
+            notebook: 0,
           }
         : { ...BALANCE_V2.defaultPlan.mix },
       brainSize: r.brainSize,

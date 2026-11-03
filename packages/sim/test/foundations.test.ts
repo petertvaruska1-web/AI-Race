@@ -140,7 +140,9 @@ describe("balance", () => {
       expect(b.brainSizes.map((s) => s.id)).toContain(plan.brainSize);
       expect(b.attentionSpans).toContain(plan.attentionSpan);
       expect(b.lengths.map((l) => l.id)).toContain(plan.length);
-      expect(Object.values(plan.mix).every((w) => w === 12)).toBe(true);
+      const { notebook, ...datasets } = plan.mix;
+      expect(Object.values(datasets).every((w) => w === 12)).toBe(true);
+      expect(notebook).toBe(0); // nothing is written in a new company's notebook
     },
   );
 

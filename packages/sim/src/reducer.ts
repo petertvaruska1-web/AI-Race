@@ -13,6 +13,8 @@ import { leagueDay } from "./league.ts";
 import { bookTraining, closeMonths, ledgerDay, newLedger } from "./ledger.ts";
 import { lookCommand } from "./looks.ts";
 import { marketDay } from "./market.ts";
+import { evalMilestones, milestonesDay } from "./milestones.ts";
+import { applyNotebookSaved } from "./notebook.ts";
 import { paletteProblem } from "./palette.ts";
 import { applyKeynote, newCompanyBusiness, productCommand, productsDay } from "./products.ts";
 import { rescueCommand, rescueDay } from "./rescue.ts";
@@ -81,6 +83,7 @@ function tick(s: WorldState): Handled {
   rescueDay(s);
   newsDay(s);
   leagueDay(s);
+  milestonesDay(s);
   trashTalkDay(s);
   fameDay(s);
   historyDay(s);
@@ -152,6 +155,8 @@ function system(s: WorldState, e: SystemEvent): Handled {
       version.overall = e.overall;
       version.personalityWords = [...e.personalityWords];
       version.traits = e.traits ? { ...e.traits } : null;
+      const owner = Object.values(s.companies).find((c) => c.versions[version.id] === version);
+      if (owner) evalMilestones(s, owner, version, e.signals);
       return OK;
     }
     case "feedbackScored":
@@ -166,6 +171,8 @@ function system(s: WorldState, e: SystemEvent): Handled {
       return applyAppReviews(s, e);
     case "keynoteResolved":
       return applyKeynote(s, e);
+    case "notebookSaved":
+      return applyNotebookSaved(s, e);
     default:
       return no("This event isn't supported yet.");
   }
@@ -252,6 +259,10 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       if (!newId) return no("Missing run id.");
       if (findRun(s, newId)) return no("That run id is already used.");
       if (activeRun(company)) return no("Your AI is already training. Wait for it to finish.");
+      const notebookShare = cmd.plan.mix.notebook > 0;
+      if (notebookShare && !(company.notebook && company.notebook.words > 0)) {
+        return no("Write something in your notebook first.");
+      }
       const preview = previewTraining(s, company.id, cmd.plan);
       if (!preview.ok) return preview;
       const { cost, durationDays } = preview.preview;
@@ -275,6 +286,7 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
         held: null,
         failure: null,
         versionId: null,
+        notebookHash: notebookShare ? (company.notebook?.hash ?? null) : null,
       };
       return OK;
     }

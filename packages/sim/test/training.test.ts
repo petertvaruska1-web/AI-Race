@@ -180,6 +180,7 @@ describe("startTraining", () => {
               reasoning: 0,
               facts: 0,
               creative: 0,
+              notebook: 0,
             },
           }),
         ),

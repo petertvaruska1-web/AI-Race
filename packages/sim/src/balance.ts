@@ -4,6 +4,7 @@ import {
   type DatasetId,
   GROUP_IDS,
   type GroupId,
+  type MixId,
   type PlanId,
   type RegionId,
   type RivalStyle,
@@ -197,6 +198,8 @@ export type Economy = {
   tutoring: { packFee: number; packShare: number };
   /** Fact-check plus: dollars per thousand tokens of text checked. */
   expertCheckPerThousand: number;
+  /** The player's notebook: how many words it holds. */
+  notebook: { maxWords: number };
   /** Learn from customers: dollars per loved conversation used, and how many it needs. */
   lovedConversationFee: number;
   lovedMin: number;
@@ -261,7 +264,7 @@ export type Balance = {
   economy: Economy;
 };
 
-const EVEN_MIX: Record<DatasetId, number> = {
+const EVEN_MIX: Record<MixId, number> = {
   web: 12,
   books: 12,
   educational: 12,
@@ -270,6 +273,7 @@ const EVEN_MIX: Record<DatasetId, number> = {
   reasoning: 12,
   facts: 12,
   creative: 12,
+  notebook: 0,
 };
 
 function defaultPlan(brainSize: string, attentionSpan: number, length: string): TrainingPlan {
@@ -604,6 +608,7 @@ const ECONOMY_V2: Economy = {
   tutoring: { packFee: 15_000, packShare: 0.1 },
   // $4 per thousand tokens: about $100,000 to check a long run's text.
   expertCheckPerThousand: 4,
+  notebook: { maxWords: 5_000 },
   lovedConversationFee: 150,
   lovedMin: 10,
   lovedMax: 400,

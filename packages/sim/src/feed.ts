@@ -247,7 +247,7 @@ function launchHeadline(company: CompanyState, product: ProductState): string {
   return best === null ? base : `${base}, scoring ${Math.round(top)} in ${SKILL_WORDS[best]}`;
 }
 
-function payingCustomers(s: WorldState, companyId: string): number {
+export function payingCustomers(s: WorldState, companyId: string): number {
   let n = 0;
   for (const region of REGION_IDS) {
     for (const group of GROUP_IDS) {

@@ -14,6 +14,10 @@ export const DATASET_IDS = [
 ] as const;
 export type DatasetId = (typeof DATASET_IDS)[number];
 
+/** What a training plan mixes: the eight datasets and the player's own notebook. */
+export const MIX_IDS = [...DATASET_IDS, "notebook"] as const;
+export type MixId = (typeof MIX_IDS)[number];
+
 /** The eight bench-v1 skill categories. */
 export const BENCH_CATEGORIES = [
   "language",
@@ -104,8 +108,43 @@ export const NEWS_TOPICS = [
   "keynote",
   "sponsorship",
   "app",
+  "interview",
+  "discovery",
+  "goal",
+  "scandal",
 ] as const;
 export type NewsTopic = (typeof NEWS_TOPICS)[number];
+/** Milestones (game-layer design §11): each earned once, only from a measurement or the state (R5). */
+export const MILESTONE_IDS = [
+  "firstSentence",
+  "firstFact",
+  "firstProgram",
+  "customers1k",
+  "customers100k",
+  "customers1m",
+  "firstPaying",
+  "firstProfit",
+  "numberOne",
+  "beatArch",
+  "dataCenter",
+  "gradeA",
+] as const;
+export type MilestoneId = (typeof MILESTONE_IDS)[number];
+export const MILESTONE_NAMES: Record<MilestoneId, string> = {
+  firstSentence: "First full sentence",
+  firstFact: "First correct fact",
+  firstProgram: "First working program",
+  customers1k: "First 1,000 customers",
+  customers100k: "100,000 customers",
+  customers1m: "1,000,000 customers",
+  firstPaying: "First paying customer",
+  firstProfit: "First profitable month",
+  numberOne: "#1 in a skill",
+  beatArch: "Beat the arch-rival in a battle",
+  dataCenter: "A data center opened",
+  gradeA: "An A on the report card",
+};
+
 /** A customer post's tone, picked from its reply's score. */
 export const POST_TONES = ["praise", "joke", "roast"] as const;
 export type PostTone = (typeof POST_TONES)[number];
@@ -191,8 +230,14 @@ export type Logo = z.infer<typeof Logo>;
 export const MixWeight = z.number().int().min(0).max(100);
 
 /** The player-facing training plan. Each control maps to a real parameter (R7). */
+const DatasetMix = Object.fromEntries(DATASET_IDS.map((id) => [id, MixWeight])) as Record<
+  DatasetId,
+  typeof MixWeight
+>;
+
 export const TrainingPlan = z.object({
-  mix: z.record(z.enum(DATASET_IDS), MixWeight),
+  /** Every dataset's weight; the notebook's is 0 in plans from before it existed. */
+  mix: z.strictObject({ ...DatasetMix, notebook: MixWeight.default(0) }),
   /** "expert" is Fact-check plus: the strictest cleaning, with duplicates and false facts removed. */
   cleaning: z.enum(["light", "standard", "thorough", "expert"]),
   removeDuplicates: z.boolean(),
