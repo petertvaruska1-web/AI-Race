@@ -1,6 +1,15 @@
 import type { Command, PlanId } from "@airace/protocol";
 import { type Balance, getBalance } from "./balance.ts";
-import type { CompanyState, FameState, PlansState, ProductState, WorldState } from "./state.ts";
+import { tellNews } from "./feed.ts";
+import { book } from "./ledger.ts";
+import type {
+  CompanyState,
+  FameState,
+  PlansState,
+  ProductState,
+  SystemEvent,
+  WorldState,
+} from "./state.ts";
 import { formatMoney } from "./training.ts";
 
 type Handled = { ok: true } | { ok: false; reason: string };
@@ -87,6 +96,13 @@ export function productCommand(
       if (onSale(company).some((p) => p.name.toLowerCase() === lower)) {
         return no("You already sell an AI with that name.");
       }
+      const keynote = cmd.keynote ?? null;
+      if (keynote && company.cash < economy.keynote.fee) {
+        return no(
+          `A launch keynote costs ${formatMoney(economy.keynote.fee)}. You have ${formatMoney(company.cash)}.`,
+        );
+      }
+      if (keynote) book(company, "events", economy.keynote.fee);
       company.products[newId] = {
         id: newId,
         name: cmd.name,
@@ -97,6 +113,9 @@ export function productCommand(
         hype: 0,
         launchPlans: [...new Set(cmd.plans)],
         feedbackKeys: [],
+        keynote: keynote
+          ? { questionId: keynote.questionId, status: "waiting", result: null, applied: false }
+          : null,
       };
       return OK;
     }
@@ -145,9 +164,55 @@ export function productsDay(s: WorldState): void {
       if (s.day >= product.launchDay) {
         product.status = "live";
         for (const plan of product.launchPlans) company.plans[plan].productId = product.id;
+        // A keynote answered before launch day: today's launch news quotes it.
+        if (product.keynote?.status === "done") tellKeynote(s, company, product);
       } else {
         product.hype += hypePerDay * (reputation / 100 + followers / (followers + 1000));
       }
     }
   }
+}
+
+/** The keynote's story, once: the real reply on stage, or a flop (playtest pack §5). */
+function tellKeynote(s: WorldState, company: CompanyState, product: ProductState): void {
+  const k = product.keynote;
+  if (!k?.result || k.applied) return;
+  k.applied = true;
+  const { score, reply } = k.result;
+  const stumble = getBalance(s.balance).economy.keynote.stumble;
+  const headline =
+    score < stumble
+      ? `${company.name}'s keynote flops: on stage, ${product.name} said "${reply}"`
+      : `Live on stage, ${product.name} said: "${reply}"`;
+  tellNews(s, company, "keynote", headline, 2 * score - 1);
+}
+
+/** The keynote's live demo came back: kept for launch day, or told at once if the AI is out. */
+export function applyKeynote(
+  s: WorldState,
+  e: Extract<SystemEvent, { type: "keynoteResolved" }>,
+): Handled {
+  const found = findProduct(s, e.productId);
+  const k = found?.product.keynote;
+  if (!found || k?.status !== "waiting") return no("This keynote is over.");
+  const { company, product } = found;
+  if ("failed" in e && e.failed) {
+    k.status = "failed";
+    k.applied = true;
+    book(company, "events", -getBalance(s.balance).economy.keynote.fee);
+    return OK;
+  }
+  const r = e as { prompt?: unknown; reply?: unknown; score?: unknown };
+  if (
+    typeof r.prompt !== "string" ||
+    typeof r.reply !== "string" ||
+    typeof r.score !== "number" ||
+    !(r.score >= 0 && r.score <= 1)
+  ) {
+    return no("That keynote result isn't valid.");
+  }
+  k.status = "done";
+  k.result = { prompt: r.prompt, reply: r.reply, score: r.score };
+  if (product.status === "live") tellKeynote(s, company, product);
+  return OK;
 }

@@ -222,6 +222,11 @@ export function applyFeedback(
   }
   const economy = getBalance(s.balance).economy;
   product.feedbackKeys = [...product.feedbackKeys, e.key].slice(-KEYS_KEPT);
+  // Replies customers loved: the server keeps their text (R2) for "Learn from customers".
+  if (company.ownerUserId !== null) {
+    const loved = e.results.filter((r) => r.score >= economy.lovedScore).length;
+    company.loved = Math.min(economy.lovedMax, company.loved + loved);
+  }
   updateSatisfaction(s, economy, product.id, e.results);
   postBestAndWorst(s, economy, company, product, e.results);
   return OK;

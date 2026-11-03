@@ -157,10 +157,18 @@ export function marketDay(s: WorldState): void {
     if (!company) continue;
     for (const p of Object.values(company.products)) {
       if (p.status !== "live" || p.launchDay !== s.day) continue;
+      // A keynote's live demo scales the launch: 0.5x for a flop, up to 1.5x for a great answer.
+      const keynote = p.keynote?.result ? 0.5 + p.keynote.result.score : 1;
       for (const region of REGION_IDS) {
         for (const group of GROUP_IDS) {
           const a = awarenessOf(m, id, region, group);
-          setAwareness(m, id, region, group, a + e.diffusion.launchBoost * (0.5 + p.hype));
+          setAwareness(
+            m,
+            id,
+            region,
+            group,
+            a + e.diffusion.launchBoost * (0.5 + p.hype) * keynote,
+          );
         }
       }
     }

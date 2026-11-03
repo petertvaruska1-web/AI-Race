@@ -130,6 +130,7 @@ describe("previewTraining", () => {
         tokens: 12_582_912,
         flops: 6 * 1_377_408 * 12_582_912,
         cost: 41_596,
+        checks: 0,
         durationDays: 13,
       },
     });

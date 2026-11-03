@@ -191,6 +191,18 @@ export type Economy = {
     unmeasuredFit: number;
     reviewsKept: number;
   };
+  /** A launch keynote's fee; below `stumble` the live demo is a flop. */
+  keynote: { fee: number; stumble: number };
+  /** Tutoring packs: each adds `packShare` of the run's tokens from one dataset, plus a fee. */
+  tutoring: { packFee: number; packShare: number };
+  /** Fact-check plus: dollars per thousand tokens of text checked. */
+  expertCheckPerThousand: number;
+  /** Learn from customers: dollars per loved conversation used, and how many it needs. */
+  lovedConversationFee: number;
+  lovedMin: number;
+  lovedMax: number;
+  /** A feedback reply scoring this or more is one customers loved. */
+  lovedScore: number;
   /** Looks by id, with their price (the free ones cost 0). */
   looks: Record<string, number>;
   /** Playground games played live for the press (playtest pack §4.3). */
@@ -588,6 +600,14 @@ const ECONOMY_V2: Economy = {
     unmeasuredFit: 0.1,
     reviewsKept: 6,
   },
+  keynote: { fee: 50_000, stumble: 0.3 },
+  tutoring: { packFee: 15_000, packShare: 0.1 },
+  // $4 per thousand tokens: about $100,000 to check a long run's text.
+  expertCheckPerThousand: 4,
+  lovedConversationFee: 150,
+  lovedMin: 10,
+  lovedMax: 400,
+  lovedScore: 0.75,
   // Status for the rich: a supernova orb is more than a month of a typical company's revenue.
   looks: {
     "orb:classic": 0,

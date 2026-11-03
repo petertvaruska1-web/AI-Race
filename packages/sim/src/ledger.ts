@@ -102,7 +102,9 @@ export function bookTraining(
   run: Pick<RunState, "plan" | "preview">,
   sign: 1 | -1,
 ): void {
-  const checks = run.plan.factCheck ? getBalance(s.balance).factCheckCost : 0;
+  // Runs started before sim-5 have no `checks`: their only check was fact-checking.
+  const checks =
+    run.preview.checks ?? (run.plan.factCheck ? getBalance(s.balance).factCheckCost : 0);
   book(company, "training", sign * (run.preview.cost - checks));
   book(company, "dataChecks", sign * checks);
 }

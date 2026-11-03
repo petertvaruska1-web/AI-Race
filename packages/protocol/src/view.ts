@@ -33,6 +33,8 @@ export const TrainingPreview = z.strictObject({
   tokens: z.number().int().positive(),
   flops: z.number().positive(),
   cost: z.number().int().min(0),
+  /** Of the cost, what checking and preparing data takes (absent before sim-5). */
+  checks: z.number().int().min(0).optional(),
   durationDays: z.number().int().positive(),
 });
 export type TrainingPreview = z.infer<typeof TrainingPreview>;

@@ -14,7 +14,7 @@ import { bookTraining, closeMonths, ledgerDay, newLedger } from "./ledger.ts";
 import { lookCommand } from "./looks.ts";
 import { marketDay } from "./market.ts";
 import { paletteProblem } from "./palette.ts";
-import { newCompanyBusiness, productCommand, productsDay } from "./products.ts";
+import { applyKeynote, newCompanyBusiness, productCommand, productsDay } from "./products.ts";
 import { rescueCommand, rescueDay } from "./rescue.ts";
 import { joinRivals, rivalsDay } from "./rivals.ts";
 import { rngInt } from "./rng.ts";
@@ -164,6 +164,8 @@ function system(s: WorldState, e: SystemEvent): Handled {
       return applyShowcase(s, e);
     case "appReviewed":
       return applyAppReviews(s, e);
+    case "keynoteResolved":
+      return applyKeynote(s, e);
     default:
       return no("This event isn't supported yet.");
   }

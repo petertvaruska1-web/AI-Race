@@ -20,7 +20,7 @@ export function previewTraining(
   const parent =
     plan.parentVersionId === null ? null : (company.versions[plan.parentVersionId] ?? null);
   const lent = ownedPflops(company, state.day) * company.compute.trainingShare;
-  return previewPlan(getBalance(state.balance), parent, plan, lent);
+  return previewPlan(getBalance(state.balance), parent, plan, lent, company.loved);
 }
 
 /**
@@ -33,6 +33,8 @@ export function previewPlan(
   parent: { nLayer: number; dModel: number } | null,
   plan: TrainingPlan,
   ownedPflopsPerDay = 0,
+  /** Conversations the company's customers loved (for "Learn from customers"). */
+  loved = 0,
 ): PreviewResult {
   if (Object.values(plan.mix).every((w) => w === 0)) {
     return { ok: false, reason: "Pick at least one dataset to train on." };
@@ -53,20 +55,36 @@ export function previewPlan(
       reason: "A new version can't have a smaller brain than the AI it grows from.",
     };
   }
+  const e = b.economy;
+  const learn = plan.learnFromCustomers === true;
+  if (learn && loved < e.lovedMin) {
+    return {
+      ok: false,
+      reason: `Customers have loved ${loved} of your AI's answers so far. Learning from them needs at least ${e.lovedMin}.`,
+    };
+  }
+  // Tutoring packs: extra practice from one dataset on top of the length.
+  const packs = plan.tutoring?.packs ?? 0;
+  const tokens = Math.round(length.tokens * (1 + e.tutoring.packShare * packs));
   const params = paramCount(brain.nLayer, brain.dModel);
-  const flops = trainingFlops(params, length.tokens);
+  const flops = trainingFlops(params, tokens);
   const pflop = flops / 1e15;
+  const checks =
+    (plan.factCheck ? b.factCheckCost : 0) +
+    (plan.cleaning === "expert" ? Math.round((tokens / 1000) * e.expertCheckPerThousand) : 0) +
+    (learn ? Math.min(loved, e.lovedMax) * e.lovedConversationFee : 0);
+  const compute = Math.round(
+    (pflop * b.cloudPricePerPflop * b.cloudPflopsPerDay) /
+      (b.cloudPflopsPerDay + ownedPflopsPerDay),
+  );
   return {
     ok: true,
     preview: {
       params,
-      tokens: length.tokens,
+      tokens,
       flops,
-      cost:
-        Math.round(
-          (pflop * b.cloudPricePerPflop * b.cloudPflopsPerDay) /
-            (b.cloudPflopsPerDay + ownedPflopsPerDay),
-        ) + (plan.factCheck ? b.factCheckCost : 0),
+      cost: compute + packs * e.tutoring.packFee + checks,
+      checks,
       durationDays: Math.max(1, Math.ceil(pflop / (b.cloudPflopsPerDay + ownedPflopsPerDay))),
     },
   };
