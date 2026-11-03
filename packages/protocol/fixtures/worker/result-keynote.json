@@ -1,0 +1,9 @@
+{
+  "schema": "KeynoteJobResult",
+  "message": {
+    "questionId": "knowledge-customer-0003",
+    "prompt": "What is the capital of France?",
+    "reply": "Paris. <|end|>",
+    "score": 1
+  }
+}

@@ -7,6 +7,10 @@
 * ``generate``: one chat reply, streamed piece by piece.
 * ``feedback``: the product's AI answers customer questions from each group, and each reply is
   scored by its question's check.
+* ``battle``: two AIs answer the same fresh challenges, side by side.
+* ``minigame``: one or two AIs play a Playground game, step by step (``minigames/run.py``).
+* ``keynote``: the product's AI answers its launch keynote's demo question, live.
+* ``appReview``: a partner app's users try the AI on fresh questions in the app's skill.
 
 The model's words are passed on exactly as generated (R1).
 """
@@ -23,10 +27,13 @@ import torch
 
 from airace_ml.battles import battle_challenges, battle_prompt, expected_answer, score_challenge
 from airace_ml.data.identity import data_identity
+from airace_ml.evals.creativity import score_story
 from airace_ml.evals.judge import Judge, check_judge_provenance
 from airace_ml.evals.novelty import NoveltyIndex, check_index_provenance
 from airace_ml.evals.suite import run_benchmarks, score_reply
-from airace_ml.feedback import pick_questions
+from airace_ml.feedback import GROUPS, customer_pool, pick_questions
+from airace_ml.minigames.content import game_items
+from airace_ml.minigames.run import play
 from airace_ml.paths import judge_dir, novelty_path, tokenizer_path
 from airace_ml.personality.fingerprint import Fingerprint, describe, measure_fingerprint
 from airace_ml.tokenizer import Tok
@@ -83,6 +90,9 @@ class JobRunner:
             "generate": self.handle_generate,
             "feedback": self.handle_feedback,
             "battle": self.handle_battle,
+            "minigame": self.handle_minigame,
+            "keynote": self.handle_keynote,
+            "appReview": self.handle_app_review,
         }
 
     # -- train -------------------------------------------------------------------------------------
@@ -263,3 +273,99 @@ class JobRunner:
                 answers[side] = {"reply": reply, "score": float(score)}
             out.append({"prompt": item.prompt, "expected": expected_answer(item), **answers})
         return {"rounds": out}
+
+    # -- minigame ----------------------------------------------------------------------------------
+
+    def handle_minigame(self, spec: dict[str, Any], ctx: JobContext) -> dict[str, Any]:
+        """Plays a Playground game with one AI (or two in a duel; ``b`` is the rival), streaming
+        each step as ``minigameStep`` and each typed reply's pieces as ``minigameText``."""
+        game = _spec_str(spec, "game")
+        ladder = game_items(
+            game,
+            _spec_str(spec, "difficulty"),
+            int(spec.get("seed", 0)),
+            spec.get("settings") or {},
+        )
+        raw = spec.get("sides")
+        if not isinstance(raw, list) or not raw:
+            raise ValueError("the minigame spec needs a side to play")
+        sides = {}
+        for s in raw:
+            if not isinstance(s, dict) or s.get("side") not in ("a", "b"):
+                raise ValueError("each minigame side is a or b")
+            sides[s["side"]] = self.models.get(
+                _spec_str(s, "versionId"), _spec_str(s, "modelTarUrl"), transient=s["side"] == "b"
+            )
+        story_score: Callable[[str, str], float] | None = None
+        if game == "story":
+            judge, index = self.creativity_tools()
+            if judge is not None and index is not None:
+
+                def story_score(story: str, prompt: str) -> float:
+                    return score_story(story, prompt, self.tok, judge, index)
+
+        result = play(
+            game,
+            ladder,
+            sides,
+            story_score=story_score,
+            seed=int(spec.get("seed", 0)),
+            on_step=lambda side, step: ctx.progress({"kind": "minigameStep", "side": side, **step}),
+            on_text=lambda side, attempt, text: ctx.progress(
+                {"kind": "minigameText", "side": side, "attempt": attempt, "text": text}
+            ),
+        )
+        return {"sides": result}
+
+    # -- keynote -----------------------------------------------------------------------------------
+
+    def handle_keynote(self, spec: dict[str, Any], ctx: JobContext | None) -> dict[str, Any]:
+        """The launch keynote's live demo: the AI answers one customer question, as customers ask."""
+        question_id = _spec_str(spec, "questionId")
+        item = next((q for g in GROUPS for q in customer_pool(g) if q.id == question_id), None)
+        if item is None:
+            raise ValueError(f"no customer question {question_id!r}")
+        lm, lock = self.models.get(_spec_str(spec, "versionId"), _spec_str(spec, "modelTarUrl"))
+        with lock:
+            reply = lm.chat_reply(
+                [("user", item.prompt)],
+                max_new_tokens=96,
+                temperature=0.8,
+                seed=int(spec.get("seed", 0)),
+            )
+        return {
+            "questionId": item.id,
+            "prompt": item.prompt,
+            "reply": reply,
+            "score": score_reply(item, reply),
+        }
+
+    # -- app review --------------------------------------------------------------------------------
+
+    def handle_app_review(self, spec: dict[str, Any], ctx: JobContext | None) -> dict[str, Any]:
+        """A partner app's users try the AI on fresh challenges in the app's skill, scored like a
+        battle round (stories by the judge)."""
+        skill = _spec_str(spec, "skill")
+        challenges = battle_challenges(skill, int(spec.get("n", 2)), int(spec.get("seed", 0)))
+        judge = index = None
+        if skill == "creativity":
+            judge, index = self.creativity_tools()
+            if judge is None or index is None:
+                raise ValueError("story app reviews need the judge and the novelty index")
+        lm, lock = self.models.get(_spec_str(spec, "versionId"), _spec_str(spec, "modelTarUrl"))
+        reviews = []
+        with lock:
+            for k, item in enumerate(challenges):
+                prompt, chat, max_new_tokens, temperature = battle_prompt(item)
+                reply = lm.stream_reply(
+                    prompt,
+                    chat=chat,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                    top_p=0.95,
+                    seed=int(spec.get("seed", 0)) + k,
+                    on_text=lambda _t: None,
+                )
+                score = score_challenge(item, reply, tok=lm.tok, judge=judge, novelty=index)
+                reviews.append({"prompt": item.prompt, "reply": reply, "score": float(score)})
+        return {"reviews": reviews}

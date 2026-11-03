@@ -9,13 +9,16 @@
       "device": "cuda",
       "vramMb": 8192,
       "maxParams": 50000000,
-      "jobTypes": ["train", "eval", "generate", "feedback", "battle"],
+      "jobTypes": ["train", "eval", "generate", "feedback", "battle", "minigame", "keynote", "appReview"],
       "slots": {
         "train": 1,
         "eval": 1,
         "generate": 2,
         "feedback": 1,
-        "battle": 1
+        "battle": 1,
+        "minigame": 1,
+        "keynote": 1,
+        "appReview": 1
       },
       "dataIdentity": "sample-0001"
     },

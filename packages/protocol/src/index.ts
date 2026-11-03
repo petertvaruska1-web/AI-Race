@@ -1,4 +1,5 @@
 export * from "./catalog.ts";
+export * from "./minigames.ts";
 export * from "./patch.ts";
 export * from "./rivals.ts";
 export * from "./text.ts";

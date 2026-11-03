@@ -29,6 +29,9 @@ describe("worker protocol fixtures", () => {
         generate: WORKER_SCHEMAS.GenerateJobSpec,
         feedback: WORKER_SCHEMAS.FeedbackJobSpec,
         battle: WORKER_SCHEMAS.BattleJobSpec,
+        minigame: WORKER_SCHEMAS.MinigameJobSpec,
+        keynote: WORKER_SCHEMAS.KeynoteJobSpec,
+        appReview: WORKER_SCHEMAS.AppReviewJobSpec,
       }[lease.jobType];
       expect(spec.safeParse(lease.spec).error).toBeUndefined();
     }

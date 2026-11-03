@@ -947,7 +947,15 @@ def _cmd_worker(args: argparse.Namespace) -> int:
         root,
         device=device.type,
         handlers=runner.handlers(),
-        slots={"train": 1, "eval": 1, "generate": 2, "battle": 1},
+        slots={
+            "train": 1,
+            "eval": 1,
+            "generate": 2,
+            "battle": 1,
+            "minigame": 1,
+            "keynote": 1,
+            "appReview": 1,
+        },
         worker_id=args.id,
     )
     print(f"Worker {agent.worker_id} serving {args.server} on {device.type}", flush=True)

@@ -16,10 +16,13 @@ type Handler<T> = (job: JobRow, value: T) => void | Promise<void>;
  */
 export const JOB_PRIORITY: Record<JobType, number> = {
   generate: 0,
+  minigame: 0, // the player is watching, like a chat
   battle: 1,
+  keynote: 1,
   train: 2,
   eval: 3,
   feedback: 4,
+  appReview: 4,
 };
 export const LEASE_MS = 30_000;
 export const MAX_ATTEMPTS = 3;

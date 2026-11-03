@@ -1,0 +1,63 @@
+{
+  "faces": {
+    "hero": [
+      "a fox",
+      "a shy robot",
+      "an old lighthouse keeper",
+      "a small dragon",
+      "a lost puppy",
+      "a brave mouse",
+      "a sleepy bear",
+      "a young painter",
+      "a talking kettle",
+      "a curious girl",
+      "a grumpy goat",
+      "a paper boat",
+      "a tiny snail",
+      "a busy bee",
+      "a friendly ghost",
+      "a clever crow",
+      "a quiet boy",
+      "a lonely moon",
+      "a happy whale",
+      "a forgetful wizard"
+    ],
+    "situation": [
+      "who loses the way home",
+      "who finds a door in a tree",
+      "who wants to see the ocean",
+      "who is afraid of the rain",
+      "who makes a new friend",
+      "who learns to whistle",
+      "who wins a race by accident",
+      "who finds a map in a bottle",
+      "who misses the last train",
+      "who builds a tiny house",
+      "who hears a strange song",
+      "who wakes up in the snow",
+      "who tries to catch a star",
+      "who plants a magic bean",
+      "who loses a favorite hat",
+      "who travels to the city",
+      "who keeps a big secret",
+      "who bakes a cake for the king",
+      "who follows a rainbow",
+      "who cannot fall asleep"
+    ],
+    "word": [
+      "key",
+      "map",
+      "hat",
+      "cake",
+      "star",
+      "boat",
+      "song",
+      "door",
+      "tree",
+      "moon",
+      "bell",
+      "ring"
+    ]
+  },
+  "quizTopics": ["mixed", "animals", "places", "school", "science", "technology"]
+}

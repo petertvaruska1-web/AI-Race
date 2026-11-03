@@ -1,0 +1,55 @@
+{
+  "schema": "MinigameJobResult",
+  "message": {
+    "sides": {
+      "a": {
+        "steps": [
+          {
+            "attempt": 0,
+            "depth": 0,
+            "retry": 0,
+            "itemId": "bridge-0-0",
+            "band": 0,
+            "typed": false,
+            "prompt": "Next: red, blue, red, blue,",
+            "display": {
+              "kind": "bridge",
+              "family": "cycle",
+              "terms": [
+                {
+                  "kind": "color",
+                  "value": "red"
+                },
+                {
+                  "kind": "color",
+                  "value": "blue"
+                }
+              ],
+              "options": [
+                {
+                  "kind": "color",
+                  "value": "blue"
+                },
+                {
+                  "kind": "color",
+                  "value": "red"
+                }
+              ]
+            },
+            "options": ["blue", "red"],
+            "answerIndex": 1,
+            "choice": 1,
+            "sure": [0.26, 0.74],
+            "reply": null,
+            "points": null,
+            "ruleMet": null,
+            "correct": true,
+            "lives": 3
+          }
+        ],
+        "score": 1,
+        "maxScore": 12
+      }
+    }
+  }
+}

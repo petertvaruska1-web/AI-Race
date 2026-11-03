@@ -1,4 +1,11 @@
 import { z } from "zod";
+import {
+  Difficulty,
+  GameId,
+  MinigameSettings,
+  MinigameSideResult,
+  MinigameStep,
+} from "./minigames.ts";
 import { zId } from "./text.ts";
 import { BATTLE_SKILLS, GroupId } from "./world.ts";
 
@@ -9,7 +16,16 @@ import { BATTLE_SKILLS, GroupId } from "./world.ts";
 
 const v = z.literal(1);
 
-export const JOB_TYPES = ["train", "eval", "generate", "feedback", "battle"] as const;
+export const JOB_TYPES = [
+  "train",
+  "eval",
+  "generate",
+  "feedback",
+  "battle",
+  "minigame",
+  "keynote",
+  "appReview",
+] as const;
 export const JobType = z.enum(JOB_TYPES);
 export type JobType = z.infer<typeof JobType>;
 
@@ -28,6 +44,9 @@ export const WorkerCapabilities = z.object({
     generate: Slots,
     feedback: Slots.default(0),
     battle: Slots.default(0),
+    minigame: Slots.default(0),
+    keynote: Slots.default(0),
+    appReview: Slots.default(0),
   }),
   /** Which corpus, tokenizer and evaluators the worker has installed (ADR 0008 item 2). */
   dataIdentity: z.string().min(1),
@@ -191,6 +210,85 @@ export const BattleJobResult = z.object({
 });
 export type BattleJobResult = z.infer<typeof BattleJobResult>;
 
+const Side = z.enum(["a", "b"]);
+
+/** One or two AIs play a Playground game (playtest pack §4); `b` is a rival's, in a duel. */
+export const MinigameJobSpec = z.object({
+  runId: zId,
+  game: GameId,
+  difficulty: Difficulty,
+  seed: z.number().int().min(0),
+  settings: MinigameSettings,
+  sides: z
+    .array(z.object({ side: Side, versionId: zId, modelTarUrl: Url }))
+    .min(1)
+    .max(2),
+});
+export type MinigameJobSpec = z.infer<typeof MinigameJobSpec>;
+
+/** A step as it happens, sent as a `progress` event. */
+export const MinigameStepEvent = MinigameStep.extend({
+  kind: z.literal("minigameStep"),
+  side: Side,
+});
+export type MinigameStepEvent = z.infer<typeof MinigameStepEvent>;
+
+/** A piece of a typed answer or story, sent as a `progress` event while it is written. */
+export const MinigameTextEvent = z.object({
+  kind: z.literal("minigameText"),
+  side: Side,
+  attempt: z.number().int().min(0),
+  text: z.string(),
+});
+export type MinigameTextEvent = z.infer<typeof MinigameTextEvent>;
+
+export const MinigameJobResult = z.object({
+  sides: z.object({ a: MinigameSideResult, b: MinigameSideResult.optional() }),
+});
+export type MinigameJobResult = z.infer<typeof MinigameJobResult>;
+
+/** A launch keynote's live demo: the product's AI answers one customer question. */
+export const KeynoteJobSpec = z.object({
+  versionId: zId,
+  modelTarUrl: Url,
+  questionId: z.string().min(1),
+  seed: z.number().int().min(0),
+});
+export type KeynoteJobSpec = z.infer<typeof KeynoteJobSpec>;
+
+export const KeynoteJobResult = z.object({
+  questionId: z.string().min(1),
+  prompt: z.string(),
+  /** Real model output, exactly as generated (R1). */
+  reply: z.string(),
+  score: z.number().min(0).max(1),
+});
+export type KeynoteJobResult = z.infer<typeof KeynoteJobResult>;
+
+/** A partner app's users try the AI on fresh questions in the app's skill. */
+export const AppReviewJobSpec = z.object({
+  versionId: zId,
+  modelTarUrl: Url,
+  skill: z.enum(BATTLE_SKILLS),
+  n: z.number().int().min(1).max(5),
+  seed: z.number().int().min(0),
+});
+export type AppReviewJobSpec = z.infer<typeof AppReviewJobSpec>;
+
+export const AppReviewJobResult = z.object({
+  reviews: z
+    .array(
+      z.object({
+        prompt: z.string(),
+        /** Real model output, exactly as generated (R1). */
+        reply: z.string(),
+        score: z.number().min(0).max(1),
+      }),
+    )
+    .min(1),
+});
+export type AppReviewJobResult = z.infer<typeof AppReviewJobResult>;
+
 /** Schemas by name, for the shared fixtures (`{schema, message}`). */
 export const WORKER_SCHEMAS = {
   WorkerMessage,
@@ -205,4 +303,10 @@ export const WORKER_SCHEMAS = {
   FeedbackJobResult,
   BattleJobSpec,
   BattleJobResult,
+  MinigameJobSpec,
+  MinigameJobResult,
+  KeynoteJobSpec,
+  KeynoteJobResult,
+  AppReviewJobSpec,
+  AppReviewJobResult,
 } as const;

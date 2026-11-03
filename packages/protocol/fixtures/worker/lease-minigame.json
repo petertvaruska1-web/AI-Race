@@ -1,0 +1,29 @@
+{
+  "schema": "ServerToWorker",
+  "message": {
+    "v": 1,
+    "type": "lease",
+    "jobId": "5f0c2b1e-3a4d-4e5f-8a9b-0c1d2e3f4a5b",
+    "jobType": "minigame",
+    "leaseMs": 30000,
+    "spec": {
+      "runId": "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "game": "bridge",
+      "difficulty": "easy",
+      "seed": 7,
+      "settings": {},
+      "sides": [
+        {
+          "side": "a",
+          "versionId": "6fa459ea-ee8a-4ca4-894e-db77e160355e",
+          "modelTarUrl": "http://127.0.0.1:8787/blobs/checkpoints/6fa459ea-ee8a-4ca4-894e-db77e160355e.tar?exp=1&sig=abc"
+        },
+        {
+          "side": "b",
+          "versionId": "budget-a-v2",
+          "modelTarUrl": "http://127.0.0.1:8787/blobs/rivals/0123456789ab/budget-a-v2.tar?exp=1&sig=def"
+        }
+      ]
+    }
+  }
+}

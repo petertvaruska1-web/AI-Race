@@ -72,7 +72,16 @@ describe("leasing", () => {
   });
 
   it("runs battles right after chats, and a rival chat last", async () => {
-    expect(JOB_PRIORITY).toEqual({ generate: 0, battle: 1, train: 2, eval: 3, feedback: 4 });
+    expect(JOB_PRIORITY).toEqual({
+      generate: 0,
+      minigame: 0,
+      battle: 1,
+      keynote: 1,
+      train: 2,
+      eval: 3,
+      feedback: 4,
+      appReview: 4,
+    });
     server = await start();
     const rival = await server.ctx.broker.enqueue("generate", { text: "r" }, null, { priority: 5 });
     const mine = await server.ctx.broker.enqueue("generate", { text: "m" }, null);

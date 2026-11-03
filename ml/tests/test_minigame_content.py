@@ -147,3 +147,15 @@ def test_every_bridge_family_has_enough_patterns_and_a_run_never_repeats_one():
     for game in ("maze", "bridge", "quiz"):
         prompts = [i.prompt for i in _all(game, "easy", 11)]
         assert len(set(prompts)) == len(prompts), game
+
+
+def test_the_client_knows_the_same_dice_faces_and_quiz_topics():
+    import json
+
+    from airace_ml.paths import REPO_ROOT
+
+    shared = json.loads(
+        (REPO_ROOT / "packages" / "protocol" / "fixtures" / "minigames" / "faces.json").read_text()
+    )
+    assert shared["faces"] == story_faces()
+    assert shared["quizTopics"] == ["mixed", *quiz_topics()]

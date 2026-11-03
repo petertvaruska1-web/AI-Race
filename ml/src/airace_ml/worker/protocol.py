@@ -10,7 +10,9 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 JobType = Literal["train", "eval", "generate"]
-JOB_TYPES: tuple[str, ...] = ("train", "eval", "generate", "feedback", "battle")
+JOB_TYPES: tuple[str, ...] = (
+    "train", "eval", "generate", "feedback", "battle", "minigame", "keynote", "appReview",
+)  # fmt: skip
 VERSION = 1
 
 

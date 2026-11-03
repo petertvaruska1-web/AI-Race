@@ -241,3 +241,81 @@ def test_rival_models_leave_the_cache_first(trained, tmp_path, tiny_tok):
     cache.get("c", url)
     assert "a" in cache._on_cpu
     assert "b" not in cache._on_cpu and "b" not in cache._on_device
+
+
+# -- minigames, keynotes, app reviews (playtest pack) -----------------------------------------
+
+
+def _side(url: str, side: str, version: str) -> dict:
+    return {"side": side, "versionId": version, "modelTarUrl": f"{url}/blobs/a.tar?sig=1"}
+
+
+def test_a_minigame_streams_each_step_and_returns_every_side(runner, trained, tmp_path):
+    rec = Recorder(tmp_path)
+    spec = {
+        "runId": "m-1",
+        "game": "bridge",
+        "difficulty": "easy",
+        "seed": 3,
+        "settings": {},
+        "sides": [_side(trained[0], "a", "v-game-a"), _side(trained[0], "b", "rival-v1")],
+    }
+    result = runner.handle_minigame(spec, rec.ctx)
+    steps = [e for e in rec.events if e["kind"] == "minigameStep"]
+    assert {e["side"] for e in steps} == {"a", "b"}
+    for side in ("a", "b"):
+        mine = [e for e in steps if e["side"] == side]
+        assert [e["attempt"] for e in mine] == list(range(len(result["sides"][side]["steps"])))
+        assert result["sides"][side]["maxScore"] == 12
+        assert all(e["choice"] is not None and abs(sum(e["sure"]) - 1) < 1e-6 for e in mine)
+    fixture = json.loads((RESULT_FIXTURES / "result-minigame.json").read_text())["message"]
+    assert set(result) == set(fixture)
+    json.dumps(result, allow_nan=False)
+
+
+def test_a_typed_minigame_streams_the_reply_as_it_is_written(runner, trained, tmp_path):
+    rec = Recorder(tmp_path)
+    spec = {
+        "runId": "m-2",
+        "game": "simon",
+        "difficulty": "easy",
+        "seed": 1,
+        "settings": {},
+        "sides": [_side(trained[0], "a", "v-game-a")],
+    }
+    result = runner.handle_minigame(spec, rec.ctx)
+    for k, step in enumerate(result["sides"]["a"]["steps"]):
+        pieces = [
+            e["text"] for e in rec.events if e["kind"] == "minigameText" and e["attempt"] == k
+        ]
+        assert "".join(pieces) == step["reply"]  # R1: real, unchanged
+
+
+def test_a_keynote_answers_its_customer_question(runner, trained):
+    from airace_ml.feedback import customer_pool
+
+    question = customer_pool("students")[0]
+    spec = {
+        "versionId": "v-game-a",
+        "modelTarUrl": f"{trained[0]}/blobs/a.tar?sig=1",
+        "questionId": question.id,
+        "seed": 4,
+    }
+    result = runner.handle_keynote(spec, None)
+    assert result["questionId"] == question.id and result["prompt"] == question.prompt
+    assert isinstance(result["reply"], str) and 0.0 <= result["score"] <= 1.0
+    with pytest.raises(ValueError):
+        runner.handle_keynote({**spec, "questionId": "no-such-question"}, None)
+
+
+def test_an_app_review_asks_fresh_questions_in_its_skill(runner, trained):
+    spec = {
+        "versionId": "v-game-a",
+        "modelTarUrl": f"{trained[0]}/blobs/a.tar?sig=1",
+        "skill": "coding",
+        "n": 2,
+        "seed": 9,
+    }
+    result = runner.handle_app_review(spec, None)
+    assert len(result["reviews"]) == 2
+    assert all(0.0 <= r["score"] <= 1.0 and isinstance(r["reply"], str) for r in result["reviews"])

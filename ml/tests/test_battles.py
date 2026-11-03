@@ -60,7 +60,9 @@ def test_a_story_needs_the_judge_and_the_novelty_index():
 
 # -- fair scoring (playtest pack §2) ---------------------------------------------------------
 
-_OUTPUT = ExactItem("o", "coding", "Program: x = 4 y = x + 3 print(y * 2) Output:", ["14"], (), False)
+_OUTPUT = ExactItem(
+    "o", "coding", "Program: x = 4 y = x + 3 print(y * 2) Output:", ["14"], (), False
+)
 _FRONT_PROMPT = 'def front(seq):\n    """Return the first item of the list seq."""\n'
 _FRONT = CheckItem(
     "f",

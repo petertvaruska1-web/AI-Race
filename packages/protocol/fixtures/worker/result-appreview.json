@@ -1,0 +1,17 @@
+{
+  "schema": "AppReviewJobResult",
+  "message": {
+    "reviews": [
+      {
+        "prompt": "Program: x = 2 print(x + 1) Output:",
+        "reply": "3",
+        "score": 1
+      },
+      {
+        "prompt": "def first(xs):",
+        "reply": "",
+        "score": 0
+      }
+    ]
+  }
+}
