@@ -39,6 +39,8 @@ export const ClientMessage = z.discriminatedUnion("type", [
   z.object({ v, type: z.literal("query"), id: RequestId, q: Query }),
   z.object({ v, type: z.literal("subscribe"), sub: StreamName }),
   z.object({ v, type: z.literal("unsubscribe"), sub: StreamName }),
+  /** The player is in the Playground (sent every 15 s): the world's customer posts wait. */
+  z.object({ v, type: z.literal("inPlayground"), worldId: zId }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
 

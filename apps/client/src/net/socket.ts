@@ -101,6 +101,11 @@ export class GameSocket {
     this.send({ v: 1, type: "resync", worldId });
   }
 
+  /** Says the player is in the Playground, so the world's customer posts wait for a moment. */
+  inPlayground(worldId: string): void {
+    this.send({ v: 1, type: "inPlayground", worldId });
+  }
+
   command(worldId: string, cmd: Command): Promise<CommandResult> {
     return this.request({ v: 1, type: "command", cid: this.deps.uuid(), worldId, cmd });
   }

@@ -59,6 +59,7 @@ export class Gateway {
   private subscribers = new Map<string, Set<Session>>();
   private queries = new Map<string, QueryHandler>();
   private chat: ChatHandler | null = null;
+  private playground: ((worldId: string) => void) | null = null;
   private closed = false;
 
   constructor(private readonly ctx: AppContext) {
@@ -82,6 +83,11 @@ export class Gateway {
   /** Handles playground messages (plan Task 15); the gateway acks or rejects with the result. */
   setChatHandler(handler: ChatHandler): void {
     this.chat = handler;
+  }
+
+  /** Called when a player watching a world says they are in its Playground. */
+  setPlaygroundHandler(handler: (worldId: string) => void): void {
+    this.playground = handler;
   }
 
   publish(sub: string, data: unknown): void {
@@ -196,6 +202,10 @@ export class Gateway {
         return;
       case "query":
         return this.query(session, userId, msg.id, msg.q);
+      case "inPlayground":
+        // Only a member watching the world can hold its feedback back.
+        if (session.watches.has(msg.worldId)) this.playground?.(msg.worldId);
+        return;
     }
   }
 

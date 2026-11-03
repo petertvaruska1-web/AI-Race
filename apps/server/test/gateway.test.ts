@@ -221,3 +221,26 @@ describe("limits", () => {
     for (const o of outcomes.slice(20)) expect(o).toMatch(/slow down/i);
   });
 });
+
+describe("the Playground sign", () => {
+  it("holds a world's feedback only for a player watching that world", async () => {
+    server = await startTestServer();
+    const { cookie, worldId } = await createGuestWorld(server);
+    const ws = await connect(server, cookie);
+    const held: string[] = [];
+    const broker = server.ctx.broker;
+    const original = broker.setPlayground.bind(broker);
+    broker.setPlayground = (id: string) => {
+      held.push(id);
+      original(id);
+    };
+    ws.send({ v: 1, type: "inPlayground", worldId }); // not watching yet
+    await settle();
+    expect(held).toEqual([]);
+    ws.send({ v: 1, type: "watch", worldId });
+    await ws.next("snapshot");
+    ws.send({ v: 1, type: "inPlayground", worldId });
+    await settle();
+    expect(held).toEqual([worldId]);
+  });
+});

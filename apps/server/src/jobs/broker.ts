@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { JobType, ServerToWorker, WorkerCapabilities, WorkerMessage } from "@airace/protocol";
-import { and, asc, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, notInArray, or } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { schema } from "../db/index.ts";
 import type { TimerHandle } from "../scheduler.ts";
@@ -24,6 +24,10 @@ export const JOB_PRIORITY: Record<JobType, number> = {
 export const LEASE_MS = 30_000;
 export const MAX_ATTEMPTS = 3;
 const SWEEP_MS = 5_000;
+/** How long a "the player is in the Playground" sign lasts (the client sends one every 15 s). */
+export const PLAYGROUND_MS = 30_000;
+/** Jobs that wait while their world's player is in the Playground, so the AI answers them first. */
+export const HELD_IN_PLAYGROUND: JobType[] = ["feedback"];
 export const LOST_WORKER = "The computer running it stopped responding.";
 
 /** A connected worker, as the broker sees it. */
@@ -53,6 +57,8 @@ export class JobBroker {
   private queue: Promise<unknown> = Promise.resolve();
   private sweepTimer: TimerHandle | null = null;
   private closed = false;
+  /** When each world last said its player is in the Playground. */
+  private playground = new Map<string, number>();
 
   constructor(private readonly ctx: AppContext) {}
 
@@ -92,6 +98,21 @@ export class JobBroker {
    */
   onPrepare(type: JobType, fn: (job: JobRow) => Promise<unknown>): void {
     this.prepare.set(type, fn);
+  }
+
+  /**
+   * The world's player is in the Playground: its customer feedback waits until
+   * `PLAYGROUND_MS` after the last sign (the lease sweep picks it up again).
+   */
+  setPlayground(worldId: string): void {
+    this.playground.set(worldId, this.ctx.opts.scheduler.now());
+  }
+
+  private playgroundWorlds(): string[] {
+    const now = this.ctx.opts.scheduler.now();
+    for (const [id, at] of this.playground)
+      if (now - at >= PLAYGROUND_MS) this.playground.delete(id);
+    return [...this.playground.keys()];
   }
 
   async enqueue(
@@ -265,6 +286,14 @@ export class JobBroker {
     const identity = this.ctx.catalog?.dataIdentity;
     if (this.closed || !identity) return;
     const workers = [...this.workers.values()].sort((a, b) => (a.workerId < b.workerId ? -1 : 1));
+    const playing = this.playgroundWorlds();
+    const notHeld =
+      playing.length === 0
+        ? undefined
+        : or(
+            notInArray(schema.jobs.type, HELD_IN_PLAYGROUND),
+            notInArray(schema.jobs.worldId, playing),
+          );
     for (const conn of workers) {
       // A worker with other data would train on something the game doesn't describe.
       if (conn.caps.dataIdentity !== identity) continue;
@@ -274,7 +303,7 @@ export class JobBroker {
         const [next] = await this.ctx.db
           .select()
           .from(schema.jobs)
-          .where(and(eq(schema.jobs.status, "queued"), inArray(schema.jobs.type, free)))
+          .where(and(eq(schema.jobs.status, "queued"), inArray(schema.jobs.type, free), notHeld))
           .orderBy(asc(schema.jobs.priority), asc(schema.jobs.seq))
           .limit(1);
         if (!next) break;

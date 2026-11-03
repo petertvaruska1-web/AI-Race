@@ -38,6 +38,16 @@ const stream = (data: unknown) =>
   game.ws.receive({ v: 1, type: "stream", sub: `chat:w1:${THREAD}`, data });
 
 describe("playground", () => {
+  it("tells the server the player is here, so customer posts wait", async () => {
+    render(<Playground view={viewOf(trainedWorld())} />);
+    expect(screen.getByText(/Customer posts are paused while you're here/)).toBeTruthy();
+    await waitFor(() =>
+      expect(game.ws.sentOf("inPlayground")).toEqual([
+        { v: 1, type: "inPlayground", worldId: "w1" },
+      ]),
+    );
+  });
+
   it("sends a message and shows the reply as it streams in", async () => {
     render(<Playground view={viewOf(trainedWorld())} />);
     await sendAndAck("Hello there");

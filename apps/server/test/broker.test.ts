@@ -86,6 +86,27 @@ describe("leasing", () => {
     expect((await w.nextLease()).jobId).toBe(rival);
   });
 
+  it("holds a world's customer feedback while its player is in the Playground", async () => {
+    server = await start();
+    const w = await worker(server, {
+      jobTypes: ["feedback"],
+      slots: { train: 0, eval: 0, generate: 0, feedback: 1 },
+    });
+    const playing = randomUUID();
+    const other = randomUUID();
+    server.ctx.broker.setPlayground(playing);
+    const held = await server.ctx.broker.enqueue("feedback", { n: 1 }, playing);
+    const free = await server.ctx.broker.enqueue("feedback", { n: 2 }, other);
+    expect((await w.nextLease()).jobId).toBe(free);
+    w.done(free, { results: [] });
+    await server.scheduler.advance(20_000);
+    server.ctx.broker.setPlayground(playing); // still there 20 s later
+    await server.scheduler.advance(20_000);
+    expect((await server.ctx.broker.getJob(held))?.status).toBe("queued");
+    await server.scheduler.advance(16_000); // 36 s after the last sign: the pause is over
+    expect((await w.nextLease()).jobId).toBe(held);
+  });
+
   it("gives nothing to a worker with other training data", async () => {
     server = await start();
     const w = await worker(server, { dataIdentity: "someone-elses-data" });

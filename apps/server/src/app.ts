@@ -75,6 +75,7 @@ export async function buildApp(
   ctx.onClose(() => ctx.training.close());
   ctx.rivals = new RivalService(ctx);
   ctx.chat = new ChatService(ctx);
+  ctx.gateway.setPlaygroundHandler((worldId) => ctx.broker.setPlayground(worldId));
   ctx.feedback = new FeedbackService(ctx);
   ctx.onClose(() => ctx.feedback.close());
   ctx.battles = new BattleService(ctx);

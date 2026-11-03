@@ -67,6 +67,13 @@ export function Playground({ view }: { view: WorldView }) {
   }, [socket, worldId]);
   useEffect(loadThreads, [loadThreads]);
 
+  // While the player is here, the world's customer posts wait, so the AI answers them first.
+  useEffect(() => {
+    socket.inPlayground(worldId);
+    const timer = setInterval(() => socket.inPlayground(worldId), 15_000);
+    return () => clearInterval(timer);
+  }, [socket, worldId]);
+
   // Follow the open conversation: its stored messages, then the reply as it streams in.
   useEffect(() => {
     if (!threadId) return;
@@ -188,6 +195,9 @@ export function Playground({ view }: { view: WorldView }) {
         </ul>
       </aside>
       <Panel>
+        <p className="mb-3 text-xs text-muted">
+          Customer posts are paused while you're here, so your AI answers you faster.
+        </p>
         {own && neverSawConversation(view, own) && (
           <p className="mb-3 rounded-lg bg-brand-soft p-3 text-sm">
             This AI never saw a conversation, so it may just continue your text.
@@ -199,6 +209,12 @@ export function Playground({ view }: { view: WorldView }) {
           </p>
         )}
         <ChatLog messages={messages} streaming={streaming} aiName={version.label} />
+        {messages.length >= 6 && (
+          <p className="mt-3 text-xs text-muted">
+            A long conversation is a lot for a small AI to follow. Start a new conversation for its
+            best answers.
+          </p>
+        )}
         {failure && (
           <div role="alert" className="mt-3 flex items-center gap-3 text-sm text-danger">
             {failure}
