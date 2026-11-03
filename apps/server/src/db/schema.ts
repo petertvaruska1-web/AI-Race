@@ -1,5 +1,6 @@
 import {
   bigint,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -232,3 +233,32 @@ export const battleRequests = pgTable("battle_requests", {
   worldId: uuid("world_id").notNull(),
   jobId: uuid("job_id"),
 });
+
+/** Playground minigame runs (playtest pack §4): practice, duels and showcases, private to their player. */
+export const minigameRuns = pgTable(
+  "minigame_runs",
+  {
+    id: uuid("id").primaryKey(),
+    worldId: uuid("world_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    companyId: text("company_id").notNull(),
+    game: text("game").notNull(),
+    difficulty: text("difficulty").notNull(),
+    settings: jsonb("settings").notNull(),
+    versionId: text("version_id").notNull(),
+    /** The rival AI of a duel: its pack key, and how the player sees it named. */
+    opponentPack: text("opponent_pack"),
+    opponentName: text("opponent_name"),
+    /** Set when the run is a showcase the world booked. */
+    showcaseId: text("showcase_id").unique(),
+    seed: integer("seed").notNull(),
+    status: text("status").notNull(),
+    jobId: uuid("job_id"),
+    result: jsonb("result"),
+    score: doublePrecision("score"),
+    maxScore: doublePrecision("max_score"),
+    opponentScore: doublePrecision("opponent_score"),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => [index("minigame_runs_world_user").on(t.worldId, t.userId)],
+);

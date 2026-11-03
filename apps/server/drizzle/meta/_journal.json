@@ -43,6 +43,13 @@
       "when": 1793353750927,
       "tag": "0005_battle_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793726423206,
+      "tag": "0006_minigames",
+      "breakpoints": true
     }
   ]
 }

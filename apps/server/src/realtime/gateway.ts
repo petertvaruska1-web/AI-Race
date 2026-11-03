@@ -25,6 +25,11 @@ export const CLOSE_UNAUTHORIZED = 4401;
 export type StreamAuthorizer = (userId: string, sub: string) => Promise<boolean>;
 export type QueryHandler = (userId: string, q: Query) => Promise<unknown>;
 export type ChatMessage = Extract<ClientMessage, { type: "chat" }>;
+export type MinigameMessage = Extract<ClientMessage, { type: "minigame" }>;
+export type MinigameHandler = (
+  userId: string,
+  msg: MinigameMessage,
+) => Promise<{ ok: true; data: unknown } | { ok: false; reason: string }>;
 export type ChatHandler = (
   userId: string,
   msg: ChatMessage,
@@ -40,6 +45,9 @@ const NEEDS_ID: ReadonlySet<Command["type"]> = new Set([
   "startBattle",
   "startCampaign",
   "buildDataCenter",
+  "startShowcase",
+  "sponsor",
+  "fundApp",
 ]);
 
 function needsId(cmd: Command): boolean {
@@ -60,6 +68,7 @@ export class Gateway {
   private queries = new Map<string, QueryHandler>();
   private chat: ChatHandler | null = null;
   private playground: ((worldId: string) => void) | null = null;
+  private minigame: MinigameHandler | null = null;
   private closed = false;
 
   constructor(private readonly ctx: AppContext) {
@@ -83,6 +92,11 @@ export class Gateway {
   /** Handles playground messages (plan Task 15); the gateway acks or rejects with the result. */
   setChatHandler(handler: ChatHandler): void {
     this.chat = handler;
+  }
+
+  /** Starts a Playground minigame; the gateway acks with its run or rejects with the reason. */
+  setMinigameHandler(handler: MinigameHandler): void {
+    this.minigame = handler;
   }
 
   /** Called when a player watching a world says they are in its Playground. */
@@ -157,7 +171,7 @@ export class Gateway {
       // A command or chat with a usable id gets a reject the client can match to it.
       const d = data as { type?: unknown; cid?: unknown } | null;
       const cid = typeof d?.cid === "string" && UUID.test(d.cid) ? d.cid : null;
-      if (cid && (d?.type === "chat" || d?.type === "command")) {
+      if (cid && (d?.type === "chat" || d?.type === "command" || d?.type === "minigame")) {
         const reason =
           d.type === "chat" ? "Messages are 1–500 characters." : "That request isn't valid.";
         session.send({ v: 1, type: "reject", cid, reason });
@@ -202,6 +216,14 @@ export class Gateway {
         return;
       case "query":
         return this.query(session, userId, msg.id, msg.q);
+      case "minigame": {
+        const r = this.minigame
+          ? await this.minigame(userId, msg)
+          : { ok: false as const, reason: "Games aren't available yet." };
+        if (r.ok) session.send({ v: 1, type: "ack", cid: msg.cid, duplicate: false, data: r.data });
+        else session.send({ v: 1, type: "reject", cid: msg.cid, reason: r.reason });
+        return;
+      }
       case "inPlayground":
         // Only a member watching the world can hold its feedback back.
         if (session.watches.has(msg.worldId)) this.playground?.(msg.worldId);

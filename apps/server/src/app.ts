@@ -13,6 +13,7 @@ import { FeedbackService } from "./feedback/service.ts";
 import { JobBroker } from "./jobs/broker.ts";
 import { registerWorkerRoutes } from "./jobs/workerGateway.ts";
 import { createLogger, type Logger } from "./log.ts";
+import { MinigameService } from "./minigames/service.ts";
 import { Gateway } from "./realtime/gateway.ts";
 import { RivalService } from "./rivals/service.ts";
 import { TrainingService } from "./training/service.ts";
@@ -32,6 +33,7 @@ export type AppContext = {
   feedback: FeedbackService;
   rivals: RivalService;
   battles: BattleService;
+  minigames: MinigameService;
   blobs: BlobStore;
   /** Null until the training data is installed. */
   catalog: Catalog | null;
@@ -59,6 +61,7 @@ export async function buildApp(
     feedback: undefined as unknown as FeedbackService,
     rivals: undefined as unknown as RivalService,
     battles: undefined as unknown as BattleService,
+    minigames: undefined as unknown as MinigameService,
     blobs: new LocalFsBlobStore(opts.blobDir),
     catalog: loadCatalog(opts.catalogPath, log),
     onClose: (fn) => {
@@ -80,6 +83,8 @@ export async function buildApp(
   ctx.onClose(() => ctx.feedback.close());
   ctx.battles = new BattleService(ctx);
   ctx.onClose(() => ctx.battles.close());
+  ctx.minigames = new MinigameService(ctx);
+  ctx.onClose(() => ctx.minigames.close());
   ctx.gateway.registerQuery("catalog", async () => {
     if (!ctx.catalog) throw new HttpError(503, NO_TRAINING_DATA);
     return publicCatalog(ctx.catalog);
