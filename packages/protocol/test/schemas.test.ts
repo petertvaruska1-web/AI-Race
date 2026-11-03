@@ -39,6 +39,8 @@ export const PLAN = {
   review: 0,
   probePrompt: "",
   parentVersionId: null,
+  tutoring: null,
+  learnFromCustomers: false,
 } as const;
 
 const CID = "4b0c1c1e-8d6a-4f43-9a55-6f1c8a2b9e10";

@@ -426,6 +426,9 @@ function planView(p: TrainingPlan): TrainingPlan {
     review: p.review,
     probePrompt: p.probePrompt,
     parentVersionId: p.parentVersionId,
+    // Absent from plans logged before sim-5.
+    tutoring: p.tutoring ? { ...p.tutoring } : null,
+    learnFromCustomers: p.learnFromCustomers ?? false,
   };
 }
 

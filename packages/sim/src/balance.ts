@@ -223,6 +223,8 @@ function defaultPlan(brainSize: string, attentionSpan: number, length: string): 
     review: 0,
     probePrompt: "",
     parentVersionId: null,
+    tutoring: null,
+    learnFromCustomers: false,
   };
 }
 

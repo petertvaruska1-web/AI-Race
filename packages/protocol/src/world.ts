@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Difficulty, GameId, MinigameSettings } from "./minigames.ts";
 import { TEXT_LIMITS, zId, zName, zText } from "./text.ts";
 
 export const DATASET_IDS = [
@@ -171,7 +172,8 @@ export const MixWeight = z.number().int().min(0).max(100);
 /** The player-facing training plan. Each control maps to a real parameter (R7). */
 export const TrainingPlan = z.object({
   mix: z.record(z.enum(DATASET_IDS), MixWeight),
-  cleaning: z.enum(["light", "standard", "thorough"]),
+  /** "expert" is Fact-check plus: the strictest cleaning, with duplicates and false facts removed. */
+  cleaning: z.enum(["light", "standard", "thorough", "expert"]),
   removeDuplicates: z.boolean(),
   factCheck: z.boolean(),
   variety: z.enum(["natural", "balanced"]),
@@ -182,8 +184,26 @@ export const TrainingPlan = z.object({
   review: z.number().min(0).max(0.5),
   probePrompt: zText(...TEXT_LIMITS.probePrompt),
   parentVersionId: zId.nullable(),
+  /** Tutoring packs: extra practice from one dataset on top of the length (10% each). */
+  tutoring: z
+    .object({ dataset: z.enum(DATASET_IDS), packs: z.number().int().min(1).max(5) })
+    .nullable()
+    .default(null),
+  /** Train on the conversations customers loved (playtest pack §5). */
+  learnFromCustomers: z.boolean().default(false),
 });
 export type TrainingPlan = z.infer<typeof TrainingPlan>;
+
+/** Sponsorships (playtest pack §5): what kind of event the company's name goes on. */
+export const SPONSOR_KINDS = ["stadium", "conference", "festival"] as const;
+export type SponsorKind = (typeof SPONSOR_KINDS)[number];
+
+/** Partner apps built on the player's AI, each betting on one skill. */
+export const APP_KINDS = ["homework", "stories", "code", "puzzles", "office"] as const;
+export type AppKind = (typeof APP_KINDS)[number];
+
+/** A look's id: `orb:<style>` or `logo:<motion>` (the sim's catalog says which exist). */
+export const LookId = z.string().regex(/^(orb|logo):[a-z]{2,20}$/);
 
 export const SPEEDS = [1, 2, 4] as const;
 export const Speed = z.literal(SPEEDS);
@@ -207,6 +227,11 @@ export const Command = z.discriminatedUnion("type", [
     name: zName(...TEXT_LIMITS.productName),
     plans: z.array(PlanId).max(3),
     countdownDays: z.number().int().min(0).max(365),
+    /** A launch keynote: the AI answers this customer question live on stage. */
+    keynote: z
+      .object({ questionId: z.string().min(1).max(64) })
+      .nullable()
+      .default(null),
   }),
   z.object({ type: z.literal("setPlan"), plan: PlanId, productId: zId.nullable() }),
   z.object({
@@ -231,6 +256,20 @@ export const Command = z.discriminatedUnion("type", [
     rivalProductId: zId,
     skill: z.enum(BATTLE_SKILLS),
   }),
+  z.object({
+    type: z.literal("startShowcase"),
+    game: GameId,
+    difficulty: Difficulty,
+    versionId: zId,
+    settings: MinigameSettings,
+  }),
+  z.object({ type: z.literal("sponsor"), region: z.enum(REGION_IDS), kind: z.enum(SPONSOR_KINDS) }),
+  z.object({ type: z.literal("buyLook"), lookId: LookId }),
+  z.object({ type: z.literal("useLook"), lookId: LookId }),
+  z.object({ type: z.literal("fundApp"), kind: z.enum(APP_KINDS), productId: zId }),
+  z.object({ type: z.literal("closeApp"), appId: zId }),
+  z.object({ type: z.literal("invest"), amount: z.number().int().positive() }),
+  z.object({ type: z.literal("withdraw"), amount: z.number().int().positive() }),
 ]);
 export type Command = z.infer<typeof Command>;
 export type CommandType = Command["type"];

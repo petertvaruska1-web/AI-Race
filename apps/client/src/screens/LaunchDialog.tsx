@@ -87,6 +87,7 @@ export function LaunchDialog({
       name: trimmed,
       plans: PLAN_IDS.filter((p) => plans.includes(p)),
       countdownDays: days,
+      keynote: null,
     });
     setBusy(false);
     if (r.ok) onClose();

@@ -194,6 +194,7 @@ function release(s: WorldState, company: CompanyState, rival: RivalState): void 
         name: rivalProductName(rival.style, rival.productWord, k),
         plans: [...e.rivals.plans[rival.style]],
         countdownDays: e.rivals.countdownDays[rival.style],
+        keynote: null,
       },
       `${company.id}-p${k}`,
     );

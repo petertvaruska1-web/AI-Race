@@ -32,6 +32,7 @@ describe("launch dialog", () => {
       name: "Spark",
       plans: ["free", "personal"],
       countdownDays: 5,
+      keynote: null,
     });
   });
 

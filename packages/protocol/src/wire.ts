@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Difficulty, DUEL_GAMES, GameId, MinigameSettings } from "./minigames.ts";
 import { PatchOp } from "./patch.ts";
 import { TEXT_LIMITS, zId, zText } from "./text.ts";
 import { WorldView } from "./view.ts";
@@ -18,6 +19,8 @@ export const Query = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("chatThreads"), worldId: zId }),
   z.object({ kind: z.literal("chatThread"), worldId: zId, threadId: zId }),
   z.object({ kind: z.literal("battle"), worldId: zId, battleId: zId }),
+  /** The player's minigame runs in a world (newest first) and personal bests. */
+  z.object({ kind: z.literal("minigameRuns"), worldId: zId }),
 ]);
 export type Query = z.infer<typeof Query>;
 
@@ -39,6 +42,23 @@ export const ClientMessage = z.discriminatedUnion("type", [
   z.object({ v, type: z.literal("query"), id: RequestId, q: Query }),
   z.object({ v, type: z.literal("subscribe"), sub: StreamName }),
   z.object({ v, type: z.literal("unsubscribe"), sub: StreamName }),
+  /** A practice minigame (free and private), or a duel against a rival product on sale. */
+  z
+    .object({
+      v,
+      type: z.literal("minigame"),
+      cid: z.uuid(),
+      worldId: zId,
+      game: GameId,
+      difficulty: Difficulty,
+      settings: MinigameSettings,
+      versionId: zId,
+      /** A rival product to duel, or null to play alone. */
+      opponent: zId.nullable(),
+    })
+    .refine((m) => m.opponent === null || (DUEL_GAMES as readonly string[]).includes(m.game), {
+      message: "Story Dice can't be a duel.",
+    }),
   /** The player is in the Playground (sent every 15 s): the world's customer posts wait. */
   z.object({ v, type: z.literal("inPlayground"), worldId: zId }),
 ]);
