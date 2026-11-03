@@ -14,6 +14,7 @@ import {
   PlanId,
   POST_TONES,
   REGION_IDS,
+  SPONSOR_KINDS,
   Speed,
   TrainingPlan,
 } from "./world.ts";
@@ -203,6 +204,12 @@ export const PublicCompany = z.strictObject({
   name: z.string(),
   logo: Logo,
   palette: Palette,
+  /** How the logo moves (`logo:<motion>`; a look the company bought). */
+  logoMotion: z.string(),
+  /** Its running sponsorships, as markers on the map. */
+  sponsorships: z.array(
+    z.strictObject({ region: z.enum(REGION_IDS), kind: z.enum(SPONSOR_KINDS) }),
+  ),
   /** Null for a rival company: no player owns it. */
   ownerUserId: zId.nullable(),
   /** What kind of rival it is; null for a player's company. The archetype is the arch-rival's only. */
@@ -350,6 +357,15 @@ export type ShowcaseView = z.infer<typeof ShowcaseView>;
 /** What the playtest pack's purchases cost, from the world's balance. */
 export const ShopView = z.strictObject({
   showcase: z.strictObject({ fee: z.number().int(), cooldownDays: z.number().int() }),
+  sponsorships: z.array(
+    z.strictObject({
+      kind: z.enum(SPONSOR_KINDS),
+      price: z.number().int(),
+      days: z.number().int(),
+      groups: z.array(GroupId),
+    }),
+  ),
+  looks: z.array(z.strictObject({ id: z.string(), price: z.number().int() })),
 });
 export type ShopView = z.infer<typeof ShopView>;
 
@@ -378,6 +394,17 @@ export const PrivateCompany = z.strictObject({
   dataCenters: z.array(DataCenterView),
   /** The last 20 battles, newest last. */
   battles: z.array(BattleView),
+  looks: z.strictObject({ owned: z.array(z.string()), orb: z.string(), logo: z.string() }),
+  /** Every sponsorship, running or over. */
+  sponsorships: z.array(
+    z.strictObject({
+      id: zId,
+      region: z.enum(REGION_IDS),
+      kind: z.enum(SPONSOR_KINDS),
+      startDay: Day,
+      endDay: Day,
+    }),
+  ),
   /** The investment fund (it counts toward the company's value). */
   fund: z.strictObject({ balance: z.number().int() }),
   /** The last 20 showcases, newest last. */

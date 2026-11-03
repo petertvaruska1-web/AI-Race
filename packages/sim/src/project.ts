@@ -18,6 +18,7 @@ import {
   type RegionId,
   type RunView,
   type ShopView,
+  SPONSOR_KINDS,
   type SpotlightView,
   type TrainingPlan,
   type VersionView,
@@ -140,6 +141,11 @@ function publicCompany(state: WorldState, c: CompanyState): PublicCompany {
     name: c.name,
     logo: { shape: c.logo.shape, symbol: c.logo.symbol, initials: c.logo.initials },
     palette: { primary: c.palette.primary, secondary: c.palette.secondary },
+    logoMotion: c.looks.logo,
+    sponsorships: Object.values(c.sponsorships)
+      .filter((x) => state.day >= x.startDay && state.day < x.endDay)
+      .sort((a, b) => a.startDay - b.startDay || (a.id < b.id ? -1 : 1))
+      .map((x) => ({ region: x.region, kind: x.kind })),
     ownerUserId: c.ownerUserId,
     rival: c.rival ? { style: c.rival.style, archetype: c.rival.archetype } : null,
     publishedVersions: versionsInOrder(c)
@@ -261,6 +267,10 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
       outcome: x.outcome,
       pointsChange: x.pointsChange,
     })),
+    looks: { owned: [...c.looks.owned], orb: c.looks.orb, logo: c.looks.logo },
+    sponsorships: Object.values(c.sponsorships)
+      .sort((a, b) => a.startDay - b.startDay || (a.id < b.id ? -1 : 1))
+      .map((x) => ({ ...x })),
     fund: { balance: c.fund.balance },
     showcases: c.showcases.map((x) => ({
       id: x.id,
@@ -488,5 +498,14 @@ function cmp(a: string, b: string): number {
 /** What the playtest pack's purchases cost, so the client never hard-codes a price. */
 function shopView(b: Balance): ShopView {
   const e = b.economy;
-  return { showcase: { fee: e.showcases.fee, cooldownDays: e.showcases.cooldownDays } };
+  return {
+    showcase: { fee: e.showcases.fee, cooldownDays: e.showcases.cooldownDays },
+    sponsorships: SPONSOR_KINDS.map((kind) => ({
+      kind,
+      price: e.sponsorships.kinds[kind].price,
+      days: e.sponsorships.kinds[kind].days,
+      groups: [...e.sponsorships.kinds[kind].groups],
+    })),
+    looks: Object.entries(e.looks).map(([id, price]) => ({ id, price })),
+  };
 }

@@ -10,6 +10,7 @@ import { historyDay } from "./history.ts";
 import { fundCommand } from "./investments.ts";
 import { leagueDay } from "./league.ts";
 import { bookTraining, closeMonths, ledgerDay, newLedger } from "./ledger.ts";
+import { lookCommand } from "./looks.ts";
 import { marketDay } from "./market.ts";
 import { paletteProblem } from "./palette.ts";
 import { newCompanyBusiness, productCommand, productsDay } from "./products.ts";
@@ -17,6 +18,7 @@ import { rescueCommand, rescueDay } from "./rescue.ts";
 import { joinRivals, rivalsDay } from "./rivals.ts";
 import { rngInt } from "./rng.ts";
 import { applyShowcase, showcaseCommand } from "./showcases.ts";
+import { sponsorCommand, sponsorshipsDay } from "./sponsorships.ts";
 import type { Input, StepResult, SystemEvent, WorldState } from "./state.ts";
 import {
   activeRun,
@@ -68,6 +70,7 @@ function tick(s: WorldState): Handled {
   settleRuns(s);
   rivalsDay(s);
   campaignsDay(s);
+  sponsorshipsDay(s);
   productsDay(s);
   marketDay(s);
   dataCentersDay(s);
@@ -290,6 +293,17 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       const company = member.companyId ? s.companies[member.companyId] : undefined;
       if (!company) return no("Found your company first.");
       return computeCommand(s, company, cmd, newId);
+    }
+    case "sponsor": {
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("Found your company first.");
+      return sponsorCommand(s, company, cmd, newId);
+    }
+    case "buyLook":
+    case "useLook": {
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("Found your company first.");
+      return lookCommand(s, company, cmd);
     }
     case "invest":
     case "withdraw": {

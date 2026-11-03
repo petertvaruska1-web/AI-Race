@@ -115,6 +115,8 @@ function sampleView(): WorldView {
         name: "Acme",
         logo: { shape: "circle", symbol: "spark", initials: "AC" },
         palette: { primary: "#4f8cff", secondary: "#ffb020" },
+        logoMotion: "logo:still",
+        sponsorships: [{ region: "pacific", kind: "stadium" }],
         ownerUserId: "u1",
         rival: null,
         publishedVersions: [],
@@ -218,7 +220,9 @@ function sampleView(): WorldView {
         loan: { balance: 120_000, principalPerMonth: 5000, monthlyRate: 0.04 },
         fund: { balance: 0 },
         showcases: [],
-        shop: { showcase: { fee: 20000, cooldownDays: 7 } },
+        shop: { showcase: { fee: 20000, cooldownDays: 7 }, sponsorships: [], looks: [] },
+        looks: { owned: ["orb:classic", "logo:still"], orb: "orb:classic", logo: "logo:still" },
+        sponsorships: [],
         battles: [
           {
             id: "b1",

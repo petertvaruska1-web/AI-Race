@@ -147,6 +147,7 @@ describe("projectView", () => {
       "followers",
       "id",
       "logo",
+      "logoMotion",
       "name",
       "ownerUserId",
       "ownership",
@@ -156,6 +157,7 @@ describe("projectView", () => {
       "publishedVersions",
       "reputation",
       "rival",
+      "sponsorships",
     ]);
     expect(acme?.publishedVersions).toEqual([]);
     const text = JSON.stringify(view);

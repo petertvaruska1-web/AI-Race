@@ -6,6 +6,7 @@ import {
   type RegionId,
   type RivalStyle,
   type Speed,
+  type SponsorKind,
   type TrainingPlan,
 } from "@airace/protocol";
 
@@ -163,6 +164,12 @@ export type Economy = {
   };
   /** Office and support: base × R^exponent a month for monthly revenue R (C35). */
   overhead: { base: number; exponent: number };
+  /** Sponsorships: what each kind of event costs, how long it runs, whose awareness it lifts. */
+  sponsorships: {
+    kinds: Record<SponsorKind, { price: number; days: number; groups: GroupId[]; rate: number }>;
+  };
+  /** Looks by id, with their price (the free ones cost 0). */
+  looks: Record<string, number>;
   /** Playground games played live for the press (playtest pack §4.3). */
   showcases: {
     fee: number;
@@ -495,6 +502,33 @@ const ECONOMY_V2: Economy = {
   // of about 5% (harness, 2026-11-03). 0.0407 × R^1.1 is 12% of a $60k month, 15% of $465k,
   // 17% of $1.7M and 21% of $14M: bigger companies pay a bigger share, and still grow rich.
   overhead: { base: 0.0407, exponent: 1.1 },
+  // Priced against a typical company's $1.7M a month after a year (harness, 2026-11-03).
+  // `rate` is the share of the unaware crowd that hears of the company each day it runs.
+  sponsorships: {
+    kinds: {
+      stadium: { price: 400_000, days: 90, groups: ["everyday", "students"], rate: 0.004 },
+      conference: {
+        price: 150_000,
+        days: 30,
+        groups: ["developers", "businesses", "researchers"],
+        rate: 0.008,
+      },
+      festival: { price: 100_000, days: 60, groups: ["creators", "everyday"], rate: 0.005 },
+    },
+  },
+  // Status for the rich: a supernova orb is more than a month of a typical company's revenue.
+  looks: {
+    "orb:classic": 0,
+    "orb:nebula": 100_000,
+    "orb:crystal": 250_000,
+    "orb:plasma": 500_000,
+    "orb:aurora": 1_000_000,
+    "orb:supernova": 2_500_000,
+    "logo:still": 0,
+    "logo:pulse": 50_000,
+    "logo:shimmer": 150_000,
+    "logo:orbit": 400_000,
+  },
   // A showcase costs four battles: it is a press event, and a great run gains 8% followers.
   showcases: { fee: 20_000, cooldownDays: 7, followers: 0.08, stumble: 0.3, kept: 20 },
 };
