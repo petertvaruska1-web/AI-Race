@@ -1,5 +1,8 @@
 # Game Layer Phase 4 "Surprises and Goals" Implementation Plan
 
+> **Note (2026-11-03):** the playtest pack shipped sim-5 first. Read every "sim-5" below as **sim-6**, and every "sim-4 world" as a **sim-5 world** (sim-3 and sim-4 worlds still chain through). The Playground now has Chat and Games modes; Interview mode joins them as a third.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The player's AI surprises them, and the game gives them something to aim for. The player can:
