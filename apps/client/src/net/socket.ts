@@ -1,4 +1,12 @@
-import { type ClientMessage, type Command, type Query, ServerMessage } from "@airace/protocol";
+import {
+  type ClientMessage,
+  type Command,
+  type Difficulty,
+  type GameId,
+  type MinigameSettings,
+  type Query,
+  ServerMessage,
+} from "@airace/protocol";
 
 /** The parts of a WebSocket the game socket uses (a test passes a fake one). */
 export type WsLike = {
@@ -125,6 +133,20 @@ export class GameSocket {
       versionId,
       text,
     });
+  }
+
+  /** Starts a Playground minigame: practice alone, or a duel against a rival product. */
+  minigame(
+    worldId: string,
+    o: {
+      game: GameId;
+      difficulty: Difficulty;
+      settings: MinigameSettings;
+      versionId: string;
+      opponent: string | null;
+    },
+  ): Promise<CommandResult> {
+    return this.request({ v: 1, type: "minigame", cid: this.deps.uuid(), worldId, ...o });
   }
 
   query<T = unknown>(q: Query): Promise<T> {

@@ -4,6 +4,8 @@ import { Button } from "../components/Button.tsx";
 import { ChatLog, type ChatMessage } from "../components/ChatLog.tsx";
 import { INPUT } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
+import { Toggle } from "../components/Toggle.tsx";
+import { Games } from "../games/Games.tsx";
 import { rivalAis } from "../rivals.ts";
 import { usePlayground } from "../store/playground.ts";
 import { useSocket } from "../store/session.ts";
@@ -57,6 +59,7 @@ export function Playground({ view }: { view: WorldView }) {
   const [failure, setFailure] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [lastSent, setLastSent] = useState("");
+  const [mode, setMode] = useState<"chat" | "games">("chat");
   const worldId = view.world.id;
 
   const loadThreads = useCallback(() => {
@@ -135,118 +138,146 @@ export function Playground({ view }: { view: WorldView }) {
   if (!version) return <p className="text-muted">Train your first AI to talk to it here.</p>;
   const tooLong = draft.length > MAX_CHARS;
   const mine = threads.filter((t) => t.versionId === version.id);
+  // Games are played with your own AIs (a rival's only as an opponent).
+  const player = own ?? versions.at(-1);
+
+  const modes = (
+    <Toggle
+      legend="Playground mode"
+      options={[
+        { label: "Chat", value: "chat" },
+        { label: "Games", value: "games" },
+      ]}
+      value={mode}
+      onChange={setMode}
+    />
+  );
+  if (mode === "games" && player) {
+    return (
+      <div className="space-y-3">
+        {modes}
+        <p className="text-xs text-muted">
+          {`Playing with ${player.label}. Customer posts are paused while you're here, so your AI answers you faster.`}
+        </p>
+        <Games view={view} versionId={player.id} />
+      </div>
+    );
+  }
 
   return (
-    <div className="grid gap-4 md:grid-cols-[220px_1fr]">
-      <aside className="space-y-3">
-        <label className="block text-sm">
-          <span className="mb-1 block font-semibold">Talk to</span>
-          <select
-            className={INPUT}
-            value={version.id}
-            onChange={(e) => {
-              setVersion(e.target.value);
-              setThreadId(null);
-              setMessages([]);
-            }}
-          >
-            <optgroup label="Your AIs">
-              {[...versions].reverse().map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.label}
-                </option>
-              ))}
-            </optgroup>
-            {rivals.length > 0 && (
-              <optgroup label="Rivals' AIs">
-                {rivals.map((r) => (
-                  <option key={r.versionId} value={r.versionId}>
-                    {`${r.companyName}'s ${r.productName}`}
+    <div className="space-y-3">
+      {modes}
+      <div className="grid gap-4 md:grid-cols-[220px_1fr]">
+        <aside className="space-y-3">
+          <label className="block text-sm">
+            <span className="mb-1 block font-semibold">Talk to</span>
+            <select
+              className={INPUT}
+              value={version.id}
+              onChange={(e) => {
+                setVersion(e.target.value);
+                setThreadId(null);
+                setMessages([]);
+              }}
+            >
+              <optgroup label="Your AIs">
+                {[...versions].reverse().map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label}
                   </option>
                 ))}
               </optgroup>
-            )}
-          </select>
-        </label>
-        <Button
-          variant="secondary"
-          className="w-full"
-          onClick={() => {
-            setThreadId(null);
-            setMessages([]);
-            setStreaming(null);
-          }}
-        >
-          New conversation
-        </Button>
-        <ul className="space-y-1 text-sm">
-          {mine.map((t, i) => (
-            <li key={t.id}>
-              <button
-                type="button"
-                onClick={() => openThread(t)}
-                aria-current={t.id === threadId ? "true" : undefined}
-                className={`w-full rounded-lg px-3 py-1.5 text-left ${t.id === threadId ? "bg-brand-soft text-text" : "text-muted hover:text-text"}`}
-              >
-                Conversation {i + 1}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </aside>
-      <Panel>
-        <p className="mb-3 text-xs text-muted">
-          Customer posts are paused while you're here, so your AI answers you faster.
-        </p>
-        {own && neverSawConversation(view, own) && (
-          <p className="mb-3 rounded-lg bg-brand-soft p-3 text-sm">
-            This AI never saw a conversation, so it may just continue your text.
-          </p>
-        )}
-        {messages.length === 0 && streaming === null && (
-          <p className="mb-3 text-sm text-muted">
-            Say something to {version.label}. It answers in its own words.
-          </p>
-        )}
-        <ChatLog messages={messages} streaming={streaming} aiName={version.label} />
-        {messages.length >= 6 && (
-          <p className="mt-3 text-xs text-muted">
-            A long conversation is a lot for a small AI to follow. Start a new conversation for its
-            best answers.
-          </p>
-        )}
-        {failure && (
-          <div role="alert" className="mt-3 flex items-center gap-3 text-sm text-danger">
-            {failure}
-            {lastSent && (
-              <Button variant="secondary" onClick={() => void send(lastSent)}>
-                Try again
-              </Button>
-            )}
-          </div>
-        )}
-        <form onSubmit={submit} className="mt-4 space-y-2">
-          <textarea
-            className={`${INPUT} min-h-20`}
-            aria-label="Your message"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                e.currentTarget.form?.requestSubmit();
-              }
-            }}
-          />
-          {tooLong && <p className="text-xs text-danger">{TOO_LONG}</p>}
+              {rivals.length > 0 && (
+                <optgroup label="Rivals' AIs">
+                  {rivals.map((r) => (
+                    <option key={r.versionId} value={r.versionId}>
+                      {`${r.companyName}'s ${r.productName}`}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </label>
           <Button
-            type="submit"
-            disabled={streaming !== null || tooLong || draft.trim().length === 0}
+            variant="secondary"
+            className="w-full"
+            onClick={() => {
+              setThreadId(null);
+              setMessages([]);
+              setStreaming(null);
+            }}
           >
-            Send
+            New conversation
           </Button>
-        </form>
-      </Panel>
+          <ul className="space-y-1 text-sm">
+            {mine.map((t, i) => (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  onClick={() => openThread(t)}
+                  aria-current={t.id === threadId ? "true" : undefined}
+                  className={`w-full rounded-lg px-3 py-1.5 text-left ${t.id === threadId ? "bg-brand-soft text-text" : "text-muted hover:text-text"}`}
+                >
+                  Conversation {i + 1}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </aside>
+        <Panel>
+          <p className="mb-3 text-xs text-muted">
+            Customer posts are paused while you're here, so your AI answers you faster.
+          </p>
+          {own && neverSawConversation(view, own) && (
+            <p className="mb-3 rounded-lg bg-brand-soft p-3 text-sm">
+              This AI never saw a conversation, so it may just continue your text.
+            </p>
+          )}
+          {messages.length === 0 && streaming === null && (
+            <p className="mb-3 text-sm text-muted">
+              Say something to {version.label}. It answers in its own words.
+            </p>
+          )}
+          <ChatLog messages={messages} streaming={streaming} aiName={version.label} />
+          {messages.length >= 6 && (
+            <p className="mt-3 text-xs text-muted">
+              A long conversation is a lot for a small AI to follow. Start a new conversation for
+              its best answers.
+            </p>
+          )}
+          {failure && (
+            <div role="alert" className="mt-3 flex items-center gap-3 text-sm text-danger">
+              {failure}
+              {lastSent && (
+                <Button variant="secondary" onClick={() => void send(lastSent)}>
+                  Try again
+                </Button>
+              )}
+            </div>
+          )}
+          <form onSubmit={submit} className="mt-4 space-y-2">
+            <textarea
+              className={`${INPUT} min-h-20`}
+              aria-label="Your message"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
+            />
+            {tooLong && <p className="text-xs text-danger">{TOO_LONG}</p>}
+            <Button
+              type="submit"
+              disabled={streaming !== null || tooLong || draft.trim().length === 0}
+            >
+              Send
+            </Button>
+          </form>
+        </Panel>
+      </div>
     </div>
   );
 }
