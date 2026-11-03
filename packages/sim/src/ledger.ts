@@ -12,11 +12,14 @@ import {
 } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
 import { monthOfDay } from "./calendar.ts";
+import { coverShortfall, fundMonthEnd } from "./investments.ts";
 import { customersOf, totalCustomers } from "./market.ts";
+import { overheadForDay } from "./overhead.ts";
 import { liveProductFor } from "./products.ts";
 import { reportMonth } from "./reports.ts";
 import { rescueMonth } from "./rescue.ts";
 import type { CompanyState, LedgerState, MonthLedger, RunState, WorldState } from "./state.ts";
+import { onLegacyRules } from "./world.ts";
 
 // The money ledger (game-layer design §8). Every change of cash is booked here
 // in whole dollars, so cash always equals founding cash plus income less costs,
@@ -104,12 +107,19 @@ export function bookTraining(
   book(company, "dataChecks", sign * checks);
 }
 
-/** A day of revenue for every company (serving is booked by `computeDay`). Call after the market step. */
+/**
+ * A day of revenue and of office and support bills for every company (serving is booked
+ * by `computeDay`). Call after the market step.
+ */
 export function ledgerDay(s: WorldState): void {
   const e = getBalance(s.balance).economy;
+  // A day replayed from an older simulation's log had no such bills.
+  const bills = !onLegacyRules(s);
   for (const id of Object.keys(s.companies).sort()) {
     const company = s.companies[id];
     if (!company) continue;
+    const m = company.ledger.current;
+    const before = m.income.personal + m.income.business;
     for (const plan of PLAN_IDS) {
       const product = liveProductFor(company, plan);
       const version = product ? company.versions[product.versionId] : undefined;
@@ -125,6 +135,8 @@ export function ledgerDay(s: WorldState): void {
         }
       }
     }
+    if (bills)
+      book(company, "overhead", overheadForDay(e, m.income.personal + m.income.business - before));
   }
 }
 
@@ -156,9 +168,11 @@ export function closeMonths(s: WorldState): void {
           for (const plan of PLAN_IDS) byGroup[g] += customersOf(s.market, id, region, g, plan);
         }
       }
+      fundMonthEnd(s, company);
       closeMonth(company, month, totalCustomers(s.market, id), byGroup);
       const closed = company.ledger.months.at(-1);
       if (closed) reportMonth(s, company, closed, company.ledger.months.at(-2));
+      coverShortfall(company);
       rescueMonth(s, company);
     }
   }

@@ -7,6 +7,7 @@ import { computeCommand, computeDay, dataCentersDay, newCompute } from "./comput
 import { fameDay } from "./fame.ts";
 import { applyFeedback, newsDay } from "./feed.ts";
 import { historyDay } from "./history.ts";
+import { fundCommand } from "./investments.ts";
 import { leagueDay } from "./league.ts";
 import { bookTraining, closeMonths, ledgerDay, newLedger } from "./ledger.ts";
 import { marketDay } from "./market.ts";
@@ -289,6 +290,12 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       const company = member.companyId ? s.companies[member.companyId] : undefined;
       if (!company) return no("Found your company first.");
       return computeCommand(s, company, cmd, newId);
+    }
+    case "invest":
+    case "withdraw": {
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("Found your company first.");
+      return fundCommand(company, cmd);
     }
     case "startShowcase": {
       const company = member.companyId ? s.companies[member.companyId] : undefined;

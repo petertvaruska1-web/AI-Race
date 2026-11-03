@@ -378,6 +378,8 @@ export const PrivateCompany = z.strictObject({
   dataCenters: z.array(DataCenterView),
   /** The last 20 battles, newest last. */
   battles: z.array(BattleView),
+  /** The investment fund (it counts toward the company's value). */
+  fund: z.strictObject({ balance: z.number().int() }),
   /** The last 20 showcases, newest last. */
   showcases: z.array(ShowcaseView),
   shop: ShopView,

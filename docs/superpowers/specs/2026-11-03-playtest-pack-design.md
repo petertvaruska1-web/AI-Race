@@ -132,7 +132,7 @@ It streams `{kind: "minigameStep", side, step, ...display}` and returns `{sides:
 | **Fact-check plus** | AI Lab, data step | A cleaning level "Expert": quality ≥ 0.80, with duplicate removal and fact-check forced on. Cost: $4 per thousand tokens checked. | Real filter |
 | **Investments** | Money screen | Deposit or withdraw. Month end: return = N(0.8%, 3%), with a 1-in-12 dip of −8% to −15% (seeded rng). Gains and losses are booked in the ledger; the fund balance counts toward company value. | Sim |
 | **Showcases** | Playground games | §4.3 | Real AI |
-| **Growing bills** (C35) | Money screen, "Office and support" | Monthly overhead = `k × customers^1.2`, tuned so that at 50,000 customers it is about 15% of revenue. | Sim |
+| **Growing bills** (C35) | Money screen, "Office and support" | Monthly overhead = `0.0407 × R^1.1` for monthly revenue R, booked daily from the day's revenue: 12% of a $60k month, 15% of $465k, 17% of $1.7M, 21% of $14M. (First drafted on customers; free users made the budget strategy lose money, so it follows revenue.) | Sim |
 
 ## 6. Architecture changes
 

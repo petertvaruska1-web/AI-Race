@@ -111,7 +111,8 @@ describe("sim properties", { timeout: 30_000 }, () => {
             0,
           );
           expect(Number.isInteger(company.cash)).toBe(true);
-          expect(company.cash).toBe(company.startCash + net);
+          // Money in the fund left cash without being income or a cost.
+          expect(company.cash + company.fund.balance).toBe(company.startCash + net);
           expect(company.ownership).toBeGreaterThan(0);
           expect(company.ownership).toBeLessThanOrEqual(1);
           // Training money: every run not refunded, once.

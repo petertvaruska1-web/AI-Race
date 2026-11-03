@@ -216,6 +216,7 @@ function sampleView(): WorldView {
         },
         rescue: { deadlineDay: 45 },
         loan: { balance: 120_000, principalPerMonth: 5000, monthlyRate: 0.04 },
+        fund: { balance: 0 },
         showcases: [],
         shop: { showcase: { fee: 20000, cooldownDays: 7 } },
         battles: [

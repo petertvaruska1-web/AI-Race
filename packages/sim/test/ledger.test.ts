@@ -165,7 +165,8 @@ describe("daily bookings", () => {
     expect(m.income.business).toBe(0);
     expect(m.revenueByGroup.students).toBe(m.income.personal);
     expect(m.revenueByPlan.personal).toBe(m.income.personal);
-    expect(company(s).cash).toBe(cash + m.income.personal - m.costs.serving);
+    expect(m.costs.overhead).toBeGreaterThan(0); // office and support grow with revenue
+    expect(company(s).cash).toBe(cash + m.income.personal - m.costs.serving - m.costs.overhead);
   });
 
   it("books business accounts once for every seat", () => {

@@ -152,6 +152,17 @@ export type Economy = {
     followers: { win: number; loss: number };
     kept: number;
   };
+  /** The investment fund's month-end returns (playtest pack §5). */
+  fund: {
+    meanMonthly: number;
+    sdMonthly: number;
+    /** The chance of a dip in any month, and how deep one goes. */
+    dipChance: number;
+    dipMin: number;
+    dipMax: number;
+  };
+  /** Office and support: base × R^exponent a month for monthly revenue R (C35). */
+  overhead: { base: number; exponent: number };
   /** Playground games played live for the press (playtest pack §4.3). */
   showcases: {
     fee: number;
@@ -478,6 +489,12 @@ const ECONOMY_V2: Economy = {
     followers: { win: 0.05, loss: -0.02 },
     kept: 20,
   },
+  // About 10% a year with a 1-in-12 dip of 8-15%: parking cash is a choice, not free money.
+  fund: { meanMonthly: 0.008, sdMonthly: 0.03, dipChance: 1 / 12, dipMin: 0.08, dipMax: 0.15 },
+  // A typical company has $1.7M revenue a month at 180,000 customers after a year, with costs
+  // of about 5% (harness, 2026-11-03). 0.0407 × R^1.1 is 12% of a $60k month, 15% of $465k,
+  // 17% of $1.7M and 21% of $14M: bigger companies pay a bigger share, and still grow rich.
+  overhead: { base: 0.0407, exponent: 1.1 },
   // A showcase costs four battles: it is a press event, and a great run gains 8% followers.
   showcases: { fee: 20_000, cooldownDays: 7, followers: 0.08, stumble: 0.3, kept: 20 },
 };

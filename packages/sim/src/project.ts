@@ -261,6 +261,7 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
       outcome: x.outcome,
       pointsChange: x.pointsChange,
     })),
+    fund: { balance: c.fund.balance },
     showcases: c.showcases.map((x) => ({
       id: x.id,
       day: x.day,
