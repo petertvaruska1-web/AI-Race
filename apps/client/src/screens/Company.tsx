@@ -16,6 +16,7 @@ import { Orb } from "../orb/Orb.tsx";
 import { arrivalsFrom } from "../orb/params.ts";
 import { regionCustomers, shareByRegion } from "../regions.ts";
 import { go } from "../route.ts";
+import { AppsPanel, OrbFrame } from "../spending/Spending.tsx";
 import { useWindows } from "../store/windows.ts";
 import { gradeColor } from "../windows/ReportWindow.tsx";
 import { LaunchDialog, launchBlocked } from "./LaunchDialog.tsx";
@@ -143,19 +144,21 @@ export function Company({ view }: { view: WorldView }) {
       </div>
 
       <Panel className="flex flex-col items-center gap-4 text-center lg:order-0 xl:order-1">
-        {latest ? (
-          <button
-            type="button"
-            aria-label={`About your AI ${latest.label}`}
-            title="Open your AI"
-            onClick={(e) => open({ kind: "ai", versionId: latest.id }, e.currentTarget)}
-            className="orb-button rounded-full"
-          >
-            {orb}
-          </button>
-        ) : (
-          orb
-        )}
+        <OrbFrame look={company.looks.orb} color={pub.palette.primary}>
+          {latest ? (
+            <button
+              type="button"
+              aria-label={`About your AI ${latest.label}`}
+              title="Open your AI"
+              onClick={(e) => open({ kind: "ai", versionId: latest.id }, e.currentTarget)}
+              className="orb-button rounded-full"
+            >
+              {orb}
+            </button>
+          ) : (
+            orb
+          )}
+        </OrbFrame>
         {latest ? (
           <div>
             <p className="font-display text-4xl font-bold text-brand">{latest.label}</p>
@@ -192,9 +195,16 @@ export function Company({ view }: { view: WorldView }) {
           </Button>
         </div>
         {blocked && latest && <p className="text-xs text-muted">{blocked}</p>}
+        <Button variant="ghost" onClick={(e) => open({ kind: "customize" }, e.currentTarget)}>
+          ✨ Customize your look
+        </Button>
         <Lineup view={view} />
         <ArchStrip view={view} />
       </Panel>
+
+      <div className="lg:order-3 lg:col-span-2 xl:col-span-3">
+        <AppsPanel view={view} />
+      </div>
 
       <Panel title="What people are saying" className="lg:order-2 lg:col-span-2 xl:col-span-1">
         <div className="max-h-[70vh] overflow-y-auto pr-1">

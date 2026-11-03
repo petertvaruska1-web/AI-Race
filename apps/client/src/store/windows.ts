@@ -20,7 +20,10 @@ export type WindowSpec =
   | { kind: "rescue" }
   | { kind: "rival"; companyId: string }
   | { kind: "newBattle"; rivalProductId?: string }
-  | { kind: "battle"; battleId: string };
+  | { kind: "battle"; battleId: string }
+  | { kind: "customize" }
+  | { kind: "fundApp" }
+  | { kind: "sponsor" };
 
 export type OpenWindow = {
   id: number;

@@ -3,7 +3,7 @@ import { type ReactNode, useState } from "react";
 import { REGION_CENTERS, STATE_TILES } from "../regions.ts";
 
 export type RegionMarks = Partial<
-  Record<RegionId, { campaign?: boolean; dataCenter?: "building" | "open" }>
+  Record<RegionId, { campaign?: boolean; dataCenter?: "building" | "open"; sponsor?: string }>
 >;
 
 const GAP = 0.12;
@@ -90,6 +90,11 @@ export function RegionMap({
             const c = REGION_CENTERS[r];
             return (
               <g key={`${r}-marks`} className="pointer-events-none">
+                {m?.sponsor && (
+                  <text x={c.x + 0.35} y={c.y - 0.35} fontSize={0.7} aria-label="Sponsored event">
+                    {m.sponsor}
+                  </text>
+                )}
                 {m?.campaign && (
                   <circle
                     cx={c.x}

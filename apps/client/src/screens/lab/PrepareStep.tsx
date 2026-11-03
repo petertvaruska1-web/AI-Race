@@ -82,9 +82,7 @@ export function PrepareStep({
   balance: Balance;
 }) {
   const update = usePlan((s) => s.update);
-  // Fact-check plus ("expert") is chosen on its own switch; its catalog pools come with it.
-  const level = plan.cleaning === "expert" ? "thorough" : plan.cleaning;
-  const key = prepKey(level, plan.removeDuplicates, plan.factCheck);
+  const key = prepKey(plan.cleaning, plan.removeDuplicates, plan.factCheck);
   const pool = catalog.datasets
     .filter((d) => plan.mix[d.id] > 0)
     .reduce((sum, d) => sum + (d.pools[key]?.tokens ?? 0), 0);
@@ -111,7 +109,9 @@ export function PrepareStep({
         <p className="mb-3 text-sm text-muted">
           {CLEANING.find((c) => c.id === plan.cleaning)?.hint}
         </p>
-        <Removed items={examples(catalog, plan, (d) => d.removedExamples.cleaning[level])} />
+        <Removed
+          items={examples(catalog, plan, (d) => d.removedExamples.cleaning[plan.cleaning])}
+        />
       </Panel>
       <Toggle
         label="Remove duplicates"
@@ -131,6 +131,16 @@ export function PrepareStep({
       >
         {plan.factCheck && (
           <Removed items={examples(catalog, plan, (d) => d.removedExamples.factCheck)} />
+        )}
+      </Toggle>
+      <Toggle
+        label={`Fact-check plus ($${balance.economy.expertCheckPerThousand} per thousand words)`}
+        hint="Experts keep only the cleanest text, without duplicates or false statements."
+        checked={plan.cleaning === "expert"}
+        onChange={(on) => update({ cleaning: on ? "expert" : "thorough" })}
+      >
+        {plan.cleaning === "expert" && (
+          <Removed items={examples(catalog, plan, (d) => d.removedExamples.cleaning.expert)} />
         )}
       </Toggle>
       <Toggle

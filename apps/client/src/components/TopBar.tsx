@@ -2,6 +2,7 @@ import { SPEEDS, type Speed, type WorldView } from "@airace/protocol";
 import { getBalance } from "@airace/sim";
 import type { ReactNode } from "react";
 import { formatMoney } from "../format.ts";
+import { LogoMotion } from "../spending/Spending.tsx";
 import { useSocket } from "../store/session.ts";
 import { useWindows } from "../store/windows.ts";
 import { CountUp } from "./CountUp.tsx";
@@ -56,7 +57,11 @@ export function TopBar({ view }: { view: WorldView }) {
         <a href="#/" className="text-sm text-muted hover:text-text" aria-label="All worlds">
           ←
         </a>
-        {company && <Logo logo={company.logo} palette={company.palette} size={36} />}
+        {company && (
+          <LogoMotion motion={company.logoMotion}>
+            <Logo logo={company.logo} palette={company.palette} size={36} />
+          </LogoMotion>
+        )}
         <div className="mr-auto min-w-0">
           <p className="player-text font-display text-lg font-semibold text-brand">
             {company?.name}

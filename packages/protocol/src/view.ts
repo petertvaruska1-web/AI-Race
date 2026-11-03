@@ -441,6 +441,8 @@ export const PrivateCompany = z.strictObject({
       ),
     }),
   ),
+  /** Feedback replies customers loved, which "Learn from customers" can train on. */
+  loved: z.number().int().min(0),
   /** The investment fund (it counts toward the company's value). */
   fund: z.strictObject({ balance: z.number().int() }),
   /** The last 20 showcases, newest last. */

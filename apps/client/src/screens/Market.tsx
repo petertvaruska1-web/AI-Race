@@ -18,6 +18,7 @@ import { formatCount, formatMoney } from "../format.ts";
 import { GROUPS, groupColors } from "../groups.ts";
 import { aboutPeople, caresAbout, groupCustomers, groupSatisfaction } from "../people.ts";
 import { regionCustomers, shareByRegion } from "../regions.ts";
+import { SPONSOR_WORDS, SponsorPanel } from "../spending/Spending.tsx";
 import { useSocket } from "../store/session.ts";
 import { useWindows } from "../store/windows.ts";
 
@@ -182,6 +183,7 @@ export function Market({ view }: { view: WorldView }) {
       </Panel>
 
       <Campaigns view={view} />
+      <SponsorPanel view={view} />
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {GROUP_IDS.map((g) => {
@@ -312,6 +314,10 @@ export function regionMarks(view: WorldView): RegionMarks {
   for (const k of company?.campaigns ?? []) {
     const regions = k.region === "all" ? REGION_IDS : [k.region];
     for (const r of regions) marks[r] = { ...marks[r], campaign: true };
+  }
+  for (const x of company?.sponsorships ?? []) {
+    if (view.world.day < x.endDay)
+      marks[x.region] = { ...marks[x.region], sponsor: SPONSOR_WORDS[x.kind].icon };
   }
   for (const d of company?.dataCenters ?? []) {
     const now = marks[d.region]?.dataCenter;

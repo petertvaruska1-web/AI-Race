@@ -1,6 +1,7 @@
 import type { WorldView } from "@airace/protocol";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef } from "react";
+import { CustomizeWindow, FundAppWindow, SponsorWindow } from "../spending/Spending.tsx";
 import { type OpenWindow, useWindows } from "../store/windows.ts";
 import { AiWindow } from "./AiWindow.tsx";
 import { BattleWindow, NewBattleWindow } from "./BattleWindows.tsx";
@@ -55,6 +56,12 @@ function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) 
       return <NewBattleWindow entry={entry} view={view} rivalProductId={s.rivalProductId} />;
     case "battle":
       return <BattleWindow entry={entry} view={view} battleId={s.battleId} />;
+    case "customize":
+      return <CustomizeWindow entry={entry} view={view} />;
+    case "fundApp":
+      return <FundAppWindow entry={entry} view={view} />;
+    case "sponsor":
+      return <SponsorWindow entry={entry} view={view} />;
   }
 }
 

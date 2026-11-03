@@ -3,6 +3,7 @@ import { type Balance, previewPlan } from "@airace/sim";
 import { Field, INPUT } from "../../components/Field.tsx";
 import { Panel } from "../../components/Panel.tsx";
 import { capitalize, formatMoney, gameDays, percent, words } from "../../format.ts";
+import { TrainingExtras } from "../../spending/Spending.tsx";
 import { usePlan } from "../../store/plan.ts";
 
 function Choice({
@@ -41,10 +42,13 @@ export function DesignStep({
   balance,
   versions,
   lent = 0,
+  loved = 0,
 }: {
   plan: TrainingPlan;
   balance: Balance;
   versions: VersionView[];
+  /** Conversations customers loved, for "Learn from customers". */
+  loved?: number;
   /** Data-center compute lent to training (PFLOP a day). */
   lent?: number;
 }) {
@@ -191,6 +195,8 @@ export function DesignStep({
           className="w-full accent-[var(--brand)] disabled:opacity-40"
         />
       </Panel>
+
+      <TrainingExtras plan={plan} loved={loved} />
 
       <Panel>
         <Field

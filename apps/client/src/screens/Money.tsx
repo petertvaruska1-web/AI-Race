@@ -20,6 +20,7 @@ import { Stat } from "../components/Stat.tsx";
 import { formatMoney, monthName } from "../format.ts";
 import { GROUPS } from "../groups.ts";
 import { COST_NAMES, INCOME_NAMES, profitOf, total } from "../money.ts";
+import { FundPanel } from "../spending/Spending.tsx";
 import { useSocket } from "../store/session.ts";
 import { useWindows } from "../store/windows.ts";
 import { gradeColor } from "../windows/ReportWindow.tsx";
@@ -154,6 +155,8 @@ export function Money({ view }: { view: WorldView }) {
           )}
         </Panel>
       )}
+
+      <FundPanel view={view} />
 
       <Panel
         title="Report cards"

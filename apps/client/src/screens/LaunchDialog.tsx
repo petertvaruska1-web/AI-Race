@@ -5,6 +5,7 @@ import { Button } from "../components/Button.tsx";
 import { INPUT } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { formatMoney } from "../format.ts";
+import { useCatalog } from "../store/catalog.ts";
 import { useSocket } from "../store/session.ts";
 
 /** Why the newest AI can't be launched yet, or null when it can. */
@@ -58,6 +59,10 @@ export function LaunchDialog({
   const [name, setName] = useState("");
   const [plans, setPlans] = useState<PlanId[]>(["free", "personal"]);
   const [days, setDays] = useState(Math.min(countdown.max, Math.max(countdown.min, 5)));
+  const [keynote, setKeynote] = useState<string | null>(null);
+  const catalog = useCatalog((s) => s.catalog);
+  // Three demo questions from different customer groups.
+  const demoQuestions = (catalog?.keynoteQuestions ?? []).filter((_, k) => k % 4 === 0).slice(0, 3);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -87,7 +92,7 @@ export function LaunchDialog({
       name: trimmed,
       plans: PLAN_IDS.filter((p) => plans.includes(p)),
       countdownDays: days,
-      keynote: null,
+      keynote: keynote ? { questionId: keynote } : null,
     });
     setBusy(false);
     if (r.ok) onClose();
@@ -154,6 +159,26 @@ export function LaunchDialog({
                 </label>
               );
             })}
+          </fieldset>
+          <fieldset className="space-y-1 text-sm">
+            <legend className="font-semibold">
+              {`Launch keynote (${formatMoney(getBalance(view.world.balance).economy.keynote.fee)})`}
+            </legend>
+            <p className="text-xs text-muted">
+              On stage, your AI answers one question live. The news quotes its real answer: a great
+              one makes a bigger launch, a bad one a flop.
+            </p>
+            {[null, ...demoQuestions].map((q) => (
+              <label key={q?.id ?? "none"} className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name="keynote"
+                  checked={keynote === (q?.id ?? null)}
+                  onChange={() => setKeynote(q?.id ?? null)}
+                />
+                <span className={q ? "player-text" : ""}>{q ? q.prompt : "No keynote"}</span>
+              </label>
+            ))}
           </fieldset>
           <label className="block text-sm">
             <span className="font-semibold">Countdown: {days} game days</span>

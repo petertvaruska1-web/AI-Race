@@ -290,6 +290,7 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
           stars: r.stars,
         })),
       })),
+    loved: c.loved,
     fund: { balance: c.fund.balance },
     showcases: c.showcases.map((x) => ({
       id: x.id,

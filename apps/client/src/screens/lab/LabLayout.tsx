@@ -66,7 +66,13 @@ export function Lab({ view }: { view: WorldView }) {
         <PrepareStep plan={plan} catalog={catalog} balance={balance} />
       )}
       {step === "design" && (
-        <DesignStep plan={plan} balance={balance} versions={versions} lent={lentToTraining(view)} />
+        <DesignStep
+          plan={plan}
+          balance={balance}
+          versions={versions}
+          lent={lentToTraining(view)}
+          loved={view.me.company?.loved ?? 0}
+        />
       )}
       {step === "train" && <TrainStep view={view} />}
       {step === "versions" && <VersionsStep view={view} onTrainFurther={() => setStep("data")} />}
@@ -85,8 +91,9 @@ function SummaryBar({ view, onStarted }: { view: WorldView; onStarted: () => voi
   if (!plan || !company) return null;
   const parent = company.versions.find((v) => v.id === plan.parentVersionId)?.shape ?? null;
   const lent = lentToTraining(view);
-  const preview = previewPlan(getBalance(view.world.balance), parent, plan, lent);
-  const rented = previewPlan(getBalance(view.world.balance), parent, plan);
+  const loved = company.loved;
+  const preview = previewPlan(getBalance(view.world.balance), parent, plan, lent, loved);
+  const rented = previewPlan(getBalance(view.world.balance), parent, plan, 0, loved);
   const saved =
     lent > 0 && preview.ok && rented.ok
       ? {
