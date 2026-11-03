@@ -11,6 +11,7 @@ import {
 } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
 import { campaignCommand } from "./campaigns.ts";
+import { newCompanyExtras } from "./companyExtras.ts";
 import { computeCommand, newCompute } from "./compute.ts";
 import { tellNews } from "./feed.ts";
 import { newLedger } from "./ledger.ts";
@@ -116,6 +117,7 @@ export function joinRivals(s: WorldState, raw: unknown): Handled {
       rescue: null,
       loan: null,
       ownership: 1,
+      ...newCompanyExtras(),
     };
     s.companies[id] = company;
     rivalPrices(s, company);

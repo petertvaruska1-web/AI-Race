@@ -1,11 +1,13 @@
+import { COST_CATEGORIES, INCOME_CATEGORIES } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
+import { newCompanyExtras } from "./companyExtras.ts";
 import type { WorldState } from "./state.ts";
 
 // Worlds saved by an older simulation, brought forward so they keep playing.
 // Each step only adds the newer fields with their starting values.
 
 /** The simulation versions `upgradeState` can bring forward. */
-export const UPGRADABLE = ["sim-3"] as const;
+export const UPGRADABLE = ["sim-3", "sim-4"] as const;
 export type UpgradableVersion = (typeof UPGRADABLE)[number];
 
 type Loose = Record<string, unknown>;
@@ -29,8 +31,39 @@ function fromSim3(s: Loose): Loose {
   return s;
 }
 
-export function upgradeState(state: unknown, from: UpgradableVersion): WorldState {
+/**
+ * A world saved by sim-4 (Phase 3) as sim-5: the playtest pack's company fields, the
+ * new money categories in every month, and the seq up to which inputs replay on the old rules.
+ */
+function fromSim4(s: Loose, legacyUntilSeq: number): Loose {
+  const companies = s.companies as Record<string, Loose>;
+  for (const c of Object.values(companies)) {
+    const extras = newCompanyExtras() as unknown as Loose;
+    for (const [k, v] of Object.entries(extras)) c[k] ??= v;
+    const ledger = c.ledger as { current: Loose; months: Loose[] };
+    for (const m of [...ledger.months, ledger.current]) {
+      const income = m.income as Record<string, number>;
+      const costs = m.costs as Record<string, number>;
+      for (const k of INCOME_CATEGORIES) income[k] ??= 0;
+      for (const k of COST_CATEGORIES) costs[k] ??= 0;
+    }
+  }
+  s.legacyUntilSeq ??= legacyUntilSeq;
+  return s;
+}
+
+/**
+ * Brings an older world forward. `legacyUntilSeq` is the last logged input that will be
+ * replayed on it: those inputs keep the old rules where the new ones would change money
+ * (they were accepted under them), so replay can't diverge.
+ */
+export function upgradeState(
+  state: unknown,
+  from: UpgradableVersion,
+  legacyUntilSeq?: number,
+): WorldState {
   const s = structuredClone(state) as Loose;
   if (from === "sim-3") fromSim3(s);
+  fromSim4(s, legacyUntilSeq ?? (s.seq as number));
   return s as unknown as WorldState;
 }

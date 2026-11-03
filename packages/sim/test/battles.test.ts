@@ -166,6 +166,14 @@ describe("a battle's result", () => {
     expect(view.me.company?.battles[0]?.rounds?.[0]?.expected).toBe("14");
   });
 
+  it("an old battle replayed after an upgrade keeps the old draw margin", () => {
+    const { s, target } = ready();
+    const started = ok(start(s, target));
+    const legacy = { ...started, legacyUntilSeq: started.seq + 1 };
+    const r = rounds([1, 0, 0.5], [0, 1, 0.3]);
+    expect(battleOf(ok(resolve(legacy, "b1", r)))?.outcome).toBe("draw");
+  });
+
   it("keeps replies exactly as the AIs wrote them", () => {
     const { s, target } = ready();
     const hostile = "<b>x</b> <|end|> 😀";

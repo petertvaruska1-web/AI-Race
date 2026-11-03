@@ -4,6 +4,7 @@ import {
   type FeedItemView,
   GROUP_IDS,
   type GroupId,
+  INCOME_CATEGORIES,
   LEAGUE_TABLES,
   type MonthLedgerView,
   PLAN_IDS,
@@ -16,12 +17,13 @@ import {
   REGION_IDS,
   type RegionId,
   type RunView,
+  type ShopView,
   type SpotlightView,
   type TrainingPlan,
   type VersionView,
   type WorldView,
 } from "@airace/protocol";
-import { adoptionShare, getBalance } from "./balance.ts";
+import { adoptionShare, type Balance, getBalance } from "./balance.ts";
 import { dateOfDay } from "./calendar.ts";
 import { ownedPflops } from "./compute.ts";
 import { leagueTables } from "./league.ts";
@@ -259,6 +261,19 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
       outcome: x.outcome,
       pointsChange: x.pointsChange,
     })),
+    showcases: c.showcases.map((x) => ({
+      id: x.id,
+      day: x.day,
+      game: x.game,
+      difficulty: x.difficulty,
+      productId: x.productId,
+      versionId: x.versionId,
+      productName: x.productName,
+      status: x.status,
+      score: x.score,
+      maxScore: x.maxScore,
+    })),
+    shop: shopView(getBalance(state.balance)),
     reports: c.reports.slice(-MONTHS_SHOWN).map((r) => ({
       ...r,
       growthByGroup: pick(GROUP_IDS, r.growthByGroup),
@@ -352,7 +367,7 @@ function pick<K extends string>(keys: readonly K[], from: Record<K, number>): Re
 function monthView(m: MonthLedger): MonthLedgerView {
   return {
     month: m.month,
-    income: { personal: m.income.personal, business: m.income.business },
+    income: pick(INCOME_CATEGORIES, m.income),
     costs: pick(COST_CATEGORIES, m.costs),
     revenueByGroup: pick(GROUP_IDS, m.revenueByGroup),
     revenueByPlan: pick(PLAN_IDS, m.revenueByPlan),
@@ -467,4 +482,10 @@ function labelNumber(v: VersionState): number {
 
 function cmp(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** What the playtest pack's purchases cost, so the client never hard-codes a price. */
+function shopView(b: Balance): ShopView {
+  const e = b.economy;
+  return { showcase: { fee: e.showcases.fee, cooldownDays: e.showcases.cooldownDays } };
 }

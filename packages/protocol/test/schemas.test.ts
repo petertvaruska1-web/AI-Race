@@ -7,6 +7,7 @@ import {
   cleanText,
   FeedItemView,
   GROUP_IDS,
+  INCOME_CATEGORIES,
   LEAGUE_TABLES,
   PLAN_IDS,
   REGION_IDS,
@@ -65,7 +66,7 @@ function sampleView(): WorldView {
   const shape = { nLayer: 4, dModel: 128, ctxLen: 256 };
   const month = {
     month: "2027-01",
-    income: { personal: 120, business: 0 },
+    income: { ...zeros(INCOME_CATEGORIES), personal: 120 },
     costs: { ...zeros(COST_CATEGORIES), training: 42000, serving: 3 },
     revenueByGroup: { ...zeros(GROUP_IDS), students: 120 },
     revenueByPlan: { ...zeros(PLAN_IDS), personal: 120 },
@@ -215,6 +216,8 @@ function sampleView(): WorldView {
         },
         rescue: { deadlineDay: 45 },
         loan: { balance: 120_000, principalPerMonth: 5000, monthlyRate: 0.04 },
+        showcases: [],
+        shop: { showcase: { fee: 20000, cooldownDays: 7 } },
         battles: [
           {
             id: "b1",

@@ -58,7 +58,14 @@ export const PlanId = z.enum(PLAN_IDS);
 export type PlanId = z.infer<typeof PlanId>;
 
 /** Ledger categories (game-layer design §8). Marketing, data centers and interest come in Phase 2. */
-export const INCOME_CATEGORIES = ["personal", "business"] as const;
+export const INCOME_CATEGORIES = [
+  "personal",
+  "business",
+  /** Partner apps' revenue share. */
+  "appRevenue",
+  /** What the investment fund gained (it stays in the fund until withdrawn). */
+  "investmentGains",
+] as const;
 export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
 export const COST_CATEGORIES = [
   "training",
@@ -68,6 +75,16 @@ export const COST_CATEGORIES = [
   "dataCenterBuild",
   "dataCenterUpkeep",
   "interest",
+  /** Launch keynotes and showcases. */
+  "events",
+  "sponsorships",
+  "looks",
+  /** Partner apps' setup and upkeep. */
+  "appCosts",
+  /** What the investment fund lost. */
+  "investmentLosses",
+  /** Office and support, which grow with the company (C35). */
+  "overhead",
 ] as const;
 export type CostCategory = (typeof COST_CATEGORIES)[number];
 
@@ -83,6 +100,10 @@ export const NEWS_TOPICS = [
   "battle",
   "ranking",
   "trashTalk",
+  "showcase",
+  "keynote",
+  "sponsorship",
+  "app",
 ] as const;
 export type NewsTopic = (typeof NEWS_TOPICS)[number];
 /** A customer post's tone, picked from its reply's score. */

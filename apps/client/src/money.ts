@@ -5,6 +5,8 @@ import type { CostCategory, IncomeCategory, MonthLedgerView } from "@airace/prot
 export const INCOME_NAMES: Record<IncomeCategory, string> = {
   personal: "Personal plans",
   business: "Business plans",
+  appRevenue: "Partner apps",
+  investmentGains: "Investment gains",
 };
 
 export const COST_NAMES: Record<CostCategory, string> = {
@@ -15,6 +17,12 @@ export const COST_NAMES: Record<CostCategory, string> = {
   dataCenterBuild: "Building data centers",
   dataCenterUpkeep: "Data center upkeep",
   interest: "Loan interest",
+  events: "Keynotes and showcases",
+  sponsorships: "Sponsorships",
+  looks: "Looks",
+  appCosts: "Partner app costs",
+  investmentLosses: "Investment losses",
+  overhead: "Office and support",
 };
 
 export const MONEY_WHAT: Record<IncomeCategory | CostCategory, string> = {
@@ -28,6 +36,14 @@ export const MONEY_WHAT: Record<IncomeCategory | CostCategory, string> = {
   dataCenterBuild: "Building your own data centers, paid when building starts.",
   dataCenterUpkeep: "Running your data centers: power, staff and repairs.",
   interest: "Interest on an emergency loan, paid at each month's end.",
+  appRevenue: "Your share of what your partner apps earned.",
+  investmentGains: "What your investment fund gained at month ends. It stays in the fund.",
+  events: "Launch keynotes and live showcases on stage.",
+  sponsorships: "Putting your name on stadiums, conferences and festivals.",
+  looks: "Orb styles and logo motions you bought.",
+  appCosts: "Setting up partner apps, and their monthly running costs.",
+  investmentLosses: "What your investment fund lost in a bad month.",
+  overhead: "Offices, support staff and admin. The bigger the company, the bigger the bill.",
 };
 
 export const total = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);

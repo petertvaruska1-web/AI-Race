@@ -36,6 +36,7 @@ export function createWorld(p: {
     companies: {},
     inviteCode: p.inviteCode,
     seq: 0,
+    legacyUntilSeq: 0,
     rivals: null,
     leaders: {},
     lastRankingNews: {},
@@ -45,6 +46,15 @@ export function createWorld(p: {
     feed: [],
     feedSeq: 0,
   };
+}
+
+/**
+ * Whether the input being applied was logged by an older simulation (an upgraded world
+ * replaying its log): rules that changed how money moves keep their old values for it.
+ * The input being applied will get seq `s.seq + 1`.
+ */
+export function onLegacyRules(s: WorldState): boolean {
+  return s.seq < (s.legacyUntilSeq ?? 0);
 }
 
 /** The host while online, else the earliest-joined online member (C1), else null. */

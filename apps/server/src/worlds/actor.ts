@@ -82,14 +82,19 @@ export class WorldActor {
           "It can't be replayed safely; start it with a matching server version.",
       );
     }
-    let state = upgradable
-      ? upgradeState(snap.state, snap.simVersion as UpgradableVersion)
-      : (snap.state as WorldState);
     const inputs = await ctx.db
       .select({ seq: schema.worldInputs.seq, payload: schema.worldInputs.payload })
       .from(schema.worldInputs)
       .where(and(eq(schema.worldInputs.worldId, worldId), gt(schema.worldInputs.seq, snap.seq)))
       .orderBy(asc(schema.worldInputs.seq));
+    // Inputs the older simulation logged replay on its rules where the new ones touch money.
+    let state = upgradable
+      ? upgradeState(
+          snap.state,
+          snap.simVersion as UpgradableVersion,
+          inputs.at(-1)?.seq ?? snap.seq,
+        )
+      : (snap.state as WorldState);
     for (const row of inputs) {
       const r = step(state, row.payload as Input);
       if (!r.ok || r.state.seq !== row.seq) {

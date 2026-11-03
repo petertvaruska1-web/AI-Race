@@ -1,12 +1,16 @@
 import type {
+  AppKind,
   Archetype,
   BattleSkill,
   Command,
   CostCategory,
+  Difficulty,
+  GameId,
   GroupId,
   IncomeCategory,
   LeagueTable,
   Logo,
+  MinigameSettings,
   NewsTopic,
   Palette,
   PlanId,
@@ -17,6 +21,7 @@ import type {
   RivalStyle,
   RunStatus,
   Speed,
+  SponsorKind,
   TrainingPlan,
   TrainingPreview,
 } from "@airace/protocol";
@@ -88,6 +93,8 @@ export type ProductState = {
   launchPlans: PlanId[];
   /** Feedback batches already applied (the last 20), so a result is never counted twice. */
   feedbackKeys: string[];
+  /** The launch keynote, if one was booked (absent before sim-5). */
+  keynote?: KeynoteState | null;
 };
 
 export type PlansState = {
@@ -273,6 +280,66 @@ export type RivalState = {
 };
 
 /** One round of a battle: the challenge and both AIs' real replies with their scores (R1). */
+/** A showcase: a minigame played live for the press (playtest pack §4.3). */
+export type ShowcaseState = {
+  id: string;
+  day: number;
+  game: GameId;
+  difficulty: Difficulty;
+  settings: MinigameSettings;
+  productId: string;
+  versionId: string;
+  productName: string;
+  seed: number;
+  status: "running" | "done" | "calledOff";
+  score: number | null;
+  maxScore: number | null;
+};
+
+/** Looks the company owns and wears (playtest pack §5). */
+export type LooksState = { owned: string[]; orb: string; logo: string };
+
+export type SponsorshipState = {
+  id: string;
+  region: RegionId;
+  kind: SponsorKind;
+  startDay: number;
+  endDay: number;
+};
+
+export type AppReviewState = {
+  day: number;
+  prompt: string;
+  reply: string;
+  score: number;
+  stars: number;
+};
+
+/** A partner app built on one of the company's products. */
+export type AppState = {
+  id: string;
+  kind: AppKind;
+  productId: string;
+  startDay: number;
+  users: number;
+  /** 1-5 stars, from its reviews (3 until the first ones). */
+  rating: number;
+  status: "live" | "closed";
+  /** The last reviews, newest last. */
+  reviews: AppReviewState[];
+  /** Review batches already applied, so a result is never counted twice. */
+  reviewKeys: string[];
+};
+
+/** The launch keynote's live demo, before and after it happens. */
+export type KeynoteState = {
+  questionId: string;
+  status: "waiting" | "done" | "failed";
+  result: { prompt: string; reply: string; score: number } | null;
+  /** Whether its effect on the launch has been applied. */
+  applied: boolean;
+};
+
 export type BattleRound = {
   prompt: string;
   /** The right answer, shown under the replies (none for a story; absent before sim-5). */
@@ -334,6 +401,15 @@ export type CompanyState = {
   loan: { balance: number; principalPerMonth: number } | null;
   /** The founders' share of the company (1 = all of it); investor rescues take part. */
   ownership: number;
+  /** The last showcases, newest last. */
+  showcases: ShowcaseState[];
+  looks: LooksState;
+  sponsorships: Record<string, SponsorshipState>;
+  apps: Record<string, AppState>;
+  /** The investment fund: money moved out of cash, earning or losing at month ends. */
+  fund: { balance: number };
+  /** Feedback replies customers loved (score 0.75 or more), up to 400; the server keeps their text. */
+  loved: number;
 };
 
 export type WorldState = {
@@ -351,6 +427,11 @@ export type WorldState = {
   inviteCode: string;
   /** Accepted inputs so far. */
   seq: number;
+  /**
+   * Inputs up to this one were logged by an older simulation and replay on its rules
+   * (an upgraded world); 0 for a world made by this one.
+   */
+  legacyUntilSeq: number;
   /** Null until rivals join (they need the rival pack). */
   rivals: { joinedDay: number; archId: string; archPassed: boolean } | null;
   /** Each league table's leader, and the day its last #1 story ran. */
@@ -383,6 +464,17 @@ export type SystemEvent =
   | { type: "rivalsJoined"; pack: RivalPack }
   | { type: "battleResolved"; battleId: string; rounds: BattleRound[] }
   | { type: "battleResolved"; battleId: string; failed: true }
+  | { type: "showcaseResolved"; showcaseId: string; score: number; maxScore: number }
+  | { type: "showcaseResolved"; showcaseId: string; failed: true }
+  | { type: "keynoteResolved"; productId: string; prompt: string; reply: string; score: number }
+  | { type: "keynoteResolved"; productId: string; failed: true }
+  | {
+      type: "appReviewed";
+      appId: string;
+      /** "w12": the week's batch, so a result is applied once. */
+      key: string;
+      reviews: { prompt: string; reply: string; score: number }[];
+    }
   | {
       type: "feedbackScored";
       productId: string;

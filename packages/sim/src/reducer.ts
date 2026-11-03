@@ -2,6 +2,7 @@ import { Command, TEXT_LIMITS } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
 import { applyBattle, battleCommand } from "./battles.ts";
 import { campaignCommand, campaignsDay } from "./campaigns.ts";
+import { newCompanyExtras } from "./companyExtras.ts";
 import { computeCommand, computeDay, dataCentersDay, newCompute } from "./compute.ts";
 import { fameDay } from "./fame.ts";
 import { applyFeedback, newsDay } from "./feed.ts";
@@ -14,6 +15,7 @@ import { newCompanyBusiness, productCommand, productsDay } from "./products.ts";
 import { rescueCommand, rescueDay } from "./rescue.ts";
 import { joinRivals, rivalsDay } from "./rivals.ts";
 import { rngInt } from "./rng.ts";
+import { applyShowcase, showcaseCommand } from "./showcases.ts";
 import type { Input, StepResult, SystemEvent, WorldState } from "./state.ts";
 import {
   activeRun,
@@ -152,6 +154,8 @@ function system(s: WorldState, e: SystemEvent): Handled {
       return joinRivals(s, e.pack);
     case "battleResolved":
       return applyBattle(s, e);
+    case "showcaseResolved":
+      return applyShowcase(s, e);
     default:
       return no("This event isn't supported yet.");
   }
@@ -209,6 +213,7 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
         rescue: null,
         loan: null,
         ownership: 1,
+        ...newCompanyExtras(),
       };
       member.companyId = newId;
       return OK;
@@ -284,6 +289,11 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       const company = member.companyId ? s.companies[member.companyId] : undefined;
       if (!company) return no("Found your company first.");
       return computeCommand(s, company, cmd, newId);
+    }
+    case "startShowcase": {
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("Found your company first.");
+      return showcaseCommand(s, company, cmd, newId);
     }
     case "startBattle": {
       const company = member.companyId ? s.companies[member.companyId] : undefined;

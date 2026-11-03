@@ -148,7 +148,7 @@ describe("recovery", () => {
     expect(again.state().day).toBe(live.day + 1);
   });
 
-  it("upgrades a world saved by sim-3 (Phase 2), replays it and saves it as sim-4", async () => {
+  it("upgrades a world saved by sim-3 (Phase 2), replays it and saves it as sim-5", async () => {
     server = await startTestServer({ balance: "balance-v2" });
     const { userId, worldId, actor } = await runningWorld(server);
     await actor.snapshot("test");
@@ -163,6 +163,7 @@ describe("recovery", () => {
       companies: Record<string, Record<string, unknown>>;
     };
     delete old.rivals;
+    delete old.legacyUntilSeq;
     for (const c of Object.values(old.companies)) {
       delete c.rival;
       delete c.startCash;
@@ -190,7 +191,9 @@ describe("recovery", () => {
       .select({ v: schema.worldSnapshots.simVersion })
       .from(schema.worldSnapshots)
       .where(eq(schema.worldSnapshots.worldId, worldId));
-    expect(versions.map((r) => r.v)).toContain("sim-4");
+    expect(versions.map((r) => r.v)).toContain("sim-5");
+    // The input logged after the old snapshot replayed on the old rules.
+    expect(s.legacyUntilSeq).toBeGreaterThan(row?.seq ?? 0);
   });
 
   it("refuses a snapshot from another simulation version", async () => {

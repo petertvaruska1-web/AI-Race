@@ -152,6 +152,16 @@ export type Economy = {
     followers: { win: number; loss: number };
     kept: number;
   };
+  /** Playground games played live for the press (playtest pack §4.3). */
+  showcases: {
+    fee: number;
+    cooldownDays: number;
+    /** Followers × (1 + followers × (2p − 1)) for a run that got a share p of the way. */
+    followers: number;
+    /** Below this share of the way, the news says it stumbled. */
+    stumble: number;
+    kept: number;
+  };
 };
 
 export type RivalBalance = {
@@ -468,6 +478,8 @@ const ECONOMY_V2: Economy = {
     followers: { win: 0.05, loss: -0.02 },
     kept: 20,
   },
+  // A showcase costs four battles: it is a press event, and a great run gains 8% followers.
+  showcases: { fee: 20_000, cooldownDays: 7, followers: 0.08, stumble: 0.3, kept: 20 },
 };
 
 export const BALANCE_V2: Balance = {
@@ -518,6 +530,7 @@ export const BALANCE_TEST: Balance = {
       trashTalkGapDays: 2,
     },
     battles: { ...ECONOMY_V2.battles, rounds: 3, cooldownDays: 2 },
+    showcases: { ...ECONOMY_V2.showcases, cooldownDays: 2 },
   },
 };
 

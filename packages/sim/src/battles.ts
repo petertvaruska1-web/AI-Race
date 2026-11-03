@@ -14,6 +14,7 @@ import type {
 } from "./state.ts";
 import { formatMoney } from "./training.ts";
 import { trashTalk } from "./trashTalk.ts";
+import { onLegacyRules } from "./world.ts";
 
 // Battles (game-layer design §10): the player's AI and a rival's answer the same
 // fresh challenges; real replies decide the result, which moves ranking points
@@ -24,6 +25,9 @@ const OK: Handled = { ok: true };
 const no = (reason: string): Handled => ({ ok: false, reason });
 
 type StartBattle = Extract<Command, { type: "startBattle" }>;
+
+/** The draw margin before near misses got partial credit (sim-4), for replayed old battles. */
+const LEGACY_DRAW_MARGIN = 0.25;
 
 function liveRivalProduct(
   s: WorldState,
@@ -162,7 +166,7 @@ export function applyBattle(
   e: Extract<SystemEvent, { type: "battleResolved" }>,
 ): Handled {
   const found = findBattle(s, e.battleId);
-  if (!found || found.battle.status !== "running") return no("This battle is over.");
+  if (found?.battle.status !== "running") return no("This battle is over.");
   const { company, battle } = found;
   const b = getBalance(s.balance).economy.battles;
   if ("failed" in e && e.failed) {
@@ -186,7 +190,8 @@ export function applyBattle(
     if (r.mine.score < r.theirs.score) losses += 1;
     total += r.mine.score - r.theirs.score;
   }
-  const outcome = total > b.drawMargin ? "win" : total < -b.drawMargin ? "loss" : "draw";
+  const margin = onLegacyRules(s) ? LEGACY_DRAW_MARGIN : b.drawMargin;
+  const outcome = total > margin ? "win" : total < -margin ? "loss" : "draw";
   battle.status = "done";
   battle.outcome = outcome;
 

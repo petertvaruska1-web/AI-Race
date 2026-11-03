@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Difficulty, GameId } from "./minigames.ts";
 import { ARCHETYPES, RIVAL_STYLES } from "./rivals.ts";
 import { Day, zId } from "./text.ts";
 import {
@@ -331,6 +332,27 @@ export const BattleView = z.strictObject({
 });
 export type BattleView = z.infer<typeof BattleView>;
 
+/** A showcase: a Playground game played live for the press. */
+export const ShowcaseView = z.strictObject({
+  id: zId,
+  day: Day,
+  game: GameId,
+  difficulty: Difficulty,
+  productId: zId,
+  versionId: zId,
+  productName: z.string(),
+  status: z.enum(["running", "done", "calledOff"]),
+  score: z.number().nullable(),
+  maxScore: z.number().nullable(),
+});
+export type ShowcaseView = z.infer<typeof ShowcaseView>;
+
+/** What the playtest pack's purchases cost, from the world's balance. */
+export const ShopView = z.strictObject({
+  showcase: z.strictObject({ fee: z.number().int(), cooldownDays: z.number().int() }),
+});
+export type ShopView = z.infer<typeof ShopView>;
+
 export const PrivateCompany = z.strictObject({
   id: zId,
   cash: z.number().int(),
@@ -356,6 +378,9 @@ export const PrivateCompany = z.strictObject({
   dataCenters: z.array(DataCenterView),
   /** The last 20 battles, newest last. */
   battles: z.array(BattleView),
+  /** The last 20 showcases, newest last. */
+  showcases: z.array(ShowcaseView),
+  shop: ShopView,
   /** The last 12 report cards, newest last. */
   reports: z.array(ReportCardView).max(12),
   /** A rescue offer waiting for a choice, until its deadline. */
