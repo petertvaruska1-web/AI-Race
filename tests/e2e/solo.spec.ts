@@ -197,7 +197,7 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
 
   // 23. Playtest pack: the fund takes money out of cash and shows it.
   await page.getByLabel("Amount").fill("1000");
-  await page.getByRole("button", { name: "Invest" }).click();
+  await page.getByRole("button", { name: "Invest", exact: true }).click();
   await expect(page.getByTestId("fund")).toHaveText("$1,000");
 
   // 24. A logo motion is bought from the Company screen's Customize window.

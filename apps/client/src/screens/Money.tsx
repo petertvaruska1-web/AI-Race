@@ -66,7 +66,7 @@ export function Money({ view }: { view: WorldView }) {
             By plan
           </h3>
           <Bars
-            rows={INCOME_CATEGORIES.map((c) => ({
+            rows={PLAN_INCOME.map((c) => ({
               label: INCOME_NAMES[c],
               value: now.income[c],
               color: c === "business" ? "var(--brand-2)" : undefined,
@@ -74,6 +74,23 @@ export function Money({ view }: { view: WorldView }) {
               onOpen: (el) => open({ kind: "income", category: c }, el),
             }))}
           />
+          {INCOME_CATEGORIES.some((c) => !used(c, "plan") && now.income[c] > 0) && (
+            <>
+              <h3 className="mt-5 mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+                Other income
+              </h3>
+              <Bars
+                rows={INCOME_CATEGORIES.filter((c) => !used(c, "plan") && now.income[c] > 0).map(
+                  (c) => ({
+                    label: INCOME_NAMES[c],
+                    value: now.income[c],
+                    testId: `income-${c}`,
+                    onOpen: (el) => open({ kind: "income", category: c }, el),
+                  }),
+                )}
+              />
+            </>
+          )}
           <h3 className="mt-5 mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
             By customer group
           </h3>
@@ -112,7 +129,9 @@ export function Money({ view }: { view: WorldView }) {
           />
           <div className="mt-5">
             <Bars
-              rows={COST_CATEGORIES.map((c) => ({
+              rows={COST_CATEGORIES.filter(
+                (c) => !OPTIONAL_COSTS.has(c) || now.costs[c] > 0 || (last?.costs[c] ?? 0) > 0,
+              ).map((c) => ({
                 label: COST_NAMES[c],
                 value: now.costs[c],
                 color: "var(--danger)",
@@ -384,3 +403,15 @@ function PlanRow({
     </div>
   );
 }
+
+/** What the plans earn; other income (apps, the fund) is listed apart once there is some. */
+const PLAN_INCOME = ["personal", "business"] as const;
+const used = (c: string, _as: "plan") => (PLAN_INCOME as readonly string[]).includes(c);
+/** Money lines that only appear once the company spends on them. */
+const OPTIONAL_COSTS = new Set<string>([
+  "events",
+  "sponsorships",
+  "looks",
+  "appCosts",
+  "investmentLosses",
+]);
