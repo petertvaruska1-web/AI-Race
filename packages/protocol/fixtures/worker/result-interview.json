@@ -1,0 +1,15 @@
+{
+  "schema": "InterviewJobResult",
+  "message": {
+    "answers": [
+      {
+        "score": 0.72,
+        "checked": false
+      },
+      {
+        "score": 0.4,
+        "checked": false
+      }
+    ]
+  }
+}

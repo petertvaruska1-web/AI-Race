@@ -7,7 +7,7 @@ import { DATASET_IDS, type DatasetId, GroupId } from "./world.ts";
 
 export const CLEANING_LEVELS = ["light", "standard", "thorough", "expert"] as const;
 /** The catalog version the server reads (the dev launcher rewrites an older one). */
-export const CATALOG_VERSION = "catalog-v2";
+export const CATALOG_VERSION = "catalog-v3";
 
 /** One way to prepare a dataset: `${cleaning}|${dedup ? 1 : 0}|${factCheck ? 1 : 0}`. */
 export const PREP_KEYS = CLEANING_LEVELS.flatMap((c) =>
@@ -65,6 +65,10 @@ export const Catalog = z
     keynoteQuestions: z
       .array(z.object({ id: z.string().min(1), group: GroupId, prompt: z.string().min(1) }))
       .min(1),
+    /** Interview prompt cards; `checked` ones have a right answer. Older catalogs have none. */
+    interviewCards: z
+      .array(z.object({ id: z.string().min(1), prompt: z.string().min(1), checked: z.boolean() }))
+      .default([]),
     referenceTraits: z.array(z.record(z.string(), z.number())),
   })
   .refine(

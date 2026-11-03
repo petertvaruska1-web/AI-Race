@@ -14,7 +14,32 @@
           "curious": 0.42,
           "brief": 0.31
         }
-      ]
+      ],
+      "previous": {
+        "label": "Spark 1",
+        "breakdown": {
+          "knowledge/topic:animals": [40, 21]
+        },
+        "traits": {
+          "verbosity": 0.3
+        }
+      },
+      "peers": [
+        {
+          "breakdown": {
+            "knowledge/topic:animals": [30, 21]
+          },
+          "traits": {
+            "verbosity": 0.4
+          }
+        }
+      ],
+      "thresholds": {
+        "minPoints": 25,
+        "minZ": 2,
+        "minPeers": 3,
+        "perEval": 3
+      }
     }
   }
 }

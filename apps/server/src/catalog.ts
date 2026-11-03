@@ -28,5 +28,6 @@ export function publicCatalog(c: Catalog): PublicCatalog {
     suite: c.suite,
     datasets: c.datasets,
     keynoteQuestions: c.keynoteQuestions,
+    interviewCards: c.interviewCards,
   };
 }

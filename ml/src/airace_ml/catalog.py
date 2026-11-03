@@ -24,7 +24,7 @@ from airace_ml.evals.suite import SUITE_VERSION
 from airace_ml.paths import TOKENIZER_VERSION, corpus_dir, tokenizer_path
 from airace_ml.tokenizer import Tok
 
-CATALOG_VERSION = "catalog-v2"  # v2: Fact-check plus pools, keynote questions
+CATALOG_VERSION = "catalog-v3"  # v2: Fact-check plus pools, keynote questions; v3: interview cards
 FINGERPRINT_FILE = "gate_fingerprint.json"
 MAX_SAMPLE_CHARS = 600
 SAMPLES = 5
@@ -177,6 +177,7 @@ def build_catalog(root: Path, population_dirs: Sequence[Path] = ()) -> dict:
     return {
         "version": CATALOG_VERSION,
         "keynoteQuestions": keynote_questions(),
+        "interviewCards": interview_cards_json(),
         "dataIdentity": data_identity(root),
         "tokenizer": TOKENIZER_VERSION,
         "suite": SUITE_VERSION,
@@ -205,6 +206,13 @@ def write_catalog(
     )
     tmp.replace(out)
     return out
+
+
+def interview_cards_json() -> list[dict]:
+    """The interview prompt cards a player can ask their AI in front of the press."""
+    from airace_ml.interviews import interview_cards
+
+    return [{"id": c.id, "prompt": c.prompt, "checked": c.checked} for c in interview_cards()]
 
 
 def keynote_questions() -> list[dict]:

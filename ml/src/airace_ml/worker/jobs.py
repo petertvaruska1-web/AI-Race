@@ -11,6 +11,7 @@
 * ``minigame``: one or two AIs play a Playground game, step by step (``minigames/run.py``).
 * ``keynote``: the product's AI answers its launch keynote's demo question, live.
 * ``appReview``: a partner app's users try the AI on fresh questions in the app's skill.
+* ``interview``: score the answers a player published from an interview (no player model).
 
 The model's words are passed on exactly as generated (R1).
 """
@@ -27,11 +28,13 @@ import torch
 
 from airace_ml.battles import battle_challenges, battle_prompt, expected_answer, score_challenge
 from airace_ml.data.identity import data_identity
+from airace_ml.discoveries import eval_signals, find_discoveries
 from airace_ml.evals.creativity import score_story
 from airace_ml.evals.judge import Judge, check_judge_provenance
 from airace_ml.evals.novelty import NoveltyIndex, check_index_provenance
 from airace_ml.evals.suite import run_benchmarks, score_reply
 from airace_ml.feedback import GROUPS, customer_pool, pick_questions
+from airace_ml.interviews import score_answer
 from airace_ml.minigames.content import game_items
 from airace_ml.minigames.run import play
 from airace_ml.paths import judge_dir, novelty_path, tokenizer_path
@@ -45,6 +48,7 @@ from airace_ml.worker.blobs import download_tar, upload_dir_tar
 from airace_ml.worker.models import ModelCache
 
 log = logging.getLogger("airace.worker")
+MAX_INTERVIEW_ANSWERS = 5
 
 
 def _finite(x: float | None) -> float | None:
@@ -93,6 +97,7 @@ class JobRunner:
             "minigame": self.handle_minigame,
             "keynote": self.handle_keynote,
             "appReview": self.handle_app_review,
+            "interview": self.handle_interview,
         }
 
     # -- train -------------------------------------------------------------------------------------
@@ -164,6 +169,7 @@ class JobRunner:
     def handle_eval(self, spec: dict[str, Any], ctx: JobContext) -> dict[str, Any]:
         lm, lock = self.models.get(_spec_str(spec, "versionId"), _spec_str(spec, "modelTarUrl"))
         judge, index = self.creativity_tools()
+        legibility_judge = judge  # well-formed replies need only the judge
         if judge is None or index is None:
             judge = index = None  # creativity needs both
         with lock:
@@ -171,16 +177,25 @@ class JobRunner:
                 lm, lm.tok, judge=judge, novelty=index, max_items_per_category=self.bench_max_items
             )
             fp = measure_fingerprint(lm, lm.tok)
+            signals = eval_signals(report, fp, legibility_judge)
         population = []
         for traits in spec.get("population") or []:
             try:
                 population.append(Fingerprint.from_dict({"traits": traits, "samples": []}))
             except (TypeError, ValueError):
                 continue  # traits from another version of the measure: not comparable
+        previous = spec.get("previous")
+        peers = [p for p in spec.get("peers") or [] if isinstance(p, dict)]
+        thresholds = spec.get("thresholds") or {}
         return {
             "report": report.to_dict(),
             "traits": dict(fp.traits),
             "personalityWords": describe(fp, population),
+            "signals": signals,
+            "breakdown": {key: [value, n] for key, (value, n) in report.tag_breakdown().items()},
+            "discoveries": find_discoveries(
+                report, fp, previous if isinstance(previous, dict) else None, peers, thresholds
+            ),
         }
 
     # -- generate ----------------------------------------------------------------------------------
@@ -316,6 +331,24 @@ class JobRunner:
             ),
         )
         return {"sides": result}
+
+    # -- interview ---------------------------------------------------------------------------------
+
+    def handle_interview(self, spec: dict[str, Any], ctx: JobContext | None) -> dict[str, Any]:
+        """Scores each published answer: by its card's check when it has a right answer, else for
+        how fluently it reads (with the judge when one is installed)."""
+        answers = spec.get("answers")
+        if not isinstance(answers, list) or not 1 <= len(answers) <= MAX_INTERVIEW_ANSWERS:
+            raise ValueError("the interview spec needs 1 to 5 answers")
+        judge, _ = self.creativity_tools()
+        scored = []
+        for answer in answers:
+            card = answer.get("cardId")
+            score, checked = score_answer(
+                card if isinstance(card, str) else None, str(answer.get("reply", "")), judge
+            )
+            scored.append({"score": min(max(score, 0.0), 1.0), "checked": checked})
+        return {"answers": scored}
 
     # -- keynote -----------------------------------------------------------------------------------
 

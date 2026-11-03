@@ -137,7 +137,38 @@ def test_eval_scores_every_category_and_describes_the_personality(runner, traine
     assert "creativity" in report["missing"]  # the tiny data root has no judge
     assert isinstance(out["personalityWords"], list)
     assert out["traits"] and all(isinstance(v, float) for v in out["traits"].values())
+    # An old-style spec (no previous version, no peers) still reports signals and a breakdown.
+    assert out["signals"]["legibleReplies"] is None  # no judge: legibility unknown
+    assert out["signals"]["correctFacts"] >= 0 and out["signals"]["passingPrograms"] >= 0
+    assert isinstance(out["breakdown"], dict) and out["discoveries"] == []
+    fixture = json.loads((RESULT_FIXTURES / "result-eval.json").read_text())["message"]
+    assert set(out) == set(fixture)
     json.dumps(out, allow_nan=False)
+
+
+def test_eval_compares_with_the_previous_version(runner, trained, tmp_path):
+    url, *_ = trained
+    rec = Recorder(tmp_path)
+    spec = {"versionId": "v-a", "modelTarUrl": f"{url}/blobs/a.tar", "population": []}
+    first = runner.handle_eval(spec, rec.ctx)
+    # The previous version was far more of everything; three peers set the scale.
+    previous = {t: v + 100 for t, v in first["traits"].items()}
+    peers = [
+        {"breakdown": {}, "traits": {t: v + d for t, v in first["traits"].items()}}
+        for d in (-0.1, 0.0, 0.1)
+    ]
+    second = runner.handle_eval(
+        {
+            **spec,
+            "previous": {"label": "Spark 1", "breakdown": {}, "traits": previous},
+            "peers": peers,
+            "thresholds": {"minPoints": 25, "minZ": 2, "minPeers": 3, "perEval": 3},
+        },
+        rec.ctx,
+    )
+    found = second["discoveries"]
+    assert len(found) == 3
+    assert all(d["kind"] == "changed" and d["title"].endswith("than Spark 1") for d in found)
 
 
 def test_generate_streams_the_reply_and_downloads_a_model_once(runner, trained, tmp_path):
@@ -319,3 +350,20 @@ def test_an_app_review_asks_fresh_questions_in_its_skill(runner, trained):
     result = runner.handle_app_review(spec, None)
     assert len(result["reviews"]) == 2
     assert all(0.0 <= r["score"] <= 1.0 and isinstance(r["reply"], str) for r in result["reviews"])
+
+
+def test_interview_scores_published_answers_without_a_model(runner, tmp_path):
+    lease = json.loads((RESULT_FIXTURES / "lease-interview.json").read_text())["message"]
+    fixture = json.loads((RESULT_FIXTURES / "result-interview.json").read_text())["message"]
+    downloads = runner.models.downloads
+    out = runner.handle_interview(lease["spec"], Recorder(tmp_path).ctx)
+    assert runner.models.downloads == downloads  # no model is loaded
+    assert len(out["answers"]) == len(lease["spec"]["answers"])
+    assert all(set(a) == set(fixture["answers"][0]) for a in out["answers"])
+    assert all(0 <= a["score"] <= 1 and a["checked"] is False for a in out["answers"])
+    json.dumps(out, allow_nan=False)
+
+
+def test_interview_refuses_an_empty_spec(runner, tmp_path):
+    with pytest.raises(ValueError, match="answers"):
+        runner.handle_interview({"interviewId": "x", "answers": []}, Recorder(tmp_path).ctx)

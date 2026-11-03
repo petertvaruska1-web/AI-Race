@@ -123,7 +123,7 @@ def test_conversations_read_as_turns(tiny_tok):
 def test_writes_to_the_data_root_by_default(tiny_data_root):
     path = write_catalog(tiny_data_root)
     assert path == Path(tiny_data_root) / "catalog" / "v1" / "catalog.json"
-    assert json.loads(path.read_text(encoding="utf-8"))["version"] == "catalog-v2"
+    assert json.loads(path.read_text(encoding="utf-8"))["version"] == "catalog-v3"
 
 
 def test_cli_exports_the_catalog(tiny_data_root, tmp_path, capsys):
@@ -150,6 +150,15 @@ def test_the_catalog_describes_fact_check_plus_and_keynote_questions(tiny_data_r
     cards = catalog["keynoteQuestions"]
     assert {c["group"] for c in cards} == set(GROUPS)
     assert all(c["id"] and c["prompt"] for c in cards)
+
+
+def test_the_catalog_carries_the_interview_cards(tiny_data_root):
+    from airace_ml.interviews import interview_cards
+
+    catalog = build_catalog(tiny_data_root)
+    assert catalog["interviewCards"] == [
+        {"id": c.id, "prompt": c.prompt, "checked": c.checked} for c in interview_cards()
+    ]
 
 
 def test_fact_check_plus_keeps_less_than_thorough_cleaning_and_forces_both_checks(tiny_data_root):

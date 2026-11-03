@@ -12,6 +12,7 @@ from typing import Any, Literal
 JobType = Literal["train", "eval", "generate"]
 JOB_TYPES: tuple[str, ...] = (
     "train", "eval", "generate", "feedback", "battle", "minigame", "keynote", "appReview",
+    "interview",
 )  # fmt: skip
 VERSION = 1
 

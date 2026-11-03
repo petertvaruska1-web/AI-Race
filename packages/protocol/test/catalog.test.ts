@@ -12,6 +12,15 @@ describe("Catalog", () => {
     expect(c.datasets.map((d) => d.title)).toEqual(DATASET_IDS.map((id) => DATASET_TITLES[id]));
   });
 
+  it("carries the interview prompt cards, and reads an older catalog without them", () => {
+    const c = Catalog.parse(sample());
+    expect(c.interviewCards.length).toBeGreaterThan(0);
+    expect(c.interviewCards.some((card) => card.checked)).toBe(true);
+    const older = sample();
+    delete older.interviewCards;
+    expect(Catalog.parse(older).interviewCards).toEqual([]);
+  });
+
   it("knows the 16 ways to prepare a dataset (Fact-check plus among them)", () => {
     expect(PREP_KEYS).toHaveLength(16);
     expect(new Set(PREP_KEYS).size).toBe(16);

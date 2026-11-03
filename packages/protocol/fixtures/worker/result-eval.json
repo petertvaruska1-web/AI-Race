@@ -23,6 +23,30 @@
     "traits": {
       "curious": 0.4
     },
-    "personalityWords": ["curious", "brief"]
+    "personalityWords": ["curious", "brief"],
+    "signals": {
+      "legibleReplies": null,
+      "correctFacts": 3,
+      "passingPrograms": 0
+    },
+    "breakdown": {
+      "knowledge/topic:animals": [72, 21]
+    },
+    "discoveries": [
+      {
+        "key": "knowledge/topic:animals",
+        "kind": "better",
+        "about": "facts about animals",
+        "title": "Much better at facts about animals than Spark 1",
+        "category": "knowledge",
+        "tag": "topic:animals",
+        "value": 72,
+        "compared": 40,
+        "evidence": {
+          "prompt": "Question: Which group of animals does the newt belong to?\nAnswer:",
+          "reply": " amphibians"
+        }
+      }
+    ]
   }
 }

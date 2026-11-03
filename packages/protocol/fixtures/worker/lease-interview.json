@@ -1,0 +1,25 @@
+{
+  "schema": "ServerToWorker",
+  "message": {
+    "v": 1,
+    "type": "lease",
+    "jobId": "9b2f6c1a-1d2e-4f3a-8b4c-5d6e7f8a9b0c",
+    "jobType": "interview",
+    "leaseMs": 30000,
+    "spec": {
+      "interviewId": "3d6f4a2b-7c8d-4e9f-a0b1-c2d3e4f5a6b7",
+      "answers": [
+        {
+          "cardId": "interview-open-02",
+          "question": "Tell us a joke.",
+          "reply": "Why did the robot cross the road? To get to the other byte."
+        },
+        {
+          "cardId": null,
+          "question": "What is <b>your</b> name?",
+          "reply": "I am Spark <|end|> and I like the sea."
+        }
+      ]
+    }
+  }
+}

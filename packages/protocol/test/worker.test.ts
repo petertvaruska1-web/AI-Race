@@ -32,9 +32,27 @@ describe("worker protocol fixtures", () => {
         minigame: WORKER_SCHEMAS.MinigameJobSpec,
         keynote: WORKER_SCHEMAS.KeynoteJobSpec,
         appReview: WORKER_SCHEMAS.AppReviewJobSpec,
+        interview: WORKER_SCHEMAS.InterviewJobSpec,
       }[lease.jobType];
       expect(spec.safeParse(lease.spec).error).toBeUndefined();
     }
+  });
+
+  it("reads an eval spec and result from before discoveries", () => {
+    const spec = WORKER_SCHEMAS.EvalJobSpec.parse({
+      versionId: "6fa459ea-ee8a-4ca4-894e-db77e160355e",
+      modelTarUrl: "http://127.0.0.1:8787/blobs/a.tar",
+      population: [],
+    });
+    expect(spec.previous).toBeNull();
+    expect(spec.peers).toEqual([]);
+    expect(spec.thresholds).toEqual({ minPoints: 25, minZ: 2, minPeers: 3, perEval: 3 });
+    const result = WORKER_SCHEMAS.EvalJobResult.parse({
+      report: {},
+      traits: {},
+      personalityWords: [],
+    });
+    expect(result).toMatchObject({ signals: null, breakdown: {}, discoveries: [] });
   });
 
   it("gives an older worker no battle slot", () => {

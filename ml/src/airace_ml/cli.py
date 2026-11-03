@@ -955,6 +955,7 @@ def _cmd_worker(args: argparse.Namespace) -> int:
             "minigame": 1,
             "keynote": 1,
             "appReview": 1,
+            "interview": 1,
         },
         worker_id=args.id,
     )

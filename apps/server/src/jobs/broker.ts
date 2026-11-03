@@ -19,6 +19,7 @@ export const JOB_PRIORITY: Record<JobType, number> = {
   minigame: 0, // the player is watching, like a chat
   battle: 1,
   keynote: 1,
+  interview: 1, // the player just published and is waiting for the reaction
   train: 2,
   eval: 3,
   feedback: 4,

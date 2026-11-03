@@ -77,6 +77,7 @@ describe("leasing", () => {
       minigame: 0,
       battle: 1,
       keynote: 1,
+      interview: 1,
       train: 2,
       eval: 3,
       feedback: 4,

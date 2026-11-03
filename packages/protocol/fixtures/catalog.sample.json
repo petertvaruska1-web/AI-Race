@@ -1,5 +1,5 @@
 {
-  "version": "catalog-v2",
+  "version": "catalog-v3",
   "dataIdentity": "sample-0001",
   "tokenizer": "tok-v1",
   "suite": "bench-v1",
@@ -703,6 +703,18 @@
       "id": "coding-customer-0001",
       "group": "developers",
       "prompt": "Program: x = 2 print(x + 1) Output:"
+    }
+  ],
+  "interviewCards": [
+    {
+      "id": "interview-knowledge-1",
+      "prompt": "Question: Which country do you travel to if you want to see the Kremlin?\nAnswer:",
+      "checked": true
+    },
+    {
+      "id": "interview-open-01",
+      "prompt": "What would you like people to know about you?",
+      "checked": false
     }
   ]
 }

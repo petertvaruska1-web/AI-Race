@@ -17,7 +17,8 @@
         "battle",
         "minigame",
         "keynote",
-        "appReview"
+        "appReview",
+        "interview"
       ],
       "slots": {
         "train": 1,
@@ -27,7 +28,8 @@
         "battle": 1,
         "minigame": 1,
         "keynote": 1,
-        "appReview": 1
+        "appReview": 1,
+        "interview": 1
       },
       "dataIdentity": "sample-0001"
     },

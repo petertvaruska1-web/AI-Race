@@ -25,6 +25,7 @@ export const JOB_TYPES = [
   "minigame",
   "keynote",
   "appReview",
+  "interview",
 ] as const;
 export const JobType = z.enum(JOB_TYPES);
 export type JobType = z.infer<typeof JobType>;
@@ -47,6 +48,7 @@ export const WorkerCapabilities = z.object({
     minigame: Slots.default(0),
     keynote: Slots.default(0),
     appReview: Slots.default(0),
+    interview: Slots.default(0),
   }),
   /** Which corpus, tokenizer and evaluators the worker has installed (ADR 0008 item 2). */
   dataIdentity: z.string().min(1),
@@ -111,18 +113,69 @@ export const TrainJobResult = z.object({
 });
 export type TrainJobResult = z.infer<typeof TrainJobResult>;
 
+/** `"<category>/<tag>"` -> [score 0-100, item count], from a benchmark report. */
+export const Breakdown = z.record(z.string(), z.tuple([z.number(), z.number().int().min(0)]));
+export type Breakdown = z.infer<typeof Breakdown>;
+
+export const DISCOVERY_KINDS = ["strength", "weakness", "better", "worse", "changed"] as const;
+export const DiscoveryKind = z.enum(DISCOVERY_KINDS);
+export type DiscoveryKind = z.infer<typeof DiscoveryKind>;
+
+/** Something the scoring found in an AI, with one real question and reply as proof (R1). */
+export const Discovery = z.object({
+  key: z.string().min(1).max(120),
+  kind: DiscoveryKind,
+  about: z.string().min(1).max(120),
+  title: z.string().min(1).max(200),
+  category: z.string().min(1).max(40),
+  tag: z.string().min(1).max(80),
+  value: z.number(),
+  compared: z.number(),
+  evidence: z.object({ prompt: z.string(), reply: z.string() }).nullable(),
+});
+export type Discovery = z.infer<typeof Discovery>;
+
+export const DiscoveryThresholds = z.object({
+  minPoints: z.number().min(0),
+  minZ: z.number().min(0),
+  minPeers: z.number().int().min(1),
+  perEval: z.number().int().min(0),
+});
+export type DiscoveryThresholds = z.infer<typeof DiscoveryThresholds>;
+
+const Traits = z.record(z.string(), z.number());
+
 export const EvalJobSpec = z.object({
   versionId: z.uuid(),
   modelTarUrl: Url,
   /** Trait vectors of other AIs; personality words are relative to them. */
-  population: z.array(z.record(z.string(), z.number())),
+  population: z.array(Traits),
+  /** The version this one was trained from, for "better" and "worse" findings. */
+  previous: z
+    .object({ label: z.string(), breakdown: Breakdown, traits: Traits })
+    .nullable()
+    .default(null),
+  /** The world's other AIs, for strengths and weaknesses. */
+  peers: z.array(z.object({ breakdown: Breakdown, traits: Traits })).default([]),
+  thresholds: DiscoveryThresholds.default({ minPoints: 25, minZ: 2, minPeers: 3, perEval: 3 }),
 });
 export type EvalJobSpec = z.infer<typeof EvalJobSpec>;
 
+/** What the milestones need from one eval; legibility is null without the judge. */
+export const EvalSignals = z.object({
+  legibleReplies: z.number().int().min(0).nullable(),
+  correctFacts: z.number().int().min(0),
+  passingPrograms: z.number().int().min(0),
+});
+export type EvalSignals = z.infer<typeof EvalSignals>;
+
 export const EvalJobResult = z.object({
   report: z.record(z.string(), z.unknown()),
-  traits: z.record(z.string(), z.number()),
+  traits: Traits,
   personalityWords: z.array(z.string()),
+  signals: EvalSignals.nullable().default(null),
+  breakdown: Breakdown.default({}),
+  discoveries: z.array(Discovery).default([]),
 });
 export type EvalJobResult = z.infer<typeof EvalJobResult>;
 
@@ -289,6 +342,33 @@ export const AppReviewJobResult = z.object({
 });
 export type AppReviewJobResult = z.infer<typeof AppReviewJobResult>;
 
+/** Scores the answers a player published from an interview; no model is loaded. */
+export const InterviewJobSpec = z.object({
+  interviewId: zId,
+  answers: z
+    .array(
+      z.object({
+        /** The prompt card asked, or null for the player's own question. */
+        cardId: z.string().min(1).max(80).nullable(),
+        question: z.string(),
+        /** The AI's answer, exactly as it was said (R1). */
+        reply: z.string(),
+      }),
+    )
+    .min(1)
+    .max(5),
+});
+export type InterviewJobSpec = z.infer<typeof InterviewJobSpec>;
+
+export const InterviewJobResult = z.object({
+  /** One per answer, in the same order. */
+  answers: z
+    .array(z.object({ score: z.number().min(0).max(1), checked: z.boolean() }))
+    .min(1)
+    .max(5),
+});
+export type InterviewJobResult = z.infer<typeof InterviewJobResult>;
+
 /** Schemas by name, for the shared fixtures (`{schema, message}`). */
 export const WORKER_SCHEMAS = {
   WorkerMessage,
@@ -309,4 +389,6 @@ export const WORKER_SCHEMAS = {
   KeynoteJobResult,
   AppReviewJobSpec,
   AppReviewJobResult,
+  InterviewJobSpec,
+  InterviewJobResult,
 } as const;
