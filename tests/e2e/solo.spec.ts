@@ -193,4 +193,33 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
   await page.getByRole("region", { name: "Report cards" }).getByRole("button").first().click();
   const place = /^Customers: (\d+(st|nd|rd|th) → )?\d+(st|nd|rd|th)$/;
   await expect(page.getByRole("dialog").getByText(place)).toBeVisible({ timeout: 60_000 });
+  await page.keyboard.press("Escape");
+
+  // 23. Playtest pack: the fund takes money out of cash and shows it.
+  await page.getByLabel("Amount").fill("1000");
+  await page.getByRole("button", { name: "Invest" }).click();
+  await expect(page.getByTestId("fund")).toHaveText("$1,000");
+
+  // 24. A logo motion is bought from the Company screen's Customize window.
+  await page.getByRole("link", { name: "Company" }).click();
+  await page.getByRole("button", { name: /Customize your look/ }).click();
+  const looks = page.getByRole("dialog", { name: /Customize/ });
+  await looks
+    .getByRole("region", { name: "Logo motion" })
+    .getByRole("button", { name: /^Buy for/ })
+    .first()
+    .click();
+  await expect(
+    looks.getByRole("region", { name: "Logo motion" }).getByText("Wearing it"),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // 25. A practice Pattern Bridge: the real AI picks every tile; the run ends with a score.
+  await page.getByRole("link", { name: "Playground" }).click();
+  await page.getByRole("radio", { name: "Games" }).click();
+  await page.getByRole("button", { name: "Play Pattern Bridge" }).click();
+  await page.getByRole("button", { name: "Practice (free)" }).click();
+  await expect(page.getByText("What comes next?")).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByTestId("result")).toBeVisible({ timeout: 180_000 });
+  await expect(page.getByTestId("score")).toHaveText(/^\d+ of 12$/);
 });
