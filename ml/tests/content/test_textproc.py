@@ -327,7 +327,9 @@ def test_boilerplate_is_found_by_cleaning_at_realistic_document_lengths(n_words)
     assert (clean_scores >= thorough).all() and clean_scores.mean() > 0.9  # clean keeps its score
     assert np.mean(boilerplate >= thorough) < 0.5  # most boilerplate falls below Thorough
     # light, standard, thorough: each level removes more of it
-    light, standard, strict = (np.mean(boilerplate >= t) for t in CLEANING_THRESHOLDS.values())
+    light, standard, strict = (
+        np.mean(boilerplate >= CLEANING_THRESHOLDS[k]) for k in ("light", "standard", "thorough")
+    )
     assert light > standard > strict
     assert boilerplate.mean() < clean_scores.mean() - 0.25
 
