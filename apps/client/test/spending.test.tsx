@@ -107,3 +107,12 @@ describe("things to buy", () => {
     );
   });
 });
+
+describe("the launch dialog on a short screen", () => {
+  it("scrolls inside the window, so Launch can always be reached", () => {
+    render(<LaunchDialog view={viewOf(trainedWorld(SCORES))} onClose={() => {}} />);
+    const dialog = screen.getByRole("dialog", { name: "Launch an AI" });
+    expect(dialog.className).toContain("overflow-y-auto");
+    expect(dialog.className).toMatch(/max-h-\[calc\(100dvh-2rem\)\]/);
+  });
+});

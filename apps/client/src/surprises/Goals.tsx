@@ -309,26 +309,36 @@ export function Victory({ view }: { view: WorldView }) {
           {`${goalTitle(goal.kind, goal.target)}: reached on ${dayLabel(goal.reachedDay ?? 0)}.`}
         </motion.p>
         <motion.div {...step(1)} className="window p-4">
-          <DayChart
-            label="Customers"
-            days={days.map((d) => d.day)}
-            series={[
-              {
-                id: "customers",
-                label: "Customers",
-                color: "var(--brand)",
-                values: days.map((d) => Object.values(d.customers).reduce((a, b) => a + b, 0)),
-              },
-              {
-                id: "cash",
-                label: "Cash",
-                color: "var(--brand-2)",
-                values: days.map((d) => d.cash),
-              },
-            ]}
-            format={formatCount}
-            height={180}
-          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <DayChart
+              label="Customers"
+              days={days.map((d) => d.day)}
+              series={[
+                {
+                  id: "customers",
+                  label: "Customers",
+                  color: "var(--brand)",
+                  values: days.map((d) => Object.values(d.customers).reduce((a, b) => a + b, 0)),
+                },
+              ]}
+              format={formatCount}
+              height={160}
+            />
+            <DayChart
+              label="Cash"
+              days={days.map((d) => d.day)}
+              series={[
+                {
+                  id: "cash",
+                  label: "Cash",
+                  color: "var(--brand-2)",
+                  values: days.map((d) => d.cash),
+                },
+              ]}
+              format={formatMoney}
+              height={160}
+            />
+          </div>
         </motion.div>
         {reports.length > 0 && (
           <motion.div {...step(2)} className="window p-4">

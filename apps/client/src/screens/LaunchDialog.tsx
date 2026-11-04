@@ -105,7 +105,7 @@ export function LaunchDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-lg"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto"
         title={<span id={titleId}>Launch an AI</span>}
         hint="Announce it, build hype during the countdown, and it goes on sale on launch day."
       >

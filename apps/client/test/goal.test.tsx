@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Home } from "../src/screens/Home.tsx";
 import { useWindows } from "../src/store/windows.ts";
 import { GoalProgress, Victory } from "../src/surprises/Goals.tsx";
-import { apply, command, LOGO, PALETTE } from "./views.ts";
+import { apply, command, LOGO, PALETTE, ticks } from "./views.ts";
 
 /** Answers `fetch` by path; records every request. */
 function mockFetch(routes: Record<string, unknown>) {
@@ -104,7 +104,10 @@ describe("goal progress and the victory", () => {
   });
 
   it("the victory screen shows once, with the company's story, and Keep playing closes it", async () => {
-    const s = goalWorld({ goal: { kind: "customers", target: 1_000 }, deadlineYears: null });
+    const s = ticks(
+      goalWorld({ goal: { kind: "customers", target: 1_000 }, deadlineYears: null }),
+      3,
+    );
     s.goal.reachedDay = s.day;
     s.goal.reachedBy = "c1";
     s.companies.c1?.milestones.push({ id: "firstPaying", day: s.day, detail: null });
@@ -113,6 +116,10 @@ describe("goal progress and the victory", () => {
     const dialog = await screen.findByRole("dialog", { name: "You reached your goal" });
     expect(dialog.textContent).toContain("Acme did it!");
     expect(dialog.textContent).toContain("First paying customer");
+    // Customers and cash are drawn on charts of their own: on one, a few thousand
+    // customers would lie flat under a cash line in the hundreds of thousands.
+    expect(screen.getByRole("img", { name: "Customers" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Cash" })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Keep playing" }));
     expect(screen.queryByRole("dialog", { name: "You reached your goal" })).toBeNull();
     unmount();
