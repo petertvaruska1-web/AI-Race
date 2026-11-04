@@ -89,6 +89,44 @@ export function postAppReview(
   });
 }
 
+/**
+ * A post that quotes an AI's real answer to a real question, verbatim (R1), by `author`:
+ * the shared frame for discoveries' and interviews' posts.
+ */
+export function quotePost(
+  s: WorldState,
+  company: CompanyState,
+  author: PostItem["author"],
+  productName: string,
+  question: string,
+  reply: string,
+  tone: PostTone,
+  sentiment: number,
+  press = false,
+): Omit<PostItem, "id"> {
+  const post: Omit<PostItem, "id"> = {
+    kind: "post",
+    day: s.day,
+    companyId: company.id,
+    sentiment,
+    author,
+    productName,
+    question,
+    reply,
+    tone,
+    ...(press ? { press: true as const } : {}),
+  };
+  addItem(s, post);
+  return post;
+}
+
+/** A person drawn from the world's name pool (never a spotlight), posting as `group`. */
+export function drawnAuthor(s: WorldState, group: GroupId): PostItem["author"] {
+  const drawn = drawAuthor(s.rng);
+  s.rng = drawn.rng;
+  return { name: drawn.name, handle: drawn.handle, group, spotlightId: null };
+}
+
 /** Adds a news story about a company, and lets it move the company's news mood. */
 export function tellNews(
   s: WorldState,
@@ -202,9 +240,19 @@ function postBestAndWorst(
     .filter((m) => m.score >= viralScore || 1 - m.score >= viralScore)
     .sort((a, b) => extremity(b.score) - extremity(a.score) || a.score - b.score)[0]?.post;
   if (!viral) return;
-  company.fame.followers += viralFollowers / 10;
-  const headline = `${viral.author.handle}'s ${TONE_WORDS[viral.tone]} ${product.name} is going viral`;
-  tellNews(s, company, "viral", headline, viral.sentiment);
+  tellViral(s, company, viral, product.name);
+}
+
+/** A post goes viral: a story about it, and the attention brings followers. */
+export function tellViral(
+  s: WorldState,
+  company: CompanyState,
+  post: Omit<PostItem, "id">,
+  productName: string,
+): void {
+  company.fame.followers += getBalance(s.balance).economy.fame.viralFollowers / 10;
+  const headline = `${post.author.handle}'s ${TONE_WORDS[post.tone]} ${productName} is going viral`;
+  tellNews(s, company, "viral", headline, post.sentiment);
 }
 
 /** Applies a scored feedback batch once: satisfaction, then posts (and maybe a viral story). */
@@ -229,7 +277,36 @@ export function applyFeedback(
   }
   updateSatisfaction(s, economy, product.id, e.results);
   postBestAndWorst(s, economy, company, product, e.results);
+  checkScandal(s, economy, company, product, e.results);
   return OK;
+}
+
+/**
+ * The data-quality scandal (game-layer design §7): once a company is big enough to be
+ * watched, customers who catch its AI stating a false fact it learned from unchecked web
+ * data make it news, once per product, and every group trusts the product a little less.
+ */
+function checkScandal(
+  s: WorldState,
+  economy: Economy,
+  company: CompanyState,
+  product: ProductState,
+  results: FeedbackResult[],
+): void {
+  if (company.rival || product.scandal || s.seq < s.sim6FromSeq) return;
+  if (company.versions[product.versionId]?.unchecked !== true) return;
+  const { minCustomers, satisfactionHit, sentiment } = economy.scandal;
+  if (totalCustomers(s.market, company.id) < minCustomers) return;
+  if (!results.some((r) => r.questionId.startsWith("knowledge-") && r.score === 0)) return;
+  product.scandal = true;
+  const headline = `Customers catch ${product.name} stating false facts: ${company.name} trained it on unchecked web data`;
+  tellNews(s, company, "scandal", headline, sentiment);
+  const byGroup = s.market.satisfaction[product.id] ?? {};
+  for (const group of GROUP_IDS) {
+    const now = byGroup[group];
+    if (now !== undefined) byGroup[group] = Math.max(0, now - satisfactionHit);
+  }
+  s.market.satisfaction[product.id] = byGroup;
 }
 
 function launchHeadline(company: CompanyState, product: ProductState): string {

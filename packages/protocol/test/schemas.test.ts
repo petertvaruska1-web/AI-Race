@@ -98,6 +98,7 @@ function sampleView(): WorldView {
         >,
       },
       rivals: "none",
+      goal: null,
       league: {
         tables: Object.fromEntries(LEAGUE_TABLES.map((t) => [t, []])) as Record<
           (typeof LEAGUE_TABLES)[number],
@@ -222,6 +223,10 @@ function sampleView(): WorldView {
         loved: 0,
         notebook: null,
         milestones: [],
+        discoveries: [],
+        interviews: [],
+        nextInterviewDay: null,
+        goalProgress: null,
         fund: { balance: 0 },
         showcases: [],
         shop: { showcase: { fee: 20000, cooldownDays: 7 }, sponsorships: [], looks: [], apps: [] },

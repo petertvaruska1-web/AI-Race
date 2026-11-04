@@ -5,9 +5,12 @@ import { applyBattle, battleCommand } from "./battles.ts";
 import { campaignCommand, campaignsDay } from "./campaigns.ts";
 import { newCompanyExtras } from "./companyExtras.ts";
 import { computeCommand, computeDay, dataCentersDay, newCompute } from "./compute.ts";
+import { applyDiscoveries, publishDiscovery } from "./discoveries.ts";
 import { fameDay } from "./fame.ts";
 import { applyFeedback, newsDay } from "./feed.ts";
+import { goalDay } from "./goal.ts";
 import { historyDay } from "./history.ts";
+import { applyInterview } from "./interviews.ts";
 import { fundCommand } from "./investments.ts";
 import { leagueDay } from "./league.ts";
 import { bookTraining, closeMonths, ledgerDay, newLedger } from "./ledger.ts";
@@ -37,6 +40,7 @@ import { trashTalkDay } from "./trashTalk.ts";
 import { effectiveHost } from "./world.ts";
 
 type Handled = { ok: true } | { ok: false; reason: string };
+const DAYS_PER_YEAR = 365;
 const OK: Handled = { ok: true };
 const no = (reason: string): Handled => ({ ok: false, reason });
 
@@ -84,6 +88,7 @@ function tick(s: WorldState): Handled {
   newsDay(s);
   leagueDay(s);
   milestonesDay(s);
+  goalDay(s);
   trashTalkDay(s);
   fameDay(s);
   historyDay(s);
@@ -173,6 +178,10 @@ function system(s: WorldState, e: SystemEvent): Handled {
       return applyKeynote(s, e);
     case "notebookSaved":
       return applyNotebookSaved(s, e);
+    case "discoveryFound":
+      return applyDiscoveries(s, e);
+    case "interviewScored":
+      return applyInterview(s, e);
     default:
       return no("This event isn't supported yet.");
   }
@@ -240,6 +249,10 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       if (s.phase !== "setup") return no("The world has already started.");
       if (!member.companyId) return no("Found your company first.");
       s.phase = "running";
+      const years = s.goal.spec.deadlineYears;
+      if (s.goal.spec.goal.kind !== "none" && years !== null) {
+        s.goal.deadlineDay = s.day + DAYS_PER_YEAR * years;
+      }
       return OK;
     }
     case "setSpeed": {
@@ -317,6 +330,11 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       const company = member.companyId ? s.companies[member.companyId] : undefined;
       if (!company) return no("Found your company first.");
       return appCommand(s, company, cmd, newId);
+    }
+    case "publishDiscovery": {
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("That discovery isn't yours.");
+      return publishDiscovery(s, company, cmd.discoveryId);
     }
     case "sponsor": {
       const company = member.companyId ? s.companies[member.companyId] : undefined;

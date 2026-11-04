@@ -1,7 +1,8 @@
-import { COST_CATEGORIES, INCOME_CATEGORIES } from "@airace/protocol";
+import { COST_CATEGORIES, INCOME_CATEGORIES, NO_GOAL } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
 import { newCompanyExtras } from "./companyExtras.ts";
 import type { WorldState } from "./state.ts";
+import { newGoal } from "./world.ts";
 
 // Worlds saved by an older simulation, brought forward so they keep playing.
 // Each step only adds the newer fields with their starting values.
@@ -56,7 +57,9 @@ function fromSim4(s: Loose, legacyUntilSeq: number): Loose {
  * A world saved by sim-5 (the playtest pack) as sim-6 (Phase 4): the notebook joins every
  * plan with a share of 0, and every company starts without one.
  */
-function fromSim5(s: Loose): Loose {
+function fromSim5(s: Loose, lastLoggedSeq: number): Loose {
+  s.sim6FromSeq ??= lastLoggedSeq;
+  s.goal ??= newGoal(NO_GOAL);
   const companies = s.companies as Record<string, Loose>;
   for (const c of Object.values(companies)) {
     const extras = newCompanyExtras() as unknown as Loose;
@@ -83,6 +86,6 @@ export function upgradeState(
   const s = structuredClone(state) as Loose;
   if (from === "sim-3") fromSim3(s);
   if (from !== "sim-5") fromSim4(s, legacyUntilSeq ?? (s.seq as number));
-  fromSim5(s);
+  fromSim5(s, legacyUntilSeq ?? (s.seq as number));
   return s as unknown as WorldState;
 }

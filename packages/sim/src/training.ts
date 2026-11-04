@@ -162,6 +162,9 @@ export function applyCompletion(
     traits: null,
     published: false,
     packKey: null,
+    unchecked:
+      parent?.unchecked === true ||
+      (run.plan.mix.web > 0 && !run.plan.factCheck && run.plan.cleaning !== "expert"),
   };
   run.status = "completed";
   run.versionId = versionId;

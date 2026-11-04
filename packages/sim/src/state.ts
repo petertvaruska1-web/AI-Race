@@ -5,8 +5,10 @@ import type {
   Command,
   CostCategory,
   Difficulty,
+  Discovery,
   EvalSignals,
   GameId,
+  GoalSpec,
   GroupId,
   IncomeCategory,
   LeagueTable,
@@ -80,6 +82,11 @@ export type VersionState = {
   personalityWords: string[];
   /** Measured style traits, from the same evaluation as the scores. */
   traits: Record<string, number> | null;
+  /**
+   * Learned from web text without fact-checking, itself or through its parent (the
+   * data-quality scandal); absent, read as false, on versions made before sim-6.
+   */
+  unchecked?: boolean;
   published: boolean;
   /** A rival's version: its key in the rival pack (its `runId` is "pack"). Null for players. */
   packKey: string | null;
@@ -99,6 +106,8 @@ export type ProductState = {
   feedbackKeys: string[];
   /** The launch keynote, if one was booked (absent before sim-5). */
   keynote?: KeynoteState | null;
+  /** Customers caught it stating false facts it learned from unchecked web data. */
+  scandal?: boolean;
 };
 
 export type PlansState = {
@@ -163,6 +172,8 @@ export type PostItem = FeedBase & {
   tone: PostTone;
   /** A partner app's review: its stars (1-5). */
   stars?: number;
+  /** Written by a news outlet (an interview), not a customer. */
+  press?: true;
 };
 
 /** A news story: game commentary over real events, never an AI's words. */
@@ -420,6 +431,32 @@ export type CompanyState = {
   notebook: { hash: string; words: number; savedDay: number } | null;
   /** Milestones earned, oldest first; each once (players only). */
   milestones: { id: MilestoneId; day: number; detail: string | null }[];
+  /** What the scoring found in this company's AIs (the last `kept`), private until published. */
+  discoveries: DiscoveryState[];
+  /** Published interviews (the last `kept`), answers verbatim. */
+  interviews: InterviewState[];
+  lastInterviewDay: number | null;
+};
+
+export type InterviewAnswer = { question: string; reply: string; score: number; checked: boolean };
+
+export type InterviewState = {
+  id: string;
+  day: number;
+  productId: string;
+  productName: string;
+  outlet: string;
+  /** The mean answer score (0-1), before the AI's personality is counted. */
+  mean: number;
+  answers: InterviewAnswer[];
+};
+
+export type DiscoveryState = Discovery & {
+  /** "<versionId>-d<k>" */
+  id: string;
+  versionId: string;
+  day: number;
+  published: boolean;
 };
 
 export type WorldState = {
@@ -442,6 +479,11 @@ export type WorldState = {
    * (an upgraded world); 0 for a world made by this one.
    */
   legacyUntilSeq: number;
+  /**
+   * Inputs before this seq were logged by sim-5 or older and replay without the rules
+   * sim-6 added to them (the scandal); 0 for a world made by sim-6.
+   */
+  sim6FromSeq: number;
   /** Null until rivals join (they need the rival pack). */
   rivals: { joinedDay: number; archId: string; archPassed: boolean } | null;
   /** Each league table's leader, and the day its last #1 story ran. */
@@ -455,6 +497,14 @@ export type WorldState = {
   feed: FeedItem[];
   /** Feed items made so far; numbers their ids. */
   feedSeq: number;
+  /** The goal chosen at creation (kind "none" for none); reached at most once. */
+  goal: {
+    spec: GoalSpec;
+    deadlineDay: number | null;
+    reachedDay: number | null;
+    reachedBy: string | null;
+    missedDay: number | null;
+  };
 };
 
 export type SystemEvent =
@@ -480,6 +530,8 @@ export type SystemEvent =
   | { type: "showcaseResolved"; showcaseId: string; failed: true }
   | { type: "keynoteResolved"; productId: string; prompt: string; reply: string; score: number }
   | { type: "keynoteResolved"; productId: string; failed: true }
+  | { type: "discoveryFound"; versionId: string; discoveries: Discovery[] }
+  | { type: "interviewScored"; interviewId: string; productId: string; answers: InterviewAnswer[] }
   /** The server stored a notebook's text; only its sha256 and word count enter the world. */
   | { type: "notebookSaved"; companyId: string; hash: string; words: number }
   | {

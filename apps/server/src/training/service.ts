@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { EvalJobResult, type Query, TrainJobResult } from "@airace/protocol";
+import {
+  Breakdown,
+  type Discovery,
+  EvalJobResult,
+  type EvalSignals,
+  type Query,
+  TrainJobResult,
+} from "@airace/protocol";
 import { getBalance, type RunState, type SystemEvent, type WorldState } from "@airace/sim";
 import { and, asc, desc, eq, ne } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
@@ -28,6 +35,25 @@ export type TrainPayload = {
   config: Record<string, unknown>;
 };
 type EvalPayload = { worldId: string; versionId: string };
+
+/** A stored report's tag breakdown ({} for one from before discoveries). */
+function breakdownOf(report: unknown): Breakdown {
+  const parsed = Breakdown.safeParse((report as { breakdown?: unknown } | null)?.breakdown);
+  return parsed.success ? parsed.data : {};
+}
+
+function traitsOf(fingerprint: unknown): Record<string, number> {
+  const parsed = EvalJobResult.shape.traits.safeParse(fingerprint);
+  return parsed.success ? parsed.data : {};
+}
+
+function findVersionIn(s: WorldState, versionId: string) {
+  for (const c of Object.values(s.companies)) {
+    const v = c.versions[versionId];
+    if (v) return v;
+  }
+  return null;
+}
 type StoredEvent = { step: number; event: unknown };
 type ActiveRun = RevealRun & { worldId: string; runId: string; done: boolean };
 
@@ -351,7 +377,11 @@ export class TrainingService {
     const { ctx } = this;
     // Personality words are relative: this AI against the world's other AIs and the references.
     const others = await ctx.db
-      .select({ fingerprint: schema.evalResults.fingerprint })
+      .select({
+        versionId: schema.evalResults.versionId,
+        fingerprint: schema.evalResults.fingerprint,
+        report: schema.evalResults.report,
+      })
       .from(schema.evalResults)
       .innerJoin(schema.modelVersions, eq(schema.modelVersions.id, schema.evalResults.versionId))
       .where(
@@ -364,10 +394,30 @@ export class TrainingService {
       ...ctx.rivals.traitsIn(actor.state()),
       ...(ctx.catalog?.referenceTraits ?? []),
     ];
+    // Discoveries compare it with the version it grew from and with the world's other AIs.
+    const state = actor.state();
+    const comparable = others.map((o) => ({
+      versionId: o.versionId,
+      breakdown: breakdownOf(o.report),
+      traits: traitsOf(o.fingerprint),
+    }));
+    const parentId = findVersionIn(state, p.versionId)?.parentId ?? null;
+    const parent = comparable.find((o) => o.versionId === parentId);
+    const parentLabel = parentId ? findVersionIn(state, parentId)?.label : undefined;
+    const { minPoints, minZ, minPeers, perEval } = getBalance(state.balance).economy.discoveries;
     return {
       versionId: p.versionId,
       modelTarUrl: signBlobUrl(ctx, checkpointKey(p.versionId), "GET", JOB_URL_TTL_MS),
       population,
+      previous:
+        parent && parentLabel
+          ? { label: parentLabel, breakdown: parent.breakdown, traits: parent.traits }
+          : null,
+      peers: [
+        ...comparable.map(({ breakdown, traits }) => ({ breakdown, traits })),
+        ...ctx.rivals.peersIn(state),
+      ],
+      thresholds: { minPoints, minZ, minPeers, perEval },
     };
   }
 
@@ -380,19 +430,17 @@ export class TrainingService {
       );
       return;
     }
-    const { report, traits, personalityWords } = parsed.data;
+    const { report, traits, personalityWords, signals, breakdown, discoveries } = parsed.data;
+    // Kept with the scores, so a restart applies the same signals and findings again.
+    const stored = { ...report, personalityWords, signals, breakdown, discoveries };
     await this.ctx.db
       .insert(schema.evalResults)
-      .values({
-        versionId: p.versionId,
-        report: { ...report, personalityWords },
-        fingerprint: traits,
-      })
+      .values({ versionId: p.versionId, report: stored, fingerprint: traits })
       .onConflictDoUpdate({
         target: schema.evalResults.versionId,
-        set: { report: { ...report, personalityWords }, fingerprint: traits },
+        set: { report: stored, fingerprint: traits },
       });
-    await this.applyEval(p.worldId, p.versionId, report, personalityWords, traits);
+    await this.applyEval(p.worldId, p.versionId, stored, personalityWords, traits);
   }
 
   private async applyEval(
@@ -407,6 +455,8 @@ export class TrainingService {
       overall?: unknown;
       missing?: unknown;
       personalityWords?: unknown;
+      signals?: unknown;
+      discoveries?: unknown;
     };
     const scores: Record<string, number | null> = {};
     for (const [category, s] of Object.entries(r.scores ?? {})) {
@@ -420,6 +470,7 @@ export class TrainingService {
       (Array.isArray(r.personalityWords)
         ? r.personalityWords.filter((w) => typeof w === "string")
         : []);
+    const signals = EvalJobResult.shape.signals.safeParse(r.signals ?? null);
     await this.submit(worldId, {
       type: "evalCompleted",
       versionId,
@@ -427,7 +478,17 @@ export class TrainingService {
       overall: typeof r.overall === "number" ? r.overall : null,
       personalityWords,
       traits,
+      signals: signals.success ? (signals.data as EvalSignals | null) : null,
     });
+    // The world refuses a version's findings a second time, so a restart can't repeat them.
+    const found = EvalJobResult.shape.discoveries.safeParse(r.discoveries ?? []);
+    if (found.success && found.data.length > 0) {
+      await this.submit(worldId, {
+        type: "discoveryFound",
+        versionId,
+        discoveries: found.data as Discovery[],
+      });
+    }
   }
 
   // --- game-pace telemetry -------------------------------------------------------

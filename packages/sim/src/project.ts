@@ -28,6 +28,7 @@ import {
 import { adoptionShare, type Balance, getBalance } from "./balance.ts";
 import { dateOfDay } from "./calendar.ts";
 import { ownedPflops } from "./compute.ts";
+import { goalProgress } from "./goal.ts";
 import { leagueTables } from "./league.ts";
 import { customersByRegion, customersOf, totalCustomers } from "./market.ts";
 import { liveProductFor } from "./products.ts";
@@ -54,6 +55,14 @@ const MONTHS_SHOWN = 12;
 // added later leak by default.
 
 /** What `viewerUserId` may see of the world. Throws for a non-member. */
+function goalView(state: WorldState): WorldView["world"]["goal"] {
+  const { spec, deadlineDay, reachedDay, missedDay, reachedBy } = state.goal;
+  const goal = spec.goal;
+  if (goal.kind === "none") return null;
+  const target = "target" in goal ? goal.target : null;
+  return { kind: goal.kind, target, deadlineDay, reachedDay, missedDay, reachedBy };
+}
+
 export function projectView(state: WorldState, viewerUserId: string): WorldView {
   const viewer = state.members[viewerUserId];
   if (!viewer) throw new Error("not a member of this world");
@@ -73,6 +82,7 @@ export function projectView(state: WorldState, viewerUserId: string): WorldView 
       inviteCode: state.inviteCode,
       market: marketView(state),
       rivals: state.rivals ? "joined" : "none",
+      goal: goalView(state),
       league: leagueView(state, viewer.companyId),
     },
     members: Object.values(state.members)
@@ -293,6 +303,35 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
     loved: c.loved,
     notebook: c.notebook ? { words: c.notebook.words, savedDay: c.notebook.savedDay } : null,
     milestones: c.milestones.map((m) => ({ id: m.id, day: m.day, detail: m.detail })),
+    goalProgress: state.goal.spec.goal.kind === "none" ? null : goalProgress(state, c),
+    interviews: c.interviews.map((i) => ({
+      id: i.id,
+      day: i.day,
+      productId: i.productId,
+      productName: i.productName,
+      outlet: i.outlet,
+      mean: i.mean,
+      answers: i.answers.map((a) => ({ ...a })),
+    })),
+    nextInterviewDay:
+      c.lastInterviewDay === null
+        ? null
+        : c.lastInterviewDay + getBalance(state.balance).economy.interviews.cooldownDays,
+    discoveries: c.discoveries.map((d) => ({
+      id: d.id,
+      versionId: d.versionId,
+      versionLabel: c.versions[d.versionId]?.label ?? "",
+      day: d.day,
+      kind: d.kind,
+      about: d.about,
+      title: d.title,
+      category: d.category,
+      tag: d.tag,
+      value: d.value,
+      compared: d.compared,
+      evidence: d.evidence ? { prompt: d.evidence.prompt, reply: d.evidence.reply } : null,
+      published: d.published,
+    })),
     fund: { balance: c.fund.balance },
     showcases: c.showcases.map((x) => ({
       id: x.id,
@@ -432,6 +471,7 @@ function feedItemView(i: FeedItem): FeedItemView {
     reply: i.reply,
     tone: i.tone,
     ...(i.stars ? { stars: i.stars } : {}),
+    ...(i.press ? { press: true as const } : {}),
   };
 }
 

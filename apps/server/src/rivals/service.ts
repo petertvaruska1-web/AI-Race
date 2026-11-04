@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { GROUP_IDS, RivalReplies, type RivalReply } from "@airace/protocol";
+import { type Breakdown, GROUP_IDS, RivalReplies, type RivalReply } from "@airace/protocol";
 import type { FeedbackResult, WorldState } from "@airace/sim";
 import type { AppContext } from "../app.ts";
 import { signBlobUrl } from "../blobs.ts";
@@ -77,6 +77,23 @@ export class RivalService {
         out.push({ ...r });
       }
     });
+    return out;
+  }
+
+  /** Every rival AI released in `s`, as discoveries compare with it: its breakdown and traits. */
+  peersIn(s: WorldState): { breakdown: Breakdown; traits: Record<string, number> }[] {
+    if (!this.loaded) return [];
+    const byKey = new Map(
+      this.loaded.pack.lineages.flatMap((l) => l.versions.map((v) => [v.key, v] as const)),
+    );
+    const out: { breakdown: Breakdown; traits: Record<string, number> }[] = [];
+    for (const c of Object.values(s.companies)) {
+      if (!c.rival) continue;
+      for (const v of Object.values(c.versions)) {
+        const packed = v.packKey ? byKey.get(v.packKey) : undefined;
+        if (packed) out.push({ breakdown: { ...packed.breakdown }, traits: { ...packed.traits } });
+      }
+    }
     return out;
   }
 

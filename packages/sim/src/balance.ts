@@ -198,6 +198,28 @@ export type Economy = {
   tutoring: { packFee: number; packShare: number };
   /** Fact-check plus: dollars per thousand tokens of text checked. */
   expertCheckPerThousand: number;
+  /** Discoveries: how big a difference counts, how many an eval reports and how many are kept. */
+  discoveries: {
+    minPoints: number;
+    minZ: number;
+    minPeers: number;
+    perEval: number;
+    publishFollowers: number;
+    kept: number;
+  };
+  /** Interviews: how often, how many answers, and how the press reacts. */
+  interviews: {
+    cooldownDays: number;
+    maxAnswers: number;
+    followersPerPoint: number;
+    viralBelow: number;
+    viralFollowers: number;
+    kept: number;
+  };
+  /** The goal: how many months of recent profit a company's value counts. */
+  goal: { valueMonths: number };
+  /** The data-quality scandal: how big a company must be for it to make news, and its cost. */
+  scandal: { minCustomers: number; satisfactionHit: number; sentiment: number };
   /** The player's notebook: how many words it holds. */
   notebook: { maxWords: number };
   /** Learn from customers: dollars per loved conversation used, and how many it needs. */
@@ -609,6 +631,24 @@ const ECONOMY_V2: Economy = {
   // $4 per thousand tokens: about $100,000 to check a long run's text.
   expertCheckPerThousand: 4,
   notebook: { maxWords: 5_000 },
+  scandal: { minCustomers: 100_000, satisfactionHit: 0.05, sentiment: -0.7 },
+  goal: { valueMonths: 24 },
+  interviews: {
+    cooldownDays: 14,
+    maxAnswers: 5,
+    followersPerPoint: 0.1,
+    viralBelow: 0.1,
+    viralFollowers: 1_000,
+    kept: 10,
+  },
+  discoveries: {
+    minPoints: 25,
+    minZ: 2,
+    minPeers: 3,
+    perEval: 3,
+    publishFollowers: 0.03,
+    kept: 30,
+  },
   lovedConversationFee: 150,
   lovedMin: 10,
   lovedMax: 400,
@@ -679,6 +719,10 @@ export const BALANCE_TEST: Balance = {
     },
     battles: { ...ECONOMY_V2.battles, rounds: 3, cooldownDays: 2 },
     showcases: { ...ECONOMY_V2.showcases, cooldownDays: 2 },
+    // The first scored AI already shows a discovery, so end-to-end tests meet one.
+    discoveries: { ...ECONOMY_V2.discoveries, minPoints: 1, minZ: 0, minPeers: 1 },
+    interviews: { ...ECONOMY_V2.interviews, cooldownDays: 1 },
+    scandal: { ...ECONOMY_V2.scandal, minCustomers: 100 },
   },
 };
 

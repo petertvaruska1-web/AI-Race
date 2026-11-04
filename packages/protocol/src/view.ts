@@ -2,10 +2,12 @@ import { z } from "zod";
 import { Difficulty, GameId } from "./minigames.ts";
 import { ARCHETYPES, RIVAL_STYLES } from "./rivals.ts";
 import { Day, zId } from "./text.ts";
+import { DiscoveryKind } from "./worker.ts";
 import {
   APP_KINDS,
   BATTLE_SKILLS,
   COST_CATEGORIES,
+  GOAL_KINDS,
   GroupId,
   INCOME_CATEGORIES,
   LEAGUE_TABLES,
@@ -174,6 +176,8 @@ export const PostView = z.strictObject({
   tone: z.enum(POST_TONES),
   /** A partner app's review: its stars. */
   stars: z.number().int().min(1).max(5).optional(),
+  /** Written by a news outlet about an interview, not by a customer. */
+  press: z.literal(true).optional(),
 });
 export type PostView = z.infer<typeof PostView>;
 
@@ -446,6 +450,49 @@ export const PrivateCompany = z.strictObject({
   loved: z.number().int().min(0),
   /** The notebook's size and when it was saved; its text stays on the server. */
   notebook: z.strictObject({ words: z.number().int().min(0), savedDay: Day }).nullable(),
+  /** What the scoring found in this company's AIs, with their real evidence (owner only, R2). */
+  discoveries: z.array(
+    z.strictObject({
+      id: z.string(),
+      versionId: zId,
+      versionLabel: z.string(),
+      day: Day,
+      kind: DiscoveryKind,
+      about: z.string(),
+      title: z.string(),
+      category: z.string(),
+      tag: z.string(),
+      value: z.number(),
+      compared: z.number(),
+      evidence: z.strictObject({ prompt: z.string(), reply: z.string() }).nullable(),
+      published: z.boolean(),
+    }),
+  ),
+  /** Published interviews, newest last; the AI's answers verbatim (R1). */
+  interviews: z.array(
+    z.strictObject({
+      id: zId,
+      day: Day,
+      productId: zId,
+      productName: z.string(),
+      outlet: z.string(),
+      mean: z.number().min(0).max(1),
+      answers: z.array(
+        z.strictObject({
+          question: z.string(),
+          reply: z.string(),
+          score: z.number().min(0).max(1),
+          checked: z.boolean(),
+        }),
+      ),
+    }),
+  ),
+  /** The first day another interview can be published (null before the first). */
+  nextInterviewDay: Day.nullable(),
+  /** Progress towards the world's goal (null without one). */
+  goalProgress: z
+    .strictObject({ value: z.number(), target: z.number().nullable(), done: z.boolean() })
+    .nullable(),
   /** The trophy shelf: milestones earned, oldest first (never a list of what is left). */
   milestones: z.array(
     z.strictObject({ id: z.enum(MILESTONE_IDS), day: Day, detail: z.string().nullable() }),
@@ -499,6 +546,17 @@ export const WorldView = z.strictObject({
     }),
     /** Whether rivals have joined this world (they need the rival pack). */
     rivals: z.enum(["joined", "none"]),
+    /** The world's goal, if it has one; `reachedBy` is the company that won it. */
+    goal: z
+      .strictObject({
+        kind: z.enum(GOAL_KINDS).exclude(["none"]),
+        target: z.number().nullable(),
+        deadlineDay: Day.nullable(),
+        reachedDay: Day.nullable(),
+        missedDay: Day.nullable(),
+        reachedBy: zId.nullable(),
+      })
+      .nullable(),
     /** Every company's place in each table; other companies' revenue shows as a place only (R2). */
     league: z.strictObject({
       tables: z.record(z.enum(LEAGUE_TABLES), z.array(LeagueRowView)),

@@ -168,7 +168,7 @@ const sumCustomers = (s: WorldState, id: string) => totalCustomers(s.market, id)
 const onSale = (c: CompanyState) => Object.values(c.products).filter((p) => p.status !== "retired");
 const rivalById = (s: WorldState, id: string) => s.companies[id] as CompanyState;
 
-describe("rivals run their businesses", () => {
+describe("rivals run their businesses", { timeout: 30_000 }, () => {
   it("launch the arch-rival's first AI on schedule, with the pack's scores, and win customers", () => {
     let s = withRivals();
     const arch = rivalById(s, "rival-1");

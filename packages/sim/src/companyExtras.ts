@@ -7,7 +7,17 @@ export const FREE_LOOKS = { orb: "orb:classic", logo: "logo:still" } as const;
 
 export type CompanyExtras = Pick<
   CompanyState,
-  "showcases" | "looks" | "sponsorships" | "apps" | "fund" | "loved" | "notebook" | "milestones"
+  | "showcases"
+  | "looks"
+  | "sponsorships"
+  | "apps"
+  | "fund"
+  | "loved"
+  | "notebook"
+  | "milestones"
+  | "discoveries"
+  | "interviews"
+  | "lastInterviewDay"
 >;
 
 export function newCompanyExtras(): CompanyExtras {
@@ -20,5 +30,8 @@ export function newCompanyExtras(): CompanyExtras {
     loved: 0,
     notebook: null,
     milestones: [],
+    discoveries: [],
+    interviews: [],
+    lastInterviewDay: null,
   };
 }

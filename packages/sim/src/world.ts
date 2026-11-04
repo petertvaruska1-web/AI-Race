@@ -1,3 +1,4 @@
+import { type GoalSpec, NO_GOAL } from "@airace/protocol";
 import { type BalanceVersion, getBalance } from "./balance.ts";
 import { emptyMarket } from "./market.ts";
 import { seedRng } from "./rng.ts";
@@ -12,6 +13,7 @@ export function createWorld(p: {
   seed: number;
   balance: BalanceVersion;
   inviteCode: string;
+  goal?: GoalSpec;
 }): WorldState {
   const { spotlights, rng } = drawSpotlights(seedRng(p.seed), getBalance(p.balance).economy);
   return {
@@ -37,6 +39,7 @@ export function createWorld(p: {
     inviteCode: p.inviteCode,
     seq: 0,
     legacyUntilSeq: 0,
+    sim6FromSeq: 0,
     rivals: null,
     leaders: {},
     lastRankingNews: {},
@@ -45,7 +48,13 @@ export function createWorld(p: {
     spotlights,
     feed: [],
     feedSeq: 0,
+    goal: newGoal(p.goal ?? NO_GOAL),
   };
+}
+
+/** A goal as the world keeps it; the deadline is set when the world starts. */
+export function newGoal(spec: GoalSpec): WorldState["goal"] {
+  return { spec, deadlineDay: null, reachedDay: null, reachedBy: null, missedDay: null };
 }
 
 /**

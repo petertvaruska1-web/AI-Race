@@ -278,6 +278,32 @@ export const APP_NAMES: Record<AppKind, string> = {
 /** A look's id: `orb:<style>` or `logo:<motion>` (the sim's catalog says which exist). */
 export const LookId = z.string().regex(/^(orb|logo):[a-z]{2,20}$/);
 
+/** Goals (game-layer design §11): optional, chosen when a world is created. */
+export const GOAL_KINDS = ["none", "customers", "profit", "bestAi", "beatArch", "value"] as const;
+export type GoalKind = (typeof GOAL_KINDS)[number];
+export const Goal = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("none") }),
+  z.object({
+    kind: z.literal("customers"),
+    target: z.number().int().min(1_000).max(1_000_000_000),
+  }),
+  z.object({ kind: z.literal("profit"), target: z.number().int().min(1_000).max(1_000_000_000) }),
+  z.object({ kind: z.literal("bestAi") }),
+  z.object({ kind: z.literal("beatArch") }),
+  z.object({
+    kind: z.literal("value"),
+    target: z.number().int().min(100_000).max(1_000_000_000_000),
+  }),
+]);
+export type Goal = z.infer<typeof Goal>;
+export const GoalSpec = z.object({
+  goal: Goal,
+  /** Game years of 365 days, or no deadline. */
+  deadlineYears: z.union([z.literal(1), z.literal(2), z.literal(5)]).nullable(),
+});
+export type GoalSpec = z.infer<typeof GoalSpec>;
+export const NO_GOAL: GoalSpec = { goal: { kind: "none" }, deadlineYears: null };
+
 export const SPEEDS = [1, 2, 4] as const;
 export const Speed = z.literal(SPEEDS);
 export type Speed = z.infer<typeof Speed>;
@@ -343,6 +369,7 @@ export const Command = z.discriminatedUnion("type", [
   z.object({ type: z.literal("closeApp"), appId: zId }),
   z.object({ type: z.literal("invest"), amount: z.number().int().positive() }),
   z.object({ type: z.literal("withdraw"), amount: z.number().int().positive() }),
+  z.object({ type: z.literal("publishDiscovery"), discoveryId: z.string().min(1).max(80) }),
 ]);
 export type Command = z.infer<typeof Command>;
 export type CommandType = Command["type"];
