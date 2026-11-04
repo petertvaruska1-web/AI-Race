@@ -133,6 +133,57 @@ describe("interview mode", () => {
   });
 });
 
+describe("an interview that can't be scored", () => {
+  it("tells the player, and lets them publish again", async () => {
+    render(<InterviewMode view={viewOf(launchedWorld())} />);
+    fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Hi?" } });
+    await userEvent.click(screen.getByRole("button", { name: "Ask" }));
+    const chat = game.ws.sentOf("chat")[0];
+    game.ws.receive({
+      v: 1,
+      type: "ack",
+      cid: chat?.cid,
+      duplicate: false,
+      data: { threadId: THREAD },
+    });
+    await waitFor(() => expect(game.ws.sentOf("subscribe")).toHaveLength(1));
+    act(() =>
+      game.ws.receive({
+        v: 1,
+        type: "stream",
+        sub: `chat:w1:${THREAD}`,
+        data: { kind: "done", text: "Hello!" },
+      }),
+    );
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Publish this" }));
+    await userEvent.click(screen.getByRole("button", { name: "Publish interview" }));
+    await waitFor(() => expect(game.ws.sentOf("interviewPublish")).toHaveLength(1));
+    const sent = game.ws.sentOf("interviewPublish")[0];
+    game.ws.receive({
+      v: 1,
+      type: "ack",
+      cid: sent?.cid,
+      duplicate: false,
+      data: { interviewId: "i1" },
+    });
+    expect(await screen.findByText("The press is reading your answers…")).toBeTruthy();
+    act(() =>
+      game.ws.receive({
+        v: 1,
+        type: "event",
+        worldId: "w1",
+        kind: "interview",
+        text: "The interview couldn't be scored. Try publishing again.",
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "The interview couldn't be scored. Try publishing again.",
+    );
+    expect(screen.getByRole("button", { name: "Publish interview" })).toBeTruthy();
+  });
+});
+
 const finding = (over: Partial<Discovery> = {}): Discovery => ({
   key: "knowledge/topic:animals",
   kind: "strength",

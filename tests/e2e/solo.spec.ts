@@ -14,11 +14,25 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
   const lossPoints = async () =>
     Number(await page.getByTestId("loss-chart").getAttribute("data-points"));
 
-  // 1–2. Sign up, start a world, found a company in a preset palette.
+  // Phase 4: the goal's victory screen can open at any moment once 1,000 people use the AI;
+  // "Keep playing" takes the player back to where they were.
+  let victory = false;
+  await page.addLocatorHandler(
+    page.getByRole("dialog", { name: "You reached your goal" }),
+    async () => {
+      victory = true;
+      await page.getByRole("button", { name: "Keep playing" }).click();
+    },
+  );
+
+  // 1–2. Sign up, start a world with the goal "Reach 1,000 customers", found a company in a
+  // preset palette.
   await page.goto(stack.url);
   await page.getByRole("textbox").fill("Ana");
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByLabel("World name").fill("Solo test");
+  await page.getByText("Reach 1,000,000 customers").click();
+  await page.getByLabel("Goal target").fill("1000");
   await page.getByRole("button", { name: "Start" }).click();
   await page.getByPlaceholder("Acme Intelligence").fill("Ember Labs");
   await page.getByRole("button", { name: /Ember/ }).click();
@@ -223,4 +237,46 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
   await expect(page.getByText("What comes next?")).toBeVisible({ timeout: 120_000 });
   await expect(page.getByTestId("result")).toBeVisible({ timeout: 180_000 });
   await expect(page.getByTestId("score")).toHaveText(/^\d+ of 12$/);
+
+  // 26. Phase 4: a notebook line, saved privately; the Data step counts its words.
+  await page.getByRole("link", { name: "AI Lab" }).click();
+  await page.getByRole("button", { name: "1 Data" }).click();
+  const notebook = page.getByTestId("dataset-notebook");
+  await notebook.getByRole("button", { name: "Write" }).click();
+  await page.getByLabel("Notebook text").fill("Ember Labs makes friendly AIs.");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Saved. Only your company's AI reads this.")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(notebook.getByTestId("notebook-words")).toHaveText("5 / 5,000 words");
+
+  // 27. The first scored AI has a discovery (the test balance's thresholds); publishing it
+  // makes a story in the feed.
+  await page.getByRole("button", { name: "5 Versions" }).click();
+  await page
+    .getByTestId("version-v1")
+    .getByRole("button", { name: /^(Strength|Weakness|Better|Worse|Changed)/ })
+    .first()
+    .click();
+  const found = page.getByRole("dialog");
+  await found.getByRole("button", { name: "Publish as news" }).click();
+  await expect(found.getByText("Published")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "Company" }).click();
+  await expect(feed.getByText(/Ember Labs(’s|'s| admits)/).first()).toBeVisible();
+
+  // 28. An interview: a prompt card, the AI's real answer, ticked and published; the press
+  // writes it up.
+  await page.getByRole("link", { name: "Playground" }).click();
+  await page.getByRole("group", { name: "Playground mode" }).getByText("Interview").click();
+  await page.getByRole("button", { name: /^Tell us a joke\./ }).click();
+  await page.getByRole("checkbox", { name: "Publish this" }).check({ timeout: 120_000 });
+  await page.getByRole("button", { name: "Publish interview" }).click();
+  const interview = page.getByTestId("interview-result");
+  await expect(interview.getByText(/interview/)).toBeVisible({ timeout: 120_000 });
+
+  // 29. The trophy shelf holds what was earned, and the goal was reached along the way.
+  await page.getByRole("link", { name: "Company" }).click();
+  await expect(page.getByTestId("trophy-shelf")).toContainText("First paying customer");
+  await expect.poll(() => victory, { timeout: 60_000 }).toBe(true);
+  await expect(page.getByTestId("goal-progress")).toContainText("Reached on");
 });

@@ -29,6 +29,20 @@
         "@airace/client"
       ],
       "port": 5173
+    },
+    {
+      "name": "check",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 5175,
+      "env": {
+        "AIRACE_DATA": "data-check",
+        "AIRACE_SERVER_PORT": "8788",
+        "AIRACE_WEB_PORT": "5175"
+      }
     }
   ]
 }

@@ -81,6 +81,17 @@ export function InterviewMode({ view }: { view: WorldView }) {
     useCatalog.getState().load(socket);
   }, [socket]);
 
+  // A scoring that failed for good comes back as a message: nothing was published.
+  useEffect(
+    () =>
+      socket.onWorld((m) => {
+        if (m.type !== "event" || m.worldId !== worldId || m.kind !== "interview") return;
+        setPublished(null);
+        setProblem(m.text);
+      }),
+    [socket, worldId],
+  );
+
   useEffect(() => {
     if (!threadId) return;
     return socket.subscribe(`chat:${worldId}:${threadId}`, (raw) => {
