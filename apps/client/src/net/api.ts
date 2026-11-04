@@ -1,3 +1,5 @@
+import type { GoalSpec } from "@airace/protocol";
+
 /** The HTTP side of the server: accounts and the world list. Everything else goes over the socket. */
 
 export type Me = { userId: string; displayName: string; wsToken: string };
@@ -52,6 +54,8 @@ export const api = {
   listWorlds: () => call<{ worlds: WorldSummary[] }>("/api/worlds").then((r) => r.worlds),
   /** What this computer has installed: the training data, and the rival AIs. */
   setup: () => call<Setup>("/api/setup"),
-  createWorld: (name: string) =>
-    call<{ worldId: string }>("/api/worlds", { name }).then((r) => r.worldId),
+  createWorld: (name: string, goal?: GoalSpec) =>
+    call<{ worldId: string }>("/api/worlds", goal ? { name, goal } : { name }).then(
+      (r) => r.worldId,
+    ),
 };

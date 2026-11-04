@@ -57,6 +57,13 @@
       "when": 1793726826777,
       "tag": "0007_loved_and_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793805167333,
+      "tag": "0008_interviews_and_notebooks",
+      "breakpoints": true
     }
   ]
 }

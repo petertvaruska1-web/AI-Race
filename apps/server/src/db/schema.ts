@@ -183,6 +183,10 @@ export const chatThreads = pgTable("chat_threads", {
   /** A player's version (a uuid) or a rival's (e.g. "rival-1-v2"). */
   versionId: text("version_id").notNull(),
   createdAt: ms("created_at").notNull(),
+  /** "chat", or "interview": the press is listening, and answers can be published. */
+  kind: text("kind").notNull().default("chat"),
+  /** An interview's product (the AI on sale being interviewed). */
+  productId: text("product_id"),
 });
 
 export const chatMessages = pgTable(
@@ -193,9 +197,36 @@ export const chatMessages = pgTable(
     role: text("role").notNull(),
     text: text("text").notNull(),
     at: ms("at").notNull(),
+    /** In an interview, the prompt card a question came from (null for the player's own). */
+    cardId: text("card_id"),
   },
   (t) => [primaryKey({ columns: [t.threadId, t.idx] })],
 );
+
+/** A published interview: which answers of which thread, and the job that scores them. */
+export const interviewRequests = pgTable("interview_requests", {
+  id: uuid("id").primaryKey(),
+  worldId: uuid("world_id").notNull(),
+  companyId: text("company_id").notNull(),
+  productId: text("product_id").notNull(),
+  threadId: uuid("thread_id").notNull(),
+  idxs: jsonb("idxs").notNull(),
+  jobId: uuid("job_id"),
+  createdAt: ms("created_at").notNull(),
+});
+
+/** A company's notebook: the fingerprint of the text it holds now. */
+export const notebooks = pgTable("notebooks", {
+  companyId: text("company_id").primaryKey(),
+  worldId: uuid("world_id").notNull(),
+  hash: text("hash").notNull(),
+});
+
+/** Notebook texts by their sha256, so a run trains on exactly the text saved when it started. */
+export const notebookTexts = pgTable("notebook_texts", {
+  hash: text("hash").primaryKey(),
+  text: text("text").notNull(),
+});
 
 /** One customer-feedback batch per product and key ("launch", "w12"): a restart never asks twice. */
 export const feedbackRequests = pgTable(

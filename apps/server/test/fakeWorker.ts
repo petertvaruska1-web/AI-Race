@@ -60,6 +60,7 @@ export class FakeWorker {
           minigame: 1,
           keynote: 1,
           appReview: 1,
+          interview: 1,
           ...o.slots,
         },
         dataIdentity: o.dataIdentity ?? s.ctx.catalog?.dataIdentity ?? "none",

@@ -28,6 +28,8 @@ type GeneratePayload = {
 
 /** Rival chats wait behind everything the player is doing (game-layer design §12). */
 const RIVAL_CHAT_PRIORITY = 5;
+/** An interview runs right after ordinary chats: the press is waiting. */
+const INTERVIEW_PRIORITY = 1;
 export const NOT_YOURS = "You can only talk to your own AIs and rivals' AIs on sale.";
 type ChatResult =
   | { ok: true; duplicate: boolean; data: { threadId: string } }
@@ -85,6 +87,15 @@ export class ChatService {
     const version = companyId ? s.companies[companyId]?.versions[msg.versionId] : undefined;
     const packKey = version ? undefined : rivalOnSale(s, msg.versionId);
     if (!version && !packKey) return { ok: false, reason: NOT_YOURS };
+    // An interview is with your own AI on sale, under that product's name.
+    const interview = msg.interview ?? null;
+    if (interview) {
+      const product = companyId ? s.companies[companyId]?.products[interview.productId] : undefined;
+      if (!product || product.versionId !== msg.versionId) {
+        return { ok: false, reason: "That AI isn't one of yours." };
+      }
+      if (product.status !== "live") return { ok: false, reason: "That AI isn't on sale." };
+    }
 
     let threadId = msg.threadId;
     if (threadId) {
@@ -92,6 +103,13 @@ export class ChatService {
       if (!thread) return { ok: false, reason: "That conversation isn't yours." };
       if (thread.versionId !== msg.versionId) {
         return { ok: false, reason: "That conversation is with another AI. Start a new one." };
+      }
+      const interviewing = thread.kind === "interview";
+      if (
+        interviewing !== (interview !== null) ||
+        (interview && thread.productId !== interview.productId)
+      ) {
+        return { ok: false, reason: "Start a new conversation for that." };
       }
       if (this.inFlight.has(threadId))
         return { ok: false, reason: "Wait for the reply before sending another message." };
@@ -117,13 +135,20 @@ export class ChatService {
         userId,
         versionId: msg.versionId,
         createdAt: now,
+        kind: interview ? "interview" : "chat",
+        productId: interview?.productId ?? null,
       });
     }
     const idx = await this.nextIdx(threadId);
     // The text goes to the model as plain text, `<|end|>` included (M1 Review Focus 1).
-    await ctx.db
-      .insert(schema.chatMessages)
-      .values({ threadId, idx, role: "user", text: msg.text, at: now });
+    await ctx.db.insert(schema.chatMessages).values({
+      threadId,
+      idx,
+      role: "user",
+      text: msg.text,
+      at: now,
+      cardId: interview?.cardId ?? null,
+    });
     const turns = await ctx.db
       .select({ role: schema.chatMessages.role, text: schema.chatMessages.text })
       .from(schema.chatMessages)
@@ -146,7 +171,11 @@ export class ChatService {
       "generate",
       payload,
       msg.worldId,
-      packKey ? { priority: RIVAL_CHAT_PRIORITY } : {},
+      packKey
+        ? { priority: RIVAL_CHAT_PRIORITY }
+        : interview
+          ? { priority: INTERVIEW_PRIORITY }
+          : {},
     );
     this.inFlight.set(threadId, jobId);
     this.remember(seenKey, threadId);
@@ -195,7 +224,13 @@ export class ChatService {
       .where(and(eq(schema.chatThreads.worldId, q.worldId), eq(schema.chatThreads.userId, userId)))
       .orderBy(asc(schema.chatThreads.createdAt));
     return {
-      threads: rows.map((t) => ({ id: t.id, versionId: t.versionId, createdAt: t.createdAt })),
+      threads: rows.map((t) => ({
+        id: t.id,
+        versionId: t.versionId,
+        createdAt: t.createdAt,
+        kind: t.kind,
+        productId: t.productId,
+      })),
     };
   }
 
@@ -208,6 +243,7 @@ export class ChatService {
         role: schema.chatMessages.role,
         text: schema.chatMessages.text,
         at: schema.chatMessages.at,
+        cardId: schema.chatMessages.cardId,
       })
       .from(schema.chatMessages)
       .where(eq(schema.chatMessages.threadId, thread.id))
@@ -215,6 +251,8 @@ export class ChatService {
     return {
       threadId: thread.id,
       versionId: thread.versionId,
+      kind: thread.kind,
+      productId: thread.productId,
       waiting: this.inFlight.has(thread.id),
       messages,
     };

@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from "node:crypto";
-import { TEXT_LIMITS, zName } from "@airace/protocol";
+import { GoalSpec, NO_GOAL, TEXT_LIMITS, zName } from "@airace/protocol";
 import { createWorld, type WorldState } from "@airace/sim";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -11,7 +11,11 @@ import { schema } from "../db/index.ts";
 import { isUniqueViolation, OutdatedWorldError } from "./actor.ts";
 import { generateInviteCode } from "./inviteCode.ts";
 
-const CreateWorldBody = z.object({ name: zName(...TEXT_LIMITS.worldName) });
+const CreateWorldBody = z.object({
+  name: zName(...TEXT_LIMITS.worldName),
+  goal: z.unknown().optional(),
+});
+const RIVAL_GOALS = ["bestAi", "beatArch"];
 
 /**
  * Writes a new world: its row, the creator's membership and the starting state
@@ -20,7 +24,7 @@ const CreateWorldBody = z.object({ name: zName(...TEXT_LIMITS.worldName) });
  */
 export async function createWorldRecord(
   ctx: AppContext,
-  p: { name: string; hostUserId: string; hostName: string },
+  p: { name: string; hostUserId: string; hostName: string; goal?: GoalSpec },
 ): Promise<{ worldId: string; inviteCode: string }> {
   const now = ctx.opts.scheduler.now();
   for (let attempt = 0; ; attempt++) {
@@ -35,6 +39,7 @@ export async function createWorldRecord(
       seed,
       balance: ctx.opts.balance,
       inviteCode,
+      goal: p.goal ?? NO_GOAL,
     });
     try {
       await ctx.db.transaction(async (tx) => {
@@ -72,10 +77,18 @@ export function registerWorldRoutes(app: FastifyInstance, ctx: AppContext): void
         const [min, max] = TEXT_LIMITS.worldName;
         return reply.code(400).send({ error: `World names are ${min}–${max} characters.` });
       }
+      const goal = GoalSpec.safeParse(parsed.data.goal ?? NO_GOAL);
+      if (!goal.success) return reply.code(400).send({ error: "That goal isn't valid." });
+      if (RIVAL_GOALS.includes(goal.data.goal.kind) && !ctx.rivals.installed) {
+        return reply
+          .code(400)
+          .send({ error: "Rival goals need the rival AIs, which aren't built yet." });
+      }
       const { worldId } = await createWorldRecord(ctx, {
         name: parsed.data.name,
         hostUserId: user.userId,
         hostName: user.displayName,
+        goal: goal.data,
       });
       return { worldId };
     } catch (err) {

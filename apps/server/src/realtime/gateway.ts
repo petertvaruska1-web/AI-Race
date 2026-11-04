@@ -26,6 +26,16 @@ export type StreamAuthorizer = (userId: string, sub: string) => Promise<boolean>
 export type QueryHandler = (userId: string, q: Query) => Promise<unknown>;
 export type ChatMessage = Extract<ClientMessage, { type: "chat" }>;
 export type MinigameMessage = Extract<ClientMessage, { type: "minigame" }>;
+export type InterviewPublishMessage = Extract<ClientMessage, { type: "interviewPublish" }>;
+export type NotebookSaveMessage = Extract<ClientMessage, { type: "notebookSave" }>;
+export type NotebookHandler = (
+  userId: string,
+  msg: NotebookSaveMessage,
+) => Promise<{ ok: true; data: unknown } | { ok: false; reason: string }>;
+export type InterviewHandler = (
+  userId: string,
+  msg: InterviewPublishMessage,
+) => Promise<{ ok: true; data: unknown } | { ok: false; reason: string }>;
 export type MinigameHandler = (
   userId: string,
   msg: MinigameMessage,
@@ -69,6 +79,8 @@ export class Gateway {
   private chat: ChatHandler | null = null;
   private playground: ((worldId: string) => void) | null = null;
   private minigame: MinigameHandler | null = null;
+  private interview: InterviewHandler | null = null;
+  private notebook: NotebookHandler | null = null;
   private closed = false;
 
   constructor(private readonly ctx: AppContext) {
@@ -97,6 +109,23 @@ export class Gateway {
   /** Starts a Playground minigame; the gateway acks with its run or rejects with the reason. */
   setMinigameHandler(handler: MinigameHandler): void {
     this.minigame = handler;
+  }
+
+  /** Publishes an interview's chosen answers; the gateway acks with its id or rejects. */
+  setInterviewHandler(handler: InterviewHandler): void {
+    this.interview = handler;
+  }
+
+  /** Saves a notebook; the gateway acks or rejects with the reason. */
+  setNotebookHandler(handler: NotebookHandler): void {
+    this.notebook = handler;
+  }
+
+  /** Tells one player something about a world, on every socket they have open. */
+  notify(userId: string, worldId: string, kind: string, text: string): void {
+    for (const session of this.sessions) {
+      if (session.userId === userId) session.send({ v: 1, type: "event", worldId, kind, text });
+    }
   }
 
   /** Called when a player watching a world says they are in its Playground. */
@@ -171,7 +200,8 @@ export class Gateway {
       // A command or chat with a usable id gets a reject the client can match to it.
       const d = data as { type?: unknown; cid?: unknown } | null;
       const cid = typeof d?.cid === "string" && UUID.test(d.cid) ? d.cid : null;
-      if (cid && (d?.type === "chat" || d?.type === "command" || d?.type === "minigame")) {
+      const answerable = ["chat", "command", "minigame", "interviewPublish", "notebookSave"];
+      if (cid && typeof d?.type === "string" && answerable.includes(d.type)) {
         const reason =
           d.type === "chat" ? "Messages are 1–500 characters." : "That request isn't valid.";
         session.send({ v: 1, type: "reject", cid, reason });
@@ -220,6 +250,22 @@ export class Gateway {
         const r = this.minigame
           ? await this.minigame(userId, msg)
           : { ok: false as const, reason: "Games aren't available yet." };
+        if (r.ok) session.send({ v: 1, type: "ack", cid: msg.cid, duplicate: false, data: r.data });
+        else session.send({ v: 1, type: "reject", cid: msg.cid, reason: r.reason });
+        return;
+      }
+      case "interviewPublish": {
+        const r = this.interview
+          ? await this.interview(userId, msg)
+          : { ok: false as const, reason: "Interviews aren't available yet." };
+        if (r.ok) session.send({ v: 1, type: "ack", cid: msg.cid, duplicate: false, data: r.data });
+        else session.send({ v: 1, type: "reject", cid: msg.cid, reason: r.reason });
+        return;
+      }
+      case "notebookSave": {
+        const r = this.notebook
+          ? await this.notebook(userId, msg)
+          : { ok: false as const, reason: "Notebooks aren't available yet." };
         if (r.ok) session.send({ v: 1, type: "ack", cid: msg.cid, duplicate: false, data: r.data });
         else session.send({ v: 1, type: "reject", cid: msg.cid, reason: r.reason });
         return;

@@ -11,11 +11,13 @@ import { ChatService } from "./chat/service.ts";
 import { type ServerOptions, SIM_VERSION } from "./config.ts";
 import { type Db, openDb } from "./db/index.ts";
 import { FeedbackService } from "./feedback/service.ts";
+import { InterviewService } from "./interviews/service.ts";
 import { JobBroker } from "./jobs/broker.ts";
 import { registerWorkerRoutes } from "./jobs/workerGateway.ts";
 import { KeynoteService } from "./keynotes/service.ts";
 import { createLogger, type Logger } from "./log.ts";
 import { MinigameService } from "./minigames/service.ts";
+import { NotebookService } from "./notebook/service.ts";
 import { Gateway } from "./realtime/gateway.ts";
 import { RivalService } from "./rivals/service.ts";
 import { TrainingService } from "./training/service.ts";
@@ -38,6 +40,8 @@ export type AppContext = {
   minigames: MinigameService;
   keynotes: KeynoteService;
   appReviews: AppReviewService;
+  interviews: InterviewService;
+  notebooks: NotebookService;
   blobs: BlobStore;
   /** Null until the training data is installed. */
   catalog: Catalog | null;
@@ -68,6 +72,8 @@ export async function buildApp(
     minigames: undefined as unknown as MinigameService,
     keynotes: undefined as unknown as KeynoteService,
     appReviews: undefined as unknown as AppReviewService,
+    interviews: undefined as unknown as InterviewService,
+    notebooks: undefined as unknown as NotebookService,
     blobs: new LocalFsBlobStore(opts.blobDir),
     catalog: loadCatalog(opts.catalogPath, log),
     onClose: (fn) => {
@@ -95,6 +101,8 @@ export async function buildApp(
   ctx.onClose(() => ctx.keynotes.close());
   ctx.appReviews = new AppReviewService(ctx);
   ctx.onClose(() => ctx.appReviews.close());
+  ctx.interviews = new InterviewService(ctx);
+  ctx.notebooks = new NotebookService(ctx);
   ctx.gateway.registerQuery("catalog", async () => {
     if (!ctx.catalog) throw new HttpError(503, NO_TRAINING_DATA);
     return publicCatalog(ctx.catalog);

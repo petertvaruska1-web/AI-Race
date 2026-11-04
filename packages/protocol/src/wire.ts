@@ -21,6 +21,8 @@ export const Query = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("battle"), worldId: zId, battleId: zId }),
   /** The player's minigame runs in a world (newest first) and personal bests. */
   z.object({ kind: z.literal("minigameRuns"), worldId: zId }),
+  /** The player's own notebook text ("" when empty). */
+  z.object({ kind: z.literal("notebook"), worldId: zId }),
 ]);
 export type Query = z.infer<typeof Query>;
 
@@ -38,6 +40,27 @@ export const ClientMessage = z.discriminatedUnion("type", [
     threadId: zId.nullable(),
     versionId: zId,
     text: zText(...TEXT_LIMITS.chatMessage, { allowNewlines: true }),
+    /** An interview: the press is listening to the AI on sale as `productId`. */
+    interview: z
+      .object({ productId: zId, cardId: z.string().min(1).max(80).nullable() })
+      .optional(),
+  }),
+  /** Saves the company's notebook (private training text; empty clears it). */
+  z.object({
+    v,
+    type: z.literal("notebookSave"),
+    cid: z.uuid(),
+    worldId: zId,
+    text: zText(0, 40_000, { allowNewlines: true }),
+  }),
+  /** Publishes chosen answers of an interview the server holds (1-5 of the AI's messages). */
+  z.object({
+    v,
+    type: z.literal("interviewPublish"),
+    cid: z.uuid(),
+    worldId: zId,
+    threadId: zId,
+    idxs: z.array(z.number().int().min(0)).min(1).max(5),
   }),
   z.object({ v, type: z.literal("query"), id: RequestId, q: Query }),
   z.object({ v, type: z.literal("subscribe"), sub: StreamName }),

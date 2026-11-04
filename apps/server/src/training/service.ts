@@ -13,6 +13,7 @@ import type { AppContext } from "../app.ts";
 import { HttpError } from "../auth.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { schema } from "../db/index.ts";
+import { notebookParagraphs } from "../notebook/filter.ts";
 import type { TimerHandle } from "../scheduler.ts";
 import type { WorldActor } from "../worlds/actor.ts";
 import { toTrainRunConfig, totalSteps } from "./config.ts";
@@ -206,6 +207,7 @@ export class TrainingService {
           balance: getBalance(s.balance),
           parent: run.plan.parentVersionId ? { dir: "parent" } : null,
           coaching: run.plan.learnFromCustomers ? await this.loved(s.worldId, companyId) : [],
+          notebook: run.notebookHash ? await this.notebookOf(run.notebookHash) : [],
         }),
       };
       const jobId = await broker.enqueue("train", payload, s.worldId);
@@ -369,6 +371,12 @@ export class TrainingService {
       .set({ status: "failed" })
       .where(eq(schema.trainingRuns.id, p.runId));
     await this.submit(p.worldId, { type: "trainingFailed", runId: p.runId, reason });
+  }
+
+  /** The notebook a run recorded, as paragraphs (none when its text is gone). */
+  private async notebookOf(hash: string): Promise<string[]> {
+    const text = await this.ctx.notebooks.textOf(hash);
+    return text ? notebookParagraphs(text) : [];
   }
 
   // --- eval jobs ----------------------------------------------------------------

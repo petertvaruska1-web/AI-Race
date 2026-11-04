@@ -22,6 +22,8 @@ export function toTrainRunConfig(
     parent: { dir: string } | null;
     /** The conversations customers loved, for a plan that learns from them. */
     coaching?: [string, string][];
+    /** The notebook's paragraphs, for a plan with a notebook share. */
+    notebook?: string[];
   },
 ): Record<string, unknown> {
   const brain = o.balance.brainSizes.find((b) => b.id === plan.brainSize);
@@ -29,6 +31,9 @@ export function toTrainRunConfig(
   if (!brain || !length) throw new Error(`plan names an unknown brain size or length`);
   let mixture: Record<string, number> = {};
   for (const id of DATASET_IDS) if (plan.mix[id] > 0) mixture[id] = plan.mix[id];
+  // The notebook trains only with text in it (the world refuses a share without words).
+  const notebook = plan.mix.notebook > 0 ? (o.notebook ?? []) : [];
+  if (notebook.length > 0) mixture.notebook = plan.mix.notebook;
   // Tutoring packs: extra tokens on top of the length, all from one dataset (as `previewPlan`).
   const packs = plan.tutoring?.packs ?? 0;
   const budget = Math.round(length.tokens * (1 + o.balance.economy.tutoring.packShare * packs));
@@ -53,6 +58,7 @@ export function toTrainRunConfig(
     token_budget: budget,
     mixture,
     ...(coaching.length > 0 ? { coaching } : {}),
+    ...(notebook.length > 0 ? { notebook } : {}),
     replay: plan.review,
     prep: {
       cleaning: plan.cleaning,
