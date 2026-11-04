@@ -1039,6 +1039,8 @@
 
 # Stage 2: friends
 
+> **Superseded (2026-11-04):** Tasks 25–28 below were never built. Stage 2 is now planned in `docs/superpowers/plans/2026-11-04-stage2-friends.md` (own hardware per player, Fair mode; owner decisions C36–C41). Keep these for their test ideas only.
+
 ### Task 25: Joining friends
 
 **Files:**
