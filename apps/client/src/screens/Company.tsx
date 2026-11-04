@@ -18,6 +18,8 @@ import { regionCustomers, shareByRegion } from "../regions.ts";
 import { go } from "../route.ts";
 import { AppsPanel, OrbFrame } from "../spending/Spending.tsx";
 import { useWindows } from "../store/windows.ts";
+import { GoalProgress } from "../surprises/Goals.tsx";
+import { TrophyShelf } from "../surprises/Trophies.tsx";
 import { gradeColor } from "../windows/ReportWindow.tsx";
 import { LaunchDialog, launchBlocked } from "./LaunchDialog.tsx";
 import { regionMarks } from "./Market.tsx";
@@ -202,8 +204,10 @@ export function Company({ view }: { view: WorldView }) {
         <ArchStrip view={view} />
       </Panel>
 
-      <div className="lg:order-3 lg:col-span-2 xl:col-span-3">
+      <div className="space-y-3 lg:order-3 lg:col-span-2 xl:col-span-3">
+        <TrophyShelf view={view} />
         <AppsPanel view={view} />
+        <GoalProgress view={view} />
       </div>
 
       <Panel title="What people are saying" className="lg:order-2 lg:col-span-2 xl:col-span-1">

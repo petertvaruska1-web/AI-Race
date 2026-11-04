@@ -123,6 +123,8 @@ export class GameSocket {
     threadId: string | null,
     versionId: string,
     text: string,
+    /** An interview: the AI on sale as `productId` answers in front of the press. */
+    interview?: { productId: string; cardId: string | null },
   ): Promise<CommandResult> {
     return this.request({
       v: 1,
@@ -132,7 +134,25 @@ export class GameSocket {
       threadId,
       versionId,
       text,
+      ...(interview ? { interview } : {}),
     });
+  }
+
+  /** Publishes the AI's answers at `idxs` of an interview thread; acks with `{interviewId}`. */
+  interviewPublish(worldId: string, threadId: string, idxs: number[]): Promise<CommandResult> {
+    return this.request({
+      v: 1,
+      type: "interviewPublish",
+      cid: this.deps.uuid(),
+      worldId,
+      threadId,
+      idxs,
+    });
+  }
+
+  /** Saves the company's notebook (empty clears it). */
+  notebookSave(worldId: string, text: string): Promise<CommandResult> {
+    return this.request({ v: 1, type: "notebookSave", cid: this.deps.uuid(), worldId, text });
   }
 
   /** Starts a Playground minigame: practice alone, or a duel against a rival product. */

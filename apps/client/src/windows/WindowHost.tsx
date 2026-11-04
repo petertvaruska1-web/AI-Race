@@ -3,6 +3,11 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import { CustomizeWindow, FundAppWindow, SponsorWindow } from "../spending/Spending.tsx";
 import { type OpenWindow, useWindows } from "../store/windows.ts";
+import { DiscoveryWindow } from "../surprises/Discoveries.tsx";
+import { GoalWindow } from "../surprises/Goals.tsx";
+import { InterviewWindow } from "../surprises/Interview.tsx";
+import { NotebookWindow } from "../surprises/Notebook.tsx";
+import { MilestonesWindow } from "../surprises/Trophies.tsx";
 import { AiWindow } from "./AiWindow.tsx";
 import { BattleWindow, NewBattleWindow } from "./BattleWindows.tsx";
 import { CampaignWindow } from "./CampaignWindow.tsx";
@@ -62,6 +67,16 @@ function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) 
       return <FundAppWindow entry={entry} view={view} />;
     case "sponsor":
       return <SponsorWindow entry={entry} view={view} />;
+    case "discovery":
+      return <DiscoveryWindow entry={entry} view={view} discoveryId={s.discoveryId} />;
+    case "interview":
+      return <InterviewWindow entry={entry} view={view} interviewId={s.interviewId} />;
+    case "notebook":
+      return <NotebookWindow entry={entry} view={view} />;
+    case "milestones":
+      return <MilestonesWindow entry={entry} view={view} />;
+    case "goal":
+      return <GoalWindow entry={entry} view={view} />;
   }
 }
 

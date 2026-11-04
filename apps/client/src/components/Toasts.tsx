@@ -1,8 +1,9 @@
-import type { NewsView, WorldView } from "@airace/protocol";
+import { MILESTONE_NAMES, type NewsView, type WorldView } from "@airace/protocol";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { monthName } from "../format.ts";
 import { useWindows, type WindowSpec } from "../store/windows.ts";
+import { MILESTONE_ICONS } from "../surprises/Trophies.tsx";
 
 const SHOW_MS = 7000;
 const MOST = 3;
@@ -76,6 +77,8 @@ export function Toasts({ view }: { view: WorldView }) {
   const archId = view.companies.find((c) => c.rival?.archetype)?.id ?? null;
   const reports = view.me.company?.reports;
   const battles = view.me.company?.battles;
+  const milestones = view.me.company?.milestones;
+  const discoveries = view.me.company?.discoveries;
   const seen = useRef<Set<string> | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -83,10 +86,14 @@ export function Toasts({ view }: { view: WorldView }) {
     const news = view.feed.filter((f): f is NewsView => f.kind === "news");
     const cards = reports ?? [];
     const fought = (battles ?? []).filter((b) => b.status === "done");
+    const earned = milestones ?? [];
+    const found = discoveries ?? [];
     const keys = [
       ...news.map((n) => n.id),
       ...cards.map((r) => `report-${r.month}`),
       ...fought.map((b) => `battle-${b.id}`),
+      ...earned.map((m) => `milestone-${m.id}`),
+      ...found.map((d) => `discovery-${d.id}`),
     ];
     if (seen.current === null) {
       // What was already there when the world opened is old news.
@@ -122,6 +129,26 @@ export function Toasts({ view }: { view: WorldView }) {
             opens: { kind: "battle", battleId: b.id } as WindowSpec,
           };
         }),
+      ...earned
+        .filter((m) => !known.has(`milestone-${m.id}`))
+        .map((m) => ({
+          id: `milestone-${m.id}`,
+          label: "Milestone",
+          headline: `${MILESTONE_ICONS[m.id]} ${MILESTONE_NAMES[m.id]}`,
+          good: true,
+          burst: true,
+          opens: { kind: "milestones" } as WindowSpec,
+        })),
+      ...found
+        .filter((d) => !known.has(`discovery-${d.id}`))
+        .map((d) => ({
+          id: `discovery-${d.id}`,
+          label: "Discovery",
+          headline: `Your AI has a surprise: ${d.title}`,
+          good: d.kind !== "weakness" && d.kind !== "worse",
+          burst: false,
+          opens: { kind: "discovery", discoveryId: d.id } as WindowSpec,
+        })),
       ...cards
         .filter((r) => !known.has(`report-${r.month}`))
         .map((r) => ({
@@ -135,7 +162,7 @@ export function Toasts({ view }: { view: WorldView }) {
     ];
     for (const k of keys) known.add(k);
     if (fresh.length > 0) setToasts((t) => [...t, ...fresh].slice(-MOST));
-  }, [view.feed, view.companies, mine, myName, archId, reports, battles]);
+  }, [view.feed, view.companies, mine, myName, archId, reports, battles, milestones, discoveries]);
 
   useEffect(() => {
     if (toasts.length === 0) return;

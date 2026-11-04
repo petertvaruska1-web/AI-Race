@@ -61,7 +61,7 @@ export function Lab({ view }: { view: WorldView }) {
       {planning && !catalog && (
         <p className="text-muted">{error ?? "Loading the training data…"}</p>
       )}
-      {step === "data" && catalog && <DataStep plan={plan} catalog={catalog} />}
+      {step === "data" && catalog && <DataStep plan={plan} catalog={catalog} view={view} />}
       {step === "prepare" && catalog && (
         <PrepareStep plan={plan} catalog={catalog} balance={balance} />
       )}

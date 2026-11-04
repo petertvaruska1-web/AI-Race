@@ -3,6 +3,7 @@ import { AppShell } from "../components/AppShell.tsx";
 import type { Route } from "../route.ts";
 import { useSocket } from "../store/session.ts";
 import { useWorld } from "../store/world.ts";
+import { Victory } from "../surprises/Goals.tsx";
 import { applyCompanyTheme } from "../theme/palette.ts";
 import { Arena } from "./Arena.tsx";
 import { Benchmarks } from "./Benchmarks.tsx";
@@ -53,6 +54,7 @@ export function WorldScreen({ route }: { route: WorldRoute }) {
       {route.tab === "bench" && <Benchmarks view={view} />}
       {route.tab === "rivals" && <Rivals view={view} />}
       {route.tab === "arena" && <Arena view={view} />}
+      <Victory view={view} />
     </AppShell>
   );
 }

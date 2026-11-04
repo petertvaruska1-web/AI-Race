@@ -5,6 +5,7 @@ import { Orb } from "../orb/Orb.tsx";
 import { go } from "../route.ts";
 import { CATEGORIES } from "../screens/Benchmarks.tsx";
 import { useWindows } from "../store/windows.ts";
+import { DiscoveryList } from "../surprises/Discoveries.tsx";
 import { GoneWindow, Section, WindowFrame, type WindowProps } from "./WindowFrame.tsx";
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
@@ -42,6 +43,7 @@ export function AiWindow({ entry, view, versionId }: WindowProps & { versionId: 
   if (!company || !pub || !v) return <GoneWindow entry={entry} />;
   const parent = company.versions.find((x) => x.id === v.parentId);
   const products = company.products.filter((p) => p.versionId === v.id && p.status !== "retired");
+  const discoveries = company.discoveries.filter((d) => d.versionId === v.id);
   const to = (tab: "lab" | "play") => go({ screen: "world", worldId: view.world.id, tab });
   return (
     <WindowFrame
@@ -134,6 +136,12 @@ export function AiWindow({ entry, view, versionId }: WindowProps & { versionId: 
               </div>
             ))}
           </div>
+        </Section>
+      )}
+
+      {discoveries.length > 0 && (
+        <Section title="Discoveries">
+          <DiscoveryList discoveries={discoveries} />
         </Section>
       )}
 

@@ -1,10 +1,11 @@
-import { TEXT_LIMITS } from "@airace/protocol";
+import { type GoalSpec, NO_GOAL, TEXT_LIMITS } from "@airace/protocol";
 import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "../components/Button.tsx";
 import { Field, INPUT } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { api, type Me, type WorldSummary } from "../net/api.ts";
 import { go } from "../route.ts";
+import { GoalPicker } from "../surprises/Goals.tsx";
 
 /** First visit: a name is all a guest needs. */
 export function Welcome({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
@@ -62,6 +63,8 @@ export function Welcome({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
 export function Home({ me }: { me: Me }) {
   const [worlds, setWorlds] = useState<WorldSummary[] | null>(null);
   const [name, setName] = useState("");
+  const [goal, setGoal] = useState<GoalSpec>(NO_GOAL);
+  const [rivals, setRivals] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [min, max] = TEXT_LIMITS.worldName;
 
@@ -70,13 +73,17 @@ export function Home({ me }: { me: Me }) {
       .listWorlds()
       .then(setWorlds)
       .catch((err: Error) => setError(err.message));
+    api
+      .setup()
+      .then((s) => setRivals(s.rivals))
+      .catch(() => setRivals(false));
   }, []);
 
   async function create(e: FormEvent) {
     e.preventDefault();
     setError(null);
     try {
-      const worldId = await api.createWorld(name);
+      const worldId = await api.createWorld(name, goal.goal.kind === "none" ? undefined : goal);
       go({ screen: "world", worldId, tab: "company" });
     } catch (err) {
       setError((err as Error).message);
@@ -127,18 +134,21 @@ export function Home({ me }: { me: Me }) {
         title="Start a new world"
         hint="A world is one game. Its clock starts when you open for business."
       >
-        <form onSubmit={create} className="flex gap-3">
-          <input
-            className={INPUT}
-            aria-label="World name"
-            placeholder="Friday night"
-            value={name}
-            maxLength={max}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <Button type="submit" disabled={name.trim().length < min}>
-            Start
-          </Button>
+        <form onSubmit={create} className="space-y-4">
+          <div className="flex gap-3">
+            <input
+              className={INPUT}
+              aria-label="World name"
+              placeholder="Friday night"
+              value={name}
+              maxLength={max}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <Button type="submit" disabled={name.trim().length < min}>
+              Start
+            </Button>
+          </div>
+          <GoalPicker rivals={rivals} onChange={setGoal} />
         </form>
       </Panel>
       {error && (

@@ -9,6 +9,7 @@ import { Games } from "../games/Games.tsx";
 import { rivalAis } from "../rivals.ts";
 import { usePlayground } from "../store/playground.ts";
 import { useSocket } from "../store/session.ts";
+import { InterviewMode } from "../surprises/Interview.tsx";
 
 type Thread = { id: string; versionId: string; createdAt: number };
 type ThreadData = {
@@ -59,7 +60,7 @@ export function Playground({ view }: { view: WorldView }) {
   const [failure, setFailure] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [lastSent, setLastSent] = useState("");
-  const [mode, setMode] = useState<"chat" | "games">("chat");
+  const [mode, setMode] = useState<"chat" | "games" | "interview">("chat");
   const worldId = view.world.id;
 
   const loadThreads = useCallback(() => {
@@ -147,11 +148,20 @@ export function Playground({ view }: { view: WorldView }) {
       options={[
         { label: "Chat", value: "chat" },
         { label: "Games", value: "games" },
+        { label: "Interview", value: "interview" },
       ]}
       value={mode}
       onChange={setMode}
     />
   );
+  if (mode === "interview") {
+    return (
+      <div className="space-y-3">
+        {modes}
+        <InterviewMode view={view} />
+      </div>
+    );
+  }
   if (mode === "games" && player) {
     return (
       <div className="space-y-3">

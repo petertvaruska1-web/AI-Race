@@ -1,12 +1,21 @@
-import { DATASET_IDS, type PublicCatalog, type TrainingPlan } from "@airace/protocol";
+import { MIX_IDS, type PublicCatalog, type TrainingPlan, type WorldView } from "@airace/protocol";
 import { Panel } from "../../components/Panel.tsx";
 import { percent, words } from "../../format.ts";
 import { usePlan } from "../../store/plan.ts";
+import { NotebookCard } from "../../surprises/Notebook.tsx";
 
 /** What the AI reads: one card per dataset, with a slider for its share of the reading. */
-export function DataStep({ plan, catalog }: { plan: TrainingPlan; catalog: PublicCatalog }) {
+export function DataStep({
+  plan,
+  catalog,
+  view,
+}: {
+  plan: TrainingPlan;
+  catalog: PublicCatalog;
+  view?: WorldView;
+}) {
   const setWeight = usePlan((s) => s.setWeight);
-  const total = DATASET_IDS.reduce((sum, id) => sum + plan.mix[id], 0);
+  const total = MIX_IDS.reduce((sum, id) => sum + plan.mix[id], 0);
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">
@@ -51,6 +60,7 @@ export function DataStep({ plan, catalog }: { plan: TrainingPlan; catalog: Publi
             </Panel>
           );
         })}
+        {view && <NotebookCard view={view} total={total} />}
       </div>
     </div>
   );

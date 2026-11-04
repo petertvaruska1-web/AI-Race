@@ -35,11 +35,13 @@ export function PostCard({
     >
       <header className="flex flex-wrap items-baseline gap-x-2">
         <span className="player-text font-semibold">
-          {spotlight ? post.author.name : post.author.handle}
+          {spotlight || post.press ? post.author.name : post.author.handle}
         </span>
-        {spotlight && <span className="player-text text-xs text-muted">{post.author.handle}</span>}
+        {(spotlight || post.press) && (
+          <span className="player-text text-xs text-muted">{post.author.handle}</span>
+        )}
         <span className="ml-auto text-xs text-muted">
-          {GROUPS[post.author.group].one} · day {post.day}
+          {post.press ? "Press" : GROUPS[post.author.group].one} · day {post.day}
         </span>
       </header>
       <p className="mt-2 text-xs text-muted">

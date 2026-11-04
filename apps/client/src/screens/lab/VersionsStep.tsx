@@ -7,6 +7,7 @@ import { capitalize, words } from "../../format.ts";
 import { go } from "../../route.ts";
 import { usePlan } from "../../store/plan.ts";
 import { usePlayground } from "../../store/playground.ts";
+import { DiscoveryList } from "../../surprises/Discoveries.tsx";
 import { LaunchDialog } from "../LaunchDialog.tsx";
 
 function brainName(view: WorldView, v: VersionView): string {
@@ -67,6 +68,11 @@ export function VersionsStep({
             >
               Train further from this
             </Button>
+          </div>
+          <div className="mt-3">
+            <DiscoveryList
+              discoveries={(view.me.company?.discoveries ?? []).filter((d) => d.versionId === v.id)}
+            />
           </div>
         </Panel>
       ))}

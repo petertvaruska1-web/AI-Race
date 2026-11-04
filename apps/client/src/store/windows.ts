@@ -23,7 +23,12 @@ export type WindowSpec =
   | { kind: "battle"; battleId: string }
   | { kind: "customize" }
   | { kind: "fundApp" }
-  | { kind: "sponsor" };
+  | { kind: "sponsor" }
+  | { kind: "discovery"; discoveryId: string }
+  | { kind: "interview"; interviewId: string }
+  | { kind: "notebook" }
+  | { kind: "milestones" }
+  | { kind: "goal" };
 
 export type OpenWindow = {
   id: number;

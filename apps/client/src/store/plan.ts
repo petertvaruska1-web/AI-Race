@@ -1,4 +1,4 @@
-import type { DatasetId, TrainingPlan } from "@airace/protocol";
+import type { MixId, TrainingPlan } from "@airace/protocol";
 import type { Balance } from "@airace/sim";
 import { create } from "zustand";
 
@@ -8,7 +8,7 @@ type PlanStore = {
   /** Starts a fresh plan from the world's defaults, growing from `parentVersionId`. */
   reset(worldId: string, balance: Balance, parentVersionId: string | null): void;
   update(change: Partial<TrainingPlan>): void;
-  setWeight(id: DatasetId, weight: number): void;
+  setWeight(id: MixId, weight: number): void;
 };
 
 /** The player's next training plan, kept while they move between the Lab's steps. */
