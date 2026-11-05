@@ -7,9 +7,10 @@ import {
   projectView,
   step,
   upgradeState,
+  type VersionState,
   type WorldState,
 } from "../src/index.ts";
-import { cmd, ok, runningWorld, sys, TICK, ticks } from "./pack.ts";
+import { cmd, ok, rejected, runningWorld, sys, TICK, ticks } from "./pack.ts";
 
 const LOGO = { shape: "circle", symbol: "spark", initials: "BE" } as const;
 const PALETTE = { primary: "#3a86ff", secondary: "#ffbe0b" };
@@ -111,5 +112,50 @@ describe("upgrading a sim-6 world", () => {
     const s = upgradeState(old, "sim-6");
     expect(s.fairMode).toBe(false);
     expect(step(s, TICK).ok).toBe(true);
+  });
+});
+
+describe("sharing an AI with friends", () => {
+  function withVersion(s0: WorldState): WorldState {
+    const s = structuredClone(s0);
+    (s.companies.c1 as CompanyState).versions.v1 = {
+      id: "v1",
+      label: "Spark 1",
+      runId: "r-v1",
+      parentId: null,
+      nLayer: 2,
+      dModel: 64,
+      ctxLen: 64,
+      createdDay: 0,
+      trainedTokens: 1,
+      scores: null,
+      overall: null,
+      personalityWords: [],
+      traits: null,
+      published: false,
+      packKey: null,
+    } as VersionState;
+    return s;
+  }
+
+  it("shares and unshares an AI; friends see only the shared ones", () => {
+    let s = withFriend(withVersion(runningWorld()));
+    expect(projectView(s, "u2").companies.find((x) => x.id === "c1")?.publishedVersions).toEqual(
+      [],
+    );
+    s = ok(step(s, cmd({ type: "publishVersion", versionId: "v1", published: true })));
+    const shared = projectView(s, "u2").companies.find((x) => x.id === "c1")?.publishedVersions;
+    expect(shared?.map((v) => v.id)).toEqual(["v1"]);
+    s = ok(step(s, cmd({ type: "publishVersion", versionId: "v1", published: false })));
+    expect(c(s, "c1").versions.v1?.published).toBe(false);
+  });
+
+  it("refuses to share someone else's AI", () => {
+    const s = withFriend(withVersion(runningWorld()));
+    expect(
+      rejected(
+        step(s, cmd({ type: "publishVersion", versionId: "v1", published: true }, undefined, "u2")),
+      ),
+    ).toBe("That AI isn't one of yours.");
   });
 });

@@ -1,11 +1,12 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { GenerateJobResult, type Query } from "@airace/protocol";
 import type { WorldState } from "@airace/sim";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, ne } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { HttpError } from "../auth.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { schema } from "../db/index.ts";
+import { trainingCards } from "../helpers/limits.ts";
 import { forPlayer, paramsOf } from "../jobs/owners.ts";
 import type { ChatMessage } from "../realtime/gateway.ts";
 import { checkpointKey } from "../training/service.ts";
@@ -15,6 +16,10 @@ const RATE_WINDOW_MS = 10 * 60 * 1000;
 const RATE_MAX_MESSAGES = 30;
 const MODEL_URL_TTL_MS = 60 * 60 * 1000;
 const RECENT_CIDS = 2000;
+/** Tries of one friend's AI: 10 messages in 10 minutes per asker (Stage 2). */
+const TRY_WINDOW_MS = 10 * 60 * 1000;
+const TRY_MAX_MESSAGES = 10;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 export const REPLY_FAILED = "The AI couldn't answer right now. Try again.";
 
 type GeneratePayload = {
@@ -31,7 +36,11 @@ type GeneratePayload = {
 const RIVAL_CHAT_PRIORITY = 5;
 /** An interview runs right after ordinary chats: the press is waiting. */
 const INTERVIEW_PRIORITY = 1;
-export const NOT_YOURS = "You can only talk to your own AIs and rivals' AIs on sale.";
+export const NOT_YOURS =
+  "You can only talk to your own AIs, rivals' AIs on sale and AIs your friends share.";
+export const NOT_SHARED = "That AI isn't shared.";
+export const TRIED_A_LOT = "You've tried this AI a lot. Take a short break.";
+export const MAKER_OFFLINE = "Its maker's computer is offline, so it can't answer right now.";
 type ChatResult =
   | { ok: true; duplicate: boolean; data: { threadId: string } }
   | { ok: false; reason: string };
@@ -46,6 +55,8 @@ export class ChatService {
   /** Threads waiting for a reply, with the job that will give it. */
   private inFlight = new Map<string, string>();
   private rate = new Map<string, number[]>();
+  /** Recent tries of a friend's AI, by `<asker>|<versionId>`. */
+  private tries = new Map<string, number[]>();
   /** Recently handled chat ids, so a resent message is acked once. */
   private seen = new Map<string, string>();
 
@@ -58,6 +69,7 @@ export class ChatService {
     });
     gateway.registerQuery("chatThreads", (userId, q) => this.threads(userId, q));
     gateway.registerQuery("chatThread", (userId, q) => this.thread(userId, q));
+    gateway.registerQuery("versionTries", (userId, q) => this.versionTries(userId, q));
     broker.onPrepare("generate", (job) => this.spec(job.payload as GeneratePayload));
     broker.onChunk((job, text) => {
       if (job.type !== "generate") return;
@@ -84,10 +96,16 @@ export class ChatService {
     const companyId = s.members[userId]?.companyId;
     if (!s.members[userId])
       return { ok: false, reason: "That world doesn't exist or you're not in it." };
-    // Your own AIs, or a rival's AI while it is on sale. Stage 2 adds the AIs other players share.
+    // Your own AIs, a rival's AI while it is on sale, or an AI another player shares (Stage 2).
     const version = companyId ? s.companies[companyId]?.versions[msg.versionId] : undefined;
     const packKey = version ? undefined : rivalOnSale(s, msg.versionId);
-    if (!version && !packKey) return { ok: false, reason: NOT_YOURS };
+    const friend = version || packKey ? null : friendsVersion(s, msg.versionId);
+    if (!version && !packKey && !friend) return { ok: false, reason: NOT_YOURS };
+    if (friend && !friend.published) return { ok: false, reason: NOT_SHARED };
+    const conns = ctx.broker.connections();
+    if (friend && !s.fairMode && trainingCards(conns, s, friend.maker).length === 0) {
+      return { ok: false, reason: MAKER_OFFLINE };
+    }
     // An interview is with your own AI on sale, under that product's name.
     const interview = msg.interview ?? null;
     if (interview) {
@@ -117,6 +135,16 @@ export class ChatService {
     }
 
     const now = ctx.opts.scheduler.now();
+    if (friend) {
+      const key = `${userId}|${msg.versionId}`;
+      const tried = (this.tries.get(key) ?? []).filter((t) => t > now - TRY_WINDOW_MS);
+      if (tried.length >= TRY_MAX_MESSAGES) {
+        this.tries.set(key, tried);
+        return { ok: false, reason: TRIED_A_LOT };
+      }
+      tried.push(now);
+      this.tries.set(key, tried);
+    }
     const recent = (this.rate.get(userId) ?? []).filter((t) => t > now - RATE_WINDOW_MS);
     if (recent.length >= RATE_MAX_MESSAGES) {
       this.rate.set(userId, recent);
@@ -170,6 +198,8 @@ export class ChatService {
     this.inFlight.set(threadId, "pending");
     const jobId = await ctx.broker.enqueue("generate", payload, msg.worldId, {
       ...forPlayer(s, userId, paramsOf(s, msg.versionId)),
+      // A friend's AI answers on its maker's card (Fair off); the asker's share pays (Fair on).
+      ...(friend ? { owner: friend.maker } : {}),
       ...(packKey
         ? { priority: RIVAL_CHAT_PRIORITY }
         : interview
@@ -233,6 +263,48 @@ export class ChatService {
     };
   }
 
+  /** How often other players tried each of your shared AIs in the last 7 days: counts only (R2). */
+  private async versionTries(userId: string, q: Query): Promise<unknown> {
+    if (q.kind !== "versionTries") throw new HttpError(400, "Unknown request.");
+    let s: WorldState;
+    try {
+      s = (await this.ctx.worlds.get(q.worldId)).state();
+    } catch {
+      throw new HttpError(403, "That world doesn't exist or you're not in it.");
+    }
+    if (!s.members[userId])
+      throw new HttpError(403, "That world doesn't exist or you're not in it.");
+    const companyId = s.members[userId]?.companyId;
+    const company = companyId ? s.companies[companyId] : undefined;
+    const shared = Object.values(company?.versions ?? {})
+      .filter((v) => v.published)
+      .sort((a, b) => a.createdDay - b.createdDay || (a.id < b.id ? -1 : 1));
+    if (shared.length === 0) return { versions: [] };
+    const since = this.ctx.opts.scheduler.now() - WEEK_MS;
+    const rows = await this.ctx.db
+      .select({ versionId: schema.chatThreads.versionId })
+      .from(schema.chatMessages)
+      .innerJoin(schema.chatThreads, eq(schema.chatThreads.id, schema.chatMessages.threadId))
+      .where(
+        and(
+          eq(schema.chatThreads.worldId, q.worldId),
+          ne(schema.chatThreads.userId, userId),
+          inArray(
+            schema.chatThreads.versionId,
+            shared.map((v) => v.id),
+          ),
+          eq(schema.chatMessages.role, "user"),
+          gte(schema.chatMessages.at, since),
+        ),
+      );
+    return {
+      versions: shared.map((v) => ({
+        versionId: v.id,
+        tries7d: rows.filter((r) => r.versionId === v.id).length,
+      })),
+    };
+  }
+
   private async thread(userId: string, q: Query): Promise<unknown> {
     if (q.kind !== "chatThread") throw new HttpError(400, "Unknown request.");
     const thread = await this.ownThread(userId, q.worldId, q.threadId);
@@ -290,6 +362,18 @@ export class ChatService {
 
 function stream(p: { worldId: string; threadId: string }): string {
   return `chat:${p.worldId}:${p.threadId}`;
+}
+
+/** Another player's AI `versionId`: who made it and whether it is shared. */
+function friendsVersion(
+  s: WorldState,
+  versionId: string,
+): { maker: string; published: boolean } | null {
+  for (const c of Object.values(s.companies)) {
+    const v = c.versions[versionId];
+    if (v && !c.rival && c.ownerUserId) return { maker: c.ownerUserId, published: v.published };
+  }
+  return null;
 }
 
 /** The pack key of a rival's AI that is on sale under `versionId`, else undefined. */

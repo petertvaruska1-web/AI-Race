@@ -303,8 +303,15 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       };
       return OK;
     }
-    case "publishVersion":
-      return no("Sharing isn't available yet.");
+    case "publishVersion": {
+      // "Share with friends" (Stage 2): a shared AI is listed in the AI Directory to try.
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("Found your company first.");
+      const version = company.versions[cmd.versionId];
+      if (!version) return no("That AI isn't one of yours.");
+      version.published = cmd.published;
+      return OK;
+    }
     case "launchProduct":
     case "setPlan":
     case "setPrice":

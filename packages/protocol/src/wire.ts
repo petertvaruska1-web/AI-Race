@@ -27,6 +27,8 @@ export const Query = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("cards"), worldId: zId }),
   /** The biggest brain the player's card (or Fair mode's shared cards) can train, and its speed. */
   z.object({ kind: z.literal("trainingLimit"), worldId: zId }),
+  /** How often other players tried each of your shared AIs this week (counts only). */
+  z.object({ kind: z.literal("versionTries"), worldId: zId }),
 ]);
 export type Query = z.infer<typeof Query>;
 

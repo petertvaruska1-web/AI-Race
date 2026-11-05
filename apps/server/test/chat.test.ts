@@ -3,7 +3,7 @@ import { rmSync } from "node:fs";
 import { GenerateJobSpec } from "@airace/protocol";
 import { asc, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
-import { REPLY_FAILED } from "../src/chat/service.ts";
+import { NOT_SHARED, NOT_YOURS, REPLY_FAILED } from "../src/chat/service.ts";
 import { schema } from "../src/db/index.ts";
 import { eventually, type FakeWorker } from "./fakeWorker.ts";
 import {
@@ -145,7 +145,7 @@ describe("playground chat", () => {
     );
     benWs.send({ v: 1, type: "subscribe", sub: `chat:${o.worldId}:${threadId}` });
     expect((await benWs.next("error")).reason).toMatch(/can't follow/i);
-    expect((await chat(benWs, o.worldId, o.versionId, "Hi")).reason).toMatch(/your own AIs/i);
+    expect((await chat(benWs, o.worldId, o.versionId, "Hi")).reason).toBe(NOT_SHARED);
     expect((await chat(benWs, o.worldId, o.versionId, "Hi", threadId ?? null)).reason).toBeTruthy();
   });
 
@@ -231,6 +231,6 @@ describe("chatting with a rival's AI", () => {
     const live = o.actor.state().companies["rival-1"]?.products[o.product.id];
     if (live) live.status = "retired";
     const again = await chat(o.ws, o.worldId, o.product.versionId, "Still there?", sent.threadId);
-    expect(again.reason).toBe("You can only talk to your own AIs and rivals' AIs on sale.");
+    expect(again.reason).toBe(NOT_YOURS);
   });
 });
