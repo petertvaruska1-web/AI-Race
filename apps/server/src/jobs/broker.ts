@@ -42,6 +42,8 @@ export type WorkerConn = {
   close(code: number, reason: string): void;
   /** Jobs leased to this connection, by id. */
   leases: Map<string, JobType>;
+  /** The player whose graphics card this is; null for the house card (the PC running the game). */
+  ownerUserId: string | null;
 };
 
 /**
@@ -158,6 +160,11 @@ export class JobBroker {
   }
 
   /** A worker said hello. Jobs it still runs stay with it; others it names are cancelled. */
+  /** Every connected card (for the cards view and the routing). */
+  connections(): WorkerConn[] {
+    return [...this.workers.values()];
+  }
+
   attach(conn: WorkerConn, running: string[]): Promise<void> {
     return this.serial(async () => {
       const previous = this.workers.get(conn.workerId);

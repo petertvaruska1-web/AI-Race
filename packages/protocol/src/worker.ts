@@ -37,6 +37,10 @@ export const WorkerCapabilities = z.object({
   device: z.enum(["cuda", "cpu"]),
   vramMb: z.number().int().min(0),
   maxParams: z.number().int().positive(),
+  /** The graphics card's name ("CPU" without one); older helpers don't say. */
+  gpuName: z.string().max(120).default("unknown"),
+  /** Training tokens a second on the reference model (0: not measured). */
+  speed: z.number().min(0).default(0),
   jobTypes: z.array(JobType).min(1),
   /** A worker from before feedback or battle jobs sends no slot for them: it gets none. */
   slots: z.object({

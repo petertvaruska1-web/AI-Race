@@ -3,6 +3,7 @@ import { type ServerToWorker, WorkerMessage } from "@airace/protocol";
 import type { FastifyInstance } from "fastify";
 import type { RawData, WebSocket } from "ws";
 import type { AppContext } from "../app.ts";
+import { userOfHelperKey } from "../helpers/keys.ts";
 import type { WorkerConn } from "./broker.ts";
 
 const HELLO_TIMEOUT_MS = 5000;
@@ -36,11 +37,14 @@ export function registerWorkerRoutes(app: FastifyInstance, ctx: AppContext): voi
       }
       const parsed = WorkerMessage.safeParse(data);
       if (!conn) {
-        if (
-          !parsed.success ||
-          parsed.data.type !== "whello" ||
-          !sameSecret(parsed.data.token, ctx.opts.workerToken)
-        ) {
+        if (!parsed.success || parsed.data.type !== "whello") {
+          socket.close(CLOSE_BAD_WORKER, "unknown worker");
+          return;
+        }
+        // The house card shows the server's own token; a player's helper shows their key.
+        const house = sameSecret(parsed.data.token, ctx.opts.workerToken);
+        const ownerUserId = house ? null : await userOfHelperKey(ctx, parsed.data.token);
+        if (!house && !ownerUserId) {
           socket.close(CLOSE_BAD_WORKER, "unknown worker");
           return;
         }
@@ -51,6 +55,7 @@ export function registerWorkerRoutes(app: FastifyInstance, ctx: AppContext): voi
           send,
           close: (code, reason) => socket.close(code, reason),
           leases: new Map(),
+          ownerUserId,
         };
         ctx.log.info({ workerId: conn.workerId, caps: conn.caps }, "worker connected");
         send({ v: 1, type: "wwelcome" });

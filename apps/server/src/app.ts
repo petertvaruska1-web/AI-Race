@@ -11,6 +11,7 @@ import { ChatService } from "./chat/service.ts";
 import { type ServerOptions, SIM_VERSION } from "./config.ts";
 import { type Db, openDb } from "./db/index.ts";
 import { FeedbackService } from "./feedback/service.ts";
+import { registerHelperKeyRoutes } from "./helpers/keys.ts";
 import { InterviewService } from "./interviews/service.ts";
 import { JobBroker } from "./jobs/broker.ts";
 import { registerWorkerRoutes } from "./jobs/workerGateway.ts";
@@ -115,6 +116,7 @@ export async function buildApp(
   await app.register(cookie, { secret: opts.secret });
   await ctx.gateway.register(app);
   registerWorkerRoutes(app, ctx);
+  registerHelperKeyRoutes(app, ctx);
 
   app.get("/api/health", async () => ({ ok: true, sim: SIM_VERSION }));
   registerAuthRoutes(app, ctx);

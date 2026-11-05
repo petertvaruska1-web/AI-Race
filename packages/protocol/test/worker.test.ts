@@ -38,6 +38,15 @@ describe("worker protocol fixtures", () => {
     }
   });
 
+  it("reads a hello from a helper that doesn't name or time its card", () => {
+    const { message } = JSON.parse(readFileSync(new URL("whello.json", DIR), "utf8"));
+    const { gpuName: _, speed: __, ...older } = message.capabilities;
+    const parsed = WorkerMessage.parse({ ...message, capabilities: older });
+    if (parsed.type !== "whello") throw new Error("not a hello");
+    expect(parsed.capabilities.gpuName).toBe("unknown");
+    expect(parsed.capabilities.speed).toBe(0);
+  });
+
   it("reads an eval spec and result from before discoveries", () => {
     const spec = WORKER_SCHEMAS.EvalJobSpec.parse({
       versionId: "6fa459ea-ee8a-4ca4-894e-db77e160355e",

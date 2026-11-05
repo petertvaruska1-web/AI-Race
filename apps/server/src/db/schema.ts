@@ -222,6 +222,13 @@ export const notebooks = pgTable("notebooks", {
   hash: text("hash").notNull(),
 });
 
+/** A player's helper key version: the key itself is derived from the server secret, never stored. */
+export const helperKeys = pgTable("helper_keys", {
+  userId: uuid("user_id").primaryKey(),
+  version: integer("version").notNull().default(0),
+  createdAt: ms("created_at").notNull(),
+});
+
 /** Notebook texts by their sha256, so a run trains on exactly the text saved when it started. */
 export const notebookTexts = pgTable("notebook_texts", {
   hash: text("hash").primaryKey(),
