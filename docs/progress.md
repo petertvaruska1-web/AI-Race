@@ -2,6 +2,11 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-11-05 — Coaching (in progress, paused)
+- **Built and pushed:** lessons in the world (sim-8), the lesson service (likes and written answers from your own AI's Playground replies, private, filtered, newest 200 kept), "Train on your lessons" adding them at 5% of the reading, and the screens (👍 Good answer, ✏️ Write a better answer, the Lab's "Your coaching" card, the lessons window). TypeScript 757 tests and checks pass.
+- **Open:** the solo end-to-end test's new coaching step: the lessons are made and the switch turns on, but the final Start training gets no answer in the full game (see `docs/handoff/sdd/ledger-coaching.md`, Task 4).
+- **Next:** fix that, run everything, play it on the GPU, then report.
+
 ## 2026-11-05 — Stage 2 "Friends" (built; a real session with a friend still to do)
 - **What players can now do:** host a game from this PC (`npm run host`, a free Cloudflare quick-tunnel link for friends anywhere, or the local network), join a friend's world by its link or code, and connect their own computer as a "helper" ("Get the helper" downloads a personal setup file; "Connect your computer" starts it). Each world chooses **Fair mode** when it is made: off, each AI trains and answers on its own player's graphics card; on, everyone's cards are shared with an equal share per company, and a run moves to another card if its card leaves. Everyone sees the world's cards; the AI Lab only offers brains the card can hold and estimates real minutes. Players share AIs in the new **AI Directory** and try each other's (answered by the maker's card), battle each other's AIs (each side on its own card; story rounds voted by the other players), and talk in a **world chat**. An absent player's company runs on autopilot; a late founder gets more starting money; customer questions that waited over 14 days for a card are dropped.
 - **Built** (`docs/superpowers/plans/2026-11-04-stage2-friends.md`, 20 tasks; rulings in `docs/handoff/sdd/ledger-stage2-friends.md`): sim-7, helper keys, cards, job routing by owner with Fair-mode shares, resume uploads, migrations 0009–0012, the join/invite/download routes, `airace-ml fetch-data`, and the screens. CLAUDE.md's R3 now reads: real work runs on the players' own helper cards (Fair mode pools them equally).

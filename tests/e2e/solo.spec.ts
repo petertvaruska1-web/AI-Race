@@ -279,4 +279,33 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
   await expect(page.getByTestId("trophy-shelf")).toContainText("First paying customer");
   await expect.poll(() => victory, { timeout: 60_000 }).toBe(true);
   await expect(page.getByTestId("goal-progress")).toContainText("Reached on");
+
+  // 30. Coaching: three replies, each liked and given a better answer (six lessons), then a
+  // run that trains on them.
+  await page.getByRole("link", { name: "Playground" }).click();
+  await page.getByRole("group", { name: "Playground mode" }).getByText("Chat").click();
+  // Your own AI (the Playground may still be on the rival's from step 20): only yours is coached.
+  await page.getByLabel("Talk to").selectOption({ index: 0 });
+  await page.getByRole("button", { name: "New conversation" }).click();
+  const log = page.getByTestId("chat-log");
+  for (let k = 0; k < 3; k++) {
+    await page.getByLabel("Your message").fill(`Question ${k + 1}?`);
+    await page.getByRole("button", { name: "Send" }).click();
+    const replyK = log.getByRole("listitem").nth(2 * k + 1);
+    await expect(replyK.getByRole("button", { name: "👍 Good answer" })).toBeVisible({
+      timeout: 120_000,
+    });
+    await replyK.getByRole("button", { name: "👍 Good answer" }).click();
+    await expect(replyK.getByText("Saved as a lesson.")).toBeVisible();
+    await replyK.getByRole("button", { name: "✏️ Write a better answer" }).click();
+    await replyK.getByLabel("Your answer").fill(`The answer to question ${k + 1}.`);
+    await replyK.getByRole("button", { name: "Save" }).click();
+    await expect(replyK.getByLabel("Your answer")).toHaveCount(0);
+  }
+  await page.getByRole("link", { name: "AI Lab" }).click();
+  await page.getByRole("button", { name: "1 Data" }).click();
+  await expect(page.getByText("6 lessons")).toBeVisible();
+  await page.getByLabel("Train on your lessons").check();
+  await page.getByRole("button", { name: "Start training" }).click();
+  await expect(page.getByText("Training", { exact: true })).toBeVisible({ timeout: 60_000 });
 });
