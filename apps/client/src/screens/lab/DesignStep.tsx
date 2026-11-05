@@ -1,5 +1,5 @@
 import { TEXT_LIMITS, type TrainingPlan, type VersionView } from "@airace/protocol";
-import { type Balance, previewPlan } from "@airace/sim";
+import { type Balance, paramCount, previewPlan } from "@airace/sim";
 import { Field, INPUT } from "../../components/Field.tsx";
 import { Panel } from "../../components/Panel.tsx";
 import { capitalize, formatMoney, gameDays, percent, words } from "../../format.ts";
@@ -43,6 +43,8 @@ export function DesignStep({
   versions,
   lent = 0,
   loved = 0,
+  maxParams = null,
+  limitNote = null,
 }: {
   plan: TrainingPlan;
   balance: Balance;
@@ -51,6 +53,10 @@ export function DesignStep({
   loved?: number;
   /** Data-center compute lent to training (PFLOP a day). */
   lent?: number;
+  /** The biggest brain the cards can train, in parameters (null: no limit known). */
+  maxParams?: number | null;
+  /** Why a bigger brain is off. */
+  limitNote?: string | null;
 }) {
   const update = usePlan((s) => s.update);
   const parent = versions.find((v) => v.id === plan.parentVersionId) ?? null;
@@ -98,17 +104,22 @@ export function DesignStep({
               { ...plan, brainSize: b.id },
               lent,
             );
+            const tooBig = maxParams !== null && paramCount(b.nLayer, b.dModel) > maxParams;
             return (
               <Choice
                 key={b.id}
                 selected={plan.brainSize === b.id}
-                disabled={shrinks}
+                disabled={shrinks || tooBig}
                 onClick={() => update({ brainSize: b.id })}
                 title={capitalize(b.id)}
                 detail={
                   p.ok ? `${formatMoney(p.preview.cost)} · ${gameDays(p.preview.durationDays)}` : ""
                 }
-                {...(shrinks ? { note: "Your AI can only grow" } : {})}
+                {...(shrinks
+                  ? { note: "Your AI can only grow" }
+                  : tooBig && limitNote
+                    ? { note: limitNote }
+                    : {})}
               />
             );
           })}

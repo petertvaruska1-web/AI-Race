@@ -1,6 +1,7 @@
 import type { WorldView } from "@airace/protocol";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef } from "react";
+import { CardsWindow } from "../cards/Cards.tsx";
 import { CustomizeWindow, FundAppWindow, SponsorWindow } from "../spending/Spending.tsx";
 import { type OpenWindow, useWindows } from "../store/windows.ts";
 import { DiscoveryWindow } from "../surprises/Discoveries.tsx";
@@ -51,6 +52,8 @@ function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) 
       return <DataCenterWindow entry={entry} view={view} />;
     case "computers":
       return <ComputersWindow entry={entry} view={view} />;
+    case "cards":
+      return <CardsWindow entry={entry} view={view} />;
     case "report":
       return <ReportWindow entry={entry} view={view} month={s.month} />;
     case "rescue":

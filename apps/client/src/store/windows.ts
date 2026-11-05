@@ -16,6 +16,7 @@ export type WindowSpec =
   | { kind: "campaign"; region?: RegionId }
   | { kind: "dataCenter" }
   | { kind: "computers" }
+  | { kind: "cards" }
   | { kind: "report"; month: string }
   | { kind: "rescue" }
   | { kind: "rival"; companyId: string }

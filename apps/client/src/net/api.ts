@@ -71,6 +71,8 @@ export const api = {
       ...(goal ? { goal } : {}),
       ...(fairMode ? { fairMode } : {}),
     }).then((r) => r.worldId),
+  /** The player's own helper key (for "Connect your computer"); never shown as text. */
+  helperKey: () => call<{ key: string }>("/api/helper/key").then((r) => r.key),
   /** A world by its invite code: name, players and Fair mode. */
   inviteInfo: (code: string) => call<InviteInfo>(`/api/worlds/invite/${encodeURIComponent(code)}`),
   /** Joins a friend's world by its invite code; resolves to the world's id. */

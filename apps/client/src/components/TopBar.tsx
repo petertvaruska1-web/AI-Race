@@ -1,6 +1,7 @@
 import { SPEEDS, type Speed, type WorldView } from "@airace/protocol";
 import { getBalance } from "@airace/sim";
 import type { ReactNode } from "react";
+import { CardsChip } from "../cards/Cards.tsx";
 import { formatMoney } from "../format.ts";
 import { LogoMotion } from "../spending/Spending.tsx";
 import { useSocket } from "../store/session.ts";
@@ -96,6 +97,7 @@ export function TopBar({ view }: { view: WorldView }) {
             {`Servers overloaded · ${Math.round(served * 100)}% answered`}
           </button>
         )}
+        <CardsChip view={view} />
         <Clock view={view} />
       </div>
       <DayBar view={view} />

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { AppShell } from "../components/AppShell.tsx";
 import type { Route } from "../route.ts";
+import { useFollowCards } from "../store/cards.ts";
 import { useSocket } from "../store/session.ts";
 import { useWorld } from "../store/world.ts";
 import { Victory } from "../surprises/Goals.tsx";
@@ -29,6 +30,8 @@ export function WorldScreen({ route }: { route: WorldRoute }) {
     socket.watch(worldId);
     return () => socket.unwatch(worldId);
   }, [socket, worldId]);
+  // Everyone's graphics cards, for the top bar's chip and the Lab's limits (Stage 2).
+  useFollowCards(worldId);
 
   const palette = view?.companies.find((c) => c.id === view.me.company?.id)?.palette ?? null;
   useEffect(() => {

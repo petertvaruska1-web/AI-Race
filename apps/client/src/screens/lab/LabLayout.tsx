@@ -1,9 +1,11 @@
 import type { WorldView } from "@airace/protocol";
 import { getBalance, previewPlan } from "@airace/sim";
 import { useEffect, useState } from "react";
+import { labLimit, NO_CARD, realMinutes } from "../../cards/Cards.tsx";
 import { Button } from "../../components/Button.tsx";
 import { lentToTraining } from "../../components/Computers.tsx";
 import { formatMoney, gameDays } from "../../format.ts";
+import { useCards } from "../../store/cards.ts";
 import { useCatalog } from "../../store/catalog.ts";
 import { usePlan } from "../../store/plan.ts";
 import { useSocket } from "../../store/session.ts";
@@ -34,6 +36,9 @@ export function Lab({ view }: { view: WorldView }) {
   const balance = getBalance(view.world.balance);
   const active = company?.runs.find((r) => r.status === "training" || r.status === "finalizing");
   const [step, setStep] = useState<LabStep>(active ? "train" : "data");
+  const cards = useCards((s) => s.cards);
+  const cardLimit = useCards((s) => s.limit);
+  const limits = labLimit(view, cards, cardLimit, balance);
 
   useEffect(() => load(socket), [load, socket]);
   useEffect(() => {
@@ -72,6 +77,8 @@ export function Lab({ view }: { view: WorldView }) {
           versions={versions}
           lent={lentToTraining(view)}
           loved={view.me.company?.loved ?? 0}
+          maxParams={limits.maxParams}
+          limitNote={limits.note}
         />
       )}
       {step === "train" && <TrainStep view={view} />}
@@ -84,6 +91,8 @@ export function Lab({ view }: { view: WorldView }) {
 /** The plan's live price and game time, and the button that starts it. */
 function SummaryBar({ view, onStarted }: { view: WorldView; onStarted: () => void }) {
   const socket = useSocket();
+  const cards = useCards((s) => s.cards);
+  const limit = useCards((s) => s.limit);
   const plan = usePlan((s) => s.plan);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -102,13 +111,21 @@ function SummaryBar({ view, onStarted }: { view: WorldView; onStarted: () => voi
         }
       : null;
   const active = company.runs.some((r) => r.status === "training" || r.status === "finalizing");
+  const limits = labLimit(view, cards, limit);
+  const minutes = preview.ok
+    ? realMinutes(preview.preview.tokens, preview.preview.params, limits.tokensPerSecond)
+    : null;
   const blocked = !preview.ok
     ? preview.reason
-    : active
-      ? "Your AI is already training."
-      : company.cash < preview.preview.cost
-        ? `Not enough cash: this costs ${formatMoney(preview.preview.cost)} and you have ${formatMoney(company.cash)}.`
-        : null;
+    : limits.noCard
+      ? NO_CARD
+      : limits.maxParams !== null && preview.preview.params > limits.maxParams
+        ? limits.note
+        : active
+          ? "Your AI is already training."
+          : company.cash < preview.preview.cost
+            ? `Not enough cash: this costs ${formatMoney(preview.preview.cost)} and you have ${formatMoney(company.cash)}.`
+            : null;
 
   async function start() {
     if (!plan) return;
@@ -131,6 +148,11 @@ function SummaryBar({ view, onStarted }: { view: WorldView; onStarted: () => voi
             </span>
           </p>
         ) : null}
+        {minutes !== null && (
+          <p data-testid="real-minutes" className="text-xs text-muted">
+            {`About ${minutes} ${minutes === 1 ? "minute" : "minutes"} ${limits.where}.`}
+          </p>
+        )}
         {saved && (saved.days > 0 || saved.dollars > 0) && (
           <p className="text-xs text-good">
             Your data centers make this run {gameDays(saved.days)} faster and{" "}
