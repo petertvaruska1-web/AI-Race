@@ -92,6 +92,13 @@
       "when": 1793892005330,
       "tag": "0012_world_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793911474080,
+      "tag": "0013_lessons",
+      "breakpoints": true
     }
   ]
 }

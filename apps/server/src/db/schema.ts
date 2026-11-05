@@ -9,6 +9,7 @@ import {
   serial,
   text,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -283,6 +284,27 @@ export const worldChat = pgTable(
     at: ms("at").notNull(),
   },
   (t) => [index("world_chat_world_idx").on(t.worldId, t.id)],
+);
+
+/** Coaching lessons (C45): a company's newest 200, private to it (R2). */
+export const lessons = pgTable(
+  "lessons",
+  {
+    id: serial("id").primaryKey(),
+    worldId: uuid("world_id").notNull(),
+    companyId: text("company_id").notNull(),
+    question: text("question").notNull(),
+    answer: text("answer").notNull(),
+    /** "liked": the AI's own reply; "written": the player's answer. */
+    kind: text("kind").notNull(),
+    sourceThread: uuid("source_thread").notNull(),
+    sourceIdx: integer("source_idx").notNull(),
+    at: ms("at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("lessons_source_idx").on(t.sourceThread, t.sourceIdx, t.kind),
+    index("lessons_company_idx").on(t.worldId, t.companyId, t.id),
+  ],
 );
 
 /** One job per battle: a restart never runs a battle twice. */

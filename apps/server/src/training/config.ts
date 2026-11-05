@@ -10,7 +10,7 @@ export const BATCH_TOKENS = 8192;
  * real setting (R7). Fields Python defaults (purchases, notebook, coaching,
  * finishing mix) are left out until the game offers them (M3).
  */
-/** "Learn from customers": the loved conversations' share of the run's text. */
+/** "Learn from customers" and "Train on your lessons": each adds this share of the run's text. */
 export const COACHING_SHARE = 0.05;
 
 export function toTrainRunConfig(
@@ -22,6 +22,8 @@ export function toTrainRunConfig(
     parent: { dir: string } | null;
     /** The conversations customers loved, for a plan that learns from them. */
     coaching?: [string, string][];
+    /** The player's lessons, for a plan that trains on them (coaching). */
+    lessons?: [string, string][];
     /** The notebook's paragraphs, for a plan with a notebook share. */
     notebook?: string[];
   },
@@ -37,10 +39,14 @@ export function toTrainRunConfig(
   // Tutoring packs: extra tokens on top of the length, all from one dataset (as `previewPlan`).
   const packs = plan.tutoring?.packs ?? 0;
   const budget = Math.round(length.tokens * (1 + o.balance.economy.tutoring.packShare * packs));
-  const coaching = plan.learnFromCustomers ? (o.coaching ?? []) : [];
+  const loved = plan.learnFromCustomers ? (o.coaching ?? []) : [];
+  const lessons = plan.coaching ? (o.lessons ?? []) : [];
+  const coaching = [...loved, ...lessons];
+  // Each source adds its own share; together they are the trainer's one `coaching` dataset.
+  const coachingShare = COACHING_SHARE * (Number(loved.length > 0) + Number(lessons.length > 0));
   if (packs > 0 || coaching.length > 0) {
     const total = Object.values(mixture).reduce((a, b) => a + b, 0);
-    const own = coaching.length > 0 ? 1 - COACHING_SHARE : 1;
+    const own = 1 - coachingShare;
     const base = length.tokens / budget;
     mixture = Object.fromEntries(
       Object.entries(mixture).map(([k, w]) => [k, (own * base * w) / total]),
@@ -49,7 +55,7 @@ export function toTrainRunConfig(
       const id = plan.tutoring.dataset;
       mixture[id] = (mixture[id] ?? 0) + own * (1 - base);
     }
-    if (coaching.length > 0) mixture.coaching = COACHING_SHARE;
+    if (coaching.length > 0) mixture.coaching = coachingShare;
   }
   return {
     run_id: o.runId,

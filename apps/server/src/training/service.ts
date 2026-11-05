@@ -216,6 +216,7 @@ export class TrainingService {
           balance: getBalance(s.balance),
           parent: run.plan.parentVersionId ? { dir: "parent" } : null,
           coaching: run.plan.learnFromCustomers ? await this.loved(s.worldId, companyId) : [],
+          lessons: run.plan.coaching ? await this.ctx.coaching.pairs(s.worldId, companyId) : [],
           notebook: run.notebookHash ? await this.notebookOf(run.notebookHash) : [],
         }),
       };

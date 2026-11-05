@@ -36,6 +36,9 @@ export type InterviewPublishMessage = Extract<ClientMessage, { type: "interviewP
 export type NotebookSaveMessage = Extract<ClientMessage, { type: "notebookSave" }>;
 export type BattleVoteMessage = Extract<ClientMessage, { type: "battleVote" }>;
 export type WorldChatMessage = Extract<ClientMessage, { type: "worldChat" }>;
+export type LessonMessage = Extract<ClientMessage, { type: "lesson" }>;
+export type LessonDeleteMessage = Extract<ClientMessage, { type: "lessonDelete" }>;
+type Answer = Promise<{ ok: true } | { ok: false; reason: string }>;
 export type WorldChatHandler = (
   userId: string,
   msg: WorldChatMessage,
@@ -100,6 +103,8 @@ export class Gateway {
   private notebook: NotebookHandler | null = null;
   private battleVote: BattleVoteHandler | null = null;
   private worldChat: WorldChatHandler | null = null;
+  private lessonHandler: ((userId: string, msg: LessonMessage) => Answer) | null = null;
+  private lessonDelete: ((userId: string, msg: LessonDeleteMessage) => Answer) | null = null;
   private closed = false;
 
   constructor(private readonly ctx: AppContext) {
@@ -128,6 +133,15 @@ export class Gateway {
   /** Handles playground messages (plan Task 15); the gateway acks or rejects with the result. */
   setChatHandler(handler: ChatHandler): void {
     this.chat = handler;
+  }
+
+  /** Takes a coaching lesson; the gateway acks or rejects with the reason. */
+  setLessonHandler(handler: (userId: string, msg: LessonMessage) => Answer): void {
+    this.lessonHandler = handler;
+  }
+
+  setLessonDeleteHandler(handler: (userId: string, msg: LessonDeleteMessage) => Answer): void {
+    this.lessonDelete = handler;
   }
 
   /** Takes a world chat message; the gateway acks or rejects with the reason. */
@@ -242,6 +256,8 @@ export class Gateway {
         "notebookSave",
         "battleVote",
         "worldChat",
+        "lesson",
+        "lessonDelete",
       ];
       if (cid && typeof d?.type === "string" && answerable.includes(d.type)) {
         const reason =
@@ -309,6 +325,20 @@ export class Gateway {
           ? await this.notebook(userId, msg)
           : { ok: false as const, reason: "Notebooks aren't available yet." };
         if (r.ok) session.send({ v: 1, type: "ack", cid: msg.cid, duplicate: false, data: r.data });
+        else session.send({ v: 1, type: "reject", cid: msg.cid, reason: r.reason });
+        return;
+      }
+      case "lesson":
+      case "lessonDelete": {
+        const r =
+          msg.type === "lesson"
+            ? this.lessonHandler
+              ? await this.lessonHandler(userId, msg)
+              : { ok: false as const, reason: "Coaching isn't available yet." }
+            : this.lessonDelete
+              ? await this.lessonDelete(userId, msg)
+              : { ok: false as const, reason: "Coaching isn't available yet." };
+        if (r.ok) session.send({ v: 1, type: "ack", cid: msg.cid, duplicate: false });
         else session.send({ v: 1, type: "reject", cid: msg.cid, reason: r.reason });
         return;
       }

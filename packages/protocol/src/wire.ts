@@ -31,6 +31,8 @@ export const Query = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("versionTries"), worldId: zId }),
   /** The world chat's last 200 messages, oldest first. */
   z.object({ kind: z.literal("worldChat"), worldId: zId }),
+  /** Your company's coaching lessons, oldest first (private). */
+  z.object({ kind: z.literal("lessons"), worldId: zId }),
 ]);
 export type Query = z.infer<typeof Query>;
 
@@ -90,6 +92,25 @@ export const ClientMessage = z.discriminatedUnion("type", [
     .refine((m) => m.opponent === null || (DUEL_GAMES as readonly string[]).includes(m.game), {
       message: "Story Dice can't be a duel.",
     }),
+  /** A lesson for your own AI (coaching): like its reply, or write the answer you wished for. */
+  z.object({
+    v,
+    type: z.literal("lesson"),
+    cid: z.uuid(),
+    worldId: zId,
+    threadId: zId,
+    /** The AI reply's place in the conversation. */
+    idx: z.number().int().min(0),
+    kind: z.enum(["liked", "written"]),
+    text: z.string().max(2000).optional(),
+  }),
+  z.object({
+    v,
+    type: z.literal("lessonDelete"),
+    cid: z.uuid(),
+    worldId: zId,
+    lessonId: z.number().int().min(0),
+  }),
   /** A message to the world chat (Stage 2); the server checks its length and words. */
   z.object({
     v,
