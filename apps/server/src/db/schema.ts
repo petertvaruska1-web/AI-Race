@@ -271,6 +271,20 @@ export const TABLE_NAMES = [
   "feedback_requests",
 ] as const;
 
+/** The world chat (Stage 2): the last 200 messages of each world. */
+export const worldChat = pgTable(
+  "world_chat",
+  {
+    id: serial("id").primaryKey(),
+    worldId: uuid("world_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    name: text("name").notNull(),
+    text: text("text").notNull(),
+    at: ms("at").notNull(),
+  },
+  (t) => [index("world_chat_world_idx").on(t.worldId, t.id)],
+);
+
 /** One job per battle: a restart never runs a battle twice. */
 export const battleRequests = pgTable("battle_requests", {
   battleId: text("battle_id").primaryKey(),

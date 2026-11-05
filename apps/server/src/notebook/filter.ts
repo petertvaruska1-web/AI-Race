@@ -23,15 +23,27 @@ function hasPhone(text: string): boolean {
   return false;
 }
 
+/**
+ * Why players' text can't be kept, or null when it can: links, email addresses, phone numbers,
+ * the AI's own characters and blocked words. Shared by notebooks and the world chat; it only
+ * blocks, never changes a word. `kind` names the text in the refusal.
+ */
+export function textProblem(
+  text: string,
+  kind: { many: string; one: string } = { many: "Messages", one: "That message" },
+): string | null {
+  if (LINK.test(text) || EMAIL.test(text) || hasPhone(text)) {
+    return `${kind.many} can't hold links, email addresses or phone numbers.`;
+  }
+  if (text.includes("<|")) return "That text has characters the AI uses for itself.";
+  if (BLOCKED.test(text)) return `${kind.one} has words that aren't allowed.`;
+  return null;
+}
+
 /** Why a notebook can't hold `text`, or null when it can (an empty one clears it). */
 export function notebookProblem(text: string): string | null {
   if (wordCount(text) > MAX_NOTEBOOK_WORDS) return "Notebooks hold up to 5,000 words.";
-  if (LINK.test(text) || EMAIL.test(text) || hasPhone(text)) {
-    return "Notebooks can't hold links, email addresses or phone numbers.";
-  }
-  if (text.includes("<|")) return "That text has characters the AI uses for itself.";
-  if (BLOCKED.test(text)) return "That notebook has words that aren't allowed.";
-  return null;
+  return textProblem(text, { many: "Notebooks", one: "That notebook" });
 }
 
 /** The notebook as training documents: its paragraphs (blank lines apart), trimmed. */

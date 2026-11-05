@@ -85,6 +85,13 @@
       "when": 1793891358074,
       "tag": "0011_battle_sides",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793892005330,
+      "tag": "0012_world_chat",
+      "breakpoints": true
     }
   ]
 }

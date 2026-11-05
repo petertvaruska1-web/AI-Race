@@ -29,6 +29,8 @@ export const Query = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("trainingLimit"), worldId: zId }),
   /** How often other players tried each of your shared AIs this week (counts only). */
   z.object({ kind: z.literal("versionTries"), worldId: zId }),
+  /** The world chat's last 200 messages, oldest first. */
+  z.object({ kind: z.literal("worldChat"), worldId: zId }),
 ]);
 export type Query = z.infer<typeof Query>;
 
@@ -88,6 +90,14 @@ export const ClientMessage = z.discriminatedUnion("type", [
     .refine((m) => m.opponent === null || (DUEL_GAMES as readonly string[]).includes(m.game), {
       message: "Story Dice can't be a duel.",
     }),
+  /** A message to the world chat (Stage 2); the server checks its length and words. */
+  z.object({
+    v,
+    type: z.literal("worldChat"),
+    cid: z.uuid(),
+    worldId: zId,
+    text: z.string().max(2000),
+  }),
   /** A vote on a story round of a battle between two other players' AIs (Stage 2). */
   z.object({
     v,

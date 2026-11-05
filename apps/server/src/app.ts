@@ -24,6 +24,7 @@ import { NotebookService } from "./notebook/service.ts";
 import { Gateway } from "./realtime/gateway.ts";
 import { RivalService } from "./rivals/service.ts";
 import { TrainingService } from "./training/service.ts";
+import { WorldChatService } from "./worldchat/service.ts";
 import { WorldRegistry } from "./worlds/registry.ts";
 import { registerWorldRoutes } from "./worlds/routes.ts";
 
@@ -46,6 +47,7 @@ export type AppContext = {
   interviews: InterviewService;
   notebooks: NotebookService;
   cards: CardsService;
+  worldChat: WorldChatService;
   blobs: BlobStore;
   /** Null until the training data is installed. */
   catalog: Catalog | null;
@@ -79,6 +81,7 @@ export async function buildApp(
     interviews: undefined as unknown as InterviewService,
     notebooks: undefined as unknown as NotebookService,
     cards: undefined as unknown as CardsService,
+    worldChat: undefined as unknown as WorldChatService,
     blobs: new LocalFsBlobStore(opts.blobDir),
     catalog: loadCatalog(opts.catalogPath, log),
     onClose: (fn) => {
@@ -110,6 +113,7 @@ export async function buildApp(
   ctx.notebooks = new NotebookService(ctx);
   ctx.cards = new CardsService(ctx);
   new LimitsService(ctx);
+  ctx.worldChat = new WorldChatService(ctx);
   ctx.gateway.registerQuery("catalog", async () => {
     if (!ctx.catalog) throw new HttpError(503, NO_TRAINING_DATA);
     return publicCatalog(ctx.catalog);
