@@ -134,6 +134,7 @@ def train_run(
     on_event: Callable[[TrainEvent], None] | None = None,
     resume: bool = False,
     checkpoint_every: int = CHECKPOINT_EVERY,
+    on_resume_saved: Callable[[Path], None] | None = None,
     _hooks: TrainHooks | None = None,
 ) -> TrainResult:
     """Train ``cfg`` into ``out_dir`` and return what came out.
@@ -142,7 +143,9 @@ def train_run(
     growth, the resume state) is checked before ``out_dir`` is touched, so a failed request
     leaves nothing behind. Every ``checkpoint_every`` steps the resume state is saved to
     ``out_dir/resume/``; ``resume=True`` continues from there and the directory is deleted once
-    the run finishes. ``device=None`` picks one with :func:`~airace_ml.device.pick_device`.
+    the run finishes. ``on_resume_saved(out_dir)`` is called (on the training thread) after each
+    save, e.g. to copy the state elsewhere with :func:`copy_resume_state`. ``device=None`` picks
+    one with :func:`~airace_ml.device.pick_device`.
     """
     started = time.perf_counter()
     if isinstance(checkpoint_every, bool) or not isinstance(checkpoint_every, int):
@@ -160,6 +163,7 @@ def train_run(
         on_event=on_event,
         hooks=_hooks or TrainHooks(),
         checkpoint_every=checkpoint_every,
+        on_resume_saved=on_resume_saved,
         started=started,
     )
     return run.execute(saved)
@@ -323,6 +327,20 @@ def _same_config(info: dict, cfg: TrainRunConfig) -> bool:
     return info["config"] == json.loads(cfg.to_json())
 
 
+def copy_resume_state(out_dir: Path, dest: Path) -> bool:
+    """Copies what a resumed run needs (the newest complete resume state and the telemetry it
+    refers to) into ``dest`` (created; must not exist), so ``dest`` can be resumed like
+    ``out_dir``. Call it between steps (``on_resume_saved``), when nothing is being written.
+    False when ``out_dir`` holds no complete state."""
+    newest = _newest_resume_state(Path(out_dir))
+    if newest is None:
+        return False
+    dest.mkdir(parents=True)
+    shutil.copytree(newest[0], dest / RESUME_DIR)
+    shutil.copyfile(Path(out_dir) / TELEMETRY_NAME, dest / TELEMETRY_NAME)
+    return True
+
+
 def has_resume_state(out_dir: Path) -> bool:
     """Whether ``out_dir`` holds a complete resume state of any run, whatever its config. A fresh
     (non-resuming) ``train_run`` into such a folder deletes that state."""
@@ -439,6 +457,7 @@ class _Run:
         on_event: Callable[[TrainEvent], None] | None,
         hooks: TrainHooks,
         checkpoint_every: int,
+        on_resume_saved: Callable[[Path], None] | None = None,
         started: float,
     ) -> None:
         self.cfg = cfg
@@ -448,6 +467,7 @@ class _Run:
         self.on_event = on_event
         self.hooks = hooks
         self.checkpoint_every = checkpoint_every
+        self.on_resume_saved = on_resume_saved
         self.started = started
 
         self.sampler = setup.sampler
@@ -529,6 +549,8 @@ class _Run:
             interrupted = step == self.hooks.stop_after_steps and step < steps
             if interrupted or (step % self.checkpoint_every == 0 and step < steps):
                 self._save_resume()
+                if self.on_resume_saved is not None:
+                    self.on_resume_saved(self.out_dir)
             if interrupted:
                 return self._result("interrupted", self._meta("interrupted"))
         if status == "unstable_stopped":

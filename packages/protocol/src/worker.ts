@@ -106,6 +106,10 @@ export const TrainJobSpec = z.object({
   config: z.record(z.string(), z.unknown()),
   parentTarUrl: Url.nullable(),
   outTarUrl: Url,
+  /** Fair mode: where the worker saves its progress every 2 minutes, so another card can go on. */
+  resumeUrl: Url.nullable().default(null),
+  /** Fair mode: the progress an earlier card saved, to continue from. */
+  resumeFromUrl: Url.nullable().default(null),
 });
 export type TrainJobSpec = z.infer<typeof TrainJobSpec>;
 

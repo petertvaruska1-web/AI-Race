@@ -13,6 +13,7 @@ import { type Db, openDb } from "./db/index.ts";
 import { FeedbackService } from "./feedback/service.ts";
 import { CardsService } from "./helpers/cards.ts";
 import { registerHelperKeyRoutes } from "./helpers/keys.ts";
+import { LimitsService } from "./helpers/limits.ts";
 import { InterviewService } from "./interviews/service.ts";
 import { JobBroker } from "./jobs/broker.ts";
 import { registerWorkerRoutes } from "./jobs/workerGateway.ts";
@@ -108,6 +109,7 @@ export async function buildApp(
   ctx.interviews = new InterviewService(ctx);
   ctx.notebooks = new NotebookService(ctx);
   ctx.cards = new CardsService(ctx);
+  new LimitsService(ctx);
   ctx.gateway.registerQuery("catalog", async () => {
     if (!ctx.catalog) throw new HttpError(503, NO_TRAINING_DATA);
     return publicCatalog(ctx.catalog);

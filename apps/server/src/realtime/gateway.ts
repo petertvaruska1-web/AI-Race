@@ -24,6 +24,12 @@ export const CLOSE_UNAUTHORIZED = 4401;
 
 export type StreamAuthorizer = (userId: string, sub: string) => Promise<boolean>;
 export type QueryHandler = (userId: string, q: Query) => Promise<unknown>;
+/** Refuses a command before it is logged (a reason), or lets it through (null). */
+export type CommandGuard = (
+  userId: string,
+  worldId: string,
+  cmd: Command,
+) => Promise<string | null>;
 export type ChatMessage = Extract<ClientMessage, { type: "chat" }>;
 export type MinigameMessage = Extract<ClientMessage, { type: "minigame" }>;
 export type InterviewPublishMessage = Extract<ClientMessage, { type: "interviewPublish" }>;
@@ -76,6 +82,7 @@ export class Gateway {
   private streams = new Map<string, StreamAuthorizer>();
   private subscribers = new Map<string, Set<Session>>();
   private queries = new Map<string, QueryHandler>();
+  private guards = new Map<string, CommandGuard>();
   private chat: ChatHandler | null = null;
   private playground: ((worldId: string) => void) | null = null;
   private minigame: MinigameHandler | null = null;
@@ -99,6 +106,11 @@ export class Gateway {
 
   registerQuery(kind: string, handler: QueryHandler): void {
     this.queries.set(kind, handler);
+  }
+
+  /** Checks commands of `type` before they reach the world; a refused one is never logged. */
+  setCommandGuard(type: Command["type"], guard: CommandGuard): void {
+    this.guards.set(type, guard);
   }
 
   /** Handles playground messages (plan Task 15); the gateway acks or rejects with the result. */
@@ -385,6 +397,12 @@ export class Gateway {
     }
     recent.push(now);
     this.rate.set(key, recent);
+    const guard = this.guards.get(cmd.type);
+    const refused = guard ? await guard(userId, worldId, cmd) : null;
+    if (refused) {
+      session.send({ v: 1, type: "reject", cid, reason: refused });
+      return;
+    }
     const input: Input = {
       kind: "command",
       userId,

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { JobType, ServerToWorker, WorkerCapabilities, WorkerMessage } from "@airace/protocol";
-import { and, asc, eq, inArray, lt, notInArray, or } from "drizzle-orm";
+import { and, asc, eq, lt, notInArray, or } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { schema } from "../db/index.ts";
 import type { TimerHandle } from "../scheduler.ts";

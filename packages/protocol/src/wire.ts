@@ -25,6 +25,8 @@ export const Query = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("notebook"), worldId: zId }),
   /** Every player's graphics cards in a world (Stage 2). */
   z.object({ kind: z.literal("cards"), worldId: zId }),
+  /** The biggest brain the player's card (or Fair mode's shared cards) can train, and its speed. */
+  z.object({ kind: z.literal("trainingLimit"), worldId: zId }),
 ]);
 export type Query = z.infer<typeof Query>;
 

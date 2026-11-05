@@ -66,6 +66,8 @@ type StoredEvent = { step: number; event: unknown };
 type ActiveRun = RevealRun & { worldId: string; runId: string; done: boolean };
 
 export const checkpointKey = (versionId: string) => `checkpoints/${versionId}.tar`;
+/** A Fair-mode run's saved progress, so another card can continue it. */
+export const resumeKey = (runId: string) => `resume/${runId}.tar`;
 
 /**
  * From a player's "start training" to a scored version (plan Task 14):
@@ -317,6 +319,9 @@ export class TrainingService {
     if (p.parentVersionId && !(await ctx.blobs.exists(checkpointKey(p.parentVersionId)))) {
       throw new Error(`parent checkpoint ${p.parentVersionId} is missing`);
     }
+    // Fair mode: the run saves its progress here, so the next card can continue it.
+    const moves = p.worldId ? await this.inFairMode(p.worldId) : false;
+    const saved = moves && (await ctx.blobs.exists(resumeKey(p.runId)));
     return {
       runId: p.runId,
       config: p.config,
@@ -324,12 +329,24 @@ export class TrainingService {
         ? signBlobUrl(ctx, checkpointKey(p.parentVersionId), "GET", JOB_URL_TTL_MS)
         : null,
       outTarUrl: signBlobUrl(ctx, checkpointKey(p.versionId), "PUT", JOB_URL_TTL_MS),
+      resumeUrl: moves ? signBlobUrl(ctx, resumeKey(p.runId), "PUT", JOB_URL_TTL_MS) : null,
+      resumeFromUrl: saved ? signBlobUrl(ctx, resumeKey(p.runId), "GET", JOB_URL_TTL_MS) : null,
     };
+  }
+
+  private async inFairMode(worldId: string): Promise<boolean> {
+    try {
+      const actor = this.ctx.worlds.peek(worldId) ?? (await this.ctx.worlds.get(worldId));
+      return actor.state().fairMode === true;
+    } catch {
+      return false;
+    }
   }
 
   private async trainLeased(p: TrainPayload, attempt: number): Promise<void> {
     const { db } = this.ctx;
-    if (attempt > 1) {
+    // A run that continues from saved progress keeps its telemetry (a few steps may repeat).
+    if (attempt > 1 && !(await this.ctx.blobs.exists(resumeKey(p.runId)))) {
       // A new attempt starts again from the parent (ADR 0008 item 8): earlier telemetry is void.
       await db.delete(schema.trainingEvents).where(eq(schema.trainingEvents.runId, p.runId));
       this.events.set(p.runId, []);
@@ -355,6 +372,7 @@ export class TrainingService {
   }
 
   private async trainDone(p: TrainPayload, result: unknown): Promise<void> {
+    await this.ctx.blobs.delete(resumeKey(p.runId));
     const parsed = TrainJobResult.safeParse(result);
     if (!parsed.success) {
       this.ctx.log.error({ runId: p.runId, issues: parsed.error.issues }, "bad training result");
@@ -383,6 +401,7 @@ export class TrainingService {
   }
 
   private async trainFailed(p: TrainPayload, reason: string): Promise<void> {
+    await this.ctx.blobs.delete(resumeKey(p.runId));
     await this.ctx.db
       .update(schema.trainingRuns)
       .set({ status: "failed" })

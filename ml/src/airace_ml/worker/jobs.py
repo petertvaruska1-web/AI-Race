@@ -42,10 +42,11 @@ from airace_ml.personality.fingerprint import Fingerprint, describe, measure_fin
 from airace_ml.tokenizer import Tok
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.train.events import event_to_dict
-from airace_ml.train.trainer import RESUME_DIR, has_resume_state, train_run
+from airace_ml.train.trainer import CHECKPOINT_EVERY, RESUME_DIR, has_resume_state, train_run
 from airace_ml.worker.agent import JobContext
 from airace_ml.worker.blobs import download_tar, upload_dir_tar
 from airace_ml.worker.models import ModelCache
+from airace_ml.worker.moving import RESUME_UPLOAD_EVERY_S, ResumeUploader, restore_resume
 
 log = logging.getLogger("airace.worker")
 MAX_INTERVIEW_ANSWERS = 5
@@ -85,6 +86,9 @@ class JobRunner:
             capacity=model_cache_size,
         )
         self.bench_max_items = bench_max_items
+        # Steps between the trainer's resume saves, and seconds between uploads of them (Fair mode).
+        self.checkpoint_every = CHECKPOINT_EVERY
+        self.resume_upload_every_s = RESUME_UPLOAD_EVERY_S
         self._creativity: tuple[Judge | None, NoveltyIndex | None] | None = None
 
     def handlers(self) -> dict[str, Callable[[dict[str, Any], JobContext], Any]]:
@@ -126,14 +130,32 @@ class JobRunner:
         resume = has_resume_state(out)
         if not resume:
             shutil.rmtree(out, ignore_errors=True)
-        result = train_run(
-            cfg,
-            out_dir=out,
-            data_root=self.data_root,
-            device=self.device,
-            on_event=lambda e: ctx.progress(event_to_dict(e)),
-            resume=resume,
+            # Fair mode: another card may have saved this run's progress to the host.
+            from_url = spec.get("resumeFromUrl")
+            if isinstance(from_url, str) and from_url:
+                resume = restore_resume(from_url, out) and has_resume_state(out)
+                if not resume:
+                    shutil.rmtree(out, ignore_errors=True)
+        resume_url = spec.get("resumeUrl")
+        uploader = (
+            ResumeUploader(resume_url, self.resume_upload_every_s)
+            if isinstance(resume_url, str) and resume_url
+            else None
         )
+        try:
+            result = train_run(
+                cfg,
+                out_dir=out,
+                data_root=self.data_root,
+                device=self.device,
+                on_event=lambda e: ctx.progress(event_to_dict(e)),
+                resume=resume,
+                checkpoint_every=self.checkpoint_every,
+                on_resume_saved=uploader.saved if uploader else None,
+            )
+        finally:
+            if uploader:
+                uploader.close()
         upload_dir_tar(out, out_url, exclude=(RESUME_DIR,))
         shutil.rmtree(work, ignore_errors=True)
         return {

@@ -239,8 +239,10 @@ describe("training flow", () => {
 });
 
 describe("waiting and failing", () => {
-  it("waits for compute when no worker is online, then applies a late result at once", async () => {
+  it("waits for compute while no card takes the run, then applies a late result at once", async () => {
     server = await start();
+    // A card is online (training needs one to start) but it doesn't take training jobs.
+    await worker(server, { workerId: "busy", jobTypes: ["generate"] });
     const o = await setup(server);
     await send(o.ws, o.worldId, { type: "startTraining", plan: plan() });
     const run = runOf(o.actor, o.userId);

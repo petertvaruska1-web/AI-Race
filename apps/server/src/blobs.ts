@@ -12,6 +12,8 @@ export type BlobStore = {
   put(key: string, stream: Readable): Promise<void>;
   get(key: string): Promise<Readable | null>;
   exists(key: string): Promise<boolean>;
+  /** Removes `key`; nothing happens when it is absent. */
+  delete(key: string): Promise<void>;
 };
 
 export type BlobMethod = "GET" | "PUT";
@@ -61,6 +63,10 @@ export class LocalFsBlobStore implements BlobStore {
   async get(key: string): Promise<Readable | null> {
     const p = this.pathOf(key);
     return (await this.exists(key)) ? createReadStream(p) : null;
+  }
+
+  async delete(key: string): Promise<void> {
+    await rm(this.pathOf(key), { force: true });
   }
 
   async exists(key: string): Promise<boolean> {
