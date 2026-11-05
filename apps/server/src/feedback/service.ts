@@ -5,6 +5,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { schema } from "../db/index.ts";
+import { DROP_JOB, isStale } from "../jobs/broker.ts";
 import { forCompany, paramsOf } from "../jobs/owners.ts";
 import { checkpointKey } from "../training/service.ts";
 import type { WorldActor } from "../worlds/actor.ts";
@@ -18,6 +19,8 @@ type FeedbackPayload = {
   versionId: string;
   key: string;
   perGroup: number;
+  /** The game day it was asked; a question unanswered for 14 days is dropped (Stage 2). */
+  enqueuedDay?: number;
 };
 
 /**
@@ -96,6 +99,7 @@ export class FeedbackService {
       versionId,
       key,
       perGroup: getBalance(s.balance).economy.feedback.perGroup,
+      enqueuedDay: s.day,
     };
     const companyId =
       Object.keys(s.companies).find((id) => s.companies[id]?.products[productId]) ?? "";
@@ -139,6 +143,10 @@ export class FeedbackService {
   }
 
   private async spec(p: FeedbackPayload): Promise<unknown> {
+    if (p.enqueuedDay !== undefined) {
+      const actor = this.ctx.worlds.peek(p.worldId) ?? (await this.ctx.worlds.get(p.worldId));
+      if (isStale(p.enqueuedDay, actor.state().day)) return DROP_JOB;
+    }
     return {
       productId: p.productId,
       versionId: p.versionId,

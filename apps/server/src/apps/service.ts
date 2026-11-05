@@ -3,6 +3,7 @@ import { type CompanyState, getBalance } from "@airace/sim";
 import type { AppContext } from "../app.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { seedOf } from "../feedback/service.ts";
+import { DROP_JOB, isStale } from "../jobs/broker.ts";
 import { forCompany, paramsOf } from "../jobs/owners.ts";
 import { requestOnce } from "../requests.ts";
 import { checkpointKey } from "../training/service.ts";
@@ -17,6 +18,8 @@ type AppReviewPayload = {
   versionId: string;
   skill: string;
   key: string;
+  /** The game day it was asked; reviews unanswered for 14 days are dropped (Stage 2). */
+  enqueuedDay?: number;
 };
 
 /**
@@ -37,6 +40,10 @@ export class AppReviewService {
     });
     broker.onPrepare("appReview", async (job) => {
       const p = job.payload as AppReviewPayload;
+      if (p.enqueuedDay !== undefined) {
+        const actor = ctx.worlds.peek(p.worldId) ?? (await ctx.worlds.get(p.worldId));
+        if (isStale(p.enqueuedDay, actor.state().day)) return DROP_JOB;
+      }
       return {
         versionId: p.versionId,
         modelTarUrl: signBlobUrl(ctx, checkpointKey(p.versionId), "GET", JOB_URL_TTL_MS),
@@ -75,6 +82,7 @@ export class AppReviewService {
           versionId: product.versionId,
           skill: kinds[app.kind].skill,
           key,
+          enqueuedDay: s.day,
         };
         const earlier = await requestOnce(
           this.ctx,

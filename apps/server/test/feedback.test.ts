@@ -136,6 +136,49 @@ describe("customer feedback jobs", () => {
     expect(ws).toBeDefined();
   });
 
+  it("drops questions that waited more than 14 game days for a card, and answers the rest", async () => {
+    server = await start();
+    const w = await worker(server, ALL_JOBS);
+    const o = await setup(server);
+    const l = await launch(server, w, o);
+    w.close();
+    await eventually(() => server?.ctx.broker.connections().length === 0);
+    await toDay(server, o.actor, l.launchDay + 20);
+    const day = o.actor.state().day;
+    const asked = await feedbackJobs(server);
+    const stale = asked.filter(
+      (j) => (j.payload as { enqueuedDay: number }).enqueuedDay < day - 14,
+    );
+    const fresh = asked.filter(
+      (j) => (j.payload as { enqueuedDay: number }).enqueuedDay >= day - 14,
+    );
+    expect(stale.length).toBeGreaterThan(0);
+    expect(fresh.length).toBeGreaterThan(0);
+
+    const back = await worker(server, { ...ALL_JOBS, workerId: "back" });
+    for (const _ of fresh) {
+      const lease = await back.nextLease();
+      expect(fresh.map((j) => j.id)).toContain(lease.jobId);
+      back.done(lease.jobId, { results: RESULTS });
+    }
+    await eventually(async () =>
+      (await feedbackJobs(server as TestServer)).every(
+        (j) => j.status === "done" || j.status === "cancelled",
+      ),
+    );
+    for (const job of await feedbackJobs(server)) {
+      const old = stale.some((j) => j.id === job.id);
+      expect([job.status, old ? job.error : null]).toEqual(
+        old ? ["cancelled", "stale"] : ["done", null],
+      );
+    }
+    // A dropped week is never asked again.
+    await toDay(server, o.actor, day + 1);
+    const keyOf = (j: { payload: unknown }) => (j.payload as { key: string }).key;
+    const after = await feedbackJobs(server);
+    for (const j of stale) expect(after.filter((a) => keyOf(a) === keyOf(j))).toHaveLength(1);
+  });
+
   it("serves a chat reply before a waiting feedback job", async () => {
     server = await start();
     // The services build real specs at lease time; here the raw payload is the spec.

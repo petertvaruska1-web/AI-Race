@@ -8,6 +8,16 @@ import { FairShare } from "./fairShare.ts";
 
 export type JobRow = typeof schema.jobs.$inferSelect;
 export type JobStatus = "queued" | "leased" | "done" | "failed" | "cancelled";
+
+/** What a prepare hook returns to cancel a job instead of handing it out (it waited too long). */
+export const DROP_JOB = "drop";
+/** Customer questions older than this many game days are dropped rather than answered (Stage 2). */
+export const STALE_AFTER_DAYS = 14;
+
+/** Whether a job asked on `enqueuedDay` is too old to answer on `day` (old jobs have no day). */
+export function isStale(enqueuedDay: number | undefined, day: number): boolean {
+  return enqueuedDay !== undefined && day - enqueuedDay > STALE_AFTER_DAYS;
+}
 type Handler<T> = (job: JobRow, value: T) => void | Promise<void>;
 
 /**
@@ -404,6 +414,11 @@ export class JobBroker {
           } catch (err) {
             this.ctx.log.error({ err, jobId: next.id }, "could not prepare job");
             await this.retryOrFail(next, "The job could not be prepared.", false);
+            continue;
+          }
+          if (spec === DROP_JOB) {
+            await this.update(next.id, { status: "cancelled", error: "stale" });
+            this.ctx.log.info({ jobId: next.id, type: next.type }, "stale job dropped");
             continue;
           }
         }
