@@ -355,6 +355,19 @@ def _parser() -> argparse.ArgumentParser:
         "server on this computer writes when it first starts)",
     )
     worker.add_argument("--id", help="a name for this worker (default: computer name and device)")
+
+    fetch = add(
+        "fetch-data",
+        _cmd_fetch_data,
+        "download the game's data from the game you play in (a helper on a friend's PC)",
+        "run it again: it carries on where it stopped",
+    )
+    fetch.add_argument(
+        "--server",
+        required=True,
+        help="the game's address (https://...) or a game link from \"Connect your computer\"",
+    )
+    fetch.add_argument("--key", help="your helper key (default: the one in the game link)")
     return parser
 
 
@@ -976,6 +989,28 @@ def _cmd_worker(args: argparse.Namespace) -> int:
         asyncio.run(agent.run_forever())
     except KeyboardInterrupt:
         print("Worker stopped.", flush=True)
+    return EXIT_OK
+
+
+EXIT_DATA_CHANGED = 3
+
+
+def _cmd_fetch_data(args: argparse.Namespace) -> int:
+    from airace_ml.worker.fetch import FetchError, IdentityChanged, fetch_data, game_address
+
+    try:
+        _, link_key = game_address(args.server)
+    except ValueError as e:
+        raise _UsageError(str(e)) from e
+    key = args.key or link_key
+    if not key:
+        raise _UsageError("--key is needed (or a game link that carries one)")
+    try:
+        fetch_data(args.server, key, _data_root(args), say=lambda s: print(s, flush=True))
+    except IdentityChanged as e:
+        return _fail(str(e), EXIT_DATA_CHANGED)
+    except FetchError as e:
+        raise _RunFailed(str(e)) from e
     return EXIT_OK
 
 
