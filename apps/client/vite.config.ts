@@ -12,6 +12,7 @@ export default defineConfig({
     proxy: {
       "/api": SERVER,
       "/blobs": SERVER,
+      "/helper": SERVER,
       "/ws": { target: SERVER, ws: true },
     },
   },

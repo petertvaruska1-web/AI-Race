@@ -15,7 +15,8 @@
     "check": "biome check . && npm run typecheck",
     "dev": "tsx tools/dev.ts",
     "host": "tsx tools/host.ts",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "e2e:friends": "playwright test tests/e2e/friends.spec.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.2",

@@ -154,6 +154,12 @@ export function registerWorldRoutes(app: FastifyInstance, ctx: AppContext): void
           event: { type: "memberJoined", userId: user.userId, displayName: user.displayName },
         });
         if (!r.ok) return reply.code(409).send({ error: r.reason });
+        // Joining isn't being here: the player is online once their page opens the world
+        // (the gateway marks it), so a join alone never keeps the clock running.
+        await actor.submit({
+          kind: "system",
+          event: { type: "presence", userId: user.userId, online: false },
+        });
       }
       // Also on a repeat, so a join cut short between the two steps is finished.
       await ctx.db

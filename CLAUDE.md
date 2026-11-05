@@ -15,7 +15,7 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 ## Non-negotiables (spec §1)
 - R1 Real model: model output is never scripted, templated or rewritten. Filters may only block.
 - R2 Opacity: weights, data, mix, prep, design, training logs, notebook and coaching never reach another player. All state goes to clients through `projectView` only.
-- R3 Fair compute: training depends on in-game compute, never player hardware. Training and inference run server-side.
+- R3 Fair compute: in-game compute sets every run's game time and cost; real work runs on the players' own helper cards (Fair mode pools them equally); never in the browser.
 - R4 Server authority: clients send intents only.
 - R5 Emergence: no unlock lists, tiers, personality menus or level caps. Scores, traits and discoveries are measurements.
 - R6 Continuous lineage: runs continue from the parent checkpoint; growth is function-preserving.
@@ -49,6 +49,9 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 - TypeScript (repo root, Milestone 2): `npm install`, then `npm test` (Vitest over every workspace) and `npm run check` (Biome plus a type check of every workspace).
 - Play the game on this PC: `npm run dev` starts the game server (port 8787), an ML worker on the GPU and the web app; open http://localhost:5173. It writes the dataset catalog first if it is missing or older than the server reads. Ctrl+C stops everything. Game data (accounts, worlds, trained AIs) lives in `data/server/`.
 - A second game beside the first (for checks while the owner plays): `AIRACE_DATA=<another data root> AIRACE_SERVER_PORT=8788 AIRACE_WEB_PORT=5175 npm run dev`. The other root needs its own `server/` folder; link `catalog`, `corpus`, `judge`, `novelty` and `tokenizer` from `data/` (directory junctions on Windows).
+- Play with friends from this PC (Stage 2, `docs/hosting.md`): `npm run host` builds the web app, packs the helper into `data/helper/ml.zip`, starts the server (serving the web app, listening on the network) and this PC's card, and opens a free Cloudflare quick tunnel when `cloudflared` is installed (it prints the friends' link, new every session). It never downloads anything. Checks beside a game in progress: `AIRACE_DATA=data-check AIRACE_SERVER_PORT=8790 AIRACE_NO_TUNNEL=1 HOST=127.0.0.1 npm run host`.
+- A friend's helper: the game's "Connect your computer" → "Get the helper" gives a personal `AI Race Helper setup.cmd` (it installs uv, the helper and `airace-ml fetch-data`, and registers the `airace-helper://` link). By hand: `cd ml && python -m uv run airace-ml fetch-data --server <game link or https address> [--key K] --data-root DIR` (exit 3: the game's data changed), then `airace-ml worker --server <game link> --data-root DIR --device auto`.
+- Two-player end-to-end test (slow, about 30 minutes; not part of `npm test`): `npm run e2e:friends`. Two browsers, two CPU helpers with players' own keys, a Fair-off and a Fair-on world: joining by link, training on each player's card, trying a shared AI, a friend battle, the world chat, an opacity check and a server restart.
 - End-to-end test (slow, about a minute; not part of `npm test`): `npm run e2e`. It builds a tiny practice dataset in a temp folder and plays a whole single-player game in the Edge that Windows has: train, chat, launch, customers, real-reply posts and money. `E2E_ECHO=1` prints the processes' output.
 - (More commands are added here as they come to exist.)
 

@@ -82,6 +82,17 @@ describe("joining a friend's world", () => {
     expect((await fetch(`${server.url}/api/worlds/invite/${w.code}`)).status).toBe(401);
   });
 
+  it("a player who joined but hasn't opened the world counts as away", async () => {
+    server = await startTestServer();
+    const ana = await createGuest(server, "Ana");
+    const w = await newWorld(server, ana.cookie, { name: "Friends" });
+    const ben = await createGuest(server, "Ben");
+    expect((await join(server, ben.cookie, w.code)).status).toBe(200);
+    expect(w.actor.state().members[ben.userId]?.online).toBe(false);
+    await owner(server, ben.cookie, w.worldId);
+    await eventually(() => w.actor.state().members[ben.userId]?.online === true);
+  });
+
   it("refuses a code that matches no world", async () => {
     server = await startTestServer();
     const ben = await createGuest(server, "Ben");

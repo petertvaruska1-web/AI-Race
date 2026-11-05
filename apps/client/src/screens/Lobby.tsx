@@ -61,7 +61,9 @@ function InviteFriends({ code }: { code: string }) {
       title="Invite friends"
       hint="Send them the link, or the code to type on their home page."
     >
-      <p className="mb-1 font-mono text-2xl tracking-widest">{code}</p>
+      <p data-testid="invite-code" className="mb-1 font-mono text-2xl tracking-widest">
+        {code}
+      </p>
       <p className="mb-3 break-all text-sm text-muted">{link}</p>
       <Button variant="secondary" onClick={copy}>
         Copy link
