@@ -346,6 +346,10 @@ export const BattleView = z.strictObject({
   outcome: z.enum(["win", "draw", "loss"]).nullable(),
   /** Ranking points won or lost by it. */
   pointsChange: z.number().int().nullable(),
+  /** Whether `rivalId` is a rival company or another player's. */
+  opponentKind: z.enum(["rival", "player"]),
+  /** A friend challenged this company: its side is `mine`. */
+  defending: z.boolean(),
 });
 export type BattleView = z.infer<typeof BattleView>;
 
@@ -546,6 +550,8 @@ export const WorldView = z.strictObject({
     }),
     /** Whether rivals have joined this world (they need the rival pack). */
     rivals: z.enum(["joined", "none"]),
+    /** Everyone's graphics cards are pooled and shared equally (chosen at creation). */
+    fairMode: z.boolean(),
     /** The world's goal, if it has one; `reachedBy` is the company that won it. */
     goal: z
       .strictObject({

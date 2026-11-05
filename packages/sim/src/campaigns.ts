@@ -4,6 +4,7 @@ import { book } from "./ledger.ts";
 import { adoptable, awarenessOf, setAwareness } from "./market.ts";
 import type { CompanyState, WorldState } from "./state.ts";
 import { formatMoney } from "./training.ts";
+import { ownerAway } from "./world.ts";
 
 // Ad campaigns (game-layer design §5): a daily budget aimed at a region (or the
 // whole country) and a group (or everyone) for a number of days. Each day it
@@ -70,6 +71,8 @@ export function campaignsDay(s: WorldState): void {
   for (const id of Object.keys(s.companies).sort()) {
     const company = s.companies[id];
     if (!company) continue;
+    // Autopilot: an absent owner's ads pause on a day the company has no cash.
+    if (company.cash < 0 && ownerAway(s, company)) continue;
     for (const key of Object.keys(company.campaigns).sort()) {
       const k = company.campaigns[key];
       if (!k || s.day <= k.startDay) continue;

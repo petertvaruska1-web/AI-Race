@@ -4,6 +4,7 @@ import { tellNews } from "./feed.ts";
 import { book, finance } from "./ledger.ts";
 import type { CompanyState, WorldState } from "./state.ts";
 import { trashTalk } from "./trashTalk.ts";
+import { ownerAway } from "./world.ts";
 
 // The rescue (game-layer design §8, C19). A month that ends with cash below zero
 // opens an offer: an emergency loan with heavy interest, or an investor who takes
@@ -69,6 +70,11 @@ export function rescueDay(s: WorldState): void {
   for (const id of Object.keys(s.companies).sort()) {
     const company = s.companies[id];
     if (!company?.rescue || s.day < company.rescue.deadlineDay) continue;
+    // Autopilot: the choice waits for its owner (C40).
+    if (ownerAway(s, company)) {
+      company.rescue.deadlineDay = s.day + 1;
+      continue;
+    }
     if (company.cash < 0) rescue(s, company, "loan");
     else company.rescue = null;
   }

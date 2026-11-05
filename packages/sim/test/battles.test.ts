@@ -90,10 +90,10 @@ const battleOf = (s: WorldState, id = "b1") =>
 describe("starting a battle", () => {
   it("refuses in plain words and changes nothing", () => {
     const alone = launch(runningWorld("balance-test"));
-    expect(rejected(start(alone, "x"))).toBe("There are no rivals in this world.");
+    expect(rejected(start(alone, "x"))).toBe("That AI isn't on sale.");
     const { s, target } = ready();
     expect(rejected(start(s, "nope"))).toBe("That AI isn't on sale.");
-    expect(rejected(start(s, "p1"))).toBe("That AI isn't on sale.");
+    expect(rejected(start(s, "p1"))).toBe("You can't battle your own AI.");
     const empty = ticks(withRivals("balance-test"), 10);
     expect(rejected(start(empty, target))).toBe("Launch an AI before battling.");
     const going = ok(start(s, target));
@@ -234,5 +234,79 @@ describe("battles in the view", () => {
       ["c1", 1016],
       ["rival-1", 984],
     ]);
+  });
+});
+
+describe("battles between friends", () => {
+  /** c1 sells Spark (v1); u2's Beta (c2) sells Nova (w1). */
+  function friends(): WorldState {
+    let s = launch(runningWorld("balance-test"));
+    s = ok(step(s, sys({ type: "memberJoined", userId: "u2", displayName: "Ben" })));
+    s = ok(
+      step(
+        s,
+        cmd(
+          {
+            type: "createCompany",
+            name: "Beta",
+            logo: { shape: "circle", symbol: "spark", initials: "BE" },
+            palette: { primary: "#3a86ff", secondary: "#ffbe0b" },
+          },
+          "c2",
+          "u2",
+        ),
+      ),
+    );
+    const c2 = s.companies.c2 as CompanyState;
+    c2.versions.w1 = {
+      ...(s.companies.c1 as CompanyState).versions.v1,
+      id: "w1",
+      runId: "rw",
+    } as never;
+    s = ok(
+      step(
+        s,
+        cmd(
+          {
+            type: "launchProduct",
+            versionId: "w1",
+            name: "Nova",
+            plans: ["free"],
+            countdownDays: 3,
+          },
+          "q1",
+          "u2",
+        ),
+      ),
+    );
+    return ticks(s, 3);
+  }
+
+  it("a friend's AI on sale can be battled, and both companies see the result", () => {
+    const s = friends();
+    const going = ok(start(s, "q1"));
+    expect(battleOf(going)).toMatchObject({ rivalId: "c2", opponentKind: "player" });
+    const done = ok(resolve(going, "b1", rounds([1, 1, 0], [0, 0, 0.5])));
+    expect(battleOf(done)?.outcome).toBe("win");
+    const theirs = (done.companies.c2 as CompanyState).battles.find((b) => b.id === "b1");
+    expect(theirs).toMatchObject({
+      defending: true,
+      rivalId: "c1",
+      outcome: "loss",
+      mine: { productId: "q1", productName: "Nova" },
+      theirs: { productId: "p1", productName: "Spark" },
+    });
+    expect(theirs?.rounds?.[0]).toMatchObject({ mine: { score: 0 }, theirs: { score: 1 } });
+    expect(done.points.knowledge).toEqual({ c1: 1016, c2: 984 });
+    expect(theirs?.pointsChange).toBe(-16);
+    // The defender paid nothing.
+    expect((done.companies.c2 as CompanyState).ledger.current.costs.marketing).toBe(0);
+    expect(projectView(done, "u2").me.company?.battles[0]).toMatchObject({ defending: true });
+  });
+
+  it("refuses your own AI, and a world without rivals still has friends to battle", () => {
+    const s = friends();
+    expect(rejected(start(s, "p1"))).toBe("You can't battle your own AI.");
+    expect(rejected(start(s, "nope"))).toBe("That AI isn't on sale.");
   });
 });

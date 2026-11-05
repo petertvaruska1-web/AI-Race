@@ -1,9 +1,12 @@
 import { type GoalSpec, NO_GOAL } from "@airace/protocol";
-import { type BalanceVersion, getBalance } from "./balance.ts";
+import { type Balance, type BalanceVersion, getBalance } from "./balance.ts";
 import { emptyMarket } from "./market.ts";
 import { seedRng } from "./rng.ts";
 import { drawSpotlights } from "./spotlights.ts";
-import type { WorldState } from "./state.ts";
+import type { CompanyState, WorldState } from "./state.ts";
+
+/** Founder grant: extra founding cash per game day of the world's age (Stage 2). */
+const FOUNDER_GRANT_PER_DAY = 2_000;
 
 export function createWorld(p: {
   worldId: string;
@@ -14,6 +17,8 @@ export function createWorld(p: {
   balance: BalanceVersion;
   inviteCode: string;
   goal?: GoalSpec;
+  /** Everyone's graphics cards shared equally (C36); fixed for the world's life. */
+  fairMode?: boolean;
 }): WorldState {
   const { spotlights, rng } = drawSpotlights(seedRng(p.seed), getBalance(p.balance).economy);
   return {
@@ -49,7 +54,19 @@ export function createWorld(p: {
     feed: [],
     feedSeq: 0,
     goal: newGoal(p.goal ?? NO_GOAL),
+    fairMode: p.fairMode ?? false,
   };
+}
+
+/** Founding cash for a company founded on `day`: a grant that grows with the world's age, up to double. */
+export function foundingCashOn(b: Balance, day: number): number {
+  return Math.min(2 * b.foundingCash, b.foundingCash + FOUNDER_GRANT_PER_DAY * day);
+}
+
+/** Whether a player company's owner is away: their company runs on autopilot (C40). */
+export function ownerAway(s: WorldState, company: CompanyState): boolean {
+  if (!company.ownerUserId || company.rival) return false;
+  return s.members[company.ownerUserId]?.online === false;
 }
 
 /** A goal as the world keeps it; the deadline is set when the world starts. */

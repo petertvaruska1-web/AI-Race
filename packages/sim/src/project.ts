@@ -83,6 +83,7 @@ export function projectView(state: WorldState, viewerUserId: string): WorldView 
       market: marketView(state),
       rivals: state.rivals ? "joined" : "none",
       goal: goalView(state),
+      fairMode: state.fairMode,
       league: leagueView(state, viewer.companyId),
     },
     members: Object.values(state.members)
@@ -277,6 +278,8 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
         : null,
       outcome: x.outcome,
       pointsChange: x.pointsChange,
+      opponentKind: x.opponentKind ?? "rival",
+      defending: x.defending === true,
     })),
     looks: { owned: [...c.looks.owned], orb: c.looks.orb, logo: c.looks.logo },
     sponsorships: Object.values(c.sponsorships)

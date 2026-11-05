@@ -99,6 +99,7 @@ function sampleView(): WorldView {
       },
       rivals: "none",
       goal: null,
+      fairMode: false,
       league: {
         tables: Object.fromEntries(LEAGUE_TABLES.map((t) => [t, []])) as Record<
           (typeof LEAGUE_TABLES)[number],
@@ -252,6 +253,8 @@ function sampleView(): WorldView {
             ],
             outcome: "win",
             pointsChange: 16,
+            opponentKind: "rival",
+            defending: false,
           },
         ],
         reports: [

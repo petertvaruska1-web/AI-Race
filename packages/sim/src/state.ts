@@ -380,6 +380,10 @@ export type BattleState = {
   outcome: "win" | "draw" | "loss" | null;
   /** The player's ranking points won (or lost) by this battle. */
   pointsChange: number | null;
+  /** Who the opponent (`rivalId`) is; absent before sim-7: a rival. */
+  opponentKind?: "rival" | "player";
+  /** A friend's battle seen by the side that was challenged. */
+  defending?: boolean;
 };
 
 export type CompanyState = {
@@ -497,6 +501,8 @@ export type WorldState = {
   feed: FeedItem[];
   /** Feed items made so far; numbers their ids. */
   feedSeq: number;
+  /** Everyone's graphics cards are pooled and shared equally (chosen at creation). */
+  fairMode: boolean;
   /** The goal chosen at creation (kind "none" for none); reached at most once. */
   goal: {
     spec: GoalSpec;

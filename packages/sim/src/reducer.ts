@@ -37,7 +37,7 @@ import {
   versionIdTaken,
 } from "./training.ts";
 import { trashTalkDay } from "./trashTalk.ts";
-import { effectiveHost } from "./world.ts";
+import { effectiveHost, foundingCashOn } from "./world.ts";
 
 type Handled = { ok: true } | { ok: false; reason: string };
 const DAYS_PER_YEAR = 365;
@@ -218,14 +218,14 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       s.companies[newId] = {
         id: newId,
         ownerUserId: userId,
-        startCash: getBalance(s.balance).foundingCash,
+        startCash: foundingCashOn(getBalance(s.balance), s.day),
         rival: null,
         lastRanks: null,
         battles: [],
         name: cmd.name,
         logo: cmd.logo,
         palette: cmd.palette,
-        cash: getBalance(s.balance).foundingCash,
+        cash: foundingCashOn(getBalance(s.balance), s.day),
         runs: {},
         versions: {},
         versionSeq: 0,

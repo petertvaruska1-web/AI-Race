@@ -29,14 +29,15 @@ type StartBattle = Extract<Command, { type: "startBattle" }>;
 /** The draw margin before near misses got partial credit (sim-4), for replayed old battles. */
 const LEGACY_DRAW_MARGIN = 0.25;
 
-function liveRivalProduct(
+/** A live product of any company, rival or player (its owner is `rival` here: the opponent). */
+function liveProductAnywhere(
   s: WorldState,
   productId: string,
 ): { rival: CompanyState; product: ProductState } | null {
   for (const id of Object.keys(s.companies).sort()) {
     const c = s.companies[id] as CompanyState;
     const p = c.products[productId];
-    if (c.rival && p?.status === "live") return { rival: c, product: p };
+    if (p?.status === "live") return { rival: c, product: p };
   }
   return null;
 }
@@ -61,10 +62,10 @@ export function battleCommand(
   newId: string | undefined,
 ): Handled {
   const b = getBalance(s.balance).economy.battles;
-  if (!s.rivals) return no("There are no rivals in this world.");
   if (!newId) return no("Missing battle id.");
-  const target = liveRivalProduct(s, cmd.rivalProductId);
+  const target = liveProductAnywhere(s, cmd.rivalProductId);
   if (!target) return no("That AI isn't on sale.");
+  if (target.rival.id === company.id) return no("You can't battle your own AI.");
   const mine = fighter(company, cmd.skill);
   if (!mine) return no("Launch an AI before battling.");
   if (company.battles.some((x) => x.status === "running")) {
@@ -104,6 +105,7 @@ export function battleCommand(
       productName: target.product.name,
       packKey: theirVersion?.packKey ?? "",
     },
+    opponentKind: target.rival.rival ? "rival" : "player",
     seed: seed.value,
     status: "running",
     rounds: null,
@@ -158,6 +160,34 @@ function validRounds(raw: unknown, count: number): raw is BattleRound[] {
 /** Elo's expected score for a player rated `a` against one rated `b`. */
 export function expectedScore(a: number, b: number): number {
   return 1 / (1 + 10 ** ((b - a) / 400));
+}
+
+/** A friend's battle, as the defender sees it: their side first, the result reversed. */
+function mirrorBattle(
+  s: WorldState,
+  defender: CompanyState,
+  challenger: CompanyState,
+  battle: BattleState,
+  pointsChange: number,
+): void {
+  const b = getBalance(s.balance).economy.battles;
+  const reversed = { win: "loss", loss: "win", draw: "draw" } as const;
+  defender.battles.push({
+    ...battle,
+    rivalId: challenger.id,
+    defending: true,
+    mine: { ...battle.theirs },
+    theirs: { ...battle.mine, packKey: "" },
+    rounds: (battle.rounds ?? []).map((r) => ({
+      ...r,
+      mine: { ...r.theirs },
+      theirs: { ...r.mine },
+    })),
+    outcome: battle.outcome ? reversed[battle.outcome] : null,
+    pointsChange,
+  });
+  if (defender.battles.length > b.kept)
+    defender.battles.splice(0, defender.battles.length - b.kept);
 }
 
 /** Applies a battle's result once: outcome, ranking points, followers, news; or the refund. */
@@ -220,6 +250,8 @@ export function applyBattle(
         ? `${them} beats ${me} in a ${skill} battle, ${losses}–${wins}`
         : `${me} and ${them} draw in a ${skill} battle, ${wins}–${losses}`;
   tellNews(s, company, "battle", headline, b.sentiment[outcome]);
+  if (battle.opponentKind === "player")
+    mirrorBattle(s, rival, company, battle, (table[rival.id] ?? theirs) - theirs);
   if (outcome === "win" && rival.id === s.rivals?.archId) {
     trashTalk(s, "playerWinsBattle", { player: company.name });
   }

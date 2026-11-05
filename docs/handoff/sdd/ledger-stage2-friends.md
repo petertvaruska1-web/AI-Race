@@ -1,0 +1,12 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-11-04-stage2-friends.md
+
+Spec: docs/superpowers/specs/2026-11-04-remaining-features-design.md (§0–§2, owner decisions C36–C41). Owner's go: 2026-11-05 ("Start Stage 2").
+Executor: inline (executing-plans). Branch m2-two-friends. Base: 027a25e.
+
+Pre-flight: shared interfaces — T1 `WorldState.fairMode` → T6 (routing), T9 (creation), T15 (UI); T2 player battles → T11 (side jobs, votes), T18; T3 `WorkerConn.ownerUserId` + caps → T5 (cards), T6 (routing), T7 (limits); T4 `speed`/`gpuName`/connect links → T5, T13 (protocol handler), T16; T6 owners/`minParams` → T7, T8, T10, T11; T12 `textProblem` → coaching plan later; T13 downloads + T14 fetch-data → T20 (helpers in e2e). No conflicts found.
+Task 1: complete (tests: sim friends 6/6; npm test 669/670 with 2 server timing flakes that pass alone, then the remaining 1 fixed → green). sim-7: `WorldState.fairMode` (createWorld param, view `world.fairMode`), `foundingCashOn(b, day)` (+$2,000 a day, at most 2×), `ownerAway(s, company)`; autopilot: an absent owner's campaigns spend nothing on a day of negative cash, and their rescue deadline moves day by day until they return; sim-6 worlds upgrade with Fair mode off.
+Task 1: Ruling: a paused campaign keeps its end day (its paused days are lost, not added later) — cost if wrong: a few days of ads.
+Task 2: complete (tests: sim battles 13/13). `startBattle` takes any other company's live product; "You can't battle your own AI."; the "There are no rivals in this world." refusal is gone (friends can battle in a rival-less world); `BattleState.opponentKind` and `defending` (view: `opponentKind`, `defending`); on resolution the defender gets a mirrored battle (sides and outcome reversed, its own points change); Elo, followers and the news as before.
+Task 2: Ruling: the plan's `BattleState.opponent {companyId, kind}` is `rivalId` (now "the opponent company") plus `opponentKind`, so every screen and service that reads `rivalId` keeps working — cost if wrong: a field named rivalId that may hold a player's company.
+Task 2: Ruling: one news story per friend battle (under the challenger); the defender learns of it from its mirrored battle (Arena and its battle toast) — cost if wrong: the defender's feed shows the story but no toast of the story itself.
+Tasks 1–2: Ruling: committed together — they edit the same state, view and projection files — cost if wrong: none.

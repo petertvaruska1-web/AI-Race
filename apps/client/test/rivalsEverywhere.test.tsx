@@ -145,6 +145,8 @@ describe("rival toasts", () => {
               })),
               outcome: "win",
               pointsChange: 16,
+              opponentKind: "rival",
+              defending: false,
             },
           ],
         },
