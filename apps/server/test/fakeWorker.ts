@@ -11,6 +11,10 @@ export type FakeWorkerOptions = {
   jobTypes?: JobType[];
   slots?: Partial<WorkerCapabilities["slots"]>;
   running?: string[];
+  gpuName?: string;
+  speed?: number;
+  vramMb?: number;
+  maxParams?: number;
 };
 
 /** A scripted ML worker for tests (never shipped): records leases, sends what the test says. */
@@ -48,8 +52,10 @@ export class FakeWorker {
       workerId: o.workerId ?? "fake-worker",
       capabilities: {
         device: "cpu",
-        vramMb: 0,
-        maxParams: 50_000_000,
+        vramMb: o.vramMb ?? 0,
+        maxParams: o.maxParams ?? 50_000_000,
+        gpuName: o.gpuName ?? "CPU",
+        speed: o.speed ?? 0,
         jobTypes,
         slots: {
           train: 1,

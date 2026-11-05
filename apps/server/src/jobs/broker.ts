@@ -160,6 +160,17 @@ export class JobBroker {
   }
 
   /** A worker said hello. Jobs it still runs stay with it; others it names are cancelled. */
+  private cardsChanged = new Set<() => void>();
+
+  /** Called whenever a card connects or leaves. */
+  onCardsChanged(fn: () => void): void {
+    this.cardsChanged.add(fn);
+  }
+
+  private cardsMoved(): void {
+    for (const fn of this.cardsChanged) fn();
+  }
+
   /** Every connected card (for the cards view and the routing). */
   connections(): WorkerConn[] {
     return [...this.workers.values()];
@@ -170,6 +181,7 @@ export class JobBroker {
       const previous = this.workers.get(conn.workerId);
       if (previous && previous !== conn) previous.close(4409, "replaced by a new connection");
       this.workers.set(conn.workerId, conn);
+      this.cardsMoved();
       const now = this.ctx.opts.scheduler.now();
       for (const jobId of running) {
         const job = await this.getJob(jobId);
@@ -192,7 +204,10 @@ export class JobBroker {
 
   detach(conn: WorkerConn): void {
     // Its leases stay until they expire: the worker may come back with `running`.
-    if (this.workers.get(conn.workerId) === conn) this.workers.delete(conn.workerId);
+    if (this.workers.get(conn.workerId) === conn) {
+      this.workers.delete(conn.workerId);
+      this.cardsMoved();
+    }
   }
 
   async handle(conn: WorkerConn, msg: WorkerMessage): Promise<void> {

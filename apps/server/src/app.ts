@@ -11,6 +11,7 @@ import { ChatService } from "./chat/service.ts";
 import { type ServerOptions, SIM_VERSION } from "./config.ts";
 import { type Db, openDb } from "./db/index.ts";
 import { FeedbackService } from "./feedback/service.ts";
+import { CardsService } from "./helpers/cards.ts";
 import { registerHelperKeyRoutes } from "./helpers/keys.ts";
 import { InterviewService } from "./interviews/service.ts";
 import { JobBroker } from "./jobs/broker.ts";
@@ -43,6 +44,7 @@ export type AppContext = {
   appReviews: AppReviewService;
   interviews: InterviewService;
   notebooks: NotebookService;
+  cards: CardsService;
   blobs: BlobStore;
   /** Null until the training data is installed. */
   catalog: Catalog | null;
@@ -75,6 +77,7 @@ export async function buildApp(
     appReviews: undefined as unknown as AppReviewService,
     interviews: undefined as unknown as InterviewService,
     notebooks: undefined as unknown as NotebookService,
+    cards: undefined as unknown as CardsService,
     blobs: new LocalFsBlobStore(opts.blobDir),
     catalog: loadCatalog(opts.catalogPath, log),
     onClose: (fn) => {
@@ -104,6 +107,7 @@ export async function buildApp(
   ctx.onClose(() => ctx.appReviews.close());
   ctx.interviews = new InterviewService(ctx);
   ctx.notebooks = new NotebookService(ctx);
+  ctx.cards = new CardsService(ctx);
   ctx.gateway.registerQuery("catalog", async () => {
     if (!ctx.catalog) throw new HttpError(503, NO_TRAINING_DATA);
     return publicCatalog(ctx.catalog);

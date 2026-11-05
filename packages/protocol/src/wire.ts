@@ -23,6 +23,8 @@ export const Query = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("minigameRuns"), worldId: zId }),
   /** The player's own notebook text ("" when empty). */
   z.object({ kind: z.literal("notebook"), worldId: zId }),
+  /** Every player's graphics cards in a world (Stage 2). */
+  z.object({ kind: z.literal("cards"), worldId: zId }),
 ]);
 export type Query = z.infer<typeof Query>;
 
