@@ -340,6 +340,10 @@ export const BattleView = z.strictObject({
         expected: z.string().nullable(),
         mine: BattleAnswerView,
         theirs: BattleAnswerView,
+        /** A story round between friends' AIs: the other players' vote totals (they decide it). */
+        votes: z
+          .strictObject({ mine: z.number().int().min(0), theirs: z.number().int().min(0) })
+          .nullable(),
       }),
     )
     .nullable(),

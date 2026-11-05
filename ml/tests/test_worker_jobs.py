@@ -257,6 +257,29 @@ def test_a_battle_streams_both_sides_round_by_round_and_scores_them(runner, trai
     json.dumps(result, allow_nan=False)
 
 
+def test_a_side_job_answers_only_its_side_and_needs_only_that_model(runner, trained, tmp_path):
+    """A friend battle runs each side on its owner's card: side b's job gets only b's model."""
+    rec = Recorder(tmp_path)
+    spec = _battle_spec(trained[0])
+    del spec["a"]
+    spec["sides"] = ["b"]
+    result = runner.handle_battle(spec, rec.ctx)
+    assert len(result["rounds"]) == 3
+    assert all(set(r) == {"prompt", "expected", "b"} for r in result["rounds"])
+    assert {e["side"] for e in rec.events} == {"b"}
+    # The same seed asks the same challenges as a whole battle does.
+    whole = runner.handle_battle(_battle_spec(trained[0]), Recorder(tmp_path).ctx)
+    assert [r["prompt"] for r in result["rounds"]] == [r["prompt"] for r in whole["rounds"]]
+
+
+def test_a_side_job_refuses_a_side_it_has_no_model_for(runner, trained, tmp_path):
+    spec = _battle_spec(trained[0])
+    del spec["a"]
+    spec["sides"] = ["a"]
+    with pytest.raises(ValueError, match="side 'a'"):
+        runner.handle_battle(spec, Recorder(tmp_path).ctx)
+
+
 def test_a_creativity_battle_needs_the_judge(runner, trained, tmp_path):
     with pytest.raises(ValueError, match="judge"):
         runner.handle_battle(_battle_spec(trained[0], "creativity", 1), Recorder(tmp_path).ctx)

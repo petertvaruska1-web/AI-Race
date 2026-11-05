@@ -274,6 +274,7 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
             expected: r.expected ?? null,
             mine: { ...r.mine },
             theirs: { ...r.theirs },
+            votes: r.votes ? { ...r.votes } : null,
           }))
         : null,
       outcome: x.outcome,

@@ -249,6 +249,7 @@ function sampleView(): WorldView {
                 expected: "5",
                 mine: { reply: "<b>x</b> <|end|>", score: 1 },
                 theirs: { reply: "", score: 0 },
+                votes: null,
               },
             ],
             outcome: "win",

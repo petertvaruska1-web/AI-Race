@@ -231,14 +231,27 @@ export type FeedbackJobResult = z.infer<typeof FeedbackJobResult>;
 const BattleSide = z.object({ versionId: zId, modelTarUrl: Url });
 
 /** Two AIs answer the same fresh challenges (game-layer design §10); `b` is the rival. */
-export const BattleJobSpec = z.object({
-  battleId: zId,
-  skill: z.enum(BATTLE_SKILLS),
-  rounds: z.number().int().min(1).max(5),
-  seed: z.number().int().min(0),
-  a: BattleSide,
-  b: BattleSide,
-});
+export const BattleJobSpec = z
+  .object({
+    battleId: zId,
+    skill: z.enum(BATTLE_SKILLS),
+    rounds: z.number().int().min(1).max(5),
+    seed: z.number().int().min(0),
+    /**
+     * The sides this job answers. A battle between friends' AIs runs each side as its own job on
+     * its owner's card, carrying only that side's model (Stage 2).
+     */
+    sides: z
+      .array(z.enum(["a", "b"]))
+      .min(1)
+      .max(2)
+      .default(["a", "b"]),
+    a: BattleSide.optional(),
+    b: BattleSide.optional(),
+  })
+  .refine((s) => s.sides.every((side) => s[side] !== undefined), {
+    message: "every listed side needs its model",
+  });
 export type BattleJobSpec = z.infer<typeof BattleJobSpec>;
 
 /** A piece of a battle reply, sent as a `progress` event while it is written. */
@@ -263,8 +276,9 @@ export const BattleJobResult = z.object({
         prompt: z.string(),
         /** The right answer, or null for a story. */
         expected: z.string().nullable().default(null),
-        a: BattleAnswer,
-        b: BattleAnswer,
+        /** Present for each side the job answered. */
+        a: BattleAnswer.optional(),
+        b: BattleAnswer.optional(),
       }),
     )
     .min(1),

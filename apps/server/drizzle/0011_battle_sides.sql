@@ -1,0 +1,1 @@
+ALTER TABLE "battle_requests" ADD COLUMN "side_b_job_id" uuid;

@@ -142,6 +142,7 @@ describe("rival toasts", () => {
                 expected: null,
                 mine: { reply: "a", score: k < 2 ? 1 : 0 },
                 theirs: { reply: "b", score: k < 2 ? 0 : 1 },
+                votes: null,
               })),
               outcome: "win",
               pointsChange: 16,

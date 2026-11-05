@@ -78,6 +78,13 @@
       "when": 1793888025063,
       "tag": "0010_job_owners",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793891358074,
+      "tag": "0011_battle_sides",
+      "breakpoints": true
     }
   ]
 }

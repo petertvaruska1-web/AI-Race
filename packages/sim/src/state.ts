@@ -363,6 +363,8 @@ export type BattleRound = {
   expected?: string | null;
   mine: { reply: string; score: number };
   theirs: { reply: string; score: number };
+  /** A story round between friends' AIs: the other players' votes (totals), which decide it. */
+  votes?: { mine: number; theirs: number };
 };
 
 /** A battle between the player's AI and a rival's (game-layer design §10). */

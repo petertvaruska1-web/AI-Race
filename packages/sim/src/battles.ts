@@ -146,13 +146,17 @@ function validRounds(raw: unknown, count: number): raw is BattleRound[] {
       expected?: unknown;
       mine?: unknown;
       theirs?: unknown;
+      votes?: unknown;
     } | null;
     const expected = x?.expected;
+    const count = (n: unknown) => Number.isInteger(n) && (n as number) >= 0;
+    const v = x?.votes as { mine?: unknown; theirs?: unknown } | undefined | null;
     return (
       typeof x?.prompt === "string" &&
       (expected === undefined || expected === null || typeof expected === "string") &&
       answer(x.mine) &&
-      answer(x.theirs)
+      answer(x.theirs) &&
+      (v === undefined || (v !== null && count(v.mine) && count(v.theirs)))
     );
   });
 }
@@ -182,6 +186,7 @@ function mirrorBattle(
       ...r,
       mine: { ...r.theirs },
       theirs: { ...r.mine },
+      ...(r.votes ? { votes: { mine: r.votes.theirs, theirs: r.votes.mine } } : {}),
     })),
     outcome: battle.outcome ? reversed[battle.outcome] : null,
     pointsChange,
@@ -211,14 +216,21 @@ export function applyBattle(
     ...(typeof r.expected === "string" ? { expected: r.expected } : {}),
     mine: { reply: r.mine.reply, score: r.mine.score },
     theirs: { reply: r.theirs.reply, score: r.theirs.score },
+    ...(r.votes ? { votes: { mine: r.votes.mine, theirs: r.votes.theirs } } : {}),
   }));
   let wins = 0;
   let losses = 0;
   let total = 0;
   for (const r of raw) {
-    if (r.mine.score > r.theirs.score) wins += 1;
-    if (r.mine.score < r.theirs.score) losses += 1;
-    total += r.mine.score - r.theirs.score;
+    // A voted story round goes to the story with more votes, by a whole round; a tie or no
+    // votes leaves it to the judge's scores.
+    const d =
+      r.votes && r.votes.mine !== r.votes.theirs
+        ? Math.sign(r.votes.mine - r.votes.theirs)
+        : r.mine.score - r.theirs.score;
+    if (d > 0) wins += 1;
+    if (d < 0) losses += 1;
+    total += d;
   }
   const margin = onLegacyRules(s) ? LEGACY_DRAW_MARGIN : b.drawMargin;
   const outcome = total > margin ? "win" : total < -margin ? "loss" : "draw";

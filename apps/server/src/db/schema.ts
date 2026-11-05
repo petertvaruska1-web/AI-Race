@@ -275,7 +275,10 @@ export const TABLE_NAMES = [
 export const battleRequests = pgTable("battle_requests", {
   battleId: text("battle_id").primaryKey(),
   worldId: uuid("world_id").notNull(),
+  /** The battle's job, or side a's in a battle between friends' AIs. */
   jobId: uuid("job_id"),
+  /** Side b's job in a battle between friends' AIs (Stage 2). */
+  sideBJobId: uuid("side_b_job_id"),
 });
 
 /** Playground minigame runs (playtest pack §4): practice, duels and showcases, private to their player. */

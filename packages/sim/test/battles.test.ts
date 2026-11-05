@@ -304,6 +304,48 @@ describe("battles between friends", () => {
     expect(projectView(done, "u2").me.company?.battles[0]).toMatchObject({ defending: true });
   });
 
+  it("a story round's votes decide it, whatever the judge said; a tie leaves it to the judge", () => {
+    const s = friends();
+    const going = ok(start(s, "q1", "creativity"));
+    const story = (m: number, th: number, votes?: { mine: number; theirs: number }) => ({
+      prompt: "Write a story",
+      expected: null,
+      mine: { reply: "mine", score: m },
+      theirs: { reply: "theirs", score: th },
+      ...(votes ? { votes } : {}),
+    });
+    // The judge prefers theirs every round; the others voted for mine 2-1 twice, then tied.
+    const done = ok(
+      resolve(going, "b1", [
+        story(0.2, 0.9, { mine: 2, theirs: 1 }),
+        story(0.2, 0.9, { mine: 2, theirs: 1 }),
+        story(0.4, 0.5, { mine: 1, theirs: 1 }),
+      ]),
+    );
+    expect(battleOf(done)?.outcome).toBe("win");
+    expect(battleOf(done)?.rounds?.[0]?.votes).toEqual({ mine: 2, theirs: 1 });
+    const theirs = (done.companies.c2 as CompanyState).battles.find((b) => b.id === "b1");
+    expect(theirs?.rounds?.[0]?.votes).toEqual({ mine: 1, theirs: 2 });
+    expect(projectView(done, "u1").me.company?.battles[0]?.rounds?.[0]?.votes).toEqual({
+      mine: 2,
+      theirs: 1,
+    });
+    expect(projectView(done, "u1").me.company?.battles[0]?.rounds?.[2]?.votes).toEqual({
+      mine: 1,
+      theirs: 1,
+    });
+    // Without votes, the judge decides.
+    const judged = ok(resolve(going, "b1", [story(0.2, 0.9), story(0.2, 0.9), story(0.4, 0.5)]));
+    expect(battleOf(judged)?.outcome).toBe("loss");
+    expect(projectView(judged, "u1").me.company?.battles[0]?.rounds?.[0]?.votes).toBeNull();
+    // Votes must be whole numbers of zero or more.
+    expect(
+      rejected(
+        resolve(going, "b1", [story(0.2, 0.9, { mine: -1, theirs: 1 }), story(0, 0), story(0, 0)]),
+      ),
+    ).toBe("That battle result isn't valid.");
+  });
+
   it("refuses your own AI, and a world without rivals still has friends to battle", () => {
     const s = friends();
     expect(rejected(start(s, "p1"))).toBe("You can't battle your own AI.");

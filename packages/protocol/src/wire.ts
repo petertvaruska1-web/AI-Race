@@ -88,6 +88,16 @@ export const ClientMessage = z.discriminatedUnion("type", [
     .refine((m) => m.opponent === null || (DUEL_GAMES as readonly string[]).includes(m.game), {
       message: "Story Dice can't be a duel.",
     }),
+  /** A vote on a story round of a battle between two other players' AIs (Stage 2). */
+  z.object({
+    v,
+    type: z.literal("battleVote"),
+    cid: z.uuid(),
+    worldId: zId,
+    battleId: zId,
+    round: z.number().int().min(0).max(9),
+    pick: z.enum(["left", "right"]),
+  }),
   /** The player is in the Playground (sent every 15 s): the world's customer posts wait. */
   z.object({ v, type: z.literal("inPlayground"), worldId: zId }),
 ]);

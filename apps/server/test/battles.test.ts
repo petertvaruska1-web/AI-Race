@@ -103,8 +103,11 @@ describe("the battle service", () => {
     expect(lease.jobType).toBe("battle");
     const spec = BattleJobSpec.parse(lease.spec);
     expect(spec).toMatchObject({ battleId: o.battleId, skill: "knowledge", rounds: 3 });
-    expect(await (await fetch(spec.a.modelTarUrl)).text()).toBe("fake-checkpoint");
-    expect(await (await fetch(spec.b.modelTarUrl)).text()).toBe(`fake-rival-${spec.b.versionId}`);
+    expect(spec.sides).toEqual(["a", "b"]);
+    expect(await (await fetch(spec.a?.modelTarUrl ?? "")).text()).toBe("fake-checkpoint");
+    expect(await (await fetch(spec.b?.modelTarUrl ?? "")).text()).toBe(
+      `fake-rival-${spec.b?.versionId}`,
+    );
     expect((await server.ctx.broker.getJob(lease.jobId))?.priority).toBe(1);
 
     o.ws.send({ v: 1, type: "subscribe", sub: `battle:${o.worldId}:${o.battleId}` });

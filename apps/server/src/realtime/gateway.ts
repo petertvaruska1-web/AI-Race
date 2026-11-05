@@ -34,6 +34,11 @@ export type ChatMessage = Extract<ClientMessage, { type: "chat" }>;
 export type MinigameMessage = Extract<ClientMessage, { type: "minigame" }>;
 export type InterviewPublishMessage = Extract<ClientMessage, { type: "interviewPublish" }>;
 export type NotebookSaveMessage = Extract<ClientMessage, { type: "notebookSave" }>;
+export type BattleVoteMessage = Extract<ClientMessage, { type: "battleVote" }>;
+export type BattleVoteHandler = (
+  userId: string,
+  msg: BattleVoteMessage,
+) => Promise<{ ok: true } | { ok: false; reason: string }>;
 export type NotebookHandler = (
   userId: string,
   msg: NotebookSaveMessage,
@@ -88,6 +93,7 @@ export class Gateway {
   private minigame: MinigameHandler | null = null;
   private interview: InterviewHandler | null = null;
   private notebook: NotebookHandler | null = null;
+  private battleVote: BattleVoteHandler | null = null;
   private closed = false;
 
   constructor(private readonly ctx: AppContext) {
@@ -116,6 +122,11 @@ export class Gateway {
   /** Handles playground messages (plan Task 15); the gateway acks or rejects with the result. */
   setChatHandler(handler: ChatHandler): void {
     this.chat = handler;
+  }
+
+  /** Takes a vote on a friends' battle's story round; the gateway acks or rejects. */
+  setBattleVoteHandler(handler: BattleVoteHandler): void {
+    this.battleVote = handler;
   }
 
   /** Starts a Playground minigame; the gateway acks with its run or rejects with the reason. */
@@ -212,7 +223,14 @@ export class Gateway {
       // A command or chat with a usable id gets a reject the client can match to it.
       const d = data as { type?: unknown; cid?: unknown } | null;
       const cid = typeof d?.cid === "string" && UUID.test(d.cid) ? d.cid : null;
-      const answerable = ["chat", "command", "minigame", "interviewPublish", "notebookSave"];
+      const answerable = [
+        "chat",
+        "command",
+        "minigame",
+        "interviewPublish",
+        "notebookSave",
+        "battleVote",
+      ];
       if (cid && typeof d?.type === "string" && answerable.includes(d.type)) {
         const reason =
           d.type === "chat" ? "Messages are 1–500 characters." : "That request isn't valid.";
@@ -279,6 +297,14 @@ export class Gateway {
           ? await this.notebook(userId, msg)
           : { ok: false as const, reason: "Notebooks aren't available yet." };
         if (r.ok) session.send({ v: 1, type: "ack", cid: msg.cid, duplicate: false, data: r.data });
+        else session.send({ v: 1, type: "reject", cid: msg.cid, reason: r.reason });
+        return;
+      }
+      case "battleVote": {
+        const r = this.battleVote
+          ? await this.battleVote(userId, msg)
+          : { ok: false as const, reason: "Voting isn't available yet." };
+        if (r.ok) session.send({ v: 1, type: "ack", cid: msg.cid, duplicate: false });
         else session.send({ v: 1, type: "reject", cid: msg.cid, reason: r.reason });
         return;
       }

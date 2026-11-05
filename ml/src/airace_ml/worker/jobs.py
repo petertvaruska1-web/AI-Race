@@ -270,12 +270,19 @@ class JobRunner:
 
     def handle_battle(self, spec: dict[str, Any], ctx: JobContext) -> dict[str, Any]:
         """Both AIs answer the same fresh challenges; each reply streams as ``battleText``
-        progress, then is scored by the challenge's check (stories: the judge)."""
+        progress, then is scored by the challenge's check (stories: the judge).
+
+        ``sides`` (default both) lists the sides this job answers: a battle between friends' AIs
+        runs each side as its own job on its owner's card, with only that side's model."""
         skill = _spec_str(spec, "skill")
         rounds = int(spec.get("rounds", 3))
         seed = int(spec.get("seed", 0))
+        listed = spec.get("sides") or ["a", "b"]
+        if not isinstance(listed, list) or not set(listed) <= {"a", "b"}:
+            raise ValueError(f"the battle spec's sides aren't valid: {listed!r}")
+        wanted = [side for side in ("a", "b") if side in listed]
         sides = {}
-        for side in ("a", "b"):
+        for side in wanted:
             s = spec.get(side)
             if not isinstance(s, dict):
                 raise ValueError(f"the battle spec needs side {side!r}")  # noqa: TRY004 (not retried)
@@ -291,7 +298,7 @@ class JobRunner:
             # Asked as the benchmark asks its kind, so each AI shows what it can really do.
             prompt, chat, max_new_tokens, temperature = battle_prompt(item)
             answers = {}
-            for side in ("a", "b"):
+            for side in wanted:
                 version_id, url = sides[side]
                 lm, lock = self.models.get(version_id, url, transient=side == "b")
                 with lock:
