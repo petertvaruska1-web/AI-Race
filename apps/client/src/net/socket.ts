@@ -150,6 +150,24 @@ export class GameSocket {
     });
   }
 
+  /** A vote on a story round of two other players' battle (Stage 2). */
+  battleVote(
+    worldId: string,
+    battleId: string,
+    round: number,
+    pick: "left" | "right",
+  ): Promise<CommandResult> {
+    return this.request({
+      v: 1,
+      type: "battleVote",
+      cid: this.deps.uuid(),
+      worldId,
+      battleId,
+      round,
+      pick,
+    });
+  }
+
   /** Saves the company's notebook (empty clears it). */
   notebookSave(worldId: string, text: string): Promise<CommandResult> {
     return this.request({ v: 1, type: "notebookSave", cid: this.deps.uuid(), worldId, text });

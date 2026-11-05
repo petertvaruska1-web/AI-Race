@@ -3,6 +3,7 @@ import { AppShell } from "../components/AppShell.tsx";
 import type { Route } from "../route.ts";
 import { useFollowCards } from "../store/cards.ts";
 import { useSocket } from "../store/session.ts";
+import { useFollowVotes } from "../store/votes.ts";
 import { useWorld } from "../store/world.ts";
 import { Victory } from "../surprises/Goals.tsx";
 import { applyCompanyTheme } from "../theme/palette.ts";
@@ -33,6 +34,8 @@ export function WorldScreen({ route }: { route: WorldRoute }) {
   }, [socket, worldId]);
   // Everyone's graphics cards, for the top bar's chip and the Lab's limits (Stage 2).
   useFollowCards(worldId);
+  // Story battles between two other players, open to this player's vote.
+  useFollowVotes(worldId);
 
   const palette = view?.companies.find((c) => c.id === view.me.company?.id)?.palette ?? null;
   useEffect(() => {

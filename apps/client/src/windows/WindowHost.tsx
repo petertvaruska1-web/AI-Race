@@ -22,6 +22,7 @@ import { RegionWindow } from "./RegionWindow.tsx";
 import { ReportWindow } from "./ReportWindow.tsx";
 import { RescueWindow } from "./RescueWindow.tsx";
 import { RivalWindow } from "./RivalWindow.tsx";
+import { VoteWindow } from "./VoteWindow.tsx";
 
 function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) {
   const s = entry.spec;
@@ -54,6 +55,8 @@ function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) 
       return <ComputersWindow entry={entry} view={view} />;
     case "cards":
       return <CardsWindow entry={entry} view={view} />;
+    case "vote":
+      return <VoteWindow entry={entry} view={view} battleId={s.battleId} />;
     case "report":
       return <ReportWindow entry={entry} view={view} month={s.month} />;
     case "rescue":

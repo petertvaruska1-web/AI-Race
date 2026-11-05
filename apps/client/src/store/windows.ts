@@ -17,6 +17,7 @@ export type WindowSpec =
   | { kind: "dataCenter" }
   | { kind: "computers" }
   | { kind: "cards" }
+  | { kind: "vote"; battleId: string }
   | { kind: "report"; month: string }
   | { kind: "rescue" }
   | { kind: "rival"; companyId: string }

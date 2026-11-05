@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { Button } from "../components/Button.tsx";
 import { INPUT } from "../components/Field.tsx";
 import { dayLabel, formatMoney } from "../format.ts";
+import { makerOnline } from "../friends.ts";
 import { rivalAis } from "../rivals.ts";
+import { type CardView, useCards } from "../store/cards.ts";
 import { useSocket } from "../store/session.ts";
 import { useWindows } from "../store/windows.ts";
 import { GoneWindow, WindowFrame, type WindowProps } from "./WindowFrame.tsx";
@@ -23,7 +25,7 @@ function blocked(view: WorldView, rivalProductId: string, skill: BattleSkill): s
   const b = getBalance(view.world.balance).economy.battles;
   const company = view.me.company;
   const rival = view.companies.find((c) => c.products.some((p) => p.id === rivalProductId));
-  if (!company || !rival) return "Pick a rival's AI.";
+  if (!company || !rival) return "Pick an AI to battle.";
   if (company.battles.some((x) => x.status === "running"))
     return "Your last battle is still going.";
   const last = company.battles.filter((x) => x.rivalId === rival.id).at(-1);
@@ -42,7 +44,34 @@ function blocked(view: WorldView, rivalProductId: string, skill: BattleSkill): s
   return null;
 }
 
-/** Pick a rival's AI and a skill, then start the battle (game-layer design §10). */
+type BattleTarget = {
+  productId: string;
+  companyName: string;
+  productName: string;
+  /** A friend's AI answers on its maker's computer (Fair off), which must be on. */
+  online: boolean;
+};
+
+/** The AIs to battle: the rivals' and other players' AIs on sale (Stage 2). */
+function battleTargets(view: WorldView, cards: CardView[] | null): BattleTarget[] {
+  const rivals = rivalAis(view).map((r) => ({ ...r, online: true }));
+  const players = view.companies
+    .filter((c) => c.rival === null && c.id !== view.me.company?.id)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .flatMap((c) =>
+      c.products
+        .filter((p) => p.status === "live" && p.version)
+        .map((p) => ({
+          productId: p.id,
+          companyName: c.name,
+          productName: p.name,
+          online: makerOnline(view, cards, c.ownerUserId),
+        })),
+    );
+  return [...players, ...rivals];
+}
+
+/** Pick an AI on sale (a rival's or a friend's) and a skill, then start the battle (§10). */
 export function NewBattleWindow({
   entry,
   view,
@@ -50,13 +79,15 @@ export function NewBattleWindow({
 }: WindowProps & { rivalProductId?: string }) {
   const socket = useSocket();
   const back = useWindows((s) => s.back);
-  const targets = rivalAis(view);
-  const [target, setTarget] = useState(rivalProductId ?? targets[0]?.productId ?? "");
+  const cards = useCards((s) => s.cards);
+  const targets = battleTargets(view, cards);
+  const firstOpen = targets.find((t) => t.online)?.productId ?? "";
+  const [target, setTarget] = useState(rivalProductId ?? firstOpen);
   const [skill, setSkill] = useState<BattleSkill>("knowledge");
   const [problem, setProblem] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const fee = getBalance(view.world.balance).economy.battles.fee;
-  const reason = target ? blocked(view, target, skill) : "Pick a rival's AI.";
+  const reason = target ? blocked(view, target, skill) : "Pick an AI to battle.";
 
   async function start() {
     setProblem(null);
@@ -78,15 +109,15 @@ export function NewBattleWindow({
       subtitle={`Both AIs answer the same fresh questions. A battle costs ${formatMoney(fee)}.`}
     >
       {targets.length === 0 ? (
-        <p className="text-sm text-muted">No rival has an AI on sale yet.</p>
+        <p className="text-sm text-muted">No one else has an AI on sale yet.</p>
       ) : (
         <div className="space-y-4">
           <label className="block text-sm">
             <span className="mb-1 block font-semibold">Against</span>
             <select className={INPUT} value={target} onChange={(e) => setTarget(e.target.value)}>
               {targets.map((t) => (
-                <option key={t.productId} value={t.productId}>
-                  {`${t.companyName}'s ${t.productName}`}
+                <option key={t.productId} value={t.productId} disabled={!t.online}>
+                  {`${t.companyName}'s ${t.productName}${t.online ? "" : " (computer off)"}`}
                 </option>
               ))}
             </select>

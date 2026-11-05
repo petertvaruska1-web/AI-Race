@@ -2,6 +2,7 @@ import { MILESTONE_NAMES, type NewsView, type WorldView } from "@airace/protocol
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { monthName } from "../format.ts";
+import { useVotes } from "../store/votes.ts";
 import { useWindows, type WindowSpec } from "../store/windows.ts";
 import { MILESTONE_ICONS } from "../surprises/Trophies.tsx";
 
@@ -81,6 +82,24 @@ export function Toasts({ view }: { view: WorldView }) {
   const discoveries = view.me.company?.discoveries;
   const seen = useRef<Set<string> | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const ballots = useVotes((s) => s.ballots);
+  const votedOn = useRef(new Set<string>());
+
+  // A friends' story battle opened to this player's vote (Stage 2).
+  useEffect(() => {
+    const fresh: Toast[] = Object.values(ballots)
+      .filter((b) => b.closed === null && !votedOn.current.has(b.battleId))
+      .map((b) => ({
+        id: `vote-${b.battleId}`,
+        label: "Vote",
+        headline: "Vote on a story battle",
+        good: true,
+        burst: false,
+        opens: { kind: "vote", battleId: b.battleId } as WindowSpec,
+      }));
+    for (const b of Object.values(ballots)) votedOn.current.add(b.battleId);
+    if (fresh.length > 0) setToasts((t) => [...t, ...fresh].slice(-MOST));
+  }, [ballots]);
 
   useEffect(() => {
     const news = view.feed.filter((f): f is NewsView => f.kind === "news");

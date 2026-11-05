@@ -176,7 +176,9 @@ export function Arena({ view }: { view: WorldView }) {
                     className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-surface-2"
                   >
                     <span>
-                      {b.skill} vs {rival?.name ?? "a rival"}
+                      {b.defending
+                        ? `${b.skill}: ${rival?.name ?? "a player"} challenged you`
+                        : `${b.skill} vs ${rival?.name ?? "a rival"}`}
                     </span>
                     <span className="text-muted">
                       {b.status === "running"
