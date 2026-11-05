@@ -5,6 +5,8 @@ import type { AppContext } from "../app.ts";
 import { HttpError } from "../auth.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { schema } from "../db/index.ts";
+import { forCompany, paramsOf } from "../jobs/owners.ts";
+
 import { checkpointKey } from "../training/service.ts";
 import type { WorldActor } from "../worlds/actor.ts";
 
@@ -75,7 +77,16 @@ export class BattleService {
       .onConflictDoNothing()
       .returning();
     if (fresh.length > 0) {
-      const jobId = await broker.enqueue("battle", payload, s.worldId);
+      const jobId = await broker.enqueue(
+        "battle",
+        payload,
+        s.worldId,
+        forCompany(
+          s,
+          companyId,
+          Math.max(paramsOf(s, battle.mine.versionId), paramsOf(s, battle.theirs.versionId)),
+        ),
+      );
       await db
         .update(schema.battleRequests)
         .set({ jobId })

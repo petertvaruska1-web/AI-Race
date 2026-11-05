@@ -2,7 +2,7 @@ import type { JobType } from "@airace/protocol";
 import { eq } from "drizzle-orm";
 import type { AppContext } from "./app.ts";
 import { schema } from "./db/index.ts";
-import type { JobRow } from "./jobs/broker.ts";
+import type { EnqueueOptions, JobRow } from "./jobs/broker.ts";
 
 /**
  * Asks for a job once per key: a row is written before the job is queued, so a restart never
@@ -14,6 +14,7 @@ export async function requestOnce(
   worldId: string,
   type: JobType,
   payload: unknown,
+  routing: EnqueueOptions = {},
 ): Promise<JobRow | null> {
   const fresh = await ctx.db
     .insert(schema.gameRequests)
@@ -21,7 +22,7 @@ export async function requestOnce(
     .onConflictDoNothing()
     .returning();
   if (fresh.length > 0) {
-    const jobId = await ctx.broker.enqueue(type, payload, worldId);
+    const jobId = await ctx.broker.enqueue(type, payload, worldId, routing);
     await ctx.db.update(schema.gameRequests).set({ jobId }).where(eq(schema.gameRequests.key, key));
     return null;
   }

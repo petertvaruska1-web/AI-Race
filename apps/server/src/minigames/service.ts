@@ -12,6 +12,8 @@ import type { AppContext } from "../app.ts";
 import { HttpError } from "../auth.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { schema } from "../db/index.ts";
+import type { EnqueueOptions } from "../jobs/broker.ts";
+import { forCompany, paramsOf } from "../jobs/owners.ts";
 import type { MinigameMessage } from "../realtime/gateway.ts";
 import { checkpointKey } from "../training/service.ts";
 import type { WorldActor } from "../worlds/actor.ts";
@@ -114,15 +116,16 @@ export class MinigameService {
       status: "running",
       createdAt: this.ctx.opts.scheduler.now(),
     });
-    await this.enqueue(runId, msg.worldId);
+    await this.enqueue(runId, msg.worldId, forCompany(s, company.id, paramsOf(s, msg.versionId)));
     return { ok: true, data: { runId } };
   }
 
-  private async enqueue(runId: string, worldId: string): Promise<void> {
+  private async enqueue(runId: string, worldId: string, routing: EnqueueOptions): Promise<void> {
     const jobId = await this.ctx.broker.enqueue(
       "minigame",
       { runId } satisfies MinigamePayload,
       worldId,
+      routing,
     );
     await this.ctx.db
       .update(schema.minigameRuns)
@@ -186,7 +189,7 @@ export class MinigameService {
       status: "running",
       createdAt: this.ctx.opts.scheduler.now(),
     });
-    await this.enqueue(runId, s.worldId);
+    await this.enqueue(runId, s.worldId, forCompany(s, company.id, paramsOf(s, x.versionId)));
   }
 
   // -- the job ---------------------------------------------------------------------------------

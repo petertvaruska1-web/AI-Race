@@ -5,6 +5,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { schema } from "../db/index.ts";
+import { forCompany, paramsOf } from "../jobs/owners.ts";
 import { checkpointKey } from "../training/service.ts";
 import type { WorldActor } from "../worlds/actor.ts";
 
@@ -96,7 +97,14 @@ export class FeedbackService {
       key,
       perGroup: getBalance(s.balance).economy.feedback.perGroup,
     };
-    const jobId = await this.ctx.broker.enqueue("feedback", payload, s.worldId);
+    const companyId =
+      Object.keys(s.companies).find((id) => s.companies[id]?.products[productId]) ?? "";
+    const jobId = await this.ctx.broker.enqueue(
+      "feedback",
+      payload,
+      s.worldId,
+      forCompany(s, companyId, paramsOf(s, versionId)),
+    );
     await this.ctx.db
       .update(schema.feedbackRequests)
       .set({ jobId })

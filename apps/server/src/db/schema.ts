@@ -117,6 +117,12 @@ export const jobs = pgTable(
     type: text("type").notNull(),
     priority: integer("priority").notNull().default(0),
     worldId: uuid("world_id"),
+    /** The player whose card must do it (Fair mode off) or whose share it counts against (on). */
+    ownerUserId: text("owner_user_id"),
+    /** The company it is for, for the Fair-mode share. */
+    companyId: text("company_id"),
+    /** The biggest model it loads, in parameters: a card must be able to hold it. */
+    minParams: integer("min_params").notNull().default(0),
     payload: jsonb("payload").notNull(),
     status: text("status").notNull(),
     leaseWorker: text("lease_worker"),

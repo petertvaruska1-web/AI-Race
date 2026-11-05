@@ -4,6 +4,7 @@ import { and, asc, eq, inArray, lt, notInArray, or } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { schema } from "../db/index.ts";
 import type { TimerHandle } from "../scheduler.ts";
+import { FairShare } from "./fairShare.ts";
 
 export type JobRow = typeof schema.jobs.$inferSelect;
 export type JobStatus = "queued" | "leased" | "done" | "failed" | "cancelled";
@@ -26,6 +27,8 @@ export const JOB_PRIORITY: Record<JobType, number> = {
   appReview: 4,
 };
 export const LEASE_MS = 30_000;
+/** How many queued jobs one dispatch looks at. */
+const DISPATCH_WINDOW = 500;
 export const MAX_ATTEMPTS = 3;
 const SWEEP_MS = 5_000;
 /** How long a "the player is in the Playground" sign lasts (the client sends one every 15 s). */
@@ -33,6 +36,31 @@ export const PLAYGROUND_MS = 30_000;
 /** Jobs that wait while their world's player is in the Playground, so the AI answers them first. */
 export const HELD_IN_PLAYGROUND: JobType[] = ["feedback", "appReview"];
 export const LOST_WORKER = "The computer running it stopped responding.";
+
+/** What routing needs to know about a job's world. */
+type RouteWorld = { fairMode: boolean; hostUserId: string; members: Set<string>; day: number };
+
+export type EnqueueOptions = {
+  priority?: number;
+  /** The player whose card does it (Fair off), or whose share it counts against (Fair on). */
+  owner?: string | null;
+  companyId?: string | null;
+  /** The biggest model it loads, in parameters. */
+  minParams?: number;
+};
+
+/**
+ * Whether `conn` may run `job` (Stage 2): it must hold the job's model; then, with Fair mode
+ * off, only its owner's cards (the house card counts as the world host's); with it on, any card
+ * of a member of the job's world, or the house card. A job without a world runs anywhere.
+ */
+export function canRun(job: JobRow, conn: WorkerConn, world: RouteWorld | null): boolean {
+  if (conn.caps.maxParams < job.minParams) return false;
+  if (!job.worldId || !world) return true;
+  if (world.fairMode) return conn.ownerUserId === null || world.members.has(conn.ownerUserId);
+  const owner = job.ownerUserId ?? world.hostUserId;
+  return conn.ownerUserId === null ? owner === world.hostUserId : conn.ownerUserId === owner;
+}
 
 /** A connected worker, as the broker sees it. */
 export type WorkerConn = {
@@ -65,6 +93,10 @@ export class JobBroker {
   private closed = false;
   /** When each world last said its player is in the Playground. */
   private playground = new Map<string, number>();
+  /** Card time per company in Fair-mode worlds. */
+  readonly fairShare = new FairShare();
+  /** When each lease began, for the Fair-mode share. */
+  private leasedAt = new Map<string, number>();
 
   constructor(private readonly ctx: AppContext) {}
 
@@ -125,7 +157,7 @@ export class JobBroker {
     type: JobType,
     payload: unknown,
     worldId: string | null,
-    opts: { priority?: number } = {},
+    opts: EnqueueOptions = {},
   ): Promise<string> {
     const id = randomUUID();
     const now = this.ctx.opts.scheduler.now();
@@ -134,6 +166,9 @@ export class JobBroker {
       type,
       priority: opts.priority ?? JOB_PRIORITY[type],
       worldId,
+      ownerUserId: opts.owner ?? null,
+      companyId: opts.companyId ?? null,
+      minParams: opts.minParams ?? 0,
       payload,
       status: "queued",
       createdAt: now,
@@ -236,6 +271,7 @@ export class JobBroker {
           const job = await this.leasedTo(conn, msg.jobId);
           if (!job) return;
           conn.leases.delete(job.id);
+          await this.noteCardTime(job);
           const finished = await this.update(job.id, {
             status: "done",
             result: msg.result,
@@ -250,6 +286,7 @@ export class JobBroker {
           const job = await this.leasedTo(conn, msg.jobId);
           if (!job) return;
           conn.leases.delete(job.id);
+          await this.noteCardTime(job);
           await this.retryOrFail(job, msg.error, msg.retryable);
           await this.dispatch();
         });
@@ -307,11 +344,19 @@ export class JobBroker {
     );
   }
 
-  /** Gives each worker's free slots the oldest, most urgent jobs it can run. Call inside `serial`. */
+  /**
+   * Gives each card's free slots the most urgent jobs it may run (`canRun`), fastest cards
+   * first. Jobs go by priority, then (in Fair-mode worlds) the company that has used the cards
+   * least, then age. Call inside `serial`.
+   */
   private async dispatch(): Promise<void> {
     const identity = this.ctx.catalog?.dataIdentity;
     if (this.closed || !identity) return;
-    const workers = [...this.workers.values()].sort((a, b) => (a.workerId < b.workerId ? -1 : 1));
+    // A worker with other data would train on something the game doesn't describe.
+    const workers = [...this.workers.values()]
+      .filter((c) => c.caps.dataIdentity === identity)
+      .sort((a, b) => b.caps.speed - a.caps.speed || (a.workerId < b.workerId ? -1 : 1));
+    if (workers.length === 0) return;
     const playing = this.playgroundWorlds();
     const notHeld =
       playing.length === 0
@@ -320,18 +365,36 @@ export class JobBroker {
             notInArray(schema.jobs.type, HELD_IN_PLAYGROUND),
             notInArray(schema.jobs.worldId, playing),
           );
+    const queued = await this.ctx.db
+      .select()
+      .from(schema.jobs)
+      .where(and(eq(schema.jobs.status, "queued"), notHeld))
+      .orderBy(asc(schema.jobs.priority), asc(schema.jobs.seq))
+      .limit(DISPATCH_WINDOW);
+    if (queued.length === 0) return;
+    const worlds = new Map<string, RouteWorld | null>();
+    for (const job of queued) {
+      if (job.worldId && !worlds.has(job.worldId)) {
+        worlds.set(job.worldId, await this.routeWorld(job.worldId));
+      }
+    }
+    const usage = (job: JobRow) => {
+      const w = job.worldId ? worlds.get(job.worldId) : null;
+      if (!w?.fairMode || !job.worldId) return 0;
+      return this.fairShare.usage(job.worldId, job.companyId ?? job.ownerUserId ?? "", w.day);
+    };
+    queued.sort((a, b) => a.priority - b.priority || usage(a) - usage(b) || a.seq - b.seq);
     for (const conn of workers) {
-      // A worker with other data would train on something the game doesn't describe.
-      if (conn.caps.dataIdentity !== identity) continue;
       for (;;) {
         const free = conn.caps.jobTypes.filter((t) => conn.caps.slots[t] > countLeases(conn, t));
         if (free.length === 0) break;
-        const [next] = await this.ctx.db
-          .select()
-          .from(schema.jobs)
-          .where(and(eq(schema.jobs.status, "queued"), inArray(schema.jobs.type, free), notHeld))
-          .orderBy(asc(schema.jobs.priority), asc(schema.jobs.seq))
-          .limit(1);
+        const index = queued.findIndex(
+          (j) =>
+            (free as string[]).includes(j.type) &&
+            canRun(j, conn, j.worldId ? (worlds.get(j.worldId) ?? null) : null),
+        );
+        if (index < 0) break;
+        const [next] = queued.splice(index, 1);
         if (!next) break;
         let spec: unknown = next.payload;
         const prepare = this.prepare.get(next.type as JobType);
@@ -352,6 +415,7 @@ export class JobBroker {
         });
         const type = job.type as JobType;
         conn.leases.set(job.id, type);
+        this.leasedAt.set(job.id, this.ctx.opts.scheduler.now());
         conn.send({
           v: 1,
           type: "lease",
@@ -364,6 +428,33 @@ export class JobBroker {
         await this.fire(this.leased.get(type), job, { attempt: job.attempts });
       }
     }
+  }
+
+  /** What routing needs to know about a world (null: none, or it can't be opened). */
+  private async routeWorld(worldId: string): Promise<RouteWorld | null> {
+    try {
+      const actor = this.ctx.worlds.peek(worldId) ?? (await this.ctx.worlds.get(worldId));
+      const s = actor.state();
+      return {
+        fairMode: s.fairMode === true,
+        hostUserId: s.hostUserId,
+        members: new Set(Object.keys(s.members)),
+        day: s.day,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Adds a finished lease's card time to its company's Fair-mode share. */
+  private async noteCardTime(job: JobRow): Promise<void> {
+    const at = this.leasedAt.get(job.id);
+    this.leasedAt.delete(job.id);
+    if (at === undefined || !job.worldId) return;
+    const world = await this.routeWorld(job.worldId);
+    if (!world?.fairMode) return;
+    const company = job.companyId ?? job.ownerUserId ?? "";
+    this.fairShare.add(job.worldId, company, this.ctx.opts.scheduler.now() - at, world.day);
   }
 
   private async leasedTo(conn: WorkerConn, jobId: string): Promise<JobRow | null> {

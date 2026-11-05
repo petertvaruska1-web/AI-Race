@@ -3,6 +3,7 @@ import type { CompanyState } from "@airace/sim";
 import type { AppContext } from "../app.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { seedOf } from "../feedback/service.ts";
+import { forCompany, paramsOf } from "../jobs/owners.ts";
 import { requestOnce } from "../requests.ts";
 import { checkpointKey } from "../training/service.ts";
 import type { WorldActor } from "../worlds/actor.ts";
@@ -69,6 +70,7 @@ export class KeynoteService {
           s.worldId,
           "keynote",
           payload,
+          forCompany(s, companyId, paramsOf(s, product.versionId)),
         );
         // After a restart: a job that ended while its world was not loaded is applied now.
         if (earlier?.status === "done") await this.done(payload, earlier.result);

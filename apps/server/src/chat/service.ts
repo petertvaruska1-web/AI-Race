@@ -6,6 +6,7 @@ import type { AppContext } from "../app.ts";
 import { HttpError } from "../auth.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { schema } from "../db/index.ts";
+import { forPlayer, paramsOf } from "../jobs/owners.ts";
 import type { ChatMessage } from "../realtime/gateway.ts";
 import { checkpointKey } from "../training/service.ts";
 
@@ -167,16 +168,14 @@ export class ChatService {
       ...(packKey ? { packKey } : {}),
     };
     this.inFlight.set(threadId, "pending");
-    const jobId = await ctx.broker.enqueue(
-      "generate",
-      payload,
-      msg.worldId,
-      packKey
+    const jobId = await ctx.broker.enqueue("generate", payload, msg.worldId, {
+      ...forPlayer(s, userId, paramsOf(s, msg.versionId)),
+      ...(packKey
         ? { priority: RIVAL_CHAT_PRIORITY }
         : interview
           ? { priority: INTERVIEW_PRIORITY }
-          : {},
-    );
+          : {}),
+    });
     this.inFlight.set(threadId, jobId);
     this.remember(seenKey, threadId);
     return { ok: true, duplicate: false, data: { threadId } };

@@ -24,7 +24,7 @@ const RIVAL_GOALS = ["bestAi", "beatArch"];
  */
 export async function createWorldRecord(
   ctx: AppContext,
-  p: { name: string; hostUserId: string; hostName: string; goal?: GoalSpec },
+  p: { name: string; hostUserId: string; hostName: string; goal?: GoalSpec; fairMode?: boolean },
 ): Promise<{ worldId: string; inviteCode: string }> {
   const now = ctx.opts.scheduler.now();
   for (let attempt = 0; ; attempt++) {
@@ -40,6 +40,7 @@ export async function createWorldRecord(
       balance: ctx.opts.balance,
       inviteCode,
       goal: p.goal ?? NO_GOAL,
+      fairMode: p.fairMode ?? false,
     });
     try {
       await ctx.db.transaction(async (tx) => {

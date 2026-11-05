@@ -4,6 +4,7 @@ import { dateOfDay, getBalance } from "@airace/sim";
 import { asc, eq } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { schema } from "../db/index.ts";
+import { forCompany } from "../jobs/owners.ts";
 import type { InterviewPublishMessage } from "../realtime/gateway.ts";
 
 /** Published interviews run right after chats: the player is waiting for the reaction. */
@@ -97,6 +98,7 @@ export class InterviewService {
     });
     const payload: InterviewPayload = { worldId: msg.worldId, userId, requestId };
     const jobId = await ctx.broker.enqueue("interview", payload, msg.worldId, {
+      ...forCompany(s, company.id),
       priority: INTERVIEW_PRIORITY,
     });
     await ctx.db

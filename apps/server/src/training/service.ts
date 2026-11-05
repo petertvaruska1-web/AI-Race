@@ -7,12 +7,19 @@ import {
   type Query,
   TrainJobResult,
 } from "@airace/protocol";
-import { getBalance, type RunState, type SystemEvent, type WorldState } from "@airace/sim";
+import {
+  getBalance,
+  paramCount,
+  type RunState,
+  type SystemEvent,
+  type WorldState,
+} from "@airace/sim";
 import { and, asc, desc, eq, ne } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { HttpError } from "../auth.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { schema } from "../db/index.ts";
+import { forCompany } from "../jobs/owners.ts";
 import { notebookParagraphs } from "../notebook/filter.ts";
 import type { TimerHandle } from "../scheduler.ts";
 import type { WorldActor } from "../worlds/actor.ts";
@@ -210,7 +217,12 @@ export class TrainingService {
           notebook: run.notebookHash ? await this.notebookOf(run.notebookHash) : [],
         }),
       };
-      const jobId = await broker.enqueue("train", payload, s.worldId);
+      const jobId = await broker.enqueue(
+        "train",
+        payload,
+        s.worldId,
+        forCompany(s, companyId, run.preview.params),
+      );
       await db.update(schema.trainingRuns).set({ jobId }).where(eq(schema.trainingRuns.id, run.id));
       return;
     }
@@ -272,7 +284,12 @@ export class TrainingService {
         shape: { nLayer: v.nLayer, dModel: v.dModel, ctxLen: v.ctxLen },
         createdAt: this.ctx.opts.scheduler.now(),
       });
-      await broker.enqueue("eval", { worldId: s.worldId, versionId: v.id }, s.worldId);
+      await broker.enqueue(
+        "eval",
+        { worldId: s.worldId, versionId: v.id },
+        s.worldId,
+        forCompany(s, companyId, paramCount(v.nLayer, v.dModel)),
+      );
       return;
     }
     if (v.scores === null) {

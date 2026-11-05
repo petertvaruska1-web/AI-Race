@@ -3,6 +3,7 @@ import { type CompanyState, getBalance } from "@airace/sim";
 import type { AppContext } from "../app.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { seedOf } from "../feedback/service.ts";
+import { forCompany, paramsOf } from "../jobs/owners.ts";
 import { requestOnce } from "../requests.ts";
 import { checkpointKey } from "../training/service.ts";
 import type { WorldActor } from "../worlds/actor.ts";
@@ -81,6 +82,7 @@ export class AppReviewService {
           s.worldId,
           "appReview",
           payload,
+          forCompany(s, companyId, paramsOf(s, product.versionId)),
         );
         if (earlier?.status === "done") await this.done(payload, earlier.result);
       }
