@@ -150,6 +150,11 @@ export class GameSocket {
     });
   }
 
+  /** A message to the world chat (Stage 2). */
+  worldChat(worldId: string, text: string): Promise<CommandResult> {
+    return this.request({ v: 1, type: "worldChat", cid: this.deps.uuid(), worldId, text });
+  }
+
   /** A vote on a story round of two other players' battle (Stage 2). */
   battleVote(
     worldId: string,

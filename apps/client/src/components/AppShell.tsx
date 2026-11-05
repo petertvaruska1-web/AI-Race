@@ -7,6 +7,7 @@ import { Button } from "./Button.tsx";
 import { SideNav } from "./SideNav.tsx";
 import { Toasts } from "./Toasts.tsx";
 import { TopBar } from "./TopBar.tsx";
+import { WorldChat } from "./WorldChat.tsx";
 
 /** While a rescue offer waits, a strip under the top bar counts down and opens the choice. */
 function RescueBanner({ view }: { view: WorldView }) {
@@ -57,6 +58,7 @@ export function AppShell({
         </main>
       </div>
       <Toasts view={view} />
+      <WorldChat view={view} />
       <WindowHost view={view} />
     </div>
   );
