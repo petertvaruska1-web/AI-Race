@@ -110,6 +110,8 @@ class WorkerAgent:
         work_root: Path | None = None,
         heartbeat_s: float = HEARTBEAT_S,
         backoff_s: float = BACKOFF_START_S,
+        gpu_name: str | None = None,
+        speed: float = 0.0,
     ) -> None:
         if not handlers:
             raise ValueError("a worker needs at least one job handler")
@@ -135,6 +137,8 @@ class WorkerAgent:
             ),
             slots=self.slots,
             data_identity=data_identity(Path(data_root)),
+            gpu_name=gpu_name if gpu_name is not None else ("CPU" if device != "cuda" else "unknown"),
+            speed=speed,
         )
         self._jobs: dict[str, JobContext] = {}
         self._unreported: set[str] = set()

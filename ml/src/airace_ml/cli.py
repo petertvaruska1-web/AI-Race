@@ -200,9 +200,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     common.add_argument(
         "--device",
-        choices=("cpu", "cuda"),
-        help="where to compute (default: the GPU when there is one; build-judge and the full "
-        "gate then need --device cpu to run on the CPU)",
+        choices=("cpu", "cuda", "auto"),
+        help="where to compute (default and auto: the GPU when there is one; build-judge and "
+        "the full gate then need --device cpu to run on the CPU)",
     )
 
     def add(name: str, run, help: str, hint: str = "") -> argparse.ArgumentParser:
@@ -346,7 +346,8 @@ def _parser() -> argparse.ArgumentParser:
     worker.add_argument(
         "--server",
         default=DEFAULT_WORKER_SERVER,
-        help=f"the game server's worker address (default {DEFAULT_WORKER_SERVER})",
+        help=f"the game server's worker address, or a game link from \"Connect your computer\" "
+        f"(default {DEFAULT_WORKER_SERVER})",
     )
     worker.add_argument(
         "--token",
@@ -409,6 +410,8 @@ def _data_root(args: argparse.Namespace) -> Path:
 
 
 def _device(args: argparse.Namespace) -> torch.device:
+    if args.device == "auto":
+        return pick_device(None)
     if args.device == "cuda" and not torch.cuda.is_available():
         raise _UsageError(
             "--device cuda was asked for, but this computer has no GPU that can be used. "
@@ -926,9 +929,14 @@ def _cmd_worker(args: argparse.Namespace) -> int:
 
     from airace_ml.worker.agent import WorkerAgent
     from airace_ml.worker.jobs import JobRunner
+    from airace_ml.worker.speed import gpu_name, measure_speed, parse_connect_link
 
     root = _data_root(args)
-    token = args.token
+    try:
+        server, link_key = parse_connect_link(args.server)
+    except ValueError as e:
+        raise _UsageError(str(e)) from e
+    token = args.token or link_key
     token_file = root / "server" / "worker-token"
     if not token:
         if not token_file.is_file():
@@ -941,11 +949,15 @@ def _cmd_worker(args: argparse.Namespace) -> int:
     device = _device(args)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     runner = JobRunner(root, device)
+    print("Timing this computer's graphics card (a few seconds)...", flush=True)
+    speed = measure_speed(device, cache_dir=root / "helper")
     agent = WorkerAgent(
-        args.server,
+        server,
         token,
         root,
         device=device.type,
+        gpu_name=gpu_name(device),
+        speed=speed,
         handlers=runner.handlers(),
         slots={
             "train": 1,

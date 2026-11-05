@@ -64,7 +64,10 @@ def test_whello_names_the_capabilities_in_camel_case():
     assert isinstance(hello, WHello)
     assert hello.capabilities.data_identity == "sample-0001"
     wire = json.loads(dumps(hello))["capabilities"]
-    assert set(wire) == {"device", "vramMb", "maxParams", "jobTypes", "slots", "dataIdentity"}
+    assert set(wire) == {
+        "device", "vramMb", "maxParams", "gpuName", "speed", "jobTypes", "slots", "dataIdentity"
+    }
+    assert wire["gpuName"] == "NVIDIA GeForce RTX 3050" and wire["speed"] == 30000
 
 
 @pytest.mark.parametrize(

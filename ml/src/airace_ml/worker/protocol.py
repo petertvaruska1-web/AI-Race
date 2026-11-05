@@ -56,12 +56,16 @@ class Capabilities:
     job_types: tuple[str, ...]
     slots: dict[str, int]
     data_identity: str
+    gpu_name: str = "unknown"
+    speed: float = 0.0
 
     def to_wire(self) -> dict[str, Any]:
         return {
             "device": self.device,
             "vramMb": self.vram_mb,
             "maxParams": self.max_params,
+            "gpuName": self.gpu_name,
+            "speed": self.speed,
             "jobTypes": list(self.job_types),
             "slots": {t: int(self.slots.get(t, 0)) for t in JOB_TYPES},
             "dataIdentity": self.data_identity,
@@ -207,6 +211,8 @@ def parse_worker_message(raw: str | bytes) -> WorkerMsg:
                 job_types=tuple(c["jobTypes"]),
                 slots={k: int(v) for k, v in c["slots"].items()},
                 data_identity=c["dataIdentity"],
+                gpu_name=str(c.get("gpuName", "unknown")),
+                speed=float(c.get("speed", 0.0)),
             )
             return WHello(_str(d, "token"), _str(d, "workerId"), caps, tuple(d.get("running", [])))
         case "heartbeat":
