@@ -1,6 +1,8 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import type { Catalog } from "@airace/protocol";
 import cookie from "@fastify/cookie";
+import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from "fastify";
 import { AppReviewService } from "./apps/service.ts";
 import { HttpError, registerAuthRoutes } from "./auth.ts";
@@ -12,6 +14,7 @@ import { type ServerOptions, SIM_VERSION } from "./config.ts";
 import { type Db, openDb } from "./db/index.ts";
 import { FeedbackService } from "./feedback/service.ts";
 import { CardsService } from "./helpers/cards.ts";
+import { registerHelperDownloads } from "./helpers/downloads.ts";
 import { registerHelperKeyRoutes } from "./helpers/keys.ts";
 import { LimitsService } from "./helpers/limits.ts";
 import { InterviewService } from "./interviews/service.ts";
@@ -132,6 +135,8 @@ export async function buildApp(
   registerAuthRoutes(app, ctx);
   registerWorldRoutes(app, ctx);
   registerBlobRoutes(app, ctx);
+  registerHelperDownloads(app, ctx);
+  await serveClient(app, opts.clientDist ?? null);
 
   await ctx.broker.start();
 
@@ -148,4 +153,16 @@ export async function buildApp(
       await database.close();
     },
   };
+}
+
+/**
+ * The built web app, when the host plays from their PC (`npm run host`): its files at `/`, and
+ * `index.html` for the links the app handles itself (`/join/<code>`, `/w/<world>`).
+ */
+async function serveClient(app: FastifyInstance, dist: string | null): Promise<void> {
+  if (!dist || !existsSync(join(dist, "index.html"))) return;
+  await app.register(fastifyStatic, { root: resolve(dist), prefix: "/", index: "index.html" });
+  for (const path of ["/join/*", "/w/*"]) {
+    app.get(path, (_req, reply) => reply.sendFile("index.html"));
+  }
 }

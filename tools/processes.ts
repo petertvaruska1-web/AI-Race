@@ -1,7 +1,9 @@
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { CATALOG_VERSION } from "@airace/protocol";
 
 // Starting and stopping the game's processes, shared by `npm run dev` and the end-to-end tests.
 
@@ -115,3 +117,30 @@ export async function waitFor(
 }
 
 export const healthy = (url: string) => async () => (await fetch(`${url}/api/health`)).ok;
+
+/**
+ * Writes the dataset catalog the server reads when it is missing or older than the server
+ * reads (`npm run dev` and `npm run host`). False when it can't (no training data yet).
+ */
+export function ensureCatalog(data: string): boolean {
+  const catalogPath = join(data, "catalog", "v1", "catalog.json");
+  const stale = () => {
+    try {
+      return JSON.parse(readFileSync(catalogPath, "utf8")).version !== CATALOG_VERSION;
+    } catch {
+      return true;
+    }
+  };
+  if (existsSync(catalogPath) && !stale()) return true;
+  console.log("Writing the dataset catalog for the game server…");
+  const [cmd, ...pre] = uvCommand();
+  const population = join(REPO, "ml", "runs", "gate-1", "runs");
+  const args = [...pre, "run", ...UV_RUN, "airace-ml", "export-catalog", "--data-root", data];
+  if (existsSync(population)) args.push("--population", population);
+  const r = spawnSync(cmd as string, args, { cwd: join(REPO, "ml"), stdio: "inherit" });
+  if (r.status !== 0) {
+    console.error("Could not write the catalog. Build the training data first (see CLAUDE.md).");
+    return false;
+  }
+  return true;
+}

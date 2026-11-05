@@ -1,8 +1,6 @@
-import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { CATALOG_VERSION } from "@airace/protocol";
 import {
+  ensureCatalog,
   healthy,
   type Proc,
   REPO,
@@ -10,8 +8,6 @@ import {
   startVite,
   startWorker,
   stop,
-  UV_RUN,
-  uvCommand,
   waitFor,
 } from "./processes.ts";
 
@@ -24,27 +20,7 @@ const server = `http://127.0.0.1:${port}`;
 // A second game can run beside the first, with its own ports and data root.
 const webPort = Number(process.env.AIRACE_WEB_PORT ?? 5173);
 
-const catalogPath = join(data, "catalog", "v1", "catalog.json");
-// Missing, or written by an older export (a catalog version the server no longer reads).
-const stale = () => {
-  try {
-    return JSON.parse(readFileSync(catalogPath, "utf8")).version !== CATALOG_VERSION;
-  } catch {
-    return true;
-  }
-};
-if (!existsSync(catalogPath) || stale()) {
-  console.log("Writing the dataset catalog for the game server…");
-  const [cmd, ...pre] = uvCommand();
-  const population = join(REPO, "ml", "runs", "gate-1", "runs");
-  const args = [...pre, "run", ...UV_RUN, "airace-ml", "export-catalog", "--data-root", data];
-  if (existsSync(population)) args.push("--population", population);
-  const r = spawnSync(cmd as string, args, { cwd: join(REPO, "ml"), stdio: "inherit" });
-  if (r.status !== 0) {
-    console.error("Could not write the catalog. Build the training data first (see CLAUDE.md).");
-    process.exit(1);
-  }
-}
+if (!ensureCatalog(data)) process.exit(1);
 
 const procs: Proc[] = [];
 const shutdown = async () => {

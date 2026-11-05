@@ -22,4 +22,8 @@ export type ServerOptions = {
   /** Where players reach the server, e.g. http://localhost:8787. */
   publicUrl: string;
   logLevel?: string;
+  /** The data root (`data/`): helpers download the game's data and code from it (Stage 2). */
+  dataRoot?: string | null;
+  /** The built web app (`apps/client/dist`), served at `/` when the host plays from their PC. */
+  clientDist?: string | null;
 };

@@ -1,0 +1,9 @@
+@echo off
+rem AI Race helper setup: it lets this computer train and run AIs in the game at {{URL}}
+rem It installs uv, Python and the AI libraries, and downloads the game's data (about 4 GB).
+rem This file holds your own helper key: don't share it.
+set "AIRACE_URL={{URL}}"
+set "AIRACE_KEY={{KEY}}"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$h = @{ Authorization = 'Bearer ' + $env:AIRACE_KEY }; iex (Invoke-WebRequest -UseBasicParsing -Headers $h ($env:AIRACE_URL + '/helper/setup.ps1')).Content"
+echo.
+pause

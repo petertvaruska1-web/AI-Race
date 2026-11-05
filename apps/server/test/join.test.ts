@@ -109,15 +109,21 @@ describe("joining a friend's world", () => {
     await send(anaWs, w.worldId, { type: "startWorld" });
 
     anaWs.close();
-    await server.scheduler.advance(6_000); // past the presence grace
-    await eventually(() => w.actor.state().members[ana.userId]?.online === false);
+    // Past the presence grace, once the server has seen the socket close.
+    await eventually(async () => {
+      await server?.scheduler.advance(1_000);
+      return w.actor.state().members[ana.userId]?.online === false;
+    });
     await send(benWs, w.worldId, { type: "setPaused", paused: true });
     expect(w.actor.state().paused).toBe(true);
     await send(benWs, w.worldId, { type: "setPaused", paused: false });
 
     benWs.close();
-    await server.scheduler.advance(6_000);
-    await eventually(() => w.actor.state().members[ben.userId]?.online === false);
+    // Past the presence grace, once the server has seen the socket close.
+    await eventually(async () => {
+      await server?.scheduler.advance(1_000);
+      return w.actor.state().members[ben.userId]?.online === false;
+    });
     const day = w.actor.state().day;
     await server.scheduler.advance(5 * DAY_MS);
     expect(w.actor.state().day).toBe(day);

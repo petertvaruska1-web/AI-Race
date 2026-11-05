@@ -46,6 +46,10 @@ const { app, close } = await buildApp({
   scheduler: realScheduler,
   publicUrl: process.env.AIRACE_PUBLIC_URL ?? `http://localhost:${port}`,
   logLevel: process.env.LOG_LEVEL ?? "info",
+  // Helpers on friends' PCs download the game's data and code from here (Stage 2).
+  dataRoot: data,
+  // Set by `npm run host`, which serves the built web app from this server.
+  clientDist: process.env.AIRACE_CLIENT_DIST ?? null,
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
