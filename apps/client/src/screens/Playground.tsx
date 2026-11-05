@@ -11,6 +11,7 @@ import { rivalAis } from "../rivals.ts";
 import { usePlayground } from "../store/playground.ts";
 import { useSocket } from "../store/session.ts";
 import { InterviewMode } from "../surprises/Interview.tsx";
+import { CoachButtons } from "../surprises/Lessons.tsx";
 
 type Thread = { id: string; versionId: string; createdAt: number };
 type ThreadData = {
@@ -266,7 +267,18 @@ export function Playground({ view }: { view: WorldView }) {
               Say something to {version.label}. It answers in its own words.
             </p>
           )}
-          <ChatLog messages={messages} streaming={streaming} aiName={version.label} />
+          <ChatLog
+            messages={messages}
+            streaming={streaming}
+            aiName={version.label}
+            {...(own && threadId
+              ? {
+                  coach: (idx: number) => (
+                    <CoachButtons worldId={worldId} threadId={threadId} idx={idx} />
+                  ),
+                }
+              : {})}
+          />
           {messages.length >= 6 && (
             <p className="mt-3 text-xs text-muted">
               A long conversation is a lot for a small AI to follow. Start a new conversation for

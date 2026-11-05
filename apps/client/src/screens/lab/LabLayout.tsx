@@ -101,8 +101,9 @@ function SummaryBar({ view, onStarted }: { view: WorldView; onStarted: () => voi
   const parent = company.versions.find((v) => v.id === plan.parentVersionId)?.shape ?? null;
   const lent = lentToTraining(view);
   const loved = company.loved;
-  const preview = previewPlan(getBalance(view.world.balance), parent, plan, lent, loved);
-  const rented = previewPlan(getBalance(view.world.balance), parent, plan, 0, loved);
+  const lessons = company.lessons;
+  const preview = previewPlan(getBalance(view.world.balance), parent, plan, lent, loved, lessons);
+  const rented = previewPlan(getBalance(view.world.balance), parent, plan, 0, loved, lessons);
   const saved =
     lent > 0 && preview.ok && rented.ok
       ? {

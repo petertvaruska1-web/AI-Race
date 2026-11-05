@@ -2,6 +2,7 @@ import { MIX_IDS, type PublicCatalog, type TrainingPlan, type WorldView } from "
 import { Panel } from "../../components/Panel.tsx";
 import { percent, words } from "../../format.ts";
 import { usePlan } from "../../store/plan.ts";
+import { LessonsCard } from "../../surprises/Lessons.tsx";
 import { NotebookCard } from "../../surprises/Notebook.tsx";
 
 /** What the AI reads: one card per dataset, with a slider for its share of the reading. */
@@ -61,6 +62,7 @@ export function DataStep({
           );
         })}
         {view && <NotebookCard view={view} total={total} />}
+        {view && <LessonsCard view={view} />}
       </div>
     </div>
   );

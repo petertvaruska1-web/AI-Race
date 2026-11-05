@@ -7,6 +7,7 @@ import { type OpenWindow, useWindows } from "../store/windows.ts";
 import { DiscoveryWindow } from "../surprises/Discoveries.tsx";
 import { GoalWindow } from "../surprises/Goals.tsx";
 import { InterviewWindow } from "../surprises/Interview.tsx";
+import { LessonsWindow } from "../surprises/Lessons.tsx";
 import { NotebookWindow } from "../surprises/Notebook.tsx";
 import { MilestonesWindow } from "../surprises/Trophies.tsx";
 import { AiWindow } from "./AiWindow.tsx";
@@ -55,6 +56,8 @@ function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) 
       return <ComputersWindow entry={entry} view={view} />;
     case "cards":
       return <CardsWindow entry={entry} view={view} />;
+    case "lessons":
+      return <LessonsWindow entry={entry} view={view} />;
     case "vote":
       return <VoteWindow entry={entry} view={view} battleId={s.battleId} />;
     case "report":

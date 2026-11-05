@@ -150,6 +150,30 @@ export class GameSocket {
     });
   }
 
+  /** A lesson for your own AI: like its reply `idx`, or write a better answer (coaching). */
+  lesson(
+    worldId: string,
+    threadId: string,
+    idx: number,
+    kind: "liked" | "written",
+    text?: string,
+  ): Promise<CommandResult> {
+    return this.request({
+      v: 1,
+      type: "lesson",
+      cid: this.deps.uuid(),
+      worldId,
+      threadId,
+      idx,
+      kind,
+      ...(text !== undefined ? { text } : {}),
+    });
+  }
+
+  lessonDelete(worldId: string, lessonId: number): Promise<CommandResult> {
+    return this.request({ v: 1, type: "lessonDelete", cid: this.deps.uuid(), worldId, lessonId });
+  }
+
   /** A message to the world chat (Stage 2). */
   worldChat(worldId: string, text: string): Promise<CommandResult> {
     return this.request({ v: 1, type: "worldChat", cid: this.deps.uuid(), worldId, text });
