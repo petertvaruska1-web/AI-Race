@@ -54,8 +54,13 @@ export const api = {
   listWorlds: () => call<{ worlds: WorldSummary[] }>("/api/worlds").then((r) => r.worlds),
   /** What this computer has installed: the training data, and the rival AIs. */
   setup: () => call<Setup>("/api/setup"),
-  createWorld: (name: string, goal?: GoalSpec) =>
-    call<{ worldId: string }>("/api/worlds", goal ? { name, goal } : { name }).then(
-      (r) => r.worldId,
-    ),
+  createWorld: (name: string, goal?: GoalSpec, fairMode?: boolean) =>
+    call<{ worldId: string }>("/api/worlds", {
+      name,
+      ...(goal ? { goal } : {}),
+      ...(fairMode ? { fairMode } : {}),
+    }).then((r) => r.worldId),
+  /** Joins a friend's world by its invite code; resolves to the world's id. */
+  joinWorld: (code: string) =>
+    call<{ worldId: string }>("/api/worlds/join", { code }).then((r) => r.worldId),
 };

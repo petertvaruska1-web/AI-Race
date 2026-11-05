@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { GoalSpec, NO_GOAL, TEXT_LIMITS, zName } from "@airace/protocol";
-import { createWorld, type WorldState } from "@airace/sim";
+import { createWorld, getBalance, type WorldState } from "@airace/sim";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -14,7 +14,11 @@ import { generateInviteCode } from "./inviteCode.ts";
 const CreateWorldBody = z.object({
   name: zName(...TEXT_LIMITS.worldName),
   goal: z.unknown().optional(),
+  /** Fair mode (Stage 2): chosen at creation and fixed for the world's life. */
+  fairMode: z.boolean().optional(),
 });
+const JoinBody = z.object({ code: z.string().trim().min(1).max(32) });
+const NO_SUCH_CODE = "That invite code doesn't match a world.";
 const RIVAL_GOALS = ["bestAi", "beatArch"];
 
 /**
@@ -90,8 +94,53 @@ export function registerWorldRoutes(app: FastifyInstance, ctx: AppContext): void
         hostUserId: user.userId,
         hostName: user.displayName,
         goal: goal.data,
+        fairMode: parsed.data.fairMode ?? false,
       });
       return { worldId };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  /**
+   * Joins a friend's world by its invite code (Stage 2). Joining again is fine; a running world
+   * can be joined (the newcomer's founding money grows with the world's age, sim-7).
+   */
+  app.post("/api/worlds/join", async (req, reply) => {
+    try {
+      const user = await requireUser(ctx, req);
+      const parsed = JoinBody.safeParse(req.body);
+      if (!parsed.success) return reply.code(404).send({ error: NO_SUCH_CODE });
+      const code = parsed.data.code.toUpperCase();
+      const [world] = await ctx.db
+        .select({ id: schema.worlds.id })
+        .from(schema.worlds)
+        .where(eq(schema.worlds.inviteCode, code));
+      if (!world) return reply.code(404).send({ error: NO_SUCH_CODE });
+      const actor = await ctx.worlds.get(world.id);
+      const s = actor.state();
+      if (!s.members[user.userId]) {
+        const max = getBalance(s.balance).maxMembers;
+        if (Object.keys(s.members).length >= max) {
+          return reply.code(409).send({ error: `This world is full (${max} players).` });
+        }
+        const r = await actor.submit({
+          kind: "system",
+          event: { type: "memberJoined", userId: user.userId, displayName: user.displayName },
+        });
+        if (!r.ok) return reply.code(409).send({ error: r.reason });
+      }
+      // Also on a repeat, so a join cut short between the two steps is finished.
+      await ctx.db
+        .insert(schema.memberships)
+        .values({
+          worldId: world.id,
+          userId: user.userId,
+          displayName: user.displayName,
+          joinedAt: ctx.opts.scheduler.now(),
+        })
+        .onConflictDoNothing();
+      return { worldId: world.id };
     } catch (err) {
       return sendError(reply, err);
     }
