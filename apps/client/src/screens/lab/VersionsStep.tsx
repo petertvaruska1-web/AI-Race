@@ -1,12 +1,13 @@
 import type { VersionView, WorldView } from "@airace/protocol";
 import { dateOfDay, getBalance } from "@airace/sim";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../../components/Button.tsx";
 import { Panel } from "../../components/Panel.tsx";
 import { capitalize, words } from "../../format.ts";
 import { go } from "../../route.ts";
 import { usePlan } from "../../store/plan.ts";
 import { usePlayground } from "../../store/playground.ts";
+import { useSocket } from "../../store/session.ts";
 import { DiscoveryList } from "../../surprises/Discoveries.tsx";
 import { LaunchDialog } from "../LaunchDialog.tsx";
 
@@ -29,6 +30,28 @@ export function VersionsStep({
   const update = usePlan((s) => s.update);
   const pick = usePlayground((s) => s.setVersion);
   const [launching, setLaunching] = useState<string | null>(null);
+  const socket = useSocket();
+  const [tries, setTries] = useState<Record<string, number>>({});
+  const [shareError, setShareError] = useState<string | null>(null);
+  const sharedKey = versions
+    .filter((v) => v.published)
+    .map((v) => v.id)
+    .join(",");
+  useEffect(() => {
+    if (!sharedKey) return;
+    socket
+      .query<{ versions: { versionId: string; tries7d: number }[] }>({
+        kind: "versionTries",
+        worldId: view.world.id,
+      })
+      .then((r) => setTries(Object.fromEntries(r.versions.map((x) => [x.versionId, x.tries7d]))))
+      .catch(() => setTries({}));
+  }, [socket, view.world.id, sharedKey]);
+  const share = async (versionId: string, published: boolean) => {
+    setShareError(null);
+    const r = await socket.command(view.world.id, { type: "publishVersion", versionId, published });
+    if (!r.ok) setShareError(r.reason);
+  };
   if (versions.length === 0)
     return <p className="text-muted">No versions yet. Your first finished run becomes v1.</p>;
   return (
@@ -69,6 +92,18 @@ export function VersionsStep({
               Train further from this
             </Button>
           </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+            <Button variant="secondary" onClick={() => void share(v.id, !v.published)}>
+              {v.published ? "Stop sharing" : "Share with friends"}
+            </Button>
+            {v.published && (
+              <span className="text-muted">
+                {tries[v.id] === undefined
+                  ? "Shared in the AI Directory"
+                  : `Tried ${tries[v.id]} ${tries[v.id] === 1 ? "time" : "times"} this week`}
+              </span>
+            )}
+          </div>
           <div className="mt-3">
             <DiscoveryList
               discoveries={(view.me.company?.discoveries ?? []).filter((d) => d.versionId === v.id)}
@@ -76,6 +111,11 @@ export function VersionsStep({
           </div>
         </Panel>
       ))}
+      {shareError && (
+        <p role="alert" className="text-sm text-danger">
+          {shareError}
+        </p>
+      )}
       {launching && (
         <LaunchDialog view={view} versionId={launching} onClose={() => setLaunching(null)} />
       )}

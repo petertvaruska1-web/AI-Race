@@ -5,6 +5,7 @@ import { ChatLog, type ChatMessage } from "../components/ChatLog.tsx";
 import { INPUT } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { Toggle } from "../components/Toggle.tsx";
+import { sharedAis } from "../friends.ts";
 import { Games } from "../games/Games.tsx";
 import { rivalAis } from "../rivals.ts";
 import { usePlayground } from "../store/playground.ts";
@@ -48,11 +49,16 @@ export function Playground({ view }: { view: WorldView }) {
   const setVersion = usePlayground((s) => s.setVersion);
   const rivals = rivalAis(view);
   const rival = rivals.find((r) => r.versionId === chosen) ?? null;
-  // A rival's AI is talked to like your own, by its version id (the server checks it is on sale).
+  const friends = sharedAis(view);
+  const friend = rival ? null : (friends.find((f) => f.versionId === chosen) ?? null);
+  // A rival's or a friend's AI is talked to like your own, by its version id (the server checks
+  // it is on sale or shared).
   const version: Pick<VersionView, "id" | "label"> | undefined = rival
     ? { id: rival.versionId, label: `${rival.companyName}'s ${rival.productName}` }
-    : (versions.find((v) => v.id === chosen) ?? versions.at(-1));
-  const own = rival ? null : (versions.find((v) => v.id === version?.id) ?? null);
+    : friend
+      ? { id: friend.versionId, label: `${friend.company.name}'s ${friend.label}` }
+      : (versions.find((v) => v.id === chosen) ?? versions.at(-1));
+  const own = rival || friend ? null : (versions.find((v) => v.id === version?.id) ?? null);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -197,6 +203,15 @@ export function Playground({ view }: { view: WorldView }) {
                   </option>
                 ))}
               </optgroup>
+              {friends.length > 0 && (
+                <optgroup label="Friends' AIs">
+                  {friends.map((f) => (
+                    <option key={f.versionId} value={f.versionId}>
+                      {`${f.company.name}'s ${f.label}`}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
               {rivals.length > 0 && (
                 <optgroup label="Rivals' AIs">
                   {rivals.map((r) => (
@@ -238,6 +253,9 @@ export function Playground({ view }: { view: WorldView }) {
           <p className="mb-3 text-xs text-muted">
             Customer posts are paused while you're here, so your AI answers you faster.
           </p>
+          {friend && (
+            <p className="mb-3 text-xs text-muted">Its maker's computer answers your messages.</p>
+          )}
           {own && neverSawConversation(view, own) && (
             <p className="mb-3 rounded-lg bg-brand-soft p-3 text-sm">
               This AI never saw a conversation, so it may just continue your text.

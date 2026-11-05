@@ -47,7 +47,7 @@ describe("app shell", () => {
     expect(screen.getByText("Screen")).toBeTruthy();
   });
 
-  it("lists the eight screens and marks the open one", () => {
+  it("lists the nine screens and marks the open one", () => {
     render(
       <AppShell view={viewOf(runningWorld())} tab="money">
         <p>Screen</p>
@@ -64,6 +64,7 @@ describe("app shell", () => {
       "Benchmarks",
       "Rivals",
       "Arena",
+      "AI Directory",
     ]);
     expect(within(nav).getByRole("link", { name: "Money" }).getAttribute("aria-current")).toBe(
       "page",

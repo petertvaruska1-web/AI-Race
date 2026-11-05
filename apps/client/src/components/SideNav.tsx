@@ -77,6 +77,16 @@ export const SCREENS: { id: Tab; label: string; icon: ReactNode }[] = [
     label: "Arena",
     icon: <path d="M5 19l10-10M9 5l10 10M4 14l6 6M14 4l6 6" {...stroke} />,
   },
+  {
+    id: "directory",
+    label: "AI Directory",
+    icon: (
+      <>
+        <rect x="4" y="4" width="16" height="16" rx="2" {...stroke} />
+        <path d="M8 9h8M8 13h8M8 17h5" {...stroke} />
+      </>
+    ),
+  },
 ];
 
 /** The screens of a world; on narrow windows it lies across the top. */

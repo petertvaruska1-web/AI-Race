@@ -9,6 +9,7 @@ import { applyCompanyTheme } from "../theme/palette.ts";
 import { Arena } from "./Arena.tsx";
 import { Benchmarks } from "./Benchmarks.tsx";
 import { Company } from "./Company.tsx";
+import { Directory } from "./Directory.tsx";
 import { Lobby } from "./Lobby.tsx";
 import { Lab } from "./lab/LabLayout.tsx";
 import { Market } from "./Market.tsx";
@@ -57,6 +58,7 @@ export function WorldScreen({ route }: { route: WorldRoute }) {
       {route.tab === "bench" && <Benchmarks view={view} />}
       {route.tab === "rivals" && <Rivals view={view} />}
       {route.tab === "arena" && <Arena view={view} />}
+      {route.tab === "directory" && <Directory view={view} />}
       <Victory view={view} />
     </AppShell>
   );
