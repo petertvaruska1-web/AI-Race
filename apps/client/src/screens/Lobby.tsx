@@ -13,7 +13,62 @@ const FIRST_PRESET = PALETTE_PRESETS[0]?.palette ?? { primary: "#4f8cff", second
 
 /** Founding a company (C5: its palette becomes the player's whole dashboard), then opening the world. */
 export function Lobby({ view }: { view: WorldView }) {
-  return view.me.company ? <OpenForBusiness view={view} /> : <FoundCompany view={view} />;
+  return (
+    <>
+      {view.me.company ? <OpenForBusiness view={view} /> : <FoundCompany view={view} />}
+      <section className="mx-auto mb-10 grid max-w-4xl gap-6 px-6 md:grid-cols-2">
+        <Players view={view} />
+        <InviteFriends code={view.world.inviteCode} />
+      </section>
+    </>
+  );
+}
+
+/** Everyone in the world, with who is here now. */
+function Players({ view }: { view: WorldView }) {
+  return (
+    <Panel title="Players">
+      <ul aria-label="Players" className="space-y-2">
+        {view.members.map((m) => (
+          <li key={m.userId} className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className={`inline-block h-2 w-2 rounded-full ${m.online ? "bg-good" : "bg-border"}`}
+            />
+            <span className="player-text">{m.displayName}</span>
+            <span className="text-sm text-muted">{m.online ? "online" : "away"}</span>
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
+/** The world's invite code and link (Stage 2). */
+function InviteFriends({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  const link = `${location.origin}/join/${code}`;
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+  return (
+    <Panel
+      title="Invite friends"
+      hint="Send them the link, or the code to type on their home page."
+    >
+      <p className="mb-1 font-mono text-2xl tracking-widest">{code}</p>
+      <p className="mb-3 break-all text-sm text-muted">{link}</p>
+      <Button variant="secondary" onClick={copy}>
+        Copy link
+      </Button>
+      {copied && <span className="ml-3 text-sm text-muted">Copied</span>}
+    </Panel>
+  );
 }
 
 function FoundCompany({ view }: { view: WorldView }) {

@@ -102,6 +102,31 @@ export function registerWorldRoutes(app: FastifyInstance, ctx: AppContext): void
     }
   });
 
+  /** A world by its invite code, for the join screen: name, size and Fair mode only (Stage 2). */
+  app.get("/api/worlds/invite/:code", async (req, reply) => {
+    try {
+      const user = await requireUser(ctx, req);
+      const code = String((req.params as { code?: string }).code ?? "").toUpperCase();
+      const [world] = await ctx.db
+        .select({ id: schema.worlds.id })
+        .from(schema.worlds)
+        .where(eq(schema.worlds.inviteCode, code));
+      if (!world) return reply.code(404).send({ error: NO_SUCH_CODE });
+      const s = (await ctx.worlds.get(world.id)).state();
+      return {
+        name: s.name,
+        fairMode: s.fairMode === true,
+        players: Object.keys(s.members).length,
+        maxPlayers: getBalance(s.balance).maxMembers,
+        member: !!s.members[user.userId],
+        // A member is simply taken to the world.
+        ...(s.members[user.userId] ? { worldId: world.id } : {}),
+      };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
   /**
    * Joins a friend's world by its invite code (Stage 2). Joining again is fine; a running world
    * can be joined (the newcomer's founding money grows with the world's age, sim-7).

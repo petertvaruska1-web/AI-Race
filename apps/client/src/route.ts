@@ -16,6 +16,12 @@ export function parseRoute(hash: string): Route {
   return { screen: "home" };
 }
 
+/** The invite code in a join link's path (`/join/<code>`), or null. */
+export function joinCodeOf(pathname: string): string | null {
+  const m = /^\/join\/([A-Za-z0-9]{1,32})\/?$/.exec(pathname);
+  return m?.[1] ? m[1].toUpperCase() : null;
+}
+
 export function href(route: Route): string {
   return route.screen === "home" ? "#/" : `#/w/${route.worldId}/${route.tab}`;
 }

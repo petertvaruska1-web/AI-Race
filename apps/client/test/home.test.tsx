@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { FAIR_NOTICE } from "../src/fair.ts";
 import { Home, Welcome } from "../src/screens/Home.tsx";
 
 /** Answers `fetch` by path; records every request. */
@@ -50,6 +51,23 @@ describe("home", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     await waitFor(() =>
       expect(calls.at(-1)).toEqual({ path: "/api/worlds", body: { name: "Saturday" } }),
+    );
+  });
+
+  it("starts a world in Fair mode, with the notice shown first", async () => {
+    const calls = mockFetch({ "/api/worlds": { worlds: [] } });
+    render(<Home me={{ userId: "u1", displayName: "Ana", wsToken: "t" }} />);
+    await screen.findByText(/No worlds yet/);
+    expect(screen.queryByText(FAIR_NOTICE)).toBeNull();
+    fireEvent.click(screen.getByLabelText("Fair mode"));
+    expect(screen.getByText(FAIR_NOTICE)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("World name"), { target: { value: "Fair night" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() =>
+      expect(calls.at(-1)).toEqual({
+        path: "/api/worlds",
+        body: { name: "Fair night", fairMode: true },
+      }),
     );
   });
 });

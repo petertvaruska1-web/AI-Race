@@ -60,6 +60,28 @@ describe("joining a friend's world", () => {
     expect(view.world.fairMode).toBe(false);
   });
 
+  it("shows a world's name, players and Fair mode by its code before joining", async () => {
+    server = await startTestServer();
+    const ana = await createGuest(server, "Ana");
+    const w = await newWorld(server, ana.cookie, { name: "Fair", fairMode: true });
+    const ben = await createGuest(server, "Ben");
+    const res = await api(server, `/api/worlds/invite/${w.code.toLowerCase()}`, {
+      cookie: ben.cookie,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      name: "Fair",
+      fairMode: true,
+      players: 1,
+      maxPlayers: 8,
+      member: false,
+    });
+    expect((await api(server, "/api/worlds/invite/ZZZZZZ", { cookie: ben.cookie })).status).toBe(
+      404,
+    );
+    expect((await fetch(`${server.url}/api/worlds/invite/${w.code}`)).status).toBe(401);
+  });
+
   it("refuses a code that matches no world", async () => {
     server = await startTestServer();
     const ben = await createGuest(server, "Ben");

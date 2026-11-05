@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HARD_TO_READ } from "../src/components/PalettePicker.tsx";
 import { Lobby } from "../src/screens/Lobby.tsx";
 import { useSession } from "../src/store/session.ts";
@@ -89,5 +89,33 @@ describe("opening for business", () => {
     expect(screen.getByText("Acme")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Open for business" }));
     await waitFor(() => expect(game.ws.sentOf("command")[0]?.cmd).toEqual({ type: "startWorld" }));
+  });
+});
+
+describe("inviting friends", () => {
+  it("lists the players with who is online, and copies the invite link", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    let s = apply(
+      testWorld(),
+      command("u1", { type: "createCompany", name: "Acme", logo: LOGO, palette: PALETTE }, "c1"),
+    );
+    s = apply(s, {
+      kind: "system",
+      event: { type: "memberJoined", userId: "u2", displayName: "Ben" },
+    });
+    s = apply(s, { kind: "system", event: { type: "presence", userId: "u2", online: false } });
+    render(<Lobby view={viewOf(s)} />);
+    const players = within(screen.getByRole("list", { name: "Players" }));
+    expect(players.getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      expect.stringContaining("online"),
+      expect.stringContaining("Ben"),
+    ]);
+    expect(players.getByText("Ben").closest("li")?.textContent).toContain("away");
+    const code = s.inviteCode;
+    expect(screen.getByText(code)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${location.origin}/join/${code}`));
+    expect(await screen.findByText("Copied")).toBeTruthy();
   });
 });

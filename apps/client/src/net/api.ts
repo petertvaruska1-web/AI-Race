@@ -17,6 +17,17 @@ export type WorldSummary =
   /** Saved by an older version of the game: listed, but it can't be opened (C29). */
   | { id: string; name: string; outdated: true };
 
+/** A world by its invite code, before joining it (Stage 2). */
+export type InviteInfo = {
+  name: string;
+  fairMode: boolean;
+  players: number;
+  maxPlayers: number;
+  member: boolean;
+  /** Only for a member. */
+  worldId?: string;
+};
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -60,6 +71,8 @@ export const api = {
       ...(goal ? { goal } : {}),
       ...(fairMode ? { fairMode } : {}),
     }).then((r) => r.worldId),
+  /** A world by its invite code: name, players and Fair mode. */
+  inviteInfo: (code: string) => call<InviteInfo>(`/api/worlds/invite/${encodeURIComponent(code)}`),
   /** Joins a friend's world by its invite code; resolves to the world's id. */
   joinWorld: (code: string) =>
     call<{ worldId: string }>("/api/worlds/join", { code }).then((r) => r.worldId),

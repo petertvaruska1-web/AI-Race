@@ -3,12 +3,19 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "../components/Button.tsx";
 import { Field, INPUT } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
+import { FAIR_NOTICE } from "../fair.ts";
 import { api, type Me, type WorldSummary } from "../net/api.ts";
 import { go } from "../route.ts";
 import { GoalPicker } from "../surprises/Goals.tsx";
 
 /** First visit: a name is all a guest needs. */
-export function Welcome({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
+export function Welcome({
+  onSignedIn,
+  intro = "Run an AI company. Train a real AI. Race your friends.",
+}: {
+  onSignedIn: (me: Me) => void;
+  intro?: string;
+}) {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,7 +39,7 @@ export function Welcome({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
   return (
     <main className="mx-auto mt-24 max-w-md px-6">
       <h1 className="mb-2 text-4xl font-bold">AI Race</h1>
-      <p className="mb-8 text-muted">Run an AI company. Train a real AI. Race your friends.</p>
+      <p className="mb-8 text-muted">{intro}</p>
       <Panel>
         <form onSubmit={submit} className="space-y-4">
           <Field
@@ -65,6 +72,8 @@ export function Home({ me }: { me: Me }) {
   const [name, setName] = useState("");
   const [goal, setGoal] = useState<GoalSpec>(NO_GOAL);
   const [rivals, setRivals] = useState(false);
+  const [fairMode, setFairMode] = useState(false);
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [min, max] = TEXT_LIMITS.worldName;
 
@@ -83,7 +92,11 @@ export function Home({ me }: { me: Me }) {
     e.preventDefault();
     setError(null);
     try {
-      const worldId = await api.createWorld(name, goal.goal.kind === "none" ? undefined : goal);
+      const worldId = await api.createWorld(
+        name,
+        goal.goal.kind === "none" ? undefined : goal,
+        fairMode,
+      );
       go({ screen: "world", worldId, tab: "company" });
     } catch (err) {
       setError((err as Error).message);
@@ -149,6 +162,42 @@ export function Home({ me }: { me: Me }) {
             </Button>
           </div>
           <GoalPicker rivals={rivals} onChange={setGoal} />
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={fairMode}
+              onChange={(e) => setFairMode(e.target.checked)}
+            />
+            Fair mode
+          </label>
+          {fairMode ? (
+            <p className="rounded-lg border border-border p-3 text-sm">{FAIR_NOTICE}</p>
+          ) : (
+            <p className="text-sm text-muted">
+              Each player's AI trains on their own computer. A faster graphics card is an edge.
+            </p>
+          )}
+        </form>
+      </Panel>
+      <Panel title="Join a friend" hint="Your friend's world has an invite code in its lobby.">
+        <form
+          className="flex gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            location.assign(`/join/${encodeURIComponent(code.trim())}`);
+          }}
+        >
+          <input
+            className={INPUT}
+            aria-label="Invite code"
+            placeholder="ABC123"
+            value={code}
+            maxLength={32}
+            onChange={(e) => setCode(e.target.value)}
+          />
+          <Button type="submit" variant="secondary" disabled={code.trim().length === 0}>
+            Join
+          </Button>
         </form>
       </Panel>
       {error && (

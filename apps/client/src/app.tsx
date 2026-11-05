@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { api, type Me } from "./net/api.ts";
 import { browserSocket } from "./net/socket.ts";
-import { useRoute } from "./route.ts";
+import { joinCodeOf, useRoute } from "./route.ts";
 import { Home, Welcome } from "./screens/Home.tsx";
+import { Join } from "./screens/Join.tsx";
 import { WorldScreen } from "./screens/World.tsx";
 import { useSession } from "./store/session.ts";
 import { bindWorldStore } from "./store/world.ts";
@@ -35,6 +36,8 @@ export function App() {
   }, []);
 
   if (!checked) return <p className="p-10 text-muted">Loading…</p>;
+  const code = joinCodeOf(location.pathname);
+  if (code) return <Join code={code} me={me} onSignedIn={signIn} />;
   if (!me) return <Welcome onSignedIn={signIn} />;
   if (route.screen === "world") return <WorldScreen route={route} />;
   return <Home me={me} />;
