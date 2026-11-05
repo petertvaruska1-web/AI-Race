@@ -433,6 +433,8 @@ export type CompanyState = {
   fund: { balance: number };
   /** Feedback replies customers loved (score 0.75 or more), up to 400; the server keeps their text. */
   loved: number;
+  /** Lessons the player gave their AIs in the Playground (sim-8); the server keeps their text. */
+  lessons: number;
   /** The player's notebook: the server keeps its text; the world only its fingerprint (R2). */
   notebook: { hash: string; words: number; savedDay: number } | null;
   /** Milestones earned, oldest first; each once (players only). */
@@ -517,6 +519,8 @@ export type WorldState = {
 
 export type SystemEvent =
   | { type: "memberJoined"; userId: string; displayName: string }
+  /** The server's count of a company's stored lessons (coaching). */
+  | { type: "lessonsCounted"; companyId: string; count: number }
   | { type: "presence"; userId: string; online: boolean }
   | { type: "trainingCompleted"; runId: string; versionId: string; result: TrainingResult }
   | { type: "trainingFailed"; runId: string; reason: string }

@@ -314,6 +314,7 @@ function defaultPlan(brainSize: string, attentionSpan: number, length: string): 
     parentVersionId: null,
     tutoring: null,
     learnFromCustomers: false,
+    coaching: false,
   };
 }
 

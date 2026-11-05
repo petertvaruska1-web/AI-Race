@@ -257,6 +257,8 @@ export const TrainingPlan = z.object({
     .default(null),
   /** Train on the conversations customers loved (playtest pack §5). */
   learnFromCustomers: z.boolean().default(false),
+  /** Train on the player's lessons from the Playground (coaching, sim-8). */
+  coaching: z.boolean().default(false),
 });
 export type TrainingPlan = z.infer<typeof TrainingPlan>;
 

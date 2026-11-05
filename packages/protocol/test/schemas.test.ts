@@ -43,6 +43,7 @@ export const PLAN = {
   parentVersionId: null,
   tutoring: null,
   learnFromCustomers: false,
+  coaching: false,
 } as const;
 
 const CID = "4b0c1c1e-8d6a-4f43-9a55-6f1c8a2b9e10";
@@ -222,6 +223,7 @@ function sampleView(): WorldView {
         rescue: { deadlineDay: 45 },
         loan: { balance: 120_000, principalPerMonth: 5000, monthlyRate: 0.04 },
         loved: 0,
+        lessons: 0,
         notebook: null,
         milestones: [],
         discoveries: [],

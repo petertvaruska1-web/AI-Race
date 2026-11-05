@@ -13,6 +13,7 @@ export type CompanyExtras = Pick<
   | "apps"
   | "fund"
   | "loved"
+  | "lessons"
   | "notebook"
   | "milestones"
   | "discoveries"
@@ -28,6 +29,7 @@ export function newCompanyExtras(): CompanyExtras {
     apps: {},
     fund: { balance: 0 },
     loved: 0,
+    lessons: 0,
     notebook: null,
     milestones: [],
     discoveries: [],

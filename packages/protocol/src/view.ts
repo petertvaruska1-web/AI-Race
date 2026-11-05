@@ -456,6 +456,8 @@ export const PrivateCompany = z.strictObject({
   ),
   /** Feedback replies customers loved, which "Learn from customers" can train on. */
   loved: z.number().int().min(0),
+  /** Lessons the player gave their AI in the Playground (coaching), up to 200. */
+  lessons: z.number().int().min(0),
   /** The notebook's size and when it was saved; its text stays on the server. */
   notebook: z.strictObject({ words: z.number().int().min(0), savedDay: Day }).nullable(),
   /** What the scoring found in this company's AIs, with their real evidence (owner only, R2). */

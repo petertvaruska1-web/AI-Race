@@ -305,6 +305,7 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
         })),
       })),
     loved: c.loved,
+    lessons: c.lessons ?? 0,
     notebook: c.notebook ? { words: c.notebook.words, savedDay: c.notebook.savedDay } : null,
     milestones: c.milestones.map((m) => ({ id: m.id, day: m.day, detail: m.detail })),
     goalProgress: state.goal.spec.goal.kind === "none" ? null : goalProgress(state, c),
@@ -522,6 +523,7 @@ function planView(p: TrainingPlan): TrainingPlan {
     // Absent from plans logged before sim-5.
     tutoring: p.tutoring ? { ...p.tutoring } : null,
     learnFromCustomers: p.learnFromCustomers ?? false,
+    coaching: p.coaching ?? false,
   };
 }
 

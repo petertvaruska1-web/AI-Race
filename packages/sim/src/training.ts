@@ -7,6 +7,10 @@ import type { CompanyState, RunState, TrainingResult, VersionState, WorldState }
 export type PreviewResult = { ok: true; preview: TrainingPreview } | { ok: false; reason: string };
 
 /** What a plan costs in money and game days, or why it can't run. */
+/** Coaching: a plan can train on lessons from this many; a company keeps at most `LESSONS_MAX`. */
+export const LESSONS_MIN = 5;
+export const LESSONS_MAX = 200;
+
 export function previewTraining(
   state: WorldState,
   companyId: string,
@@ -20,7 +24,14 @@ export function previewTraining(
   const parent =
     plan.parentVersionId === null ? null : (company.versions[plan.parentVersionId] ?? null);
   const lent = ownedPflops(company, state.day) * company.compute.trainingShare;
-  return previewPlan(getBalance(state.balance), parent, plan, lent, company.loved);
+  return previewPlan(
+    getBalance(state.balance),
+    parent,
+    plan,
+    lent,
+    company.loved,
+    company.lessons ?? 0,
+  );
 }
 
 /**
@@ -35,6 +46,8 @@ export function previewPlan(
   ownedPflopsPerDay = 0,
   /** Conversations the company's customers loved (for "Learn from customers"). */
   loved = 0,
+  /** Lessons the player gave the AI (for "Train on your lessons"). */
+  lessons = 0,
 ): PreviewResult {
   if (Object.values(plan.mix).every((w) => w === 0)) {
     return { ok: false, reason: "Pick at least one dataset to train on." };
@@ -56,6 +69,12 @@ export function previewPlan(
     };
   }
   const e = b.economy;
+  if (plan.coaching === true && lessons < LESSONS_MIN) {
+    return {
+      ok: false,
+      reason: `Your AI needs at least ${LESSONS_MIN} lessons first. You have ${lessons}.`,
+    };
+  }
   const learn = plan.learnFromCustomers === true;
   if (learn && loved < e.lovedMin) {
     return {

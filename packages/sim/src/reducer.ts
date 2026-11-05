@@ -32,6 +32,7 @@ import {
   findRun,
   findVersion,
   formatMoney,
+  LESSONS_MAX,
   previewTraining,
   settleRuns,
   versionIdTaken,
@@ -108,6 +109,15 @@ function system(s: WorldState, e: SystemEvent): Handled {
         online: true,
         companyId: null,
       };
+      return OK;
+    }
+    case "lessonsCounted": {
+      const company = s.companies[e.companyId];
+      const n = e.count;
+      if (!company || company.rival || !Number.isInteger(n) || n < 0 || n > LESSONS_MAX) {
+        return no("That isn't valid.");
+      }
+      company.lessons = n;
       return OK;
     }
     case "presence": {
