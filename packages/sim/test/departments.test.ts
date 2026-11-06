@@ -13,7 +13,7 @@ import {
   step,
   type WorldState,
 } from "../src/index.ts";
-import { cmd, ok, rejected, runningWorld, sys, TICK, ticks } from "./pack.ts";
+import { cmd, ok, rejected, runningWorld, sys, TICK, ticks, withRivals } from "./pack.ts";
 
 const c1 = (s: WorldState) => s.companies.c1 as CompanyState;
 const fund = (s: WorldState, department: string, budget: number) =>
@@ -257,5 +257,51 @@ describe("what departments do", () => {
     s = ticks(s, 20);
     expect(c1(s).runs.r1?.preview).toEqual(recorded);
     expect(recorded?.tokens).toBeGreaterThan(BALANCE_V2.lengths[1]?.tokens ?? 0);
+  });
+});
+
+// -- rivals fund departments by style (Task 3) -----------------------------------------------
+
+describe("rivals' departments", () => {
+  const SHARES: Record<string, Partial<Record<Department, number>>> = {
+    premium: { research: 0.06 },
+    budget: { support: 0.05 },
+    specialist: { research: 0.03, data: 0.03 },
+    consumer: { sales: 0.06 },
+  };
+  /** Every rival's last closed month earned `revenue`. */
+  function earned(revenue: number): WorldState {
+    const s = withRivals();
+    for (const c of Object.values(s.companies)) {
+      if (!c.rival) continue;
+      const month = structuredClone(c.ledger.current);
+      for (const k of Object.keys(month.income)) (month.income as Record<string, number>)[k] = 0;
+      month.income.personal = revenue;
+      c.ledger.months = [month];
+    }
+    return s;
+  }
+  const rivals = (s: WorldState) => Object.values(s.companies).filter((c) => c.rival);
+
+  it("fund their style's departments from last month's revenue, in $10,000 steps", () => {
+    const s = ok(step(earned(1_234_567), TICK));
+    expect(rivals(s).length).toBeGreaterThan(0);
+    for (const c of rivals(s)) {
+      const shares = SHARES[c.rival?.style ?? ""] ?? {};
+      for (const d of DEPARTMENTS) {
+        const want = Math.floor((1_234_567 * (shares[d] ?? 0)) / 10_000) * 10_000;
+        expect(c.departments[d].budget, `${c.rival?.style} ${d}`).toBe(want);
+      }
+    }
+  });
+
+  it("fund at most $500,000 a month each, and nothing without revenue", () => {
+    for (const c of rivals(ok(step(earned(100_000_000), TICK)))) {
+      for (const d of DEPARTMENTS) expect(c.departments[d].budget).toBeLessThanOrEqual(500_000);
+      expect(Math.max(...DEPARTMENTS.map((d) => c.departments[d].budget))).toBe(500_000);
+    }
+    for (const c of rivals(ok(step(earned(0), TICK)))) {
+      for (const d of DEPARTMENTS) expect(c.departments[d].budget).toBe(0);
+    }
   });
 });

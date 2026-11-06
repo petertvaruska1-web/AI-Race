@@ -2,6 +2,7 @@ import {
   type AppKind,
   type BattleSkill,
   type DatasetId,
+  type Department,
   GROUP_IDS,
   type GroupId,
   type MixId,
@@ -246,6 +247,8 @@ export type Economy = {
     sales: number;
     supportSatisfaction: number;
     supportServing: number;
+    /** Support & operations: unhappy customers leave `1 − supportChurn·s` as often. */
+    supportChurn: number;
   };
   /** Playground games played live for the press (playtest pack §4.3). */
   showcases: {
@@ -260,6 +263,8 @@ export type Economy = {
 };
 
 export type RivalBalance = {
+  /** Each style's monthly department budgets, as shares of last month's revenue (C43). */
+  departments: Record<RivalStyle, Partial<Record<Department, number>>>;
   /** Times the founding cash, by style; the arch-rival gets `archBonus` times more. */
   startCash: Record<RivalStyle, number>;
   archBonus: number;
@@ -536,6 +541,12 @@ const ECONOMY_V2: Economy = {
   maxProducts: 3,
   countdown: { min: 3, max: 14 },
   rivals: {
+    departments: {
+      premium: { research: 0.06 },
+      budget: { support: 0.05 },
+      specialist: { research: 0.03, data: 0.03 },
+      consumer: { sales: 0.06 },
+    },
     startCash: { premium: 3, budget: 1, specialist: 1.5, consumer: 2 },
     archBonus: 1.5,
     firstRelease: [12, 25, 40, 55],
@@ -697,6 +708,9 @@ const ECONOMY_V2: Economy = {
     sales: 0.002,
     supportSatisfaction: 0.3,
     supportServing: 0.2,
+    // Tuned (Task 3): serving is too small a bill for its discount alone to repay a team, so
+    // Support also keeps unhappy customers; at $100,000 a month it repays 2.5% of a year's profit.
+    supportChurn: 0.3,
   },
 };
 

@@ -1,6 +1,7 @@
 import {
   BENCH_CATEGORIES,
   type Command,
+  type Department,
   GROUP_IDS,
   type GroupId,
   PLAN_IDS,
@@ -58,6 +59,8 @@ export type BotScript = {
   spike?: { afterDays: number; factor: number };
   /** Rivals from the synthetic pack join when the world starts; their AIs get weekly feedback. */
   rivals?: boolean;
+  /** Department budgets a month, set when the world starts (before the first training). */
+  departments?: Partial<Record<Department, number>>;
 };
 
 export type DayReport = {
@@ -78,6 +81,8 @@ export type DayReport = {
   /** What is still owed on rescue loans. */
   loan: number;
   rescueOffered: boolean;
+  /** This day's department spending (Team). */
+  teamCost: number;
 };
 export type Report = {
   launchDay: number;
@@ -110,16 +115,18 @@ function company(s: WorldState): CompanyState {
   return c;
 }
 
-function totals(c: CompanyState): { income: number; serving: number; costs: number } {
+function totals(c: CompanyState): { income: number; serving: number; costs: number; team: number } {
   let income = 0;
   let serving = 0;
   let costs = 0;
+  let team = 0;
   for (const m of [...c.ledger.months, c.ledger.current]) {
     income += m.income.personal + m.income.business;
     serving += m.costs.serving;
     costs += Object.values(m.costs).reduce((a, b) => a + b, 0);
+    team += m.costs.team;
   }
-  return { income, serving, costs };
+  return { income, serving, costs, team };
 }
 
 /** A group's feedback score for a model: its weighted skill, as the checks would roughly find. */
@@ -194,6 +201,9 @@ export function runBot(balance: Balance, script: BotScript, days: number, seed =
   );
   s = apply(s, cmd({ type: "startWorld" }));
   if (script.rivals) s = apply(s, sys({ type: "rivalsJoined", pack: SYNTHETIC_PACK }));
+  for (const [department, budget] of Object.entries(script.departments ?? {})) {
+    s = apply(s, cmd({ type: "setDepartment", department, budget }));
+  }
   s = trainAndScore(s, balance, "r1", "v1", null, scores);
   if (script.prices?.personal !== undefined) {
     s = apply(s, cmd({ type: "setPrice", plan: "personal", price: script.prices.personal }));
@@ -292,6 +302,7 @@ export function runBot(balance: Balance, script: BotScript, days: number, seed =
       served: c.compute.served,
       loan: c.loan?.balance ?? 0,
       rescueOffered: c.rescue !== null,
+      teamCost: now.team - before.team,
     });
     before = now;
   }

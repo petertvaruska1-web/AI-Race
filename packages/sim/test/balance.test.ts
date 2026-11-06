@@ -1,4 +1,11 @@
-import { GROUP_IDS, type GroupId, PLAN_IDS, REGION_IDS, type RegionId } from "@airace/protocol";
+import {
+  DEPARTMENTS,
+  GROUP_IDS,
+  type GroupId,
+  PLAN_IDS,
+  REGION_IDS,
+  type RegionId,
+} from "@airace/protocol";
 import { describe, expect, it } from "vitest";
 import {
   adoptionShare,
@@ -284,6 +291,35 @@ describe("balance-v2 with an arch-rival and three rivals", { timeout: 300_000 },
     for (const [name, r] of Object.entries(strategies)) {
       const profits = r.reports.slice(-3).map((c) => c.profit);
       expect(Math.max(...profits), `${name}: ${profits.join(", ")}`).toBeGreaterThan(0);
+    }
+  });
+
+  it("makes no department a must-have or a waste: $100,000 a month moves a year's profit 2–25%", () => {
+    const profit = (r: ReturnType<typeof runBot>) =>
+      r.days.reduce((n, d) => n + d.income - d.costs, 0);
+    const base = profit(runBot(BALANCE_V2, { rivals: true }, 365));
+    for (const department of DEPARTMENTS) {
+      const funded = runBot(
+        BALANCE_V2,
+        { rivals: true, departments: { [department]: 100_000 } },
+        365,
+      );
+      const cost = funded.days.reduce((n, d) => n + d.teamCost, 0);
+      const change = (profit(funded) - base) / base;
+      expect(Math.abs(change), `${department}: ${(change * 100).toFixed(1)}%`).toBeLessThanOrEqual(
+        0.25,
+      );
+      expect(
+        Math.abs(change),
+        `${department}: ${(change * 100).toFixed(1)}%`,
+      ).toBeGreaterThanOrEqual(0.02);
+      // What the bot can see pays back at least 2% of a year's profit beyond its cost's share:
+      // Sales & marketing in customers, Support & operations in kept customers and serving.
+      // (Research's and the Data team's worth is the real AI and its checks, which the bot fixes.)
+      if (department === "sales" || department === "support") {
+        const gain = profit(funded) - base + cost;
+        expect(gain / base, `${department} gains ${Math.round(gain)}`).toBeGreaterThanOrEqual(0.02);
+      }
     }
   });
 

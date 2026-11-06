@@ -3,6 +3,7 @@ import {
   ARCHETYPE_WORDS,
   ARCHETYPES,
   type Archetype,
+  DEPARTMENTS,
   REGION_IDS,
   RIVAL_STYLES,
   RivalPack,
@@ -272,6 +273,22 @@ function review(s: WorldState, company: CompanyState, rival: RivalState): void {
   }
 }
 
+/**
+ * A rival funds its style's departments from last month's revenue (C43): each budget is its
+ * share of that revenue, in whole $10,000 steps, at most the largest budget. No revenue, no team.
+ */
+function fundDepartments(s: WorldState, company: CompanyState, rival: RivalState): void {
+  const e = getBalance(s.balance).economy;
+  const last = company.ledger.months.at(-1);
+  const revenue = last ? Object.values(last.income).reduce((a, b) => a + b, 0) : 0;
+  const shares = e.rivals.departments[rival.style];
+  const { step, maxBudget } = e.departments;
+  for (const d of DEPARTMENTS) {
+    const want = Math.floor((Math.max(0, revenue) * (shares[d] ?? 0)) / step) * step;
+    company.departments[d].budget = Math.min(maxBudget, want);
+  }
+}
+
 /** The daily rival step, right after training settles: releases, lineup, reviews, rescues. */
 export function rivalsDay(s: WorldState): void {
   if (!s.rivals) return;
@@ -282,6 +299,7 @@ export function rivalsDay(s: WorldState): void {
     if (!company || !rival) continue;
     release(s, company, rival);
     tidy(company, s.day);
+    fundDepartments(s, company, rival);
     if (s.day - rival.lastReviewDay >= every) review(s, company, rival);
     if (company.rescue) rescueCommand(s, company, { type: "chooseRescue", kind: "loan" });
   }

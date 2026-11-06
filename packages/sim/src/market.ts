@@ -8,6 +8,7 @@ import {
 } from "@airace/protocol";
 import { adoptionShare, type Economy, getBalance } from "./balance.ts";
 import { closeness } from "./compute.ts";
+import { strengthsOf } from "./departments.ts";
 import { liveProductFor } from "./products.ts";
 import { paramCount } from "./shape.ts";
 import type { MarketState, VersionState, WorldState } from "./state.ts";
@@ -177,6 +178,11 @@ export function marketDay(s: WorldState): void {
   // Word of mouth that reaches neighbouring regions, applied after every cell's own.
   const spills: { id: string; region: RegionId; group: GroupId; spread: number }[] = [];
 
+  const keep: Record<string, number> = {};
+  for (const id of companyIds) {
+    const company = s.companies[id];
+    if (company) keep[id] = 1 - e.departments.supportChurn * strengthsOf(s, company).support;
+  }
   for (const region of REGION_IDS) {
     for (const group of GROUP_IDS) {
       const g = e.groups[group];
@@ -222,7 +228,8 @@ export function marketDay(s: WorldState): void {
           target > n
             ? (target - n) * e.diffusion.adoptRate * aware
             : (target - n) * e.diffusion.switchRate;
-        n -= n * g.churnPerDay * (1 - o.satisfaction);
+        // Support & operations keep unhappy customers longer.
+        n -= n * g.churnPerDay * (1 - o.satisfaction) * (keep[o.companyId] ?? 1);
         setCustomers(m, o.companyId, region, group, o.plan, n);
       });
       // A plan that is no longer offered loses its customers gradually.
