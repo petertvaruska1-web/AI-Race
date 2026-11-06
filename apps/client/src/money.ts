@@ -23,6 +23,7 @@ export const COST_NAMES: Record<CostCategory, string> = {
   appCosts: "Partner app costs",
   investmentLosses: "Investment losses",
   overhead: "Office and support",
+  team: "Team",
 };
 
 export const MONEY_WHAT: Record<IncomeCategory | CostCategory, string> = {
@@ -43,6 +44,7 @@ export const MONEY_WHAT: Record<IncomeCategory | CostCategory, string> = {
   looks: "Orb styles and logo motions you bought.",
   appCosts: "Setting up partner apps, and their monthly running costs.",
   investmentLosses: "What your investment fund lost in a bad month.",
+  team: "Your departments' monthly budgets (Research, Data team, Sales & marketing, Support & operations), paid a day at a time.",
   overhead: "Offices, support staff and admin. The bigger the company, the bigger the bill.",
 };
 

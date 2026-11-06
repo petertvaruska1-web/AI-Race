@@ -1,0 +1,15 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-11-04-departments.md
+
+Executed inline (superpowers:executing-plans), committing and pushing after every task; one self-review at the end (the owner prefers no helper agents). Spec: docs/superpowers/specs/2026-11-04-remaining-features-design.md §4 (C43). Started 2026-11-06 on the owner's go ("Start departments").
+
+Pre-flight:
+- Task 1 → Task 2: Task 1 produces `departmentStrength(c, d)` and `CompanyState.departments`; Task 2's four effects read the strengths (research and data in the training preview, sales in the market, support in satisfaction and serving). Consistent.
+- Task 1 → Task 4: Task 1's view `me.company.departments: {budget, staffed, strength}` is what the Team panel's effect lines and slider read; the Lab's client-side preview must pass the same research and data strengths as the server (Task 2 extends `previewPlan`). Consistent once Task 2 adds the parameters.
+- Task 1 → Task 3: rivals' budgets are the same `departments` state, set by the rival's monthly rule instead of a command. Consistent.
+- Task 2 → server: `token_budget` must become the run's recorded `preview.tokens` (today it is the plan's length).
+- Coaching ended at sim-8, so this is sim-9.
+Task 1: Ruling: effect sizes live in the balance next to the plan's four numbers (`departments: {maxBudget 500000, step 10000, growDays 30, scale 200000, research 0.3, data 0.5, sales 0.002, supportSatisfaction 0.3, supportServing 0.2}`), so Task 3 can tune them; `departmentStrength(c, d, scale = balance-v2's)` as the plan's interface, plus `strengthsOf(s, c)` by the world's balance — cost if wrong: none (both balances share the values).
+Task 1: Ruling: a budget is accepted whatever the cash (cash may go negative, as with serving; the rescue covers it); the four budgets are booked as one Team amount a day; a shrinking team under $1 snaps to 0; an absent owner with negative cash keeps the budgets but spends nothing and the teams shrink toward 0 — cost if wrong: a cash check later.
+Task 1: Ruling: the client's "Team" money labels (`COST_NAMES.team`, `MONEY_WHAT.team`) land now, since the type check requires every cost line named; Task 4 adds the panel — cost if wrong: none.
+Task 1: Ruling: the property generator's `setDepartment` shares one slot with `setTrainingShare` (as a nested oneof), because a new top-level slot thinned the seeded exploration (3 failed runs against its floor of 5) — cost if wrong: department commands are a little rarer in the random games.
+Task 1: complete (tests: sim departments 7/7, upgrade, properties; npm test 768/768; check clean). sim-9: `DEPARTMENTS`/`DEPARTMENT_NAMES`/`Department` and command `setDepartment {department, budget}` (refusal "Budgets are $0–$500,000 a month, in $10,000 steps."), cost category `team`, `CompanyState.departments: Record<Department, {budget, staffed}>` (new and upgraded companies all 0), `departmentsDay` before `campaignsDay`, `departmentStrength`, `strengthsOf`, view `me.company.departments: {research|data|sales|support: {budget, staffed (whole), strength}}`, `UPGRADABLE` gains sim-8, `SIM_VERSION = "sim-9"`.

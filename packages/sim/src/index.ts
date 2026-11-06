@@ -5,6 +5,7 @@ export * from "./calendar.ts";
 export * from "./campaigns.ts";
 export * from "./companyExtras.ts";
 export * from "./compute.ts";
+export * from "./departments.ts";
 export * from "./discoveries.ts";
 export * from "./fame.ts";
 export * from "./feed.ts";

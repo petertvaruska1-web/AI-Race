@@ -191,7 +191,7 @@ describe("recovery", () => {
       .select({ v: schema.worldSnapshots.simVersion })
       .from(schema.worldSnapshots)
       .where(eq(schema.worldSnapshots.worldId, worldId));
-    expect(versions.map((r) => r.v)).toContain("sim-8");
+    expect(versions.map((r) => r.v)).toContain("sim-9");
     // The input logged after the old snapshot replayed on the old rules.
     expect(s.legacyUntilSeq).toBeGreaterThan(row?.seq ?? 0);
   });

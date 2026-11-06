@@ -89,6 +89,8 @@ export const COST_CATEGORIES = [
   "investmentLosses",
   /** Office and support, which grow with the company (C35). */
   "overhead",
+  /** The four departments' monthly budgets, booked daily (C43). */
+  "team",
 ] as const;
 export type CostCategory = (typeof COST_CATEGORIES)[number];
 
@@ -263,6 +265,16 @@ export const TrainingPlan = z.object({
 export type TrainingPlan = z.infer<typeof TrainingPlan>;
 
 /** Sponsorships (playtest pack §5): what kind of event the company's name goes on. */
+/** Departments a company funds with monthly budgets (C43); no individual people. */
+export const DEPARTMENTS = ["research", "data", "sales", "support"] as const;
+export type Department = (typeof DEPARTMENTS)[number];
+export const DEPARTMENT_NAMES: Record<Department, string> = {
+  research: "Research",
+  data: "Data team",
+  sales: "Sales & marketing",
+  support: "Support & operations",
+};
+
 export const SPONSOR_KINDS = ["stadium", "conference", "festival"] as const;
 export type SponsorKind = (typeof SPONSOR_KINDS)[number];
 
@@ -370,6 +382,11 @@ export const Command = z.discriminatedUnion("type", [
   z.object({ type: z.literal("fundApp"), kind: z.enum(APP_KINDS), productId: zId }),
   z.object({ type: z.literal("closeApp"), appId: zId }),
   z.object({ type: z.literal("invest"), amount: z.number().int().positive() }),
+  z.object({
+    type: z.literal("setDepartment"),
+    department: z.enum(DEPARTMENTS),
+    budget: z.number().int(),
+  }),
   z.object({ type: z.literal("withdraw"), amount: z.number().int().positive() }),
   z.object({ type: z.literal("publishDiscovery"), discoveryId: z.string().min(1).max(80) }),
 ]);

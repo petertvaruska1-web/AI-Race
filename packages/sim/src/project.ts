@@ -2,6 +2,7 @@ import {
   APP_KINDS,
   BATTLE_SKILLS,
   COST_CATEGORIES,
+  type Department,
   type FeedItemView,
   GROUP_IDS,
   type GroupId,
@@ -28,6 +29,7 @@ import {
 import { adoptionShare, type Balance, getBalance } from "./balance.ts";
 import { dateOfDay } from "./calendar.ts";
 import { ownedPflops } from "./compute.ts";
+import { strengthsOf } from "./departments.ts";
 import { goalProgress } from "./goal.ts";
 import { leagueTables } from "./league.ts";
 import { customersByRegion, customersOf, totalCustomers } from "./market.ts";
@@ -342,6 +344,7 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
       published: d.published,
     })),
     fund: { balance: c.fund.balance },
+    departments: departmentsView(state, c),
     showcases: c.showcases.map((x) => ({
       id: x.id,
       day: x.day,
@@ -587,5 +590,21 @@ function shopView(b: Balance): ShopView {
       setup: e.apps.kinds[kind].setup,
       upkeep: e.apps.kinds[kind].upkeep,
     })),
+  };
+}
+
+/** The owner's departments: budgets, teams (whole dollars) and strengths. */
+function departmentsView(state: WorldState, c: CompanyState) {
+  const strength = strengthsOf(state, c);
+  const one = (d: Department) => ({
+    budget: c.departments[d].budget,
+    staffed: Math.round(c.departments[d].staffed),
+    strength: strength[d],
+  });
+  return {
+    research: one("research"),
+    data: one("data"),
+    sales: one("sales"),
+    support: one("support"),
   };
 }

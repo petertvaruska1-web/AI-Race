@@ -5,6 +5,7 @@ import { applyBattle, battleCommand } from "./battles.ts";
 import { campaignCommand, campaignsDay } from "./campaigns.ts";
 import { newCompanyExtras } from "./companyExtras.ts";
 import { computeCommand, computeDay, dataCentersDay, newCompute } from "./compute.ts";
+import { departmentCommand, departmentsDay } from "./departments.ts";
 import { applyDiscoveries, publishDiscovery } from "./discoveries.ts";
 import { fameDay } from "./fame.ts";
 import { applyFeedback, newsDay } from "./feed.ts";
@@ -77,6 +78,7 @@ function tick(s: WorldState): Handled {
   closeMonths(s);
   settleRuns(s);
   rivalsDay(s);
+  departmentsDay(s);
   campaignsDay(s);
   sponsorshipsDay(s);
   productsDay(s);
@@ -363,6 +365,11 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       const company = member.companyId ? s.companies[member.companyId] : undefined;
       if (!company) return no("Found your company first.");
       return lookCommand(s, company, cmd);
+    }
+    case "setDepartment": {
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("Found your company first.");
+      return departmentCommand(s, company, cmd);
     }
     case "invest":
     case "withdraw": {

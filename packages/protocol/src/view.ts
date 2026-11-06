@@ -396,6 +396,13 @@ export const ShopView = z.strictObject({
 });
 export type ShopView = z.infer<typeof ShopView>;
 
+/** One department as its owner sees it (C43). */
+const DepartmentView = z.strictObject({
+  budget: z.number().int().min(0),
+  staffed: z.number().int().min(0),
+  strength: z.number().min(0).max(1),
+});
+
 export const PrivateCompany = z.strictObject({
   id: zId,
   cash: z.number().int(),
@@ -509,6 +516,13 @@ export const PrivateCompany = z.strictObject({
   ),
   /** The investment fund (it counts toward the company's value). */
   fund: z.strictObject({ balance: z.number().int() }),
+  /** The four departments: monthly budget, the team grown so far, and its strength (0–1). */
+  departments: z.strictObject({
+    research: DepartmentView,
+    data: DepartmentView,
+    sales: DepartmentView,
+    support: DepartmentView,
+  }),
   /** The last 20 showcases, newest last. */
   showcases: z.array(ShowcaseView),
   shop: ShopView,

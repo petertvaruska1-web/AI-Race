@@ -4,6 +4,7 @@ import type {
   BattleSkill,
   Command,
   CostCategory,
+  Department,
   Difficulty,
   Discovery,
   EvalSignals,
@@ -388,6 +389,9 @@ export type BattleState = {
   defending?: boolean;
 };
 
+/** One department: what the company budgets a month, and the team it has grown so far. */
+export type DepartmentState = { budget: number; staffed: number };
+
 export type CompanyState = {
   id: string;
   /** Null for a rival: no player owns it. */
@@ -431,6 +435,11 @@ export type CompanyState = {
   apps: Record<string, AppState>;
   /** The investment fund: money moved out of cash, earning or losing at month ends. */
   fund: { balance: number };
+  /**
+   * The four departments (sim-9, C43): a monthly budget and the team grown toward it so far
+   * (dollars a month of staff; it moves 1/30 of the gap a day).
+   */
+  departments: Record<Department, DepartmentState>;
   /** Feedback replies customers loved (score 0.75 or more), up to 400; the server keeps their text. */
   loved: number;
   /** Lessons the player gave their AIs in the Playground (sim-8); the server keeps their text. */

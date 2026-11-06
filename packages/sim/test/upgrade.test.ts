@@ -88,3 +88,31 @@ describe("upgrading a sim-4 world", () => {
     expect(runningWorld().legacyUntilSeq).toBe(0);
   });
 });
+
+describe("upgrading a sim-8 world", () => {
+  it("gives every department a budget of 0 and no team, and adds the Team cost line", () => {
+    const s = structuredClone(ticks(runningWorld(), 40)) as unknown as {
+      companies: Record<
+        string,
+        Record<string, unknown> & {
+          ledger: {
+            current: { costs: Record<string, number> };
+            months: { costs: Record<string, number> }[];
+          };
+        }
+      >;
+    };
+    for (const c of Object.values(s.companies)) {
+      delete c.departments;
+      for (const m of [...c.ledger.months, c.ledger.current]) delete m.costs.team;
+    }
+    const up = upgradeState(s, "sim-8");
+    const c1 = up.companies.c1;
+    expect(c1?.departments.research).toEqual({ budget: 0, staffed: 0 });
+    expect(c1?.departments.support).toEqual({ budget: 0, staffed: 0 });
+    expect(c1?.ledger.current.costs.team).toBe(0);
+    expect(c1?.ledger.months.every((m) => m.costs.team === 0)).toBe(true);
+    expect(c1?.lessons).toBeDefined();
+    expect(step(up, TICK).ok).toBe(true);
+  });
+});

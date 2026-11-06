@@ -231,6 +231,12 @@ function sampleView(): WorldView {
         nextInterviewDay: null,
         goalProgress: null,
         fund: { balance: 0 },
+        departments: {
+          research: { budget: 100000, staffed: 63000, strength: 0.27 },
+          data: { budget: 0, staffed: 0, strength: 0 },
+          sales: { budget: 0, staffed: 0, strength: 0 },
+          support: { budget: 0, staffed: 0, strength: 0 },
+        },
         showcases: [],
         shop: { showcase: { fee: 20000, cooldownDays: 7 }, sponsorships: [], looks: [], apps: [] },
         apps: [],

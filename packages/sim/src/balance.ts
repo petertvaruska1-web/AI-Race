@@ -230,6 +230,23 @@ export type Economy = {
   lovedScore: number;
   /** Looks by id, with their price (the free ones cost 0). */
   looks: Record<string, number>;
+  /**
+   * Departments (C43): the largest monthly budget and its step, the days a team takes to close
+   * the gap to its budget, the staffing at which strength is 1 − 1/e, and each effect at full
+   * strength (Research: extra text read; Data team: checks' discount; Sales & marketing:
+   * awareness a day; Support & operations: softer satisfaction drops and cheaper serving).
+   */
+  departments: {
+    maxBudget: number;
+    step: number;
+    growDays: number;
+    scale: number;
+    research: number;
+    data: number;
+    sales: number;
+    supportSatisfaction: number;
+    supportServing: number;
+  };
   /** Playground games played live for the press (playtest pack §4.3). */
   showcases: {
     fee: number;
@@ -669,6 +686,18 @@ const ECONOMY_V2: Economy = {
   },
   // A showcase costs four battles: it is a press event, and a great run gains 8% followers.
   showcases: { fee: 20_000, cooldownDays: 7, followers: 0.08, stumble: 0.3, kept: 20 },
+  // Departments (spec §4, first guesses; the balance harness pins them in Task 3).
+  departments: {
+    maxBudget: 500_000,
+    step: 10_000,
+    growDays: 30,
+    scale: 200_000,
+    research: 0.3,
+    data: 0.5,
+    sales: 0.002,
+    supportSatisfaction: 0.3,
+    supportServing: 0.2,
+  },
 };
 
 export const BALANCE_V2: Balance = {

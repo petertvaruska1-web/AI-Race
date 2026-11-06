@@ -185,9 +185,18 @@ const commandInput: fc.Arbitrary<Input> = user.chain((u) =>
         id: fc.constantFrom("DC_1", "DC_2"),
       })
       .map((r) => command(u, { type: "buildDataCenter", region: r.region }, r.id)),
-    fc
-      .constantFrom(0, 0.5, 1, -1, 2)
-      .map((share) => command(u, { type: "setTrainingShare", share })),
+    // Settings share one slot, so adding one doesn't thin out the rest of the game.
+    fc.oneof(
+      fc
+        .constantFrom(0, 0.5, 1, -1, 2)
+        .map((share) => command(u, { type: "setTrainingShare", share })),
+      fc
+        .record({
+          department: fc.constantFrom("research", "data", "sales", "support"),
+          budget: fc.constantFrom(0, 100_000, 500_000, 15_000, 600_000),
+        })
+        .map((r) => command(u, { type: "setDepartment", ...r })),
+    ),
     fc.constantFrom("loan", "investor").map((kind) => command(u, { type: "chooseRescue", kind })),
     fc
       .record({

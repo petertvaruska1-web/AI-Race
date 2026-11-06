@@ -1,3 +1,4 @@
+import { DEPARTMENTS } from "@airace/protocol";
 import type { CompanyState } from "./state.ts";
 
 // What sim-5 (the playtest pack) and sim-6 (Phase 4) add to every company, at their starting values.
@@ -12,6 +13,7 @@ export type CompanyExtras = Pick<
   | "sponsorships"
   | "apps"
   | "fund"
+  | "departments"
   | "loved"
   | "lessons"
   | "notebook"
@@ -28,6 +30,7 @@ export function newCompanyExtras(): CompanyExtras {
     sponsorships: {},
     apps: {},
     fund: { balance: 0 },
+    departments: newDepartments(),
     loved: 0,
     lessons: 0,
     notebook: null,
@@ -36,4 +39,11 @@ export function newCompanyExtras(): CompanyExtras {
     interviews: [],
     lastInterviewDay: null,
   };
+}
+
+/** Every department unfunded, with no team. */
+export function newDepartments(): CompanyState["departments"] {
+  return Object.fromEntries(
+    DEPARTMENTS.map((d) => [d, { budget: 0, staffed: 0 }]),
+  ) as CompanyState["departments"];
 }

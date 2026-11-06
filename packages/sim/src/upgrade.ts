@@ -1,6 +1,6 @@
 import { COST_CATEGORIES, INCOME_CATEGORIES, NO_GOAL } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
-import { newCompanyExtras } from "./companyExtras.ts";
+import { newCompanyExtras, newDepartments } from "./companyExtras.ts";
 import type { WorldState } from "./state.ts";
 import { newGoal } from "./world.ts";
 
@@ -8,7 +8,7 @@ import { newGoal } from "./world.ts";
 // Each step only adds the newer fields with their starting values.
 
 /** The simulation versions `upgradeState` can bring forward. */
-export const UPGRADABLE = ["sim-3", "sim-4", "sim-5", "sim-6", "sim-7"] as const;
+export const UPGRADABLE = ["sim-3", "sim-4", "sim-5", "sim-6", "sim-7", "sim-8"] as const;
 export type UpgradableVersion = (typeof UPGRADABLE)[number];
 
 type Loose = Record<string, unknown>;
@@ -91,6 +91,18 @@ function fromSim7(s: Loose): Loose {
   return s;
 }
 
+/** A sim-8 world as sim-9 (departments): every department unfunded, and a Team cost line. */
+function fromSim8(s: Loose): Loose {
+  for (const c of Object.values(s.companies as Record<string, Loose>)) {
+    c.departments ??= newDepartments();
+    const ledger = c.ledger as { current: Loose; months: Loose[] };
+    for (const m of [...ledger.months, ledger.current]) {
+      (m.costs as Record<string, number>).team ??= 0;
+    }
+  }
+  return s;
+}
+
 /**
  * Brings an older world forward. `legacyUntilSeq` is the last logged input that will be
  * replayed on it: those inputs keep the old rules where the new ones would change money
@@ -105,7 +117,8 @@ export function upgradeState(
   if (from === "sim-3") fromSim3(s);
   if (from === "sim-3" || from === "sim-4") fromSim4(s, legacyUntilSeq ?? (s.seq as number));
   if (from !== "sim-6" && from !== "sim-7") fromSim5(s, legacyUntilSeq ?? (s.seq as number));
-  if (from !== "sim-7") fromSim6(s);
-  fromSim7(s);
+  if (from !== "sim-7" && from !== "sim-8") fromSim6(s);
+  if (from !== "sim-8") fromSim7(s);
+  fromSim8(s);
   return s as unknown as WorldState;
 }
