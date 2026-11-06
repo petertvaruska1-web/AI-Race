@@ -3,6 +3,7 @@ import { getBalance, previewPlan } from "@airace/sim";
 import { useEffect, useState } from "react";
 import { labLimit, NO_CARD, realMinutes } from "../../cards/Cards.tsx";
 import { Button } from "../../components/Button.tsx";
+import { useBottomBar } from "../../components/bottomBar.ts";
 import { lentToTraining } from "../../components/Computers.tsx";
 import { formatMoney, gameDays } from "../../format.ts";
 import { useCards } from "../../store/cards.ts";
@@ -96,6 +97,8 @@ function SummaryBar({ view, onStarted }: { view: WorldView; onStarted: () => voi
   const plan = usePlan((s) => s.plan);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bar, setBar] = useState<HTMLDivElement | null>(null);
+  useBottomBar(bar);
   const company = view.me.company;
   if (!plan || !company) return null;
   const parent = company.versions.find((v) => v.id === plan.parentVersionId)?.shape ?? null;
@@ -139,7 +142,10 @@ function SummaryBar({ view, onStarted }: { view: WorldView; onStarted: () => voi
   }
 
   return (
-    <div className="sticky bottom-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-brand bg-surface p-4 shadow-lg">
+    <div
+      ref={setBar}
+      className="sticky bottom-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-brand bg-surface p-4 shadow-lg"
+    >
       <div>
         {preview.ok ? (
           <p data-testid="plan-cost" className="text-lg font-semibold">

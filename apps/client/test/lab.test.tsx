@@ -3,6 +3,8 @@ import { BALANCE_V2, formatMoney, previewPlan } from "@airace/sim";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import sampleCatalog from "../../../packages/protocol/fixtures/catalog.sample.json";
+import { Toasts } from "../src/components/Toasts.tsx";
+import { WorldChat } from "../src/components/WorldChat.tsx";
 import { words } from "../src/format.ts";
 import { Lab } from "../src/screens/lab/LabLayout.tsx";
 import { useCatalog } from "../src/store/catalog.ts";
@@ -106,5 +108,21 @@ describe("AI Lab planning", () => {
         expect(text, `${s} mentions ${jargon}`).not.toContain(jargon);
       }
     }
+  });
+});
+
+describe("the Lab's bottom bar and the corners", () => {
+  it("reserves its height while shown, so notifications and the world chat sit above it", async () => {
+    const root = document.documentElement;
+    const { unmount } = render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
+    step("1 Data");
+    await screen.findByRole("button", { name: "Start training" });
+    expect(root.style.getPropertyValue("--bottom-bar")).toMatch(/^\d+px$/);
+    unmount();
+    expect(root.style.getPropertyValue("--bottom-bar")).toBe("");
+    const { container: toasts } = render(<Toasts view={viewOf(runningWorld("balance-v2"))} />);
+    expect((toasts.firstElementChild as HTMLElement).style.bottom).toContain("--bottom-bar");
+    const { container: chat } = render(<WorldChat view={viewOf(runningWorld("balance-v2"))} />);
+    expect((chat.firstElementChild as HTMLElement).style.bottom).toContain("--bottom-bar");
   });
 });

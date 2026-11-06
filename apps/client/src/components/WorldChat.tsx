@@ -1,6 +1,7 @@
 import type { WorldView } from "@airace/protocol";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useSocket } from "../store/session.ts";
+import { ABOVE_BOTTOM_BAR } from "./bottomBar.ts";
 
 type Line = { name: string; companyId: string | null; text: string; at: number };
 const KEPT = 200;
@@ -63,7 +64,10 @@ export function WorldChat({ view }: { view: WorldView }) {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 z-30 w-80 max-w-[calc(100vw-2rem)]">
+    <div
+      className="fixed left-4 z-30 w-80 max-w-[calc(100vw-2rem)]"
+      style={{ bottom: ABOVE_BOTTOM_BAR }}
+    >
       {open && (
         <div className="window mb-2 flex max-h-96 flex-col p-3">
           <ul className="mb-2 flex-1 space-y-1 overflow-y-auto text-sm">

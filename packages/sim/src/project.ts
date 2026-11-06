@@ -261,7 +261,11 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
       day: x.day,
       skill: x.skill,
       rivalId: x.rivalId,
-      mine: { ...x.mine },
+      mine: {
+        productId: x.mine.productId,
+        versionId: x.mine.versionId,
+        productName: x.mine.productName,
+      },
       theirs: {
         productId: x.theirs.productId,
         versionId: x.theirs.versionId,

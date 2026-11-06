@@ -6,8 +6,10 @@ device, the next ``capacity`` in CPU memory, older ones only on disk. Rival AIs,
 chat or a battle, are *transient*: they make room before any other model (game-layer design §12).
 """
 
+import os
 import shutil
 import threading
+import uuid
 from collections import OrderedDict
 from pathlib import Path
 
@@ -69,12 +71,18 @@ class ModelCache:
         folder = self.models_dir / version_id
         if (folder / META_NAME).is_file():
             return folder
-        shutil.rmtree(folder, ignore_errors=True)  # a download that stopped halfway
-        partial = self.models_dir / f"{version_id}.partial"
-        shutil.rmtree(partial, ignore_errors=True)
+        # Two helpers can share this folder (two on one PC): each downloads into its own place.
+        partial = self.models_dir / f"{version_id}.{os.getpid()}.{uuid.uuid4().hex[:8]}.partial"
         download_tar(url, partial)
         self.downloads += 1
-        partial.rename(folder)
+        if not (folder / META_NAME).is_file():
+            shutil.rmtree(folder, ignore_errors=True)  # a download that stopped halfway
+            try:
+                partial.rename(folder)
+            except OSError:
+                if not (folder / META_NAME).is_file():  # not the other helper's finished copy
+                    raise
+        shutil.rmtree(partial, ignore_errors=True)
         return folder
 
     def _keep(

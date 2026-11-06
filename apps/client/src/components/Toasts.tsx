@@ -5,6 +5,7 @@ import { monthName } from "../format.ts";
 import { useVotes } from "../store/votes.ts";
 import { useWindows, type WindowSpec } from "../store/windows.ts";
 import { MILESTONE_ICONS } from "../surprises/Trophies.tsx";
+import { ABOVE_BOTTOM_BAR } from "./bottomBar.ts";
 
 const SHOW_MS = 7000;
 const MOST = 3;
@@ -190,7 +191,10 @@ export function Toasts({ view }: { view: WorldView }) {
   }, [toasts]);
 
   return (
-    <div className="pointer-events-none fixed right-4 bottom-4 z-30 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
+    <div
+      className="pointer-events-none fixed right-4 z-30 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
+      style={{ bottom: ABOVE_BOTTOM_BAR }}
+    >
       <AnimatePresence initial={false}>
         {toasts.map((t) => (
           <motion.div

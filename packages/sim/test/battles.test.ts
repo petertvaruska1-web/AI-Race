@@ -304,6 +304,15 @@ describe("battles between friends", () => {
     expect(projectView(done, "u2").me.company?.battles[0]).toMatchObject({ defending: true });
   });
 
+  it("the defender's view stays valid: no pack key in their side of the battle", () => {
+    const done = ok(resolve(ok(start(friends(), "q1")), "b1", rounds([1, 1, 0], [0, 0, 0.5])));
+    const theirs = (done.companies.c2 as CompanyState).battles.find((b) => b.id === "b1");
+    expect(theirs?.mine).toEqual({ productId: "q1", versionId: "w1", productName: "Nova" });
+    // A state saved before the fix still projects a valid view.
+    (theirs?.mine as Record<string, unknown>).packKey = "";
+    expect(WorldView.safeParse(projectView(done, "u2")).success).toBe(true);
+  });
+
   it("a story round's votes decide it, whatever the judge said; a tie leaves it to the judge", () => {
     const s = friends();
     const going = ok(start(s, "q1", "creativity"));

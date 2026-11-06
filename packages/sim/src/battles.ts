@@ -180,7 +180,11 @@ function mirrorBattle(
     ...battle,
     rivalId: challenger.id,
     defending: true,
-    mine: { ...battle.theirs },
+    mine: {
+      productId: battle.theirs.productId,
+      versionId: battle.theirs.versionId,
+      productName: battle.theirs.productName,
+    },
     theirs: { ...battle.mine, packKey: "" },
     rounds: (battle.rounds ?? []).map((r) => ({
       ...r,

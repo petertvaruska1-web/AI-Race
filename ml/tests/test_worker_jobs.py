@@ -390,3 +390,27 @@ def test_interview_scores_published_answers_without_a_model(runner, tmp_path):
 def test_interview_refuses_an_empty_spec(runner, tmp_path):
     with pytest.raises(ValueError, match="answers"):
         runner.handle_interview({"interviewId": "x", "answers": []}, Recorder(tmp_path).ctx)
+
+
+def test_two_helpers_sharing_a_folder_can_download_the_same_model_at_once(
+    trained, tmp_path, tiny_tok, monkeypatch
+):
+    from airace_ml.worker import models
+    from airace_ml.worker.models import ModelCache
+
+    first = ModelCache(tmp_path / "models", tiny_tok, "cpu")
+    other = ModelCache(tmp_path / "models", tiny_tok, "cpu")
+    url = f"{trained[0]}/blobs/a.tar?sig=1"
+    real = models.download_tar
+    raced = []
+
+    def racing(u, dest):
+        if not raced:  # the other helper finishes the same download meanwhile
+            raced.append(True)
+            other.fetch("a", url)
+        return real(u, dest)
+
+    monkeypatch.setattr(models, "download_tar", racing)
+    folder = first.fetch("a", url)
+    assert (folder / "meta.json").is_file()
+    assert not list((tmp_path / "models").glob("*.partial*"))
