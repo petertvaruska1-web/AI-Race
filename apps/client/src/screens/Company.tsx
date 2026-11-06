@@ -17,6 +17,7 @@ import { arrivalsFrom } from "../orb/params.ts";
 import { regionCustomers, shareByRegion } from "../regions.ts";
 import { go } from "../route.ts";
 import { AppsPanel, OrbFrame } from "../spending/Spending.tsx";
+import { TeamPanel } from "../spending/Team.tsx";
 import { useWindows } from "../store/windows.ts";
 import { GoalProgress } from "../surprises/Goals.tsx";
 import { TrophyShelf } from "../surprises/Trophies.tsx";
@@ -206,6 +207,7 @@ export function Company({ view }: { view: WorldView }) {
 
       <div className="space-y-3 lg:order-3 lg:col-span-2 xl:col-span-3">
         <TrophyShelf view={view} />
+        <TeamPanel view={view} />
         <AppsPanel view={view} />
         <GoalProgress view={view} />
       </div>

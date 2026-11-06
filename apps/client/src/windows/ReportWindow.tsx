@@ -82,6 +82,7 @@ export function ReportWindow({ entry, view, month }: WindowProps & { month: stri
   const open = useWindows((s) => s.open);
   const card = view.me.company?.reports.find((r) => r.month === month);
   if (!card) return <GoneWindow entry={entry} />;
+  const team = view.me.company?.ledger.months.find((m) => m.month === month)?.costs.team ?? 0;
   return (
     <WindowFrame
       entry={entry}
@@ -113,6 +114,9 @@ export function ReportWindow({ entry, view, month }: WindowProps & { month: stri
             />
           </div>
           <p className="mt-4 text-sm">{why(card)}</p>
+          {team > 0 && (
+            <p className="mt-1 text-xs text-muted">{`Your team cost ${formatMoney(team)} this month.`}</p>
+          )}
           <p className="mt-1 text-xs text-muted">
             Customers: {formatCount(card.customersStart)} → {formatCount(card.customersEnd)}
           </p>

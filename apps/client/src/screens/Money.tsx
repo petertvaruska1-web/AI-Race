@@ -414,4 +414,5 @@ const OPTIONAL_COSTS = new Set<string>([
   "looks",
   "appCosts",
   "investmentLosses",
+  "team",
 ]);
