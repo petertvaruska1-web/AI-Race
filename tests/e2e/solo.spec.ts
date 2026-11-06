@@ -209,10 +209,13 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
   await expect(page.getByRole("dialog").getByText(place)).toBeVisible({ timeout: 60_000 });
   await page.keyboard.press("Escape");
 
-  // 23. Playtest pack: the fund takes money out of cash and shows it.
+  // 23. Playtest pack: the fund takes money out of cash and shows it. Paused, since the fund's
+  // value moves every game day.
+  await page.getByRole("button", { name: "Pause" }).click();
   await page.getByLabel("Amount").fill("1000");
   await page.getByRole("button", { name: "Invest", exact: true }).click();
   await expect(page.getByTestId("fund")).toHaveText("$1,000");
+  await page.getByRole("button", { name: "Resume" }).click();
 
   // 24. A logo motion is bought from the Company screen's Customize window.
   await page.getByRole("link", { name: "Company" }).click();
