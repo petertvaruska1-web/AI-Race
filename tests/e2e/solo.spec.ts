@@ -311,4 +311,15 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
   await page.getByLabel("Train on your lessons").check();
   await page.getByRole("button", { name: "Start training" }).click();
   await expect(page.getByText("Training", { exact: true })).toBeVisible({ timeout: 60_000 });
+
+  // 31. Departments: fund Research at $100,000 a month; the Team line joins the money.
+  await page.getByRole("link", { name: "Company" }).click();
+  const research = page.getByLabel("Research budget");
+  await research.fill("100000");
+  await research.dispatchEvent("pointerup");
+  const team = page.getByRole("region", { name: "Team" });
+  await expect(team.getByText("$100,000 a month")).toBeVisible();
+  await expect(team.getByText(/^Training reads \d+% more text$/)).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("link", { name: "Money" }).click();
+  await expect(page.getByTestId("cost-team")).toBeVisible({ timeout: 60_000 });
 });
