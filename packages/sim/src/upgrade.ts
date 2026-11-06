@@ -92,7 +92,8 @@ function fromSim7(s: Loose): Loose {
 }
 
 /** A sim-8 world as sim-9 (departments): every department unfunded, and a Team cost line. */
-function fromSim8(s: Loose): Loose {
+function fromSim8(s: Loose, lastLoggedSeq: number): Loose {
+  s.sim9FromSeq ??= lastLoggedSeq;
   for (const c of Object.values(s.companies as Record<string, Loose>)) {
     c.departments ??= newDepartments();
     const ledger = c.ledger as { current: Loose; months: Loose[] };
@@ -119,6 +120,6 @@ export function upgradeState(
   if (from !== "sim-6" && from !== "sim-7") fromSim5(s, legacyUntilSeq ?? (s.seq as number));
   if (from !== "sim-7" && from !== "sim-8") fromSim6(s);
   if (from !== "sim-8") fromSim7(s);
-  fromSim8(s);
+  fromSim8(s, legacyUntilSeq ?? (s.seq as number));
   return s as unknown as WorldState;
 }

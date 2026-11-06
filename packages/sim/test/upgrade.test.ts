@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { step, upgradeState } from "../src/index.ts";
-import { runningWorld, TICK, ticks } from "./pack.ts";
+import { runningWorld, TICK, ticks, withRivals } from "./pack.ts";
 
 /** A sim-3 state: today's state without the fields sim-4 added. */
 function sim3() {
@@ -114,5 +114,41 @@ describe("upgrading a sim-8 world", () => {
     expect(c1?.ledger.months.every((m) => m.costs.team === 0)).toBe(true);
     expect(c1?.lessons).toBeDefined();
     expect(step(up, TICK).ok).toBe(true);
+  });
+});
+
+describe("replaying a sim-8 world's log on sim-9", () => {
+  it("lets rivals fund departments only after the inputs sim-8 logged, so replay can't diverge", () => {
+    const s = structuredClone(withRivals()) as unknown as Record<string, unknown> & {
+      seq: number;
+      companies: Record<
+        string,
+        Record<string, unknown> & {
+          rival: unknown;
+          ledger: { current: { income: Record<string, number> }; months: unknown[] };
+        }
+      >;
+    };
+    for (const c of Object.values(s.companies)) {
+      delete c.departments;
+      if (!c.rival) continue;
+      const month = structuredClone(c.ledger.current);
+      month.income.personal = 2_000_000;
+      c.ledger.months = [month];
+    }
+    delete s.sim9FromSeq;
+    const lastLogged = s.seq + 3;
+    let up = upgradeState(s, "sim-8", lastLogged);
+    const rivalBudgets = (w: typeof up) =>
+      Object.values(w.companies)
+        .filter((c) => c.rival)
+        .reduce((n, c) => n + Object.values(c.departments).reduce((m, d) => m + d.budget, 0), 0);
+    while (up.seq < lastLogged) {
+      up = ticks(up, 1);
+      expect(rivalBudgets(up)).toBe(0); // the old rules while replaying the old log
+    }
+    up = ticks(up, 1);
+    expect(rivalBudgets(up)).toBeGreaterThan(0);
+    expect(ticks(withRivals(), 0).sim9FromSeq).toBe(0); // a new world plays the new rules at once
   });
 });

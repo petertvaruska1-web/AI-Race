@@ -278,6 +278,8 @@ function review(s: WorldState, company: CompanyState, rival: RivalState): void {
  * share of that revenue, in whole $10,000 steps, at most the largest budget. No revenue, no team.
  */
 function fundDepartments(s: WorldState, company: CompanyState, rival: RivalState): void {
+  // A world from sim-8 replays its logged inputs without rival teams (replay can't diverge).
+  if (s.seq < (s.sim9FromSeq ?? 0)) return;
   const e = getBalance(s.balance).economy;
   const last = company.ledger.months.at(-1);
   const revenue = last ? Object.values(last.income).reduce((a, b) => a + b, 0) : 0;

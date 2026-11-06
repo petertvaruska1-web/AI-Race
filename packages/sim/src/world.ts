@@ -45,6 +45,7 @@ export function createWorld(p: {
     seq: 0,
     legacyUntilSeq: 0,
     sim6FromSeq: 0,
+    sim9FromSeq: 0,
     rivals: null,
     leaders: {},
     lastRankingNews: {},

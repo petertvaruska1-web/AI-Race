@@ -501,6 +501,11 @@ export type WorldState = {
    * sim-6 added to them (the scandal); 0 for a world made by sim-6.
    */
   sim6FromSeq: number;
+  /**
+   * Inputs from this seq on play sim-9's rules where they touch money on their own: rivals
+   * funding departments. An upgraded sim-8 world replays its logged inputs on the old rules.
+   */
+  sim9FromSeq: number;
   /** Null until rivals join (they need the rival pack). */
   rivals: { joinedDay: number; archId: string; archPassed: boolean } | null;
   /** Each league table's leader, and the day its last #1 story ran. */
