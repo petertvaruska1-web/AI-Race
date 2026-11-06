@@ -1,6 +1,7 @@
 import type { TrainingPlan, TrainingPreview } from "@airace/protocol";
 import { type Balance, getBalance } from "./balance.ts";
 import { ownedPflops } from "./compute.ts";
+import { strengthsOf } from "./departments.ts";
 import { paramCount, trainingFlops } from "./shape.ts";
 import type { CompanyState, RunState, TrainingResult, VersionState, WorldState } from "./state.ts";
 
@@ -31,8 +32,12 @@ export function previewTraining(
     lent,
     company.loved,
     company.lessons ?? 0,
+    strengthsOf(state, company),
   );
 }
+
+/** The departments a plan's price and reading depend on (C43), each a strength 0–1. */
+export type PlanTeams = { research?: number; data?: number };
 
 /**
  * The same preview from the balance, the parent's brain and the data-center compute
@@ -48,6 +53,8 @@ export function previewPlan(
   loved = 0,
   /** Lessons the player gave the AI (for "Train on your lessons"). */
   lessons = 0,
+  /** Research reads more text for the same money; the Data team makes checks cheaper. */
+  teams: PlanTeams = {},
 ): PreviewResult {
   if (Object.values(plan.mix).every((w) => w === 0)) {
     return { ok: false, reason: "Pick at least one dataset to train on." };
@@ -84,14 +91,18 @@ export function previewPlan(
   }
   // Tutoring packs: extra practice from one dataset on top of the length.
   const packs = plan.tutoring?.packs ?? 0;
-  const tokens = Math.round(length.tokens * (1 + e.tutoring.packShare * packs));
+  const paid = Math.round(length.tokens * (1 + e.tutoring.packShare * packs));
+  // Research: the AI reads more text for the money and time the paid text costs.
+  const tokens = Math.round(paid * (1 + e.departments.research * (teams.research ?? 0)));
   const params = paramCount(brain.nLayer, brain.dModel);
-  const flops = trainingFlops(params, tokens);
+  const flops = trainingFlops(params, paid);
   const pflop = flops / 1e15;
-  const checks =
+  const listed =
     (plan.factCheck ? b.factCheckCost : 0) +
-    (plan.cleaning === "expert" ? Math.round((tokens / 1000) * e.expertCheckPerThousand) : 0) +
+    (plan.cleaning === "expert" ? Math.round((paid / 1000) * e.expertCheckPerThousand) : 0) +
     (learn ? Math.min(loved, e.lovedMax) * e.lovedConversationFee : 0);
+  // The Data team: every check costs less.
+  const checks = Math.round(listed * (1 - e.departments.data * (teams.data ?? 0)));
   const compute = Math.round(
     (pflop * b.cloudPricePerPflop * b.cloudPflopsPerDay) /
       (b.cloudPflopsPerDay + ownedPflopsPerDay),

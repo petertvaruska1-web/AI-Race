@@ -1,5 +1,5 @@
 import { type Catalog, prepKey } from "@airace/protocol";
-import { BALANCE_V2, formatMoney, previewPlan } from "@airace/sim";
+import { BALANCE_V2, formatMoney, previewPlan, previewTraining } from "@airace/sim";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import sampleCatalog from "../../../packages/protocol/fixtures/catalog.sample.json";
@@ -38,6 +38,25 @@ describe("AI Lab planning", () => {
     const small = previewPlan(BALANCE_V2, null, plan);
     if (!small.ok) throw new Error(small.reason);
     expect(screen.getByTestId("plan-cost").textContent).toContain(formatMoney(small.preview.cost));
+  });
+
+  it("prices with the company's Data team, and reads more with its Research, as the server does", async () => {
+    const s = runningWorld("balance-v2");
+    const company = s.companies.c1;
+    if (!company) throw new Error("no company");
+    company.departments.data = { budget: 200_000, staffed: 200_000 };
+    company.departments.research = { budget: 200_000, staffed: 200_000 };
+    render(<Lab view={viewOf(s)} />);
+    step("2 Prepare");
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Fact-checking/ }));
+    const plan = usePlan.getState().plan;
+    if (!plan?.factCheck) throw new Error("no fact-checked plan");
+    const server = previewTraining(s, "c1", plan);
+    if (!server.ok) throw new Error(server.reason);
+    const plain = previewPlan(BALANCE_V2, null, plan);
+    if (!plain.ok) throw new Error(plain.reason);
+    expect(server.preview.cost).toBeLessThan(plain.preview.cost);
+    expect(screen.getByTestId("plan-cost").textContent).toContain(formatMoney(server.preview.cost));
   });
 
   it("says when there is not enough cash", () => {

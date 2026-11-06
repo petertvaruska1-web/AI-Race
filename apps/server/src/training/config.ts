@@ -26,6 +26,8 @@ export function toTrainRunConfig(
     lessons?: [string, string][];
     /** The notebook's paragraphs, for a plan with a notebook share. */
     notebook?: string[];
+    /** The run's recorded `preview.tokens`: what the AI really reads. */
+    tokens?: number;
   },
 ): Record<string, unknown> {
   const brain = o.balance.brainSizes.find((b) => b.id === plan.brainSize);
@@ -61,7 +63,8 @@ export function toTrainRunConfig(
     run_id: o.runId,
     seed: o.seed,
     shape: { n_layer: brain.nLayer, d_model: brain.dModel, ctx_len: plan.attentionSpan },
-    token_budget: budget,
+    // The run's recorded reading (Research makes it more than the paid length).
+    token_budget: o.tokens ?? budget,
     mixture,
     ...(coaching.length > 0 ? { coaching } : {}),
     ...(notebook.length > 0 ? { notebook } : {}),

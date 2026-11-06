@@ -218,6 +218,7 @@ export class TrainingService {
           coaching: run.plan.learnFromCustomers ? await this.loved(s.worldId, companyId) : [],
           lessons: run.plan.coaching ? await this.ctx.coaching.pairs(s.worldId, companyId) : [],
           notebook: run.notebookHash ? await this.notebookOf(run.notebookHash) : [],
+          tokens: run.preview.tokens,
         }),
       };
       const jobId = await broker.enqueue(

@@ -105,8 +105,14 @@ function SummaryBar({ view, onStarted }: { view: WorldView; onStarted: () => voi
   const lent = lentToTraining(view);
   const loved = company.loved;
   const lessons = company.lessons;
-  const preview = previewPlan(getBalance(view.world.balance), parent, plan, lent, loved, lessons);
-  const rented = previewPlan(getBalance(view.world.balance), parent, plan, 0, loved, lessons);
+  // Research reads more for the money; the Data team makes checks cheaper (as the server prices).
+  const teams = {
+    research: company.departments.research.strength,
+    data: company.departments.data.strength,
+  };
+  const b = getBalance(view.world.balance);
+  const preview = previewPlan(b, parent, plan, lent, loved, lessons, teams);
+  const rented = previewPlan(b, parent, plan, 0, loved, lessons, teams);
   const saved =
     lent > 0 && preview.ok && rented.ok
       ? {

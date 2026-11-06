@@ -238,6 +238,22 @@ describe("training flow", () => {
   });
 });
 
+describe("departments and training", () => {
+  it("Research: the trainer reads the run's recorded text, more than the plan's length", async () => {
+    server = await start();
+    const w = await worker(server);
+    const o = await setup(server);
+    await send(o.ws, o.worldId, { type: "setDepartment", department: "research", budget: 100_000 });
+    await toDay(server, o.actor, o.actor.state().day + 30);
+    await send(o.ws, o.worldId, { type: "startTraining", plan: plan() });
+    const lease = await w.nextLease();
+    const run = runOf(o.actor, o.userId);
+    const config = TrainJobSpec.parse(lease.spec).config as { token_budget: number };
+    expect(run.preview.tokens).toBeGreaterThan(BALANCE_TEST.lengths[0]?.tokens ?? 0);
+    expect(config.token_budget).toBe(run.preview.tokens);
+  });
+});
+
 describe("waiting and failing", () => {
   it("waits for compute while no card takes the run, then applies a late result at once", async () => {
     server = await start();

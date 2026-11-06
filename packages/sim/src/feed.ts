@@ -8,6 +8,7 @@ import {
   REGION_IDS,
 } from "@airace/protocol";
 import { type Economy, getBalance } from "./balance.ts";
+import { strengthsOf } from "./departments.ts";
 import { noteNews } from "./fame.ts";
 import { customersOf, totalCustomers } from "./market.ts";
 import { findProduct } from "./products.ts";
@@ -178,15 +179,20 @@ function updateSatisfaction(
   economy: Economy,
   productId: string,
   results: FeedbackResult[],
+  /** The company's Support & operations strength. */
+  support: number,
 ): void {
   const { satisfactionAlpha, satisfactionStart } = economy.feedback;
   const byGroup = s.market.satisfaction[productId] ?? {};
+  const soften = 1 - economy.departments.supportSatisfaction * support;
   for (const group of GROUP_IDS) {
     const scores = results.filter((r) => r.group === group).map((r) => r.score);
     if (scores.length === 0) continue;
     const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
     const old = byGroup[group] ?? satisfactionStart;
-    byGroup[group] = old + satisfactionAlpha * (mean - old);
+    const change = satisfactionAlpha * (mean - old);
+    // Support & operations soften a drop; a rise is unchanged.
+    byGroup[group] = old + (change < 0 ? change * soften : change);
   }
   s.market.satisfaction[productId] = byGroup;
 }
@@ -275,7 +281,7 @@ export function applyFeedback(
     const loved = e.results.filter((r) => r.score >= economy.lovedScore).length;
     company.loved = Math.min(economy.lovedMax, company.loved + loved);
   }
-  updateSatisfaction(s, economy, product.id, e.results);
+  updateSatisfaction(s, economy, product.id, e.results, strengthsOf(s, company).support);
   postBestAndWorst(s, economy, company, product, e.results);
   checkScandal(s, economy, company, product, e.results);
   return OK;

@@ -1,6 +1,13 @@
-import { type Command, DEPARTMENTS, type Department } from "@airace/protocol";
+import {
+  type Command,
+  DEPARTMENTS,
+  type Department,
+  GROUP_IDS,
+  REGION_IDS,
+} from "@airace/protocol";
 import { getBalance } from "./balance.ts";
 import { book } from "./ledger.ts";
+import { awarenessOf, setAwareness } from "./market.ts";
 import type { CompanyState, WorldState } from "./state.ts";
 import { formatMoney } from "./training.ts";
 import { ownerAway } from "./world.ts";
@@ -71,5 +78,23 @@ export function departmentsDay(s: WorldState): void {
       if (dept.staffed < 1 && target === 0) dept.staffed = 0;
     }
     book(company, "team", spend);
+    salesDay(s, company);
+  }
+}
+
+/**
+ * Sales & marketing, after the teams grow: in every region and group, awareness rises by
+ * `sales · s · (1 − awareness)` a day, once the company has an AI on sale.
+ */
+function salesDay(s: WorldState, company: CompanyState): void {
+  const e = getBalance(s.balance).economy.departments;
+  const strength = departmentStrength(company, "sales", e.scale);
+  if (strength <= 0) return;
+  if (!Object.values(company.products).some((p) => p.status === "live")) return;
+  for (const region of REGION_IDS) {
+    for (const group of GROUP_IDS) {
+      const a = awarenessOf(s.market, company.id, region, group);
+      setAwareness(s.market, company.id, region, group, a + e.sales * strength * (1 - a));
+    }
   }
 }

@@ -7,6 +7,7 @@ import {
   type RegionId,
 } from "@airace/protocol";
 import { type Balance, type Economy, getBalance } from "./balance.ts";
+import { strengthsOf } from "./departments.ts";
 import { tellNews } from "./feed.ts";
 import { book } from "./ledger.ts";
 import { customersOf } from "./market.ts";
@@ -167,7 +168,15 @@ export function computeDay(s: WorldState): void {
     // The cloud's share of the load costs cloud prices; owned centers' share a fraction of them.
     const fromCloud = load > 0 ? Math.min(cloud, need) / load : 0;
     const fromOwned = load > 0 ? Math.min(owned, load) / load : 0;
-    book(company, "serving", dollars * (fromCloud + fromOwned * c.ownedServingPriceShare));
+    // Support & operations make serving cheaper.
+    const support =
+      1 -
+      getBalance(s.balance).economy.departments.supportServing * strengthsOf(s, company).support;
+    book(
+      company,
+      "serving",
+      dollars * (fromCloud + fromOwned * c.ownedServingPriceShare) * support,
+    );
     company.compute.cloudPflops = cloud;
     company.compute.loadPflops = load;
     company.compute.served = served;
