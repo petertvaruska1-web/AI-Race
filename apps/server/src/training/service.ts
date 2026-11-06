@@ -450,6 +450,7 @@ export class TrainingService {
     const parent = comparable.find((o) => o.versionId === parentId);
     const parentLabel = parentId ? findVersionIn(state, parentId)?.label : undefined;
     const { minPoints, minZ, minPeers, perEval } = getBalance(state.balance).economy.discoveries;
+    const owner = Object.values(state.companies).find((c) => c.versions[p.versionId]);
     return {
       versionId: p.versionId,
       modelTarUrl: signBlobUrl(ctx, checkpointKey(p.versionId), "GET", JOB_URL_TTL_MS),
@@ -463,6 +464,7 @@ export class TrainingService {
         ...ctx.rivals.peersIn(state),
       ],
       thresholds: { minPoints, minZ, minPeers, perEval },
+      ownText: await ctx.coaching.ownText(state, owner?.id),
     };
   }
 

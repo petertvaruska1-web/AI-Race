@@ -63,6 +63,15 @@ def _spec_str(spec: dict[str, Any], key: str) -> str:
     return v
 
 
+def _knowing(index: NoveltyIndex | None, part: Any, tok: Tok) -> NoveltyIndex | None:
+    """``index``, also counting as seen the company's own text in ``part["ownText"]`` (its
+    notebook and coaching lessons, which its AI trained on): copying them is not new writing."""
+    texts = part.get("ownText") if isinstance(part, dict) else None
+    if index is None or not isinstance(texts, list):
+        return index
+    return index.knowing(tok.encode(t) for t in texts if isinstance(t, str) and t.strip())
+
+
 class JobRunner:
     """The handlers for one worker, sharing its data, device and model cache."""
 
@@ -194,6 +203,7 @@ class JobRunner:
         legibility_judge = judge  # well-formed replies need only the judge
         if judge is None or index is None:
             judge = index = None  # creativity needs both
+        index = _knowing(index, spec, self.tok)
         with lock:
             report = run_benchmarks(
                 lm, lm.tok, judge=judge, novelty=index, max_items_per_category=self.bench_max_items
@@ -293,6 +303,7 @@ class JobRunner:
             judge, index = self.creativity_tools()
             if judge is None or index is None:
                 raise ValueError("creativity battles need the judge and the novelty index")
+        own = {side: _knowing(index, spec.get(side), self.tok) for side in wanted}
         out = []
         for k, item in enumerate(challenges):
             # Asked as the benchmark asks its kind, so each AI shows what it can really do.
@@ -313,7 +324,7 @@ class JobRunner:
                             {"kind": "battleText", "round": k, "side": side, "text": t}
                         ),
                     )
-                score = score_challenge(item, reply, tok=lm.tok, judge=judge, novelty=index)
+                score = score_challenge(item, reply, tok=lm.tok, judge=judge, novelty=own[side])
                 answers[side] = {"reply": reply, "score": float(score)}
             out.append({"prompt": item.prompt, "expected": expected_answer(item), **answers})
         return {"rounds": out}
@@ -414,6 +425,7 @@ class JobRunner:
             judge, index = self.creativity_tools()
             if judge is None or index is None:
                 raise ValueError("story app reviews need the judge and the novelty index")
+        index = _knowing(index, spec, self.tok)
         lm, lock = self.models.get(_spec_str(spec, "versionId"), _spec_str(spec, "modelTarUrl"))
         reviews = []
         with lock:

@@ -154,6 +154,17 @@ describe("battles between friends' AIs", () => {
     async () => {
       server = await start();
       const { house, ana, ben, bensCard, bensProduct } = await friends(server);
+      // Each side's creativity knows only its own company's text.
+      await server.ctx.db.insert(schema.lessons).values({
+        worldId: ana.worldId,
+        companyId: companyOf(ana).id,
+        question: "Ana's question?",
+        answer: "Ana's answer.",
+        kind: "written",
+        sourceThread: randomUUID(),
+        sourceIdx: 1,
+        at: 0,
+      });
       expect(await challenge(ana, bensProduct, "knowledge")).toBeNull();
       const battle = await eventually(() =>
         companyOf(ana).battles.find((b) => b.status === "running"),
@@ -167,6 +178,8 @@ describe("battles between friends' AIs", () => {
       expect(specA.b).toBeUndefined();
       expect(specB.a).toBeUndefined();
       expect(specA.seed).toBe(specB.seed);
+      expect(specA.a?.ownText).toEqual(["Ana's question?", "Ana's answer."]);
+      expect(specB.b?.ownText).toEqual([]);
       const db = server.ctx.db;
       const owners = await Promise.all(
         [a.jobId, b.jobId].map(async (id) => {

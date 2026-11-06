@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { TrainJobSpec } from "@airace/protocol";
+import { EvalJobSpec, TrainJobSpec } from "@airace/protocol";
 import { BALANCE_TEST } from "@airace/sim";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
@@ -203,6 +203,37 @@ describe("lessons from the Playground", () => {
     expect(config.coaching).toHaveLength(5);
     expect(config.coaching).toContainEqual(["What is 2+2?", "Answer 4"]);
     expect(config.mixture.coaching).toBeCloseTo(0.05);
+  });
+});
+
+describe("creativity knows the company's own text", () => {
+  it("an eval carries the company's notebook and lessons, so copying them isn't new writing", async () => {
+    server = await start();
+    const o = await talked(server);
+    expect(
+      await coach(o.ws, o.worldId, o.threadId, 1, "written", "It is four, my friend."),
+    ).toBeNull();
+    const cid = randomUUID();
+    o.ws.send({
+      v: 1,
+      type: "notebookSave",
+      cid,
+      worldId: o.worldId,
+      text: "The marmalade lighthouse sings to the sea.",
+    });
+    await o.ws.next("ack", (m) => m.cid === cid);
+    // v1's eval waited for a card that measures; this one takes it now.
+    const measurer = await worker(server, { jobTypes: ["eval"] });
+    const lease = await measurer.nextLease();
+    const spec = EvalJobSpec.parse(lease.spec);
+    expect(spec.versionId).toBe(o.versionId);
+    expect(spec.ownText).toEqual(
+      expect.arrayContaining([
+        "The marmalade lighthouse sings to the sea.",
+        "What is 2+2?",
+        "It is four, my friend.",
+      ]),
+    );
   });
 });
 

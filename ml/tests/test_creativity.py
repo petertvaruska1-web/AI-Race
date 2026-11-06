@@ -1409,3 +1409,15 @@ def test_score_story_is_the_per_story_score_of_score_creativity(tiny_tok):
             item.score
         )
     assert score_story("", STORY_PROMPTS[0], tiny_tok, judge, idx) == 0.0
+
+
+def test_an_index_knowing_a_companys_own_text_counts_it_as_seen():
+    rng = np.random.default_rng(6)
+    corpus, own, fresh = (rng.integers(16, 4096, k).tolist() for k in (200, 40, 40))
+    idx = NoveltyIndex.build([np.array(corpus)], sample_mod=1)
+    knowing = idx.knowing([own])
+    assert idx.novelty(own) == 1.0  # the corpus never had it
+    assert knowing.novelty(own) == 0.0  # the company wrote it: copying it isn't new
+    assert knowing.novelty(own + fresh) == pytest.approx(idx.novelty(own + fresh, seen=own))
+    assert knowing.novelty(fresh, seen=corpus[:30]) == idx.novelty(fresh, seen=corpus[:30])
+    assert idx.knowing([]) is idx and idx.novelty(own) == 1.0  # the original is unchanged

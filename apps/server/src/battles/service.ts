@@ -255,18 +255,22 @@ export class BattleService {
       rounds: getBalance(s.balance).economy.battles.rounds,
       seed: battle.seed,
     };
-    const model = (versionId: string) => ({
+    const model = async (versionId: string, companyId: string) => ({
       versionId,
       modelTarUrl: signBlobUrl(this.ctx, checkpointKey(versionId), "GET", MODEL_URL_TTL_MS),
+      ownText: await this.ctx.coaching.ownText(s, companyId),
     });
     if (p.side) {
       // One side only, with only its own model (a friend's weights stay off your card).
-      const versionId = p.side === "a" ? battle.mine.versionId : battle.theirs.versionId;
-      return { ...base, sides: [p.side], [p.side]: model(versionId) };
+      const side =
+        p.side === "a"
+          ? await model(battle.mine.versionId, p.companyId)
+          : await model(battle.theirs.versionId, battle.rivalId);
+      return { ...base, sides: [p.side], [p.side]: side };
     }
     return {
       ...base,
-      a: model(battle.mine.versionId),
+      a: await model(battle.mine.versionId, p.companyId),
       b: {
         versionId: battle.theirs.packKey,
         modelTarUrl: await this.ctx.rivals.modelUrl(battle.theirs.packKey),

@@ -165,6 +165,20 @@ export class CoachingService {
       .orderBy(asc(schema.lessons.id));
   }
 
+  /**
+   * A company's own text, for creativity to count as seen (ledger F32): its notebook and every
+   * lesson's question and answer. Its AIs trained on these, so copying them isn't new writing.
+   */
+  async ownText(s: WorldState, companyId: string | null | undefined): Promise<string[]> {
+    const company = companyId ? s.companies[companyId] : undefined;
+    if (!company || company.rival) return [];
+    const notebook = company.notebook
+      ? await this.ctx.notebooks.textOf(company.notebook.hash)
+      : null;
+    const lessons = await this.of(s.worldId, company.id);
+    return [...(notebook ? [notebook] : []), ...lessons.flatMap((l) => [l.question, l.answer])];
+  }
+
   /** The lessons as the trainer's coaching pairs `[question, answer]`. */
   async pairs(worldId: string, companyId: string): Promise<[string, string][]> {
     return (await this.of(worldId, companyId)).map((l) => [l.question, l.answer]);

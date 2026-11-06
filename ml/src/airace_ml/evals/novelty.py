@@ -17,6 +17,7 @@ how they were made and, for the index of a data root, which data that was
 says, so an index is only good for the data it was built from (:func:`check_index_provenance`).
 """
 
+import copy
 import json
 import os
 from collections.abc import Iterable, Sequence
@@ -135,6 +136,19 @@ class NoveltyIndex:
         self.n = n
         self.sample_mod = sample_mod
         self.data_identity = data_identity
+        #: Hashes of text the AI being scored was given by its own company (see :meth:`knowing`).
+        self.known = np.zeros(0, np.uint64)
+
+    def knowing(self, texts: Iterable[Sequence[int] | np.ndarray]) -> "NoveltyIndex":
+        """This index, also counting every window of ``texts`` as seen: a company's own notebook
+        and coaching lessons, which its AI was trained on, so copying them is not new writing
+        (ledger F32). The corpus hashes are shared, not copied; with no windows it is ``self``."""
+        own = _unique(ngram_hashes(t, self.n) for t in texts)
+        if own.size == 0:
+            return self
+        other = copy.copy(self)
+        other.known = np.union1d(self.known, own)
+        return other
 
     def __len__(self) -> int:
         return int(self.hashes.size)
@@ -203,6 +217,8 @@ class NoveltyIndex:
         if self.hashes.size:
             pos = np.minimum(np.searchsorted(self.hashes, sampled), self.hashes.size - 1)
             known = self.hashes[pos] == sampled
+        if self.known.size:
+            known |= np.isin(sampled, self.known)
         if seen is not None:
             known |= np.isin(sampled, ngram_hashes(seen, self.n))
         return np.count_nonzero(~known) / sampled.size

@@ -1,6 +1,7 @@
 import json
 import uuid
 
+import numpy as np
 import pytest
 
 from airace_ml.evals.suite import CATEGORIES
@@ -414,3 +415,70 @@ def test_two_helpers_sharing_a_folder_can_download_the_same_model_at_once(
     folder = first.fetch("a", url)
     assert (folder / "meta.json").is_file()
     assert not list((tmp_path / "models").glob("*.partial*"))
+
+
+# -- a company's own text counts as seen in creativity (ledger F32) ----------------------------
+
+
+class _Stop(Exception):
+    pass
+
+
+def _seen_by(runner, monkeypatch, target: str):
+    """Runs with creativity tools and records the novelty index each scorer was handed."""
+    from airace_ml.evals.novelty import NoveltyIndex
+    from airace_ml.worker import jobs
+
+    index = NoveltyIndex(np.zeros(0, np.uint64))
+    monkeypatch.setattr(runner, "creativity_tools", lambda: (object(), index))
+    handed = []
+
+    def capture(*args, novelty=None, **kwargs):
+        handed.append(novelty)
+        raise _Stop
+
+    monkeypatch.setattr(jobs, target, capture)
+    return index, handed
+
+
+OWN = ["Once upon a time a marmalade lighthouse sang to the sea every night."]
+
+
+def test_eval_counts_the_companys_own_text_as_seen(runner, trained, monkeypatch, tmp_path):
+    index, handed = _seen_by(runner, monkeypatch, "run_benchmarks")
+    spec = {"versionId": "v-a", "modelTarUrl": f"{trained[0]}/blobs/a.tar", "ownText": OWN}
+    with pytest.raises(_Stop):
+        runner.handle_eval(spec, Recorder(tmp_path).ctx)
+    assert handed[0] is not index
+    assert handed[0].novelty(runner.tok.encode(OWN[0])) == 0.0
+    with pytest.raises(_Stop):
+        runner.handle_eval({**spec, "ownText": []}, Recorder(tmp_path).ctx)
+    assert handed[1] is index
+
+
+def test_a_story_battle_counts_each_sides_own_text_as_seen(runner, trained, monkeypatch, tmp_path):
+    index, handed = _seen_by(runner, monkeypatch, "score_challenge")
+    spec = _battle_spec(trained[0], "creativity", 1)
+    spec["a"]["ownText"] = OWN
+    with pytest.raises(_Stop):
+        runner.handle_battle(spec, Recorder(tmp_path).ctx)
+    assert handed[0].known.size > 0  # side a: its company's text
+    spec["sides"], spec["a"]["ownText"] = ["b"], []
+    with pytest.raises(_Stop):
+        runner.handle_battle(spec, Recorder(tmp_path).ctx)
+    assert handed[1] is index  # a rival's side has none
+
+
+def test_a_story_app_review_counts_the_companys_own_text_as_seen(runner, trained, monkeypatch):
+    _, handed = _seen_by(runner, monkeypatch, "score_challenge")
+    spec = {
+        "versionId": "v-game-a",
+        "modelTarUrl": f"{trained[0]}/blobs/a.tar?sig=1",
+        "skill": "creativity",
+        "n": 1,
+        "seed": 9,
+        "ownText": OWN,
+    }
+    with pytest.raises(_Stop):
+        runner.handle_app_review(spec, None)
+    assert handed[0].known.size > 0

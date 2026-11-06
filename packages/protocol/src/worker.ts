@@ -166,6 +166,12 @@ export const EvalJobSpec = z.object({
   /** The world's other AIs, for strengths and weaknesses. */
   peers: z.array(z.object({ breakdown: Breakdown, traits: Traits })).default([]),
   thresholds: DiscoveryThresholds.default({ minPoints: 25, minZ: 2, minPeers: 3, perEval: 3 }),
+  /**
+   * The company's own notebook and lesson text, which its AI was trained on: creativity counts it
+   * as seen, so copying it isn't new writing (ledger F32). It goes only to a card that runs this
+   * company's job, like the training data itself.
+   */
+  ownText: z.array(z.string()).default([]),
 });
 export type EvalJobSpec = z.infer<typeof EvalJobSpec>;
 
@@ -228,7 +234,16 @@ export const FeedbackJobResult = z.object({
 });
 export type FeedbackJobResult = z.infer<typeof FeedbackJobResult>;
 
-const BattleSide = z.object({ versionId: zId, modelTarUrl: Url });
+const BattleSide = z.object({
+  versionId: zId,
+  modelTarUrl: Url,
+  /**
+   * The company's own notebook and lesson text, which its AI was trained on: creativity counts it
+   * as seen, so copying it isn't new writing (ledger F32). It goes only to a card that runs this
+   * company's job, like the training data itself.
+   */
+  ownText: z.array(z.string()).default([]),
+});
 
 /** Two AIs answer the same fresh challenges (game-layer design §10); `b` is the rival. */
 export const BattleJobSpec = z
@@ -347,6 +362,12 @@ export const AppReviewJobSpec = z.object({
   skill: z.enum(BATTLE_SKILLS),
   n: z.number().int().min(1).max(5),
   seed: z.number().int().min(0),
+  /**
+   * The company's own notebook and lesson text, which its AI was trained on: creativity counts it
+   * as seen, so copying it isn't new writing (ledger F32). It goes only to a card that runs this
+   * company's job, like the training data itself.
+   */
+  ownText: z.array(z.string()).default([]),
 });
 export type AppReviewJobSpec = z.infer<typeof AppReviewJobSpec>;
 

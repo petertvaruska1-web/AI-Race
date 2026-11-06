@@ -44,12 +44,15 @@ export class AppReviewService {
         const actor = ctx.worlds.peek(p.worldId) ?? (await ctx.worlds.get(p.worldId));
         if (isStale(p.enqueuedDay, actor.state().day)) return DROP_JOB;
       }
+      const s = (ctx.worlds.peek(p.worldId) ?? (await ctx.worlds.get(p.worldId))).state();
+      const owner = Object.values(s.companies).find((c) => c.apps[p.appId]);
       return {
         versionId: p.versionId,
         modelTarUrl: signBlobUrl(ctx, checkpointKey(p.versionId), "GET", JOB_URL_TTL_MS),
         skill: p.skill,
         n: REVIEWS_PER_WEEK,
         seed: seedOf(p.appId, p.key),
+        ownText: await ctx.coaching.ownText(s, owner?.id),
       };
     });
     broker.onDone("appReview", (job, result) => this.done(job.payload as AppReviewPayload, result));
