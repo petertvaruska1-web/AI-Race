@@ -8,6 +8,7 @@ import { formatCount, formatMoney } from "../format.ts";
 import { api } from "../net/api.ts";
 import { rivalCompanies, shareOfWilling } from "../rivals.ts";
 import { go } from "../route.ts";
+import { OffersList } from "../spending/Licensing.tsx";
 import { usePlayground } from "../store/playground.ts";
 import { useWindows } from "../store/windows.ts";
 
@@ -21,6 +22,7 @@ function RivalCard({ view, company }: { view: WorldView; company: PublicCompany 
   const open = useWindows((s) => s.open);
   const arch = company.rival?.archetype ?? null;
   const news = view.feed.filter((f) => f.kind === "news" && f.companyId === company.id).slice(-2);
+  const offers = view.licenseOffers.filter((o) => o.licensorId === company.id);
   return (
     <motion.article
       aria-label={company.name}
@@ -98,6 +100,11 @@ function RivalCard({ view, company }: { view: WorldView; company: PublicCompany 
           </li>
         ))}
       </ul>
+      {offers.length > 0 && (
+        <div className="mt-3 border-t border-border pt-2">
+          <OffersList view={view} offers={offers} />
+        </div>
+      )}
       <p className="mt-3 text-xs text-muted">
         {company.prices.free ? "Free plan · " : ""}
         {company.prices.personal ? `Personal ${formatMoney(company.prices.personal)}/month · ` : ""}

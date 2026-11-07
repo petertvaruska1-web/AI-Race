@@ -2,6 +2,7 @@ import type { WorldView } from "@airace/protocol";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import { CardsWindow } from "../cards/Cards.tsx";
+import { OfferWindow, ProposalWindow, ProposeWindow, TakeWindow } from "../spending/Licensing.tsx";
 import { CustomizeWindow, FundAppWindow, SponsorWindow } from "../spending/Spending.tsx";
 import { type OpenWindow, useWindows } from "../store/windows.ts";
 import { DiscoveryWindow } from "../surprises/Discoveries.tsx";
@@ -86,6 +87,14 @@ function WindowContent({ entry, view }: { entry: OpenWindow; view: WorldView }) 
       return <MilestonesWindow entry={entry} view={view} />;
     case "goal":
       return <GoalWindow entry={entry} view={view} />;
+    case "offerLicense":
+      return <OfferWindow entry={entry} view={view} versionId={s.versionId} />;
+    case "takeLicense":
+      return <TakeWindow entry={entry} view={view} offerId={s.offerId} />;
+    case "propose":
+      return <ProposeWindow entry={entry} view={view} versionId={s.versionId} />;
+    case "proposal":
+      return <ProposalWindow entry={entry} view={view} proposalId={s.proposalId} />;
   }
 }
 

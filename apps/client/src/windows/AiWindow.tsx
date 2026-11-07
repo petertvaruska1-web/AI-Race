@@ -1,9 +1,11 @@
+import { groupList } from "@airace/sim";
 import { motion } from "motion/react";
 import { Button } from "../components/Button.tsx";
 import { dayLabel, words } from "../format.ts";
 import { Orb } from "../orb/Orb.tsx";
 import { go } from "../route.ts";
 import { CATEGORIES } from "../screens/Benchmarks.tsx";
+import { termsLabel } from "../spending/Licensing.tsx";
 import { useWindows } from "../store/windows.ts";
 import { DiscoveryList } from "../surprises/Discoveries.tsx";
 import { GoneWindow, Section, WindowFrame, type WindowProps } from "./WindowFrame.tsx";
@@ -43,6 +45,8 @@ export function AiWindow({ entry, view, versionId }: WindowProps & { versionId: 
   if (!company || !pub || !v) return <GoneWindow entry={entry} />;
   const parent = company.versions.find((x) => x.id === v.parentId);
   const products = company.products.filter((p) => p.versionId === v.id && p.status !== "retired");
+  const onSale = products.some((p) => p.status === "live");
+  const offered = view.licenseOffers.find((o) => o.versionId === v.id);
   const discoveries = company.discoveries.filter((d) => d.versionId === v.id);
   const to = (tab: "lab" | "play") => go({ screen: "world", worldId: view.world.id, tab });
   return (
@@ -189,7 +193,18 @@ export function AiWindow({ entry, view, versionId }: WindowProps & { versionId: 
         <Button variant="secondary" onClick={() => to("lab")}>
           Train it further
         </Button>
+        {onSale && !offered && (
+          <Button
+            variant="secondary"
+            onClick={(e) => open({ kind: "offerLicense", versionId: v.id }, e.currentTarget)}
+          >
+            Offer for license
+          </Button>
+        )}
       </div>
+      {offered && (
+        <p className="mt-3 text-sm text-muted">{`Offered for license: ${termsLabel(offered)}, for ${groupList(offered.groups)}.`}</p>
+      )}
     </WindowFrame>
   );
 }

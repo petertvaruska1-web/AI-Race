@@ -81,6 +81,7 @@ export function Toasts({ view }: { view: WorldView }) {
   const battles = view.me.company?.battles;
   const milestones = view.me.company?.milestones;
   const discoveries = view.me.company?.discoveries;
+  const proposals = view.me.company?.licenses.proposals;
   const seen = useRef<Set<string> | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const ballots = useVotes((s) => s.ballots);
@@ -108,7 +109,9 @@ export function Toasts({ view }: { view: WorldView }) {
     const fought = (battles ?? []).filter((b) => b.status === "done");
     const earned = milestones ?? [];
     const found = discoveries ?? [];
+    const asks = (proposals ?? []).filter((p) => p.role === "licensor");
     const keys = [
+      ...asks.map((p) => `proposal-${p.id}`),
       ...news.map((n) => n.id),
       ...cards.map((r) => `report-${r.month}`),
       ...fought.map((b) => `battle-${b.id}`),
@@ -169,6 +172,16 @@ export function Toasts({ view }: { view: WorldView }) {
           burst: false,
           opens: { kind: "discovery", discoveryId: d.id } as WindowSpec,
         })),
+      ...asks
+        .filter((p) => !known.has(`proposal-${p.id}`))
+        .map((p) => ({
+          id: `proposal-${p.id}`,
+          label: "License request",
+          headline: `${p.otherName} asks to license ${p.aiName}`,
+          good: true,
+          burst: false,
+          opens: { kind: "proposal", proposalId: p.id } as WindowSpec,
+        })),
       ...cards
         .filter((r) => !known.has(`report-${r.month}`))
         .map((r) => ({
@@ -182,7 +195,18 @@ export function Toasts({ view }: { view: WorldView }) {
     ];
     for (const k of keys) known.add(k);
     if (fresh.length > 0) setToasts((t) => [...t, ...fresh].slice(-MOST));
-  }, [view.feed, view.companies, mine, myName, archId, reports, battles, milestones, discoveries]);
+  }, [
+    view.feed,
+    view.companies,
+    mine,
+    myName,
+    archId,
+    reports,
+    battles,
+    milestones,
+    discoveries,
+    proposals,
+  ]);
 
   useEffect(() => {
     if (toasts.length === 0) return;

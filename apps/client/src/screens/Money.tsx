@@ -37,6 +37,9 @@ export function Money({ view }: { view: WorldView }) {
   if (!company) return null;
   const now = company.ledger.current;
   const last = company.ledger.months.at(-1);
+  // Other income shows once there is some, this month or last (royalties land at the close).
+  const otherIncome = (c: (typeof INCOME_CATEGORIES)[number]) =>
+    now.income[c] > 0 || (last?.income[c] ?? 0) > 0;
   const income = total(now.income);
   const costs = total(now.costs);
 
@@ -74,13 +77,13 @@ export function Money({ view }: { view: WorldView }) {
               onOpen: (el) => open({ kind: "income", category: c }, el),
             }))}
           />
-          {INCOME_CATEGORIES.some((c) => !used(c, "plan") && now.income[c] > 0) && (
+          {INCOME_CATEGORIES.some((c) => !used(c, "plan") && otherIncome(c)) && (
             <>
               <h3 className="mt-5 mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
                 Other income
               </h3>
               <Bars
-                rows={INCOME_CATEGORIES.filter((c) => !used(c, "plan") && now.income[c] > 0).map(
+                rows={INCOME_CATEGORIES.filter((c) => !used(c, "plan") && otherIncome(c)).map(
                   (c) => ({
                     label: INCOME_NAMES[c],
                     value: now.income[c],
@@ -415,4 +418,5 @@ const OPTIONAL_COSTS = new Set<string>([
   "appCosts",
   "investmentLosses",
   "team",
+  "licenses",
 ]);

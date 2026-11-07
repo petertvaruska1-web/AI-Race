@@ -31,7 +31,11 @@ export type WindowSpec =
   | { kind: "interview"; interviewId: string }
   | { kind: "notebook" }
   | { kind: "milestones" }
-  | { kind: "goal" };
+  | { kind: "goal" }
+  | { kind: "offerLicense"; versionId: string }
+  | { kind: "takeLicense"; offerId: string }
+  | { kind: "propose"; versionId: string }
+  | { kind: "proposal"; proposalId: string };
 
 export type OpenWindow = {
   id: number;

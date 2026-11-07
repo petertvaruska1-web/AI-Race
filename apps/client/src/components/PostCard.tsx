@@ -45,7 +45,14 @@ export function PostCard({
         </span>
       </header>
       <p className="mt-2 text-xs text-muted">
-        asked <span className="player-text font-semibold text-text">{post.productName}</span>:
+        asked <span className="player-text font-semibold text-text">{post.productName}</span>
+        {post.poweredBy && (
+          <>
+            {" "}
+            (<span className="player-text">{`powered by ${post.poweredBy}`}</span>)
+          </>
+        )}
+        :
       </p>
       <p className="player-text text-sm">{post.question}</p>
       <p className="mt-2 text-xs text-muted">and it said:</p>
