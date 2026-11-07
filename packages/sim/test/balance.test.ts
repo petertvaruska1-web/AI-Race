@@ -323,6 +323,17 @@ describe("balance-v2 with an arch-rival and three rivals", { timeout: 300_000 },
     }
   });
 
+  it("keeps licensing a rival's AI for the weakest group within 25% of a year's unlicensed profit", () => {
+    const profit = (r: ReturnType<typeof runBot>) =>
+      r.days.reduce((n, d) => n + d.income - d.costs, 0);
+    const base = profit(runBot(BALANCE_V2, { rivals: true }, 365));
+    const licensed = runBot(BALANCE_V2, { rivals: true, license: { afterDays: 0 } }, 365);
+    const paid = licensed.days.reduce((n, d) => n + d.licenseCost, 0);
+    const change = (profit(licensed) - base) / base;
+    expect(paid).toBeGreaterThan(0);
+    expect(Math.abs(change), `${(change * 100).toFixed(1)}%`).toBeLessThanOrEqual(0.25);
+  });
+
   it("keeps ads an investment with rivals advertising too: a blitz takes two months to pay back", () => {
     const plain = runBot(BALANCE_V2, { rivals: true }, 150);
     const blitz = runBot(

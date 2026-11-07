@@ -238,6 +238,7 @@ describe("licensed answers", () => {
       ...ALL_JOBS,
       token: await keyOf(s, ben.cookie),
       workerId: "ben-pc",
+      ready: true,
     });
     openSockets.push(bensCard);
     const owl = await launch(s, bensCard, ben, "Owl");

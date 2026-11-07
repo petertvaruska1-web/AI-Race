@@ -265,6 +265,17 @@ export type Economy = {
 export type RivalBalance = {
   /** Each style's monthly department budgets, as shares of last month's revenue (C43). */
   departments: Record<RivalStyle, Partial<Record<Department, number>>>;
+  /**
+   * Licensing (C44): each style's royalty price per customer a month, in cents; the term of its
+   * offers and requests; how far a player's AI must lead the rival's best in its focus skill
+   * before the rival asks to license it; and the days between a rival's requests.
+   */
+  licensing: {
+    priceCents: Record<RivalStyle, number>;
+    months: 3 | 6 | 12;
+    lead: number;
+    everyDays: number;
+  };
   /** Times the founding cash, by style; the arch-rival gets `archBonus` times more. */
   startCash: Record<RivalStyle, number>;
   archBonus: number;
@@ -546,6 +557,12 @@ const ECONOMY_V2: Economy = {
       budget: { support: 0.05 },
       specialist: { research: 0.03, data: 0.03 },
       consumer: { sales: 0.06 },
+    },
+    licensing: {
+      priceCents: { premium: 800, budget: 150, specialist: 500, consumer: 300 },
+      months: 6,
+      lead: 10,
+      everyDays: 90,
     },
     startCash: { premium: 3, budget: 1, specialist: 1.5, consumer: 2 },
     archBonus: 1.5,

@@ -90,6 +90,17 @@ export function groupList(groups: readonly GroupId[]): string {
   return `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
 }
 
+/** The company's newest live product (latest launch, then id), if any. */
+export function newestLive(company: CompanyState): ProductState | null {
+  let best: ProductState | null = null;
+  for (const p of Object.values(company.products)) {
+    if (p.status !== "live") continue;
+    if (!best || p.launchDay > best.launchDay || (p.launchDay === best.launchDay && p.id > best.id))
+      best = p;
+  }
+  return best;
+}
+
 /** The company's newest live product built on `versionId`: the AI is on sale. */
 export function onSaleAs(company: CompanyState, versionId: string): ProductState | null {
   let best: ProductState | null = null;
@@ -215,6 +226,11 @@ export function licensesDay(s: WorldState): void {
   for (const deal of [...L.deals]) {
     const licensor = s.companies[deal.licensorId];
     const licensee = s.companies[deal.licenseeId];
+    // A rival moves its license to the AI that took over its plans.
+    if (licensee?.rival && licensee.products[deal.productId]?.status !== "live") {
+      const next = newestLive(licensee);
+      if (next && !deal.groups.some((g) => activeLicense(s, next.id, g))) deal.productId = next.id;
+    }
     const over =
       s.day >= deal.endDay ||
       !licensor ||

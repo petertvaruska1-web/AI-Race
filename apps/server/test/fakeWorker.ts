@@ -15,6 +15,11 @@ export type FakeWorkerOptions = {
   speed?: number;
   vramMb?: number;
   maxParams?: number;
+  /**
+   * Wait until the server has registered this card (a player's key is checked first, and the
+   * server welcomes a card a moment before it can be given work).
+   */
+  ready?: boolean;
 };
 
 /** A scripted ML worker for tests (never shipped): records leases, sends what the test says. */
@@ -74,6 +79,13 @@ export class FakeWorker {
       running: o.running ?? [],
     });
     if (o.token === undefined) await worker.until(() => worker.welcomed, "wwelcome");
+    if (o.ready) {
+      const id = o.workerId ?? "fake-worker";
+      await worker.until(
+        () => s.ctx.broker.connections().some((c) => c.workerId === id),
+        "registration",
+      );
+    }
     return worker;
   }
 

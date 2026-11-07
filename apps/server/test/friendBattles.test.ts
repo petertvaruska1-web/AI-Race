@@ -108,6 +108,7 @@ async function friends(s: TestServer) {
     ...JOBS,
     token: await keyOf(s, ben.cookie),
     workerId: "ben-pc",
+    ready: true,
   });
   openSockets.push(bensCard);
   const bensProduct = await onSale(s, bensCard, ben);

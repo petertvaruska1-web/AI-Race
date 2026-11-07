@@ -10,7 +10,7 @@ import {
   upgradeState,
   type WorldState,
 } from "../src/index.ts";
-import { cmd, ok, rejected, runningWorld, sys, TICK, ticks } from "./pack.ts";
+import { cmd, ok, rejected, runningWorld, sys, TICK, ticks, withRivals } from "./pack.ts";
 
 const c = (s: WorldState, id: string) => s.companies[id] as CompanyState;
 
@@ -595,5 +595,74 @@ describe("licensed answers to customers", () => {
       }),
     );
     expect(rejected(bad)).toBe("That feedback isn't valid.");
+  });
+});
+
+describe("rivals and licenses", () => {
+  const PRICES = { premium: 800, budget: 150, specialist: 500, consumer: 300 } as const;
+
+  it("offer each new AI they put on sale at their style's price, for all six groups", () => {
+    let s = withRivals();
+    s = ticks(s, 30);
+    const rivals = Object.values(s.companies).filter((x) => x.rival);
+    for (const rival of rivals) {
+      const live = Object.values(rival.products).filter((p) => p.status === "live");
+      const offers = s.licenses.offers.filter((o) => o.licensorId === rival.id);
+      if (live.length === 0) {
+        expect(offers).toEqual([]);
+        continue;
+      }
+      const newest = live.sort((a, b) => b.launchDay - a.launchDay)[0];
+      expect(offers).toEqual([
+        expect.objectContaining({
+          versionId: newest?.versionId,
+          aiName: newest?.name,
+          priceCents: PRICES[rival.rival?.style ?? "premium"],
+          months: 6,
+          groups: ["students", "creators", "developers", "businesses", "everyday", "researchers"],
+          exclusive: false,
+        }),
+      ]);
+    }
+    expect(s.licenses.offers.length).toBeGreaterThan(0);
+  });
+
+  /** A world with rivals on sale and Acme selling `knowledge`-strong Pengu. */
+  function strongPlayer(knowledge: number): WorldState {
+    const s = ticks(withRivals(), 30);
+    selling(s, "c1", "v1", "p1", "Pengu", knowledge);
+    return s;
+  }
+
+  it("ask once to license a player's AI that beats their focus skill by 10, and not again within 90 days", () => {
+    let s = ok(step(strongPlayer(100), TICK));
+    const asks = s.licenses.proposals.filter((p) => p.licensorId === "c1");
+    // Rivals whose best in their focus skill is 10 or more below Pengu's.
+    expect(asks.length).toBeGreaterThan(0);
+    for (const p of asks) {
+      const rival = c(s, p.licenseeId);
+      expect(p).toMatchObject({
+        versionId: "v1",
+        months: 6,
+        priceCents: PRICES[rival.rival?.style ?? "premium"],
+        groups: [rival.rival?.focus],
+      });
+      expect(rival.products[p.productId]?.status).toBe("live");
+    }
+    const asked = asks.map((p) => p.licenseeId);
+    // Declined: no second ask within 90 days.
+    for (const p of asks) {
+      s = ok(step(s, cmd({ type: "answerProposal", proposalId: p.id, accept: false })));
+    }
+    s = ticks(s, 85);
+    expect(s.licenses.proposals.filter((p) => asked.includes(p.licenseeId))).toEqual([]);
+  });
+
+  it("don't ask about an AI that isn't 10 better than theirs", () => {
+    const weak = strongPlayer(0);
+    const scores = c(weak, "c1").versions.v1?.scores ?? {};
+    for (const k of Object.keys(scores)) scores[k] = 0;
+    const s = ticks(weak, 1);
+    expect(s.licenses.proposals).toEqual([]);
   });
 });

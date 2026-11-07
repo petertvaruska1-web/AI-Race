@@ -4,18 +4,21 @@ import {
   ARCHETYPES,
   type Archetype,
   DEPARTMENTS,
+  GROUP_IDS,
+  type GroupId,
   REGION_IDS,
   RIVAL_STYLES,
   RivalPack,
   type RivalPackLineage,
   type RivalStyle,
 } from "@airace/protocol";
-import { getBalance } from "./balance.ts";
+import { type Economy, getBalance } from "./balance.ts";
 import { campaignCommand } from "./campaigns.ts";
 import { newCompanyExtras } from "./companyExtras.ts";
 import { computeCommand, newCompute } from "./compute.ts";
 import { tellNews } from "./feed.ts";
 import { newLedger } from "./ledger.ts";
+import { activeLicense, makeOffer, makeProposal, newestLive } from "./licensing.ts";
 import { adoptable, customersByRegion, totalCustomers } from "./market.ts";
 import { newCompanyBusiness, productCommand } from "./products.ts";
 import { rescueCommand } from "./rescue.ts";
@@ -291,6 +294,73 @@ function fundDepartments(s: WorldState, company: CompanyState, rival: RivalState
   }
 }
 
+/** The skill a group weighs most: a rival's focus skill (the first of equals). */
+export function focusSkill(e: Economy, group: GroupId): string {
+  let best = "";
+  let top = -1;
+  for (const [skill, weight] of Object.entries(e.groups[group].weights)) {
+    if ((weight ?? 0) > top) {
+      best = skill;
+      top = weight ?? 0;
+    }
+  }
+  return best;
+}
+
+/**
+ * A rival's licensing (C44): it offers its newest AI on sale at its style's price for every
+ * group; and, at most once per `everyDays`, asks to license the player AI on sale that leads
+ * its own best in its focus skill by `lead` or more, for its focus group.
+ */
+function licenseDay(s: WorldState, company: CompanyState, rival: RivalState): void {
+  // A world from sim-9 replays its logged inputs without rival licensing (replay can't diverge).
+  if (s.seq < (s.sim10FromSeq ?? 0)) return;
+  const e = getBalance(s.balance).economy;
+  const terms = e.rivals.licensing;
+  const price = terms.priceCents[rival.style];
+  const newest = newestLive(company);
+  if (!newest) return;
+  const L = s.licenses;
+  if (!L.offers.some((o) => o.licensorId === company.id && o.versionId === newest.versionId)) {
+    L.offers = L.offers.filter((o) => o.licensorId !== company.id);
+    makeOffer(s, company, {
+      versionId: newest.versionId,
+      priceCents: price,
+      months: terms.months,
+      groups: [...GROUP_IDS],
+      exclusive: false,
+    });
+  }
+
+  const last = L.lastRequest[company.id];
+  if (last !== undefined && s.day - last < terms.everyDays) return;
+  if (activeLicense(s, newest.id, rival.focus)) return;
+  if (L.proposals.some((p) => p.licenseeId === company.id)) return;
+  const skill = focusSkill(e, rival.focus);
+  let ours = 0;
+  for (const v of Object.values(company.versions)) ours = Math.max(ours, v.scores?.[skill] ?? 0);
+  let pick: { versionId: string; score: number } | null = null;
+  for (const id of Object.keys(s.companies).sort()) {
+    const player = s.companies[id];
+    if (!player || player.rival) continue;
+    for (const p of Object.values(player.products).sort((a, b) => (a.id < b.id ? -1 : 1))) {
+      if (p.status !== "live") continue;
+      const score = player.versions[p.versionId]?.scores?.[skill];
+      if (typeof score !== "number" || score < ours + terms.lead) continue;
+      if (!pick || score > pick.score) pick = { versionId: p.versionId, score };
+    }
+  }
+  if (!pick) return;
+  const asked = makeProposal(s, company, {
+    versionId: pick.versionId,
+    productId: newest.id,
+    priceCents: price,
+    months: terms.months,
+    groups: [rival.focus],
+  });
+  if (asked.ok) L.lastRequest[company.id] = s.day;
+}
+
 /** The daily rival step, right after training settles: releases, lineup, reviews, rescues. */
 export function rivalsDay(s: WorldState): void {
   if (!s.rivals) return;
@@ -302,6 +372,7 @@ export function rivalsDay(s: WorldState): void {
     release(s, company, rival);
     tidy(company, s.day);
     fundDepartments(s, company, rival);
+    licenseDay(s, company, rival);
     if (s.day - rival.lastReviewDay >= every) review(s, company, rival);
     if (company.rescue) rescueCommand(s, company, { type: "chooseRescue", kind: "loan" });
   }

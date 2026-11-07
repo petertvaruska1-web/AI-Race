@@ -61,6 +61,11 @@ export type BotScript = {
   rivals?: boolean;
   /** Department budgets a month, set when the world starts (before the first training). */
   departments?: Partial<Record<Department, number>>;
+  /**
+   * From this many days after launch, keeps a rival's AI licensed for one group (the bot's
+   * weakest by default): whenever none runs, it takes the offer whose AI suits the group best.
+   */
+  license?: { afterDays: number; group?: GroupId };
 };
 
 export type DayReport = {
@@ -83,6 +88,8 @@ export type DayReport = {
   rescueOffered: boolean;
   /** This day's department spending (Team). */
   teamCost: number;
+  /** This day's royalties paid for licensed AIs. */
+  licenseCost: number;
 };
 export type Report = {
   launchDay: number;
@@ -115,18 +122,70 @@ function company(s: WorldState): CompanyState {
   return c;
 }
 
-function totals(c: CompanyState): { income: number; serving: number; costs: number; team: number } {
+function totals(c: CompanyState): {
+  income: number;
+  serving: number;
+  costs: number;
+  team: number;
+  licenses: number;
+} {
   let income = 0;
   let serving = 0;
   let costs = 0;
   let team = 0;
+  let licenses = 0;
   for (const m of [...c.ledger.months, c.ledger.current]) {
     income += m.income.personal + m.income.business;
     serving += m.costs.serving;
     costs += Object.values(m.costs).reduce((a, b) => a + b, 0);
     team += m.costs.team;
+    licenses += m.costs.licenses;
   }
-  return { income, serving, costs, team };
+  return { income, serving, costs, team, licenses };
+}
+
+/** The group the bot's AI serves worst. */
+function weakestGroup(balance: Balance, scores: Record<string, number>): GroupId {
+  return GROUP_IDS.reduce((a, b) =>
+    feedbackScore(balance, b, scores) < feedbackScore(balance, a, scores) ? b : a,
+  );
+}
+
+/** Keeps a rival's AI licensed for `group` on `productId`: takes the best offer when none runs. */
+function keepLicensed(
+  s: WorldState,
+  balance: Balance,
+  productId: string,
+  group: GroupId,
+): WorldState {
+  if (s.licenses.deals.some((d) => d.productId === productId && d.groups.includes(group))) return s;
+  let best: { offerId: string; score: number } | null = null;
+  for (const o of s.licenses.offers) {
+    const scores = s.companies[o.licensorId]?.versions[o.versionId]?.scores;
+    if (!scores || !o.groups.includes(group)) continue;
+    const known = Object.fromEntries(
+      Object.entries(scores).filter((e): e is [string, number] => typeof e[1] === "number"),
+    );
+    const score = feedbackScore(balance, group, known);
+    if (!best || score > best.score) best = { offerId: o.id, score };
+  }
+  if (!best) return s;
+  return apply(s, cmd({ type: "takeLicense", offerId: best.offerId, productId, groups: [group] }));
+}
+
+/** The scores answering `group` on `productId`: a licensed AI's, else the bot's own. */
+function answeringScores(
+  s: WorldState,
+  productId: string,
+  group: GroupId,
+  own: Record<string, number>,
+): Record<string, number> {
+  const deal = s.licenses.deals.find((d) => d.productId === productId && d.groups.includes(group));
+  const scores = deal ? s.companies[deal.licensorId]?.versions[deal.versionId]?.scores : null;
+  if (!scores) return own;
+  return Object.fromEntries(
+    Object.entries(scores).filter((e): e is [string, number] => typeof e[1] === "number"),
+  );
 }
 
 /** A group's feedback score for a model: its weighted skill, as the checks would roughly find. */
@@ -254,6 +313,10 @@ export function runBot(balance: Balance, script: BotScript, days: number, seed =
       modelScores = retrain.scores;
       liveProduct = "p2";
     }
+    if (script.license && s.day >= launchDay + script.license.afterDays) {
+      const group = script.license.group ?? weakestGroup(balance, modelScores);
+      s = keepLicensed(s, balance, liveProduct, group);
+    }
     const product = company(s).products[liveProduct];
     const thisWeek = Math.floor(s.day / 7);
     if (product?.status === "live" && thisWeek !== week) {
@@ -263,7 +326,7 @@ export function runBot(balance: Balance, script: BotScript, days: number, seed =
         questionId: `q-${group}`,
         question: "A customer question",
         reply: "A reply.",
-        score: feedbackScore(balance, group, modelScores),
+        score: feedbackScore(balance, group, answeringScores(s, liveProduct, group, modelScores)),
       }));
       s = apply(
         s,
@@ -303,6 +366,7 @@ export function runBot(balance: Balance, script: BotScript, days: number, seed =
       loan: c.loan?.balance ?? 0,
       rescueOffered: c.rescue !== null,
       teamCost: now.team - before.team,
+      licenseCost: now.licenses - before.licenses,
     });
     before = now;
   }
