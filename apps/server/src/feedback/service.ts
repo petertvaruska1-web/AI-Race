@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { FeedbackJobResult, GROUP_IDS } from "@airace/protocol";
-import { getBalance, type WorldState } from "@airace/sim";
+import { FeedbackJobResult, GROUP_IDS, type GroupId } from "@airace/protocol";
+import { activeLicense, type Deal, getBalance, type WorldState } from "@airace/sim";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { signBlobUrl } from "../blobs.ts";
@@ -21,7 +21,23 @@ type FeedbackPayload = {
   perGroup: number;
   /** The game day it was asked; a question unanswered for 14 days is dropped (Stage 2). */
   enqueuedDay?: number;
+  /** The groups asked (all six when absent: jobs queued before licensing). */
+  groups?: GroupId[];
+  /** A licensed AI answering the licensee's customers: its name on the posts (C44). */
+  poweredBy?: string;
 };
+
+/** Who answers a product's customers: its own AI for some groups, licensed AIs for others. */
+function splitGroups(s: WorldState, productId: string): { own: GroupId[]; licensed: Deal[] } {
+  const own: GroupId[] = [];
+  const licensed: Deal[] = [];
+  for (const group of GROUP_IDS) {
+    const deal = activeLicense(s, productId, group);
+    if (!deal) own.push(group);
+    else if (!licensed.includes(deal)) licensed.push(deal);
+  }
+  return { own, licensed };
+}
 
 /**
  * Customer feedback (game-layer design §7): each live product's AI answers a
@@ -67,13 +83,41 @@ export class FeedbackService {
       for (const productId of Object.keys(company.products).sort()) {
         const product = company.products[productId];
         if (product?.status !== "live") continue;
+        const { own, licensed } = splitGroups(s, productId);
         const packKey = company.rival ? company.versions[product.versionId]?.packKey : null;
         if (packKey) {
-          await this.answerFromPack(actor, productId, packKey, week);
-          continue;
+          await this.answerFromPack(actor, productId, packKey, week, own);
+        } else if (own.length > 0) {
+          for (const key of ["launch", week]) {
+            await this.request(s, productId, product.versionId, key, {
+              companyId,
+              groups: own,
+            });
+          }
         }
-        for (const key of ["launch", week])
-          await this.request(s, productId, product.versionId, key);
+        // Licensed groups: the licensed AI answers on its maker's card (or the pool), C44.
+        for (const deal of licensed) {
+          const licensor = s.companies[deal.licensorId];
+          const lent = licensor?.versions[deal.versionId];
+          if (!licensor || !lent) continue;
+          const key = `${week}~${deal.id}`;
+          if (lent.packKey) {
+            await this.answerFromPack(
+              actor,
+              productId,
+              lent.packKey,
+              key,
+              deal.groups,
+              deal.aiName,
+            );
+          } else {
+            await this.request(s, productId, deal.versionId, key, {
+              companyId: licensor.id,
+              groups: deal.groups,
+              poweredBy: deal.aiName,
+            });
+          }
+        }
       }
     }
   }
@@ -83,6 +127,7 @@ export class FeedbackService {
     productId: string,
     versionId: string,
     key: string,
+    who: { companyId: string; groups: GroupId[]; poweredBy?: string },
   ): Promise<void> {
     const memo = `${productId}|${key}`;
     if (this.known.has(memo)) return;
@@ -100,14 +145,14 @@ export class FeedbackService {
       key,
       perGroup: getBalance(s.balance).economy.feedback.perGroup,
       enqueuedDay: s.day,
+      groups: [...who.groups],
+      ...(who.poweredBy ? { poweredBy: who.poweredBy } : {}),
     };
-    const companyId =
-      Object.keys(s.companies).find((id) => s.companies[id]?.products[productId]) ?? "";
     const jobId = await this.ctx.broker.enqueue(
       "feedback",
       payload,
       s.worldId,
-      forCompany(s, companyId, paramsOf(s, versionId)),
+      forCompany(s, who.companyId, paramsOf(s, versionId)),
     );
     await this.ctx.db
       .update(schema.feedbackRequests)
@@ -126,13 +171,19 @@ export class FeedbackService {
     productId: string,
     packKey: string,
     key: string,
+    groups: readonly GroupId[],
+    poweredBy?: string,
   ): Promise<void> {
     const memo = `${productId}|${key}`;
     if (this.known.has(memo)) return;
     this.known.add(memo);
+    if (groups.length === 0) return;
     const s = actor.state();
     const perGroup = getBalance(s.balance).economy.feedback.perGroup;
-    const results = this.ctx.rivals.feedbackFor(productId, packKey, key, perGroup);
+    const results = this.ctx.rivals
+      .feedbackFor(productId, packKey, key, perGroup)
+      .filter((r) => groups.includes(r.group))
+      .map((r) => (poweredBy ? { ...r, poweredBy } : r));
     if (results.length === 0) return;
     const r = await actor.submit({
       kind: "system",
@@ -151,7 +202,7 @@ export class FeedbackService {
       productId: p.productId,
       versionId: p.versionId,
       modelTarUrl: signBlobUrl(this.ctx, checkpointKey(p.versionId), "GET", JOB_URL_TTL_MS),
-      groups: [...GROUP_IDS],
+      groups: [...(p.groups ?? GROUP_IDS)],
       perGroup: p.perGroup,
       seed: seedOf(p.productId, p.key),
     };
@@ -164,14 +215,14 @@ export class FeedbackService {
       return;
     }
     const actor = this.ctx.worlds.peek(p.worldId) ?? (await this.ctx.worlds.get(p.worldId));
+    // Only the groups asked; a licensed AI's replies carry its name (C44).
+    const asked = p.groups ?? [...GROUP_IDS];
+    const results = parsed.data.results
+      .filter((r) => asked.includes(r.group))
+      .map((r) => (p.poweredBy ? { ...r, poweredBy: p.poweredBy } : r));
     const r = await actor.submit({
       kind: "system",
-      event: {
-        type: "feedbackScored",
-        productId: p.productId,
-        key: p.key,
-        results: parsed.data.results,
-      },
+      event: { type: "feedbackScored", productId: p.productId, key: p.key, results },
     });
     if (!r.ok) {
       this.ctx.log.info(
@@ -180,7 +231,8 @@ export class FeedbackService {
       );
       return;
     }
-    await this.keepLoved(actor, p.productId, parsed.data.results);
+    // A licensed AI's replies are not the licensee's to learn from.
+    if (!p.poweredBy) await this.keepLoved(actor, p.productId, results);
   }
 
   /** The replies customers loved, kept (newest `lovedMax`) as the company's training text (R2). */

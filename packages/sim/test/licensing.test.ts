@@ -535,3 +535,65 @@ describe("licensing in random games", () => {
     expect(moved).toBeGreaterThan(0); // and royalties are paid
   }, 60_000);
 });
+
+describe("licensed answers to customers", () => {
+  const REPLY = "Pengu: <b>2+2</b> = 4 <|end|> 😀";
+  const batch = (s: WorldState) =>
+    step(
+      s,
+      sys({
+        type: "feedbackScored",
+        productId: "p2",
+        key: "w1~deal-2",
+        results: [
+          {
+            group: "students",
+            questionId: "q1",
+            question: "What is 2 + 2?",
+            reply: REPLY,
+            score: 1,
+            poweredBy: "Pengu",
+          },
+        ],
+      }),
+    );
+
+  it("post as the licensee's product, powered by the licensed AI, quoting it byte for byte", () => {
+    const s = ok(batch(licensed()));
+    const post = s.feed.findLast((i) => i.kind === "post");
+    expect(post).toMatchObject({
+      kind: "post",
+      companyId: "c2",
+      productName: "Owl",
+      reply: REPLY,
+      poweredBy: "Pengu",
+    });
+    const seen = projectView(s, "u3").feed.findLast((i) => i.kind === "post");
+    expect(seen).toMatchObject({ reply: REPLY, poweredBy: "Pengu", productName: "Owl" });
+  });
+
+  it("move the licensee's product's satisfaction, and aren't the licensee's loved replies", () => {
+    const before = licensed();
+    const s = ok(batch(before));
+    expect(s.market.satisfaction.p2?.students ?? 0).toBeGreaterThan(
+      before.market.satisfaction.p2?.students ?? 0.5,
+    );
+    expect(c(s, "c2").loved).toBe(c(before, "c2").loved);
+  });
+
+  it("refuse a label that isn't a short text", () => {
+    const s = licensed();
+    const bad = step(
+      s,
+      sys({
+        type: "feedbackScored",
+        productId: "p2",
+        key: "w1",
+        results: [
+          { group: "students", questionId: "q", question: "?", reply: "x", score: 1, poweredBy: 7 },
+        ],
+      }),
+    );
+    expect(rejected(bad)).toBe("That feedback isn't valid.");
+  });
+});

@@ -7,9 +7,19 @@ import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { schema } from "../src/db/index.ts";
 import type { WorldActor } from "../src/worlds/actor.ts";
-import { eventually, type FakeWorker } from "./fakeWorker.ts";
-import { closeSockets, owner, send, setup, start, toDay, trainVersion, worker } from "./flows.ts";
-import type { TestServer } from "./harness.ts";
+import { eventually, FakeWorker } from "./fakeWorker.ts";
+import {
+  closeSockets,
+  openSockets,
+  owner,
+  send,
+  setup,
+  start,
+  toDay,
+  trainVersion,
+  worker,
+} from "./flows.ts";
+import { api, createGuest, type TestServer } from "./harness.ts";
 import type { WsClient } from "./wsClient.ts";
 
 let server: TestServer | null = null;
@@ -52,7 +62,7 @@ function companyOf(o: Owner): CompanyState {
 }
 
 /** Trains and scores the owner's first AI, then launches it on free and personal in 3 days. */
-async function launch(s: TestServer, w: FakeWorker, o: Owner) {
+async function launch(s: TestServer, w: FakeWorker, o: Owner, name = "Spark") {
   const versionId = await trainVersion(s, w, o);
   const evalLease = await w.nextLease();
   expect(evalLease.jobType).toBe("eval");
@@ -61,7 +71,7 @@ async function launch(s: TestServer, w: FakeWorker, o: Owner) {
   await send(o.ws, o.worldId, {
     type: "launchProduct",
     versionId,
-    name: "Spark",
+    name,
     plans: ["free", "personal"],
     countdownDays: 3,
   });
@@ -193,4 +203,111 @@ describe("customer feedback jobs", () => {
     expect((await w.nextLease()).jobId).toBe(g);
     expect((await w.nextLease()).jobId).toBe(f);
   });
+});
+
+describe("licensed answers", () => {
+  async function keyOf(s: TestServer, cookie: string): Promise<string> {
+    const res = await api(s, "/api/helper/key", { cookie });
+    return ((await res.json()) as { key: string }).key;
+  }
+
+  /** Ana (host, house card) sells Spark; Ben (his own card) sells Owl and licenses Spark for students. */
+  async function licensedWorld(s: TestServer) {
+    const house = await worker(s, ALL_JOBS);
+    const ana = await setup(s);
+    const spark = await launch(s, house, ana, "Spark");
+    const g = await createGuest(s, "Ben");
+    const res = await api(s, "/api/worlds/join", {
+      body: { code: ana.actor.state().inviteCode },
+      cookie: g.cookie,
+    });
+    expect(res.status).toBe(200);
+    const ben = {
+      ...g,
+      ws: await owner(s, g.cookie, ana.worldId),
+      worldId: ana.worldId,
+      actor: ana.actor,
+    };
+    await send(ben.ws, ben.worldId, {
+      type: "createCompany",
+      name: "Bolt",
+      logo: { shape: "circle", symbol: "spark", initials: "BO" },
+      palette: { primary: "#4f8cff", secondary: "#ffb020" },
+    });
+    const bensCard = await FakeWorker.connect(s, {
+      ...ALL_JOBS,
+      token: await keyOf(s, ben.cookie),
+      workerId: "ben-pc",
+    });
+    openSockets.push(bensCard);
+    const owl = await launch(s, bensCard, ben, "Owl");
+    await toDay(s, ana.actor, Math.max(spark.launchDay, owl.launchDay) + 1);
+    await send(ana.ws, ana.worldId, {
+      type: "offerLicense",
+      versionId: spark.versionId,
+      priceCents: 300,
+      months: 6,
+      groups: ["students"],
+      exclusive: false,
+    });
+    const offerId = ana.actor.state().licenses.offers[0]?.id;
+    await send(ben.ws, ben.worldId, {
+      type: "takeLicense",
+      offerId,
+      productId: owl.productId,
+      groups: ["students"],
+    });
+    expect(ana.actor.state().licenses.deals).toHaveLength(1);
+    return { house, ana, ben, bensCard, spark, owl };
+  }
+
+  it("splits a licensee's batch: the licensed groups' questions go to the licensed AI on its maker's card", async () => {
+    server = await start();
+    const { house, ana, ben, spark, owl } = await licensedWorld(server);
+    const dealId = ana.actor.state().licenses.deals[0]?.id as string;
+    await toDay(server, ana.actor, ana.actor.state().day + 7);
+    const week = `w${Math.floor(ana.actor.state().day / 7)}`;
+    const jobs = (await feedbackJobs(server)).filter(
+      (j) => (j.payload as { productId: string }).productId === owl.productId,
+    );
+    const own = jobs.find((j) => (j.payload as { key: string }).key === week);
+    const lic = jobs.find((j) => (j.payload as { key: string }).key === `${week}~${dealId}`);
+    expect(own?.ownerUserId).toBe(ben.userId);
+    expect(lic?.ownerUserId).toBe(ana.userId);
+    expect(lic?.payload).toMatchObject({ versionId: spark.versionId, groups: ["students"] });
+    expect((own?.payload as { groups?: string[] } | undefined)?.groups).not.toContain("students");
+
+    // The house card (Ana's) answers the licensed questions with Spark.
+    const REPLY = "Spark says <b>4</b> <|end|> 😀";
+    for (;;) {
+      const lease = await house.nextLease();
+      const spec = FeedbackJobSpec.parse(lease.spec);
+      if (lease.jobId !== lic?.id) {
+        house.done(lease.jobId, { results: RESULTS });
+        continue;
+      }
+      expect(spec).toMatchObject({ versionId: spark.versionId, groups: ["students"] });
+      const before = ana.actor.state().market.satisfaction[owl.productId]?.students ?? 0.5;
+      house.done(lease.jobId, {
+        results: [
+          { group: "students", questionId: "q1", question: "2 + 2?", reply: REPLY, score: 1 },
+          // A stray group the job wasn't asked about is dropped.
+          { group: "developers", questionId: "q2", question: "Code?", reply: "x", score: 0 },
+        ],
+      });
+      const post = await eventually(() =>
+        ana.actor.state().feed.find((i) => i.kind === "post" && i.reply === REPLY),
+      );
+      expect(post).toMatchObject({
+        companyId: companyOf(ben).id,
+        productName: "Owl",
+        poweredBy: "Spark",
+      });
+      expect(ana.actor.state().feed.some((i) => i.kind === "post" && i.reply === "x")).toBe(false);
+      expect(ana.actor.state().market.satisfaction[owl.productId]?.students ?? 0).toBeGreaterThan(
+        before,
+      );
+      break;
+    }
+  }, 90_000);
 });

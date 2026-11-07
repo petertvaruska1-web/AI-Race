@@ -156,7 +156,9 @@ function validResult(r: unknown): r is FeedbackResult {
     typeof x.reply === "string" &&
     typeof x.score === "number" &&
     x.score >= 0 &&
-    x.score <= 1
+    x.score <= 1 &&
+    (x.poweredBy === undefined ||
+      (typeof x.poweredBy === "string" && x.poweredBy.length > 0 && x.poweredBy.length <= 64))
   );
 }
 
@@ -236,6 +238,7 @@ function postBestAndWorst(
       question: r.question,
       reply: r.reply,
       tone: toneOf(r.score),
+      ...(r.poweredBy ? { poweredBy: r.poweredBy } : {}),
     };
     addItem(s, post);
     made.push({ post, score: r.score });
@@ -277,13 +280,15 @@ export function applyFeedback(
   const economy = getBalance(s.balance).economy;
   product.feedbackKeys = [...product.feedbackKeys, e.key].slice(-KEYS_KEPT);
   // Replies customers loved: the server keeps their text (R2) for "Learn from customers".
+  // A licensed AI's replies are not the licensee's to learn from.
+  const own = e.results.filter((r) => r.poweredBy === undefined);
   if (company.ownerUserId !== null) {
-    const loved = e.results.filter((r) => r.score >= economy.lovedScore).length;
+    const loved = own.filter((r) => r.score >= economy.lovedScore).length;
     company.loved = Math.min(economy.lovedMax, company.loved + loved);
   }
   updateSatisfaction(s, economy, product.id, e.results, strengthsOf(s, company).support);
   postBestAndWorst(s, economy, company, product, e.results);
-  checkScandal(s, economy, company, product, e.results);
+  checkScandal(s, economy, company, product, own);
   return OK;
 }
 

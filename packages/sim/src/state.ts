@@ -153,6 +153,8 @@ export type FeedbackResult = {
   reply: string;
   /** 0..1 */
   score: number;
+  /** A licensed AI's name when it wrote the reply for the licensee's customers (C44). */
+  poweredBy?: string;
 };
 
 type FeedBase = {
@@ -175,6 +177,8 @@ export type PostItem = FeedBase & {
   stars?: number;
   /** Written by a news outlet (an interview), not a customer. */
   press?: true;
+  /** The licensed AI that wrote the reply (C44): "powered by Pengu". */
+  poweredBy?: string;
 };
 
 /** A news story: game commentary over real events, never an AI's words. */

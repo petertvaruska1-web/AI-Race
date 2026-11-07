@@ -178,6 +178,8 @@ export const PostView = z.strictObject({
   stars: z.number().int().min(1).max(5).optional(),
   /** Written by a news outlet about an interview, not by a customer. */
   press: z.literal(true).optional(),
+  /** The licensed AI that wrote the reply for this product's customers (C44). */
+  poweredBy: z.string().optional(),
 });
 export type PostView = z.infer<typeof PostView>;
 

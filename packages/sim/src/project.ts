@@ -497,6 +497,7 @@ function feedItemView(i: FeedItem): FeedItemView {
     tone: i.tone,
     ...(i.stars ? { stars: i.stars } : {}),
     ...(i.press ? { press: true as const } : {}),
+    ...(i.poweredBy ? { poweredBy: i.poweredBy } : {}),
   };
 }
 
