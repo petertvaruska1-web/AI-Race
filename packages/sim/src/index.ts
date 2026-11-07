@@ -16,6 +16,8 @@ export * from "./interviews.ts";
 export * from "./investments.ts";
 export * from "./league.ts";
 export * from "./ledger.ts";
+export * from "./licenseState.ts";
+export * from "./licensing.ts";
 export * from "./looks.ts";
 export * from "./market.ts";
 export * from "./milestones.ts";

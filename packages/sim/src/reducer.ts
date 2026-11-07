@@ -15,6 +15,7 @@ import { applyInterview } from "./interviews.ts";
 import { fundCommand } from "./investments.ts";
 import { leagueDay } from "./league.ts";
 import { bookTraining, closeMonths, ledgerDay, newLedger } from "./ledger.ts";
+import { licenseCommand } from "./licensing.ts";
 import { lookCommand } from "./looks.ts";
 import { marketDay } from "./market.ts";
 import { evalMilestones, milestonesDay } from "./milestones.ts";
@@ -370,6 +371,16 @@ function command(s: WorldState, userId: string, raw: unknown, newId: string | un
       const company = member.companyId ? s.companies[member.companyId] : undefined;
       if (!company) return no("Found your company first.");
       return departmentCommand(s, company, cmd);
+    }
+    case "offerLicense":
+    case "withdrawOffer":
+    case "takeLicense":
+    case "proposeLicense":
+    case "answerProposal":
+    case "endLicense": {
+      const company = member.companyId ? s.companies[member.companyId] : undefined;
+      if (!company) return no("Found your company first.");
+      return licenseCommand(s, company, cmd);
     }
     case "invest":
     case "withdraw": {

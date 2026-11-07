@@ -403,6 +403,62 @@ const DepartmentView = z.strictObject({
   strength: z.number().min(0).max(1),
 });
 
+/** A public license offer (C44): terms any company in the world can take. */
+export const LicenseOfferView = z.strictObject({
+  id: zId,
+  licensorId: zId,
+  versionId: zId,
+  /** The licensed AI's product name when it was offered. */
+  aiName: z.string(),
+  priceCents: z.number().int(),
+  months: z.number().int(),
+  groups: z.array(GroupId),
+  exclusive: z.boolean(),
+  day: Day,
+});
+export type LicenseOfferView = z.infer<typeof LicenseOfferView>;
+
+const LicenseSide = z.enum(["licensor", "licensee"]);
+
+/** One of the company's running licenses, seen from its side. */
+export const LicenseDealView = z.strictObject({
+  id: zId,
+  role: LicenseSide,
+  otherId: zId,
+  otherName: z.string(),
+  versionId: zId,
+  aiName: z.string(),
+  /** The licensee's product the licensed AI powers. */
+  productId: zId,
+  productName: z.string(),
+  priceCents: z.number().int(),
+  groups: z.array(GroupId),
+  startDay: Day,
+  endDay: Day,
+  exclusive: z.boolean(),
+  /** Royalties built up so far this month, in whole dollars; paid at the month's close. */
+  owed: z.number().int().min(0),
+});
+export type LicenseDealView = z.infer<typeof LicenseDealView>;
+
+/** A proposed license waiting for the maker's answer: `licensor` is asked, `licensee` asked. */
+export const LicenseProposalView = z.strictObject({
+  id: zId,
+  role: LicenseSide,
+  otherId: zId,
+  otherName: z.string(),
+  versionId: zId,
+  aiName: z.string(),
+  productId: zId,
+  productName: z.string(),
+  priceCents: z.number().int(),
+  months: z.number().int(),
+  groups: z.array(GroupId),
+  day: Day,
+  expiresDay: Day,
+});
+export type LicenseProposalView = z.infer<typeof LicenseProposalView>;
+
 export const PrivateCompany = z.strictObject({
   id: zId,
   cash: z.number().int(),
@@ -523,6 +579,11 @@ export const PrivateCompany = z.strictObject({
     sales: DepartmentView,
     support: DepartmentView,
   }),
+  /** Licenses this company gives or takes, and proposals waiting for an answer (C44). */
+  licenses: z.strictObject({
+    deals: z.array(LicenseDealView),
+    proposals: z.array(LicenseProposalView),
+  }),
   /** The last 20 showcases, newest last. */
   showcases: z.array(ShowcaseView),
   shop: ShopView,
@@ -598,6 +659,8 @@ export const WorldView = z.strictObject({
     }),
   ),
   companies: z.array(PublicCompany),
+  /** Every open license offer in the world, oldest first (C44). */
+  licenseOffers: z.array(LicenseOfferView),
   /** The newest 50 posts and news, oldest first; public whatever company they are about. */
   feed: z.array(FeedItemView).max(50),
   spotlights: z.array(SpotlightView),

@@ -1,6 +1,7 @@
 import { COST_CATEGORIES, INCOME_CATEGORIES, NO_GOAL } from "@airace/protocol";
 import { getBalance } from "./balance.ts";
 import { newCompanyExtras, newDepartments } from "./companyExtras.ts";
+import { newLicenses } from "./licenseState.ts";
 import type { WorldState } from "./state.ts";
 import { newGoal } from "./world.ts";
 
@@ -8,7 +9,7 @@ import { newGoal } from "./world.ts";
 // Each step only adds the newer fields with their starting values.
 
 /** The simulation versions `upgradeState` can bring forward. */
-export const UPGRADABLE = ["sim-3", "sim-4", "sim-5", "sim-6", "sim-7", "sim-8"] as const;
+export const UPGRADABLE = ["sim-3", "sim-4", "sim-5", "sim-6", "sim-7", "sim-8", "sim-9"] as const;
 export type UpgradableVersion = (typeof UPGRADABLE)[number];
 
 type Loose = Record<string, unknown>;
@@ -104,6 +105,20 @@ function fromSim8(s: Loose, lastLoggedSeq: number): Loose {
   return s;
 }
 
+/** A sim-9 world as sim-10 (licensing): no offers or deals, and the two license money lines. */
+function fromSim9(s: Loose, lastLoggedSeq: number): Loose {
+  s.sim10FromSeq ??= lastLoggedSeq;
+  s.licenses ??= newLicenses();
+  for (const c of Object.values(s.companies as Record<string, Loose>)) {
+    const ledger = c.ledger as { current: Loose; months: Loose[] };
+    for (const m of [...ledger.months, ledger.current]) {
+      (m.income as Record<string, number>).licenseIncome ??= 0;
+      (m.costs as Record<string, number>).licenses ??= 0;
+    }
+  }
+  return s;
+}
+
 /**
  * Brings an older world forward. `legacyUntilSeq` is the last logged input that will be
  * replayed on it: those inputs keep the old rules where the new ones would change money
@@ -120,6 +135,7 @@ export function upgradeState(
   if (from !== "sim-6" && from !== "sim-7") fromSim5(s, legacyUntilSeq ?? (s.seq as number));
   if (from !== "sim-7" && from !== "sim-8") fromSim6(s);
   if (from !== "sim-8") fromSim7(s);
-  fromSim8(s, legacyUntilSeq ?? (s.seq as number));
+  if (from !== "sim-9") fromSim8(s, legacyUntilSeq ?? (s.seq as number));
+  fromSim9(s, legacyUntilSeq ?? (s.seq as number));
   return s as unknown as WorldState;
 }

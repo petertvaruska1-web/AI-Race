@@ -32,6 +32,7 @@ import { ownedPflops } from "./compute.ts";
 import { strengthsOf } from "./departments.ts";
 import { goalProgress } from "./goal.ts";
 import { leagueTables } from "./league.ts";
+import { PROPOSAL_DAYS } from "./licensing.ts";
 import { customersByRegion, customersOf, totalCustomers } from "./market.ts";
 import { liveProductFor } from "./products.ts";
 import type {
@@ -99,6 +100,17 @@ export function projectView(state: WorldState, viewerUserId: string): WorldView 
     companies: sortedIds(state.companies).map((id) =>
       publicCompany(state, state.companies[id] as CompanyState),
     ),
+    licenseOffers: state.licenses.offers.map((o) => ({
+      id: o.id,
+      licensorId: o.licensorId,
+      versionId: o.versionId,
+      aiName: o.aiName,
+      priceCents: o.priceCents,
+      months: o.months,
+      groups: [...o.groups],
+      exclusive: o.exclusive,
+      day: o.day,
+    })),
     feed: state.feed.slice(-FEED_SHOWN).map(feedItemView),
     spotlights: state.spotlights.map(spotlightView),
     me: { userId: viewerUserId, company: own ? privateCompany(state, own) : null },
@@ -345,6 +357,7 @@ function privateCompany(state: WorldState, c: CompanyState): PrivateCompany {
     })),
     fund: { balance: c.fund.balance },
     departments: departmentsView(state, c),
+    licenses: licensesView(state, c),
     showcases: c.showcases.map((x) => ({
       id: x.id,
       day: x.day,
@@ -606,5 +619,47 @@ function departmentsView(state: WorldState, c: CompanyState) {
     data: one("data"),
     sales: one("sales"),
     support: one("support"),
+  };
+}
+
+/** The company's licenses and proposals, from its side (R2: no other private facts). */
+function licensesView(state: WorldState, c: CompanyState): PrivateCompany["licenses"] {
+  const nameOf = (id: string) => state.companies[id]?.name ?? "";
+  const productName = (companyId: string, productId: string) =>
+    state.companies[companyId]?.products[productId]?.name ?? "";
+  const side = (x: { licensorId: string; licenseeId: string }) =>
+    x.licensorId === c.id
+      ? { role: "licensor" as const, otherId: x.licenseeId, otherName: nameOf(x.licenseeId) }
+      : { role: "licensee" as const, otherId: x.licensorId, otherName: nameOf(x.licensorId) };
+  const mine = (x: { licensorId: string; licenseeId: string }) =>
+    x.licensorId === c.id || x.licenseeId === c.id;
+  return {
+    deals: state.licenses.deals.filter(mine).map((d) => ({
+      id: d.id,
+      ...side(d),
+      versionId: d.versionId,
+      aiName: d.aiName,
+      productId: d.productId,
+      productName: productName(d.licenseeId, d.productId),
+      priceCents: d.priceCents,
+      groups: [...d.groups],
+      startDay: d.startDay,
+      endDay: d.endDay,
+      exclusive: d.exclusive,
+      owed: Math.round(d.owed),
+    })),
+    proposals: state.licenses.proposals.filter(mine).map((p) => ({
+      id: p.id,
+      ...side(p),
+      versionId: p.versionId,
+      aiName: p.aiName,
+      productId: p.productId,
+      productName: productName(p.licenseeId, p.productId),
+      priceCents: p.priceCents,
+      months: p.months,
+      groups: [...p.groups],
+      day: p.day,
+      expiresDay: p.day + PROPOSAL_DAYS,
+    })),
   };
 }

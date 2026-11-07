@@ -1,5 +1,6 @@
 import { type GoalSpec, NO_GOAL } from "@airace/protocol";
 import { type Balance, type BalanceVersion, getBalance } from "./balance.ts";
+import { newLicenses } from "./licenseState.ts";
 import { emptyMarket } from "./market.ts";
 import { seedRng } from "./rng.ts";
 import { drawSpotlights } from "./spotlights.ts";
@@ -46,6 +47,8 @@ export function createWorld(p: {
     legacyUntilSeq: 0,
     sim6FromSeq: 0,
     sim9FromSeq: 0,
+    sim10FromSeq: 0,
+    licenses: newLicenses(),
     rivals: null,
     leaders: {},
     lastRankingNews: {},

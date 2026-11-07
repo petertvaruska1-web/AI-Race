@@ -476,6 +476,61 @@ export type DiscoveryState = Discovery & {
   published: boolean;
 };
 
+/** An open license offer (C44): any other company can take it for one of its products. */
+export type LicenseOffer = {
+  id: string;
+  licensorId: string;
+  versionId: string;
+  /** The AI's product name when offered. */
+  aiName: string;
+  priceCents: number;
+  months: number;
+  groups: GroupId[];
+  exclusive: boolean;
+  day: number;
+};
+
+/** Terms a company asks of another company's AI; its maker accepts or declines. */
+export type LicenseProposal = {
+  id: string;
+  licensorId: string;
+  licenseeId: string;
+  versionId: string;
+  aiName: string;
+  productId: string;
+  priceCents: number;
+  months: number;
+  groups: GroupId[];
+  day: number;
+};
+
+/** A running license: the licensee's product uses the licensor's AI for `groups`. */
+export type Deal = {
+  id: string;
+  licensorId: string;
+  licenseeId: string;
+  versionId: string;
+  aiName: string;
+  productId: string;
+  priceCents: number;
+  groups: GroupId[];
+  startDay: number;
+  endDay: number;
+  exclusive: boolean;
+  /** Royalties built up since the last month close, in dollars (fractional). */
+  owed: number;
+};
+
+export type LicensesState = {
+  offers: LicenseOffer[];
+  proposals: LicenseProposal[];
+  deals: Deal[];
+  /** Numbers offer, proposal and deal ids. */
+  seq: number;
+  /** The day each rival last asked to license a player's AI. */
+  lastRequest: Record<string, number>;
+};
+
 export type WorldState = {
   worldId: string;
   name: string;
@@ -506,6 +561,13 @@ export type WorldState = {
    * funding departments. An upgraded sim-8 world replays its logged inputs on the old rules.
    */
   sim9FromSeq: number;
+  /**
+   * Inputs from this seq on play sim-10's rules where they act on their own: rivals offering
+   * and asking for licenses. An upgraded sim-9 world replays its logged inputs without them.
+   */
+  sim10FromSeq: number;
+  /** License offers, proposals and running deals between companies (C44). */
+  licenses: LicensesState;
   /** Null until rivals join (they need the rival pack). */
   rivals: { joinedDay: number; archId: string; archPassed: boolean } | null;
   /** Each league table's leader, and the day its last #1 story ran. */

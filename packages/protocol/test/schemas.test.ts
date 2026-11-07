@@ -151,6 +151,19 @@ function sampleView(): WorldView {
         followers: 37,
       },
     ],
+    licenseOffers: [
+      {
+        id: "offer-1",
+        licensorId: "c1",
+        versionId: "v-1",
+        aiName: "Spark",
+        priceCents: 300,
+        months: 6,
+        groups: ["students", "everyday"],
+        exclusive: false,
+        day: 3,
+      },
+    ],
     feed: [
       POST,
       {
@@ -236,6 +249,27 @@ function sampleView(): WorldView {
           data: { budget: 0, staffed: 0, strength: 0 },
           sales: { budget: 0, staffed: 0, strength: 0 },
           support: { budget: 0, staffed: 0, strength: 0 },
+        },
+        licenses: {
+          deals: [
+            {
+              id: "deal-2",
+              role: "licensor",
+              otherId: "c2",
+              otherName: "Beta",
+              versionId: "v-1",
+              aiName: "Spark",
+              productId: "p9",
+              productName: "Owl",
+              priceCents: 300,
+              groups: ["students"],
+              startDay: 3,
+              endDay: 183,
+              exclusive: false,
+              owed: 1200,
+            },
+          ],
+          proposals: [],
         },
         showcases: [],
         shop: { showcase: { fee: 20000, cooldownDays: 7 }, sponsorships: [], looks: [], apps: [] },

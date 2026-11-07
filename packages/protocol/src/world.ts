@@ -69,6 +69,8 @@ export const INCOME_CATEGORIES = [
   "appRevenue",
   /** What the investment fund gained (it stays in the fund until withdrawn). */
   "investmentGains",
+  /** Royalties from companies licensing this company's AIs (C44). */
+  "licenseIncome",
 ] as const;
 export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
 export const COST_CATEGORIES = [
@@ -91,6 +93,8 @@ export const COST_CATEGORIES = [
   "overhead",
   /** The four departments' monthly budgets, booked daily (C43). */
   "team",
+  /** Royalties for other companies' AIs this company licenses (C44). */
+  "licenses",
 ] as const;
 export type CostCategory = (typeof COST_CATEGORIES)[number];
 
@@ -322,6 +326,14 @@ export const SPEEDS = [1, 2, 4] as const;
 export const Speed = z.literal(SPEEDS);
 export type Speed = z.infer<typeof Speed>;
 
+/** A license's term in game months of 30 days (C44). */
+export const LICENSE_MONTHS = [3, 6, 12] as const;
+const LicenseMonths = z.union([z.literal(3), z.literal(6), z.literal(12)]);
+/** The customer groups a license covers: one or more of the six. */
+const LicenseGroups = z.array(GroupId).min(1).max(GROUP_IDS.length);
+/** Royalty prices per customer a month, in cents: $0.10–$20. */
+export const LICENSE_PRICE_CENTS = { min: 10, max: 2000 } as const;
+
 export const Command = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("createCompany"),
@@ -389,6 +401,31 @@ export const Command = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("withdraw"), amount: z.number().int().positive() }),
   z.object({ type: z.literal("publishDiscovery"), discoveryId: z.string().min(1).max(80) }),
+  z.object({
+    type: z.literal("offerLicense"),
+    versionId: zId,
+    priceCents: z.number().int(),
+    months: LicenseMonths,
+    groups: LicenseGroups,
+    exclusive: z.boolean(),
+  }),
+  z.object({ type: z.literal("withdrawOffer"), offerId: zId }),
+  z.object({
+    type: z.literal("takeLicense"),
+    offerId: zId,
+    productId: zId,
+    groups: LicenseGroups,
+  }),
+  z.object({
+    type: z.literal("proposeLicense"),
+    versionId: zId,
+    productId: zId,
+    priceCents: z.number().int(),
+    months: LicenseMonths,
+    groups: LicenseGroups,
+  }),
+  z.object({ type: z.literal("answerProposal"), proposalId: zId, accept: z.boolean() }),
+  z.object({ type: z.literal("endLicense"), dealId: zId }),
 ]);
 export type Command = z.infer<typeof Command>;
 export type CommandType = Command["type"];
