@@ -118,6 +118,8 @@ export const NEWS_TOPICS = [
   "discovery",
   "goal",
   "scandal",
+  /** Licenses starting and ending (C44). */
+  "license",
 ] as const;
 export type NewsTopic = (typeof NEWS_TOPICS)[number];
 /** Milestones (game-layer design §11): each earned once, only from a measurement or the state (R5). */

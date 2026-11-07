@@ -9,6 +9,7 @@ import {
 import { adoptionShare, type Economy, getBalance } from "./balance.ts";
 import { closeness } from "./compute.ts";
 import { strengthsOf } from "./departments.ts";
+import { licensedVersion } from "./licensing.ts";
 import { liveProductFor } from "./products.ts";
 import { paramCount } from "./shape.ts";
 import type { MarketState, VersionState, WorldState } from "./state.ts";
@@ -195,7 +196,10 @@ export function marketDay(s: WorldState): void {
         for (const plan of PLAN_IDS) {
           if (plan === "business" && !g.buysBusiness) continue;
           const product = liveProductFor(company, plan);
-          const version = product ? company.versions[product.versionId] : undefined;
+          // A licensed AI answers its licensed groups with its own measured skills (C44).
+          const version = product
+            ? (licensedVersion(s, product.id, group) ?? company.versions[product.versionId])
+            : undefined;
           if (!product || !version) continue;
           const satisfaction = m.satisfaction[product.id]?.[group] ?? e.feedback.satisfactionStart;
           const price = plan === "free" ? 0 : company.plans[plan].price;

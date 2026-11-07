@@ -1,10 +1,21 @@
-import { type Command, GROUP_IDS, type GroupId, LICENSE_PRICE_CENTS } from "@airace/protocol";
+import {
+  type Command,
+  GROUP_IDS,
+  type GroupId,
+  LICENSE_PRICE_CENTS,
+  PLAN_IDS,
+  REGION_IDS,
+} from "@airace/protocol";
+import { tellNews } from "./feed.ts";
+import { book } from "./ledger.ts";
+import { customersOf } from "./market.ts";
 import type {
   CompanyState,
   Deal,
   LicenseOffer,
   LicenseProposal,
   ProductState,
+  VersionState,
   WorldState,
 } from "./state.ts";
 
@@ -46,6 +57,37 @@ export function activeLicense(s: WorldState, productId: string, group: GroupId):
   return (
     s.licenses.deals.find((d) => d.productId === productId && d.groups.includes(group)) ?? null
   );
+}
+
+/** The AI that answers `productId`'s `group`: a licensed one, or null for the product's own. */
+export function licensedVersion(
+  s: WorldState,
+  productId: string,
+  group: GroupId,
+): VersionState | null {
+  const deal = activeLicense(s, productId, group);
+  if (!deal) return null;
+  const licensor = s.companies[deal.licensorId];
+  return licensor && Object.hasOwn(licensor.versions, deal.versionId)
+    ? (licensor.versions[deal.versionId] ?? null)
+    : null;
+}
+
+/** The groups in news copy. */
+const GROUP_WORDS: Record<GroupId, string> = {
+  students: "students",
+  creators: "creators",
+  developers: "developers",
+  businesses: "businesses",
+  everyday: "everyday users",
+  researchers: "researchers",
+};
+
+/** "students", "students and creators", "students, creators and developers". */
+export function groupList(groups: readonly GroupId[]): string {
+  const words = inOrder(groups).map((g) => GROUP_WORDS[g]);
+  if (words.length <= 1) return words.join("");
+  return `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
 }
 
 /** The company's newest live product built on `versionId`: the AI is on sale. */
@@ -108,7 +150,95 @@ function startDeal(
     owed: 0,
   };
   s.licenses.deals.push(deal);
+  const licensee = s.companies[deal.licenseeId];
+  const licensor = s.companies[deal.licensorId];
+  if (licensee && licensor) {
+    tellNews(
+      s,
+      licensee,
+      "license",
+      `${licensee.name} licenses ${licensor.name}'s ${deal.aiName} for its ${groupList(deal.groups)}`,
+      0.3,
+    );
+  }
   return deal;
+}
+
+/** The licensee's customers today in the deal's groups, on every plan its product powers. */
+export function licensedCustomers(s: WorldState, deal: Deal): number {
+  const licensee = s.companies[deal.licenseeId];
+  if (!licensee) return 0;
+  let n = 0;
+  for (const plan of PLAN_IDS) {
+    if (licensee.plans[plan].productId !== deal.productId) continue;
+    for (const region of REGION_IDS) {
+      for (const group of deal.groups) n += customersOf(s.market, licensee.id, region, group, plan);
+    }
+  }
+  return n;
+}
+
+/** Pays what the deal has built up, from licensee to licensor (whole dollars, both sides alike). */
+function settle(s: WorldState, deal: Deal, extra = 0): void {
+  const dollars = Math.round(deal.owed + extra);
+  deal.owed = 0;
+  const licensee = s.companies[deal.licenseeId];
+  const licensor = s.companies[deal.licensorId];
+  if (!licensee || !licensor || dollars <= 0) return;
+  book(licensee, "licenses", dollars);
+  book(licensor, "licenseIncome", dollars);
+}
+
+/** Ends a deal: pays what it built up (and `extra`), and tells the news. */
+function endDeal(s: WorldState, deal: Deal, extra = 0): void {
+  settle(s, deal, extra);
+  s.licenses.deals = s.licenses.deals.filter((d) => d.id !== deal.id);
+  const licensee = s.companies[deal.licenseeId];
+  if (licensee) {
+    tellNews(s, licensee, "license", `${licensee.name}'s license of ${deal.aiName} ends`, 0);
+  }
+}
+
+/** At a month's close, every deal pays what it built up that month. Call before the books close. */
+export function settleLicenses(s: WorldState): void {
+  for (const deal of s.licenses.deals) settle(s, deal);
+}
+
+/**
+ * The daily licensing step, after products: deals whose term is over, whose AI is no longer on
+ * sale or whose product closed end (paying what they built up); the rest build up a 30th of
+ * their monthly royalty for today's customers. Offers of AIs no longer on sale close, and
+ * proposals lapse.
+ */
+export function licensesDay(s: WorldState): void {
+  const L = s.licenses;
+  for (const deal of [...L.deals]) {
+    const licensor = s.companies[deal.licensorId];
+    const licensee = s.companies[deal.licenseeId];
+    const over =
+      s.day >= deal.endDay ||
+      !licensor ||
+      !licensee ||
+      !onSaleAs(licensor, deal.versionId) ||
+      licensee.products[deal.productId]?.status !== "live";
+    if (over) endDeal(s, deal);
+  }
+  for (const deal of L.deals) {
+    deal.owed += ((deal.priceCents / 100) * licensedCustomers(s, deal)) / LICENSE_MONTH_DAYS;
+  }
+  L.offers = L.offers.filter((o) => {
+    const licensor = s.companies[o.licensorId];
+    return licensor !== undefined && onSaleAs(licensor, o.versionId) !== null;
+  });
+  L.proposals = L.proposals.filter((p) => {
+    const licensor = s.companies[p.licensorId];
+    return (
+      s.day < p.day + PROPOSAL_DAYS &&
+      licensor !== undefined &&
+      onSaleAs(licensor, p.versionId) !== null &&
+      s.companies[p.licenseeId]?.products[p.productId]?.status === "live"
+    );
+  });
 }
 
 /** Posts an offer of `licensor`'s AI. Rivals use it too. */
@@ -294,7 +424,17 @@ export function licenseCommand(s: WorldState, company: CompanyState, cmd: Licens
       return makeProposal(s, company, cmd);
     case "answerProposal":
       return answerProposal(s, company, cmd.proposalId, cmd.accept);
-    case "endLicense":
-      return no("That request isn't valid.");
+    case "endLicense": {
+      const deal = s.licenses.deals.find((d) => d.id === cmd.dealId);
+      if (!deal || (deal.licenseeId !== company.id && deal.licensorId !== company.id)) {
+        return no("That license has ended.");
+      }
+      if (deal.licenseeId !== company.id) {
+        return no("Only the company that licenses it can end it early.");
+      }
+      // Ending early costs one more month's royalties at today's customers.
+      endDeal(s, deal, (deal.priceCents / 100) * licensedCustomers(s, deal));
+      return OK;
+    }
   }
 }

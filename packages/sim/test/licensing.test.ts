@@ -1,14 +1,16 @@
 import type { GroupId } from "@airace/protocol";
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   activeLicense,
   type CompanyState,
+  type Input,
   projectView,
   step,
   upgradeState,
   type WorldState,
 } from "../src/index.ts";
-import { cmd, ok, rejected, runningWorld, sys } from "./pack.ts";
+import { cmd, ok, rejected, runningWorld, sys, TICK, ticks } from "./pack.ts";
 
 const c = (s: WorldState, id: string) => s.companies[id] as CompanyState;
 
@@ -308,4 +310,228 @@ describe("upgraded worlds", () => {
     expect(c(s, "c1").ledger.current.income.licenseIncome).toBe(0);
     expect(c(s, "c1").ledger.current.costs.licenses).toBe(0);
   });
+});
+
+/** Ben (c2) takes Ana's Pengu (v1) for Owl's students at $3 a customer a month. */
+function licensed(s0 = market3(), groups: GroupId[] = ["students"]): WorldState {
+  let s = ok(offer(s0, { groups, priceCents: 300, months: 3 }));
+  s = ok(take(s, s.licenses.offers[0]?.id as string, "p2", "u2", groups));
+  return s;
+}
+
+/** Sets c2's students on the free plan in one region to `n` (and nobody elsewhere). */
+function students(s: WorldState, n: number): void {
+  s.market.customers.c2 = { pacific: { students: { free: n } } };
+}
+
+const studentsOf = (s: WorldState, id: string) => {
+  let n = 0;
+  for (const byGroup of Object.values(s.market.customers[id] ?? {})) {
+    for (const n2 of Object.values(byGroup?.students ?? {})) n += n2 ?? 0;
+  }
+  return n;
+};
+
+describe("licensed AIs in the market", () => {
+  it("win a licensee's students with the licensed AI's knowledge", () => {
+    const base = market3();
+    // Owl knows little; Pengu knows a lot.
+    selling(base, "c2", "v2", "p2", "Owl", 5);
+    selling(base, "c1", "v1", "p1", "Pengu", 95);
+    for (const s of [base]) {
+      for (const p of ["p1", "p2", "p3"]) {
+        const company = Object.values(s.companies).find((x) => x.products[p]);
+        const product = company?.products[p];
+        if (product) product.launchDay = s.day + 1; // tomorrow's launch spreads the word
+      }
+    }
+    const without = ticks(base, 40);
+    const withLicense = ticks(licensed(structuredClone(base)), 40);
+    expect(studentsOf(withLicense, "c2")).toBeGreaterThan(1.2 * studentsOf(without, "c2"));
+  });
+});
+
+describe("royalties", () => {
+  it("build up a day at a time and are paid at the month close, to both sides", () => {
+    let s = licensed();
+    const startMonth = c(s, "c2").ledger.current.month;
+    let expected = 0;
+    while (c(s, "c2").ledger.current.month === startMonth) {
+      students(s, 1_000);
+      expected += (3 * 1_000) / 30;
+      s = ok(step(s, TICK));
+    }
+    const paid = c(s, "c2").ledger.months.at(-1)?.costs.licenses;
+    const got = c(s, "c1").ledger.months.at(-1)?.income.licenseIncome;
+    // The tick that closes the month builds up nothing before it.
+    expect(paid).toBe(Math.round(expected - 100));
+    expect(got).toBe(paid);
+    expect(s.licenses.deals[0]?.owed).toBeCloseTo(100, 6); // today's, for the new month
+  });
+
+  it("are $0 for a licensee with no customers in the licensed groups", () => {
+    let s = licensed();
+    const startMonth = c(s, "c2").ledger.current.month;
+    while (c(s, "c2").ledger.current.month === startMonth) {
+      students(s, 0);
+      s = ok(step(s, TICK));
+    }
+    expect(c(s, "c2").ledger.months.at(-1)?.costs.licenses).toBe(0);
+    expect(c(s, "c1").ledger.months.at(-1)?.income.licenseIncome).toBe(0);
+  });
+
+  it("are told in the news when a license starts", () => {
+    const s = licensed(market3(), ["students", "everyday"]);
+    expect(s.feed.at(-1)).toMatchObject({
+      kind: "news",
+      companyId: "c2",
+      headline: "Beta licenses Acme's Pengu for its students and everyday users",
+    });
+  });
+});
+
+describe("a license ends", () => {
+  it("when the licensed AI is retired, that day, with the royalty so far", () => {
+    let s = licensed();
+    students(s, 600);
+    s = ok(step(s, TICK)); // $60 built up
+    s = ok(step(s, cmd({ type: "setPlan", plan: "free", productId: null })));
+    s = ok(step(s, cmd({ type: "setPlan", plan: "personal", productId: null })));
+    s = ok(step(s, cmd({ type: "retireProduct", productId: "p1" })));
+    const paid = c(s, "c2").ledger.current.costs.licenses;
+    const got = c(s, "c1").ledger.current.income.licenseIncome;
+    s = ok(step(s, TICK));
+    expect(s.licenses.deals).toEqual([]);
+    expect(activeLicense(s, "p2", "students")).toBeNull();
+    expect(c(s, "c2").ledger.current.costs.licenses - paid).toBe(60);
+    expect(c(s, "c1").ledger.current.income.licenseIncome - got).toBe(60);
+    expect(s.feed.at(-1)).toMatchObject({ headline: "Beta's license of Pengu ends" });
+  });
+
+  it("at the end of its term", () => {
+    let s = licensed();
+    s = ticks(s, 89);
+    expect(s.licenses.deals).toHaveLength(1);
+    s = ticks(s, 1);
+    expect(s.licenses.deals).toEqual([]);
+  });
+
+  it("early, by the licensee only, paying one month at today's customers", () => {
+    let s = licensed();
+    students(s, 600);
+    s = ok(step(s, TICK)); // $60 built up
+    const dealId = s.licenses.deals[0]?.id as string;
+    expect(rejected(step(s, cmd({ type: "endLicense", dealId })))).toBe(
+      "Only the company that licenses it can end it early.",
+    );
+    students(s, 500);
+    const paid = c(s, "c2").ledger.current.costs.licenses;
+    s = ok(step(s, cmd({ type: "endLicense", dealId }, undefined, "u2")));
+    expect(s.licenses.deals).toEqual([]);
+    expect(c(s, "c2").ledger.current.costs.licenses - paid).toBe(60 + 1_500);
+  });
+});
+
+describe("licensing in random games", () => {
+  const PLAYERS = ["u1", "u2", "u3"] as const;
+  const PRODUCTS = ["p1", "p2", "p3"] as const;
+  const VERSIONS = ["v1", "v2", "v3"] as const;
+  const id = (kind: string) => fc.integer({ min: 1, max: 5 }).map((n) => `${kind}-${n}`);
+  const groups = fc.constantFrom<GroupId[]>(
+    ["students"],
+    ["students"],
+    ["students", "everyday"],
+    ["everyday"],
+  );
+  const input: fc.Arbitrary<Input> = fc.oneof(
+    { arbitrary: fc.constant(TICK), weight: 6 },
+    fc
+      .record({
+        u: fc.constantFrom(...PLAYERS),
+        versionId: fc.constantFrom(...VERSIONS),
+        priceCents: fc.constantFrom(300, 10, 2000),
+        months: fc.constantFrom(3, 6, 12),
+        groups,
+        exclusive: fc.boolean(),
+      })
+      .map(({ u, ...r }) => cmd({ type: "offerLicense", ...r }, undefined, u)),
+    {
+      arbitrary: fc
+        .record({
+          u: fc.constantFrom(...PLAYERS),
+          offerId: id("offer"),
+          productId: fc.constantFrom(...PRODUCTS),
+          groups,
+        })
+        .map(({ u, ...r }) => cmd({ type: "takeLicense", ...r }, undefined, u)),
+      weight: 4,
+    },
+    fc
+      .record({
+        u: fc.constantFrom(...PLAYERS),
+        versionId: fc.constantFrom(...VERSIONS),
+        productId: fc.constantFrom(...PRODUCTS),
+        groups,
+      })
+      .map(({ u, ...r }) =>
+        cmd({ type: "proposeLicense", priceCents: 500, months: 3, ...r }, undefined, u),
+      ),
+    fc
+      .record({
+        u: fc.constantFrom(...PLAYERS),
+        proposalId: id("proposal"),
+        accept: fc.boolean(),
+      })
+      .map(({ u, ...r }) => cmd({ type: "answerProposal", ...r }, undefined, u)),
+    fc
+      .record({ u: fc.constantFrom(...PLAYERS), dealId: id("deal") })
+      .map(({ u, dealId }) => cmd({ type: "endLicense", dealId }, undefined, u)),
+  );
+
+  it("keep every company's money adding up, and royalties equal on both sides", () => {
+    let deals = 0;
+    let moved = 0;
+    let made = 0;
+    fc.assert(
+      fc.property(fc.array(input, { minLength: 30, maxLength: 120 }), (inputs) => {
+        let s = market3();
+        for (const id of ["c2", "c3"]) {
+          s.market.customers[id] = {
+            pacific: { students: { free: 800 }, everyday: { free: 400 } },
+          };
+        }
+        for (const i of inputs) {
+          const r = step(s, i);
+          if (r.ok) s = r.state;
+        }
+        deals += s.licenses.seq;
+        let paid = 0;
+        let got = 0;
+        for (const company of Object.values(s.companies)) {
+          const months = [...company.ledger.months, company.ledger.current];
+          const sum = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
+          const net = months.reduce(
+            (n, m) =>
+              n +
+              sum(m.income) -
+              sum(m.costs) +
+              m.financing.loans +
+              m.financing.investors -
+              m.financing.repaid,
+            0,
+          );
+          expect(company.cash + company.fund.balance).toBe(company.startCash + net);
+          paid += months.reduce((n, m) => n + m.costs.licenses, 0);
+          got += months.reduce((n, m) => n + m.income.licenseIncome, 0);
+        }
+        expect(got).toBe(paid);
+        moved += paid;
+        made += s.feed.filter((x) => x.kind === "news" && x.topic === "license").length;
+      }),
+      { numRuns: 60, seed: 3 },
+    );
+    expect(deals).toBeGreaterThan(30); // licenses really happen in these games
+    expect(made).toBeGreaterThan(5); // deals start and end
+    expect(moved).toBeGreaterThan(0); // and royalties are paid
+  }, 60_000);
 });

@@ -15,7 +15,7 @@ import { applyInterview } from "./interviews.ts";
 import { fundCommand } from "./investments.ts";
 import { leagueDay } from "./league.ts";
 import { bookTraining, closeMonths, ledgerDay, newLedger } from "./ledger.ts";
-import { licenseCommand } from "./licensing.ts";
+import { licenseCommand, licensesDay } from "./licensing.ts";
 import { lookCommand } from "./looks.ts";
 import { marketDay } from "./market.ts";
 import { evalMilestones, milestonesDay } from "./milestones.ts";
@@ -83,6 +83,7 @@ function tick(s: WorldState): Handled {
   campaignsDay(s);
   sponsorshipsDay(s);
   productsDay(s);
+  licensesDay(s);
   appsDay(s);
   marketDay(s);
   dataCentersDay(s);

@@ -13,6 +13,7 @@ import {
 import { getBalance } from "./balance.ts";
 import { monthOfDay } from "./calendar.ts";
 import { coverShortfall, fundMonthEnd } from "./investments.ts";
+import { settleLicenses } from "./licensing.ts";
 import { customersOf, totalCustomers } from "./market.ts";
 import { overheadForDay } from "./overhead.ts";
 import { liveProductFor } from "./products.ts";
@@ -161,6 +162,10 @@ export function closeMonth(
 /** On the first day of a game month, closes every company's previous month. Call first in the tick. */
 export function closeMonths(s: WorldState): void {
   const month = monthOfDay(s.day);
+  // Royalties land in the month that is closing, on both sides.
+  if (Object.values(s.companies).some((c) => c.ledger.current.month !== month)) {
+    settleLicenses(s);
+  }
   for (const id of Object.keys(s.companies).sort()) {
     const company = s.companies[id];
     if (company && company.ledger.current.month !== month) {
