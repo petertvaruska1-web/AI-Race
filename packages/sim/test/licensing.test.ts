@@ -629,7 +629,7 @@ describe("rivals and licenses", () => {
 
   /** A world with rivals on sale and Acme selling `knowledge`-strong Pengu. */
   function strongPlayer(knowledge: number): WorldState {
-    const s = ticks(withRivals(), 30);
+    const s = ticks(withRivals(), 120);
     selling(s, "c1", "v1", "p1", "Pengu", knowledge);
     return s;
   }
@@ -641,13 +641,20 @@ describe("rivals and licenses", () => {
     expect(asks.length).toBeGreaterThan(0);
     for (const p of asks) {
       const rival = c(s, p.licenseeId);
-      expect(p).toMatchObject({
-        versionId: "v1",
-        months: 6,
-        priceCents: PRICES[rival.rival?.style ?? "premium"],
-        groups: [rival.rival?.focus],
-      });
+      expect(p).toMatchObject({ versionId: "v1", months: 6, groups: [rival.rival?.focus] });
       expect(rival.products[p.productId]?.status).toBe("live");
+      // Its style's price, but never more than a tenth of its last month's revenue in royalties.
+      expect(p.priceCents).toBeLessThanOrEqual(PRICES[rival.rival?.style ?? "premium"]);
+      expect(p.priceCents).toBeGreaterThanOrEqual(10);
+      const last = rival.ledger.months.at(-1);
+      const revenue = last ? Object.values(last.income).reduce((a, b) => a + b, 0) : 0;
+      let focus = 0;
+      for (const byGroup of Object.values(s.market.customers[rival.id] ?? {})) {
+        for (const n of Object.values(byGroup?.[rival.rival?.focus ?? "students"] ?? {})) {
+          focus += n ?? 0;
+        }
+      }
+      expect((p.priceCents / 100) * focus).toBeLessThanOrEqual(0.1 * revenue + 1e-6);
     }
     const asked = asks.map((p) => p.licenseeId);
     // Declined: no second ask within 90 days.
@@ -656,6 +663,18 @@ describe("rivals and licenses", () => {
     }
     s = ticks(s, 85);
     expect(s.licenses.proposals.filter((p) => asked.includes(p.licenseeId))).toEqual([]);
+  });
+
+  it("don't ask when a tenth of their revenue can't pay 10 cents a customer", () => {
+    const poor = strongPlayer(100);
+    for (const rival of Object.values(poor.companies)) {
+      const last = rival.rival ? rival.ledger.months.at(-1) : undefined;
+      if (!last) continue;
+      for (const k of Object.keys(last.income)) last.income[k as keyof typeof last.income] = 0;
+      last.income.personal = 100;
+    }
+    const s = ok(step(poor, TICK));
+    expect(s.licenses.proposals).toEqual([]);
   });
 
   it("don't ask about an AI that isn't 10 better than theirs", () => {

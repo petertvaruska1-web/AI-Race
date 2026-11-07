@@ -275,6 +275,8 @@ export type RivalBalance = {
     months: 3 | 6 | 12;
     lead: number;
     everyDays: number;
+    /** A request's royalties are at most this share of the rival's last month's revenue. */
+    maxShareOfRevenue: number;
   };
   /** Times the founding cash, by style; the arch-rival gets `archBonus` times more. */
   startCash: Record<RivalStyle, number>;
@@ -563,6 +565,7 @@ const ECONOMY_V2: Economy = {
       months: 6,
       lead: 10,
       everyDays: 90,
+      maxShareOfRevenue: 0.1,
     },
     startCash: { premium: 3, budget: 1, specialist: 1.5, consumer: 2 },
     archBonus: 1.5,

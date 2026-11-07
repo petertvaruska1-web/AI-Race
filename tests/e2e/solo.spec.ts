@@ -322,4 +322,30 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
   await expect(team.getByText(/^Training reads \d+% more text$/)).toBeVisible({ timeout: 60_000 });
   await page.getByRole("link", { name: "Money" }).click();
   await expect(page.getByTestId("cost-team")).toBeVisible({ timeout: 60_000 });
+
+  // 32. Licensing: take a rival's offer for your students; the month's close pays its royalty,
+  // and the next report card shows it.
+  await page.getByRole("link", { name: "Rivals" }).click();
+  await page
+    .getByRole("button", { name: /^License / })
+    .first()
+    .click();
+  const take = page.getByRole("dialog", { name: /^License / });
+  const groups = take.getByRole("group", { name: "For these customers" });
+  for (const other of ["Creators", "Developers", "Businesses", "Everyday users", "Researchers"]) {
+    await groups.getByLabel(other).uncheck();
+  }
+  await take.getByRole("button", { name: "License it" }).click();
+  await expect(take).toHaveCount(0);
+  await page.getByRole("link", { name: "Company" }).click();
+  await expect(
+    page.getByRole("region", { name: "Licenses" }).getByText(/ powers .+ for students$/),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Money" }).click();
+  await expect(page.getByTestId("cost-licenses")).toBeVisible({ timeout: 120_000 });
+  await page.getByRole("region", { name: "Report cards" }).getByRole("button").first().click();
+  await expect(
+    page.getByRole("dialog").getByText(/^Licenses cost \$[\d,]+ this month\.$/),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
 });

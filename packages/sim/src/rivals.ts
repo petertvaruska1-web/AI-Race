@@ -6,6 +6,7 @@ import {
   DEPARTMENTS,
   GROUP_IDS,
   type GroupId,
+  LICENSE_PRICE_CENTS,
   REGION_IDS,
   RIVAL_STYLES,
   RivalPack,
@@ -19,7 +20,7 @@ import { computeCommand, newCompute } from "./compute.ts";
 import { tellNews } from "./feed.ts";
 import { newLedger } from "./ledger.ts";
 import { activeLicense, makeOffer, makeProposal, newestLive } from "./licensing.ts";
-import { adoptable, customersByRegion, totalCustomers } from "./market.ts";
+import { adoptable, customersByRegion, customersOf, totalCustomers } from "./market.ts";
 import { newCompanyBusiness, productCommand } from "./products.ts";
 import { rescueCommand } from "./rescue.ts";
 import { drawLook, rivalProductName } from "./rivalCast.ts";
@@ -351,10 +352,25 @@ function licenseDay(s: WorldState, company: CompanyState, rival: RivalState): vo
     }
   }
   if (!pick) return;
+  // What it can afford: its royalties at most a share of last month's revenue.
+  const closed = company.ledger.months.at(-1);
+  const revenue = closed ? Object.values(closed.income).reduce((a, b) => a + b, 0) : 0;
+  let focusCustomers = 0;
+  for (const region of REGION_IDS) {
+    for (const plan of PLANS) {
+      focusCustomers += customersOf(s.market, company.id, region, rival.focus, plan);
+    }
+  }
+  const affordable =
+    focusCustomers > 0
+      ? Math.floor((100 * terms.maxShareOfRevenue * Math.max(0, revenue)) / focusCustomers)
+      : price;
+  const offered = Math.min(price, affordable);
+  if (offered < LICENSE_PRICE_CENTS.min) return;
   const asked = makeProposal(s, company, {
     versionId: pick.versionId,
     productId: newest.id,
-    priceCents: price,
+    priceCents: offered,
     months: terms.months,
     groups: [rival.focus],
   });

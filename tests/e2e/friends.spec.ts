@@ -152,6 +152,30 @@ test("Fair mode off: each AI trains on its own player's helper; sharing, a battl
   await a.getByRole("link", { name: "Arena" }).click();
   await expect(a.getByText(/Bolt challenged you/)).toBeVisible({ timeout: 60_000 });
 
+  // 4b. Licensing between friends: Ana offers Spark; Ben licenses it for Nova's students; at
+  // the month's close Ana's money shows License income.
+  await a.getByRole("link", { name: "Company" }).click();
+  await a.getByRole("button", { name: /^About your AI / }).click();
+  await a.getByRole("button", { name: "Offer for license" }).click();
+  const offer = a.getByRole("dialog", { name: /for license$/ });
+  await offer.getByLabel("Price per customer a month ($)").fill("2");
+  await offer.getByLabel("Students").check();
+  await offer.getByRole("button", { name: "Offer it" }).click();
+  await expect(offer).toHaveCount(0);
+  await a.keyboard.press("Escape");
+  await b.getByRole("link", { name: "AI Directory" }).click();
+  await b
+    .getByRole("region", { name: "License offers" })
+    .getByRole("button", { name: "License Spark" })
+    .click({ timeout: 60_000 });
+  const take = b.getByRole("dialog", { name: "License Spark" });
+  await take.getByRole("button", { name: "License it" }).click();
+  await expect(take).toHaveCount(0);
+  await a.getByRole("link", { name: "Money" }).click();
+  await expect(a.getByTestId("income-licenseIncome")).toBeVisible({ timeout: 180_000 });
+  // Back where the later steps expect Ana (the Money screen has a second "Open money").
+  await a.getByRole("link", { name: "Arena" }).click();
+
   // 5. The world chat, both ways.
   await a.getByRole("button", { name: /World chat/ }).click();
   await a.getByLabel("Message").fill("Good game, Ben!");
