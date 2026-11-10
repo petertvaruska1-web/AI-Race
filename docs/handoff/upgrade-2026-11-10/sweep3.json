@@ -1,0 +1,20 @@
+{
+  "common": [],
+  "runs": [
+    ["tiny_muonB_s1", ["--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2", "--momentum", "0.9", "--decay", "0.4", "--min_ratio", "0.02", "--ns_steps", "3", "--save", "runs/upgrade/tiny_muonB_s1"]],
+    ["tiny_muonB_casual0.3_s1", ["--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2", "--momentum", "0.9", "--decay", "0.4", "--min_ratio", "0.02", "--ns_steps", "3", "--casual", "0.3", "--save", "runs/upgrade/tiny_muonB_casual0.3_s1"]],
+    ["tiny_muonB_s2", ["--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2", "--momentum", "0.9", "--decay", "0.4", "--min_ratio", "0.02", "--ns_steps", "3", "--seed", "2"]],
+    ["tiny_muonB_s3", ["--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2", "--momentum", "0.9", "--decay", "0.4", "--min_ratio", "0.02", "--ns_steps", "3", "--seed", "3"]],
+    ["tiny_muonA_s2", ["--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2", "--seed", "2"]],
+    ["tiny_muonA_s3", ["--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2", "--seed", "3"]],
+    ["tiny_adamw_best_s2", ["--lr", "4e-3", "--decay", "0.4", "--min_ratio", "0.02", "--seed", "2"]],
+    ["small_adamw_base", ["--shape", "6,192,256"]],
+    ["small_adamw_lr4e-3", ["--shape", "6,192,256", "--lr", "4e-3"]],
+    ["small_muonB_015", ["--shape", "6,192,256", "--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2", "--momentum", "0.9", "--decay", "0.4", "--min_ratio", "0.02", "--ns_steps", "3"]],
+    ["small_muonB_01", ["--shape", "6,192,256", "--opt", "muon", "--lr", "0.01", "--wd", "0", "--emb_lr", "1.2e-2", "--momentum", "0.9", "--decay", "0.4", "--min_ratio", "0.02", "--ns_steps", "3"]],
+    ["medium_adamw_base_25M", ["--shape", "8,256,256", "--tokens", "25165824", "--save", "runs/upgrade/medium_adamw_base_25M"]],
+    ["medium_muonB_015_25M", ["--shape", "8,256,256", "--tokens", "25165824", "--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2", "--momentum", "0.9", "--decay", "0.4", "--min_ratio", "0.02", "--ns_steps", "3", "--save", "runs/upgrade/medium_muonB_015_25M"]],
+    ["medium_muonB_01_25M", ["--shape", "8,256,256", "--tokens", "25165824", "--opt", "muon", "--lr", "0.01", "--wd", "0", "--emb_lr", "1.2e-2", "--momentum", "0.9", "--decay", "0.4", "--min_ratio", "0.02", "--ns_steps", "3"]],
+    ["medium_adamw_lr4e-3_25M", ["--shape", "8,256,256", "--tokens", "25165824", "--lr", "4e-3"]]
+  ]
+}
