@@ -3,7 +3,7 @@ import torch
 
 from airace_ml.model.checkpoint import CheckpointMeta, load_checkpoint, save_checkpoint
 from airace_ml.model.shape import ModelShape, ShapeError
-from airace_ml.model.transformer import Transformer
+from airace_ml.model.transformer import RMSNorm, Transformer
 
 
 def test_reference_param_counts():
@@ -77,6 +77,87 @@ def test_rmsnorm_eps_is_a_saved_buffer(tmp_path):
     m2, _ = load_checkpoint(tmp_path)
     assert m2.blocks[1].mlp_norm.eps.item() == pytest.approx(3e-4)
     assert m2.blocks[0].mlp_norm.eps.item() == pytest.approx(1e-5)
+
+
+def _reference_rmsnorm(x, weight, eps):
+    return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + eps) * weight
+
+
+def test_rmsnorm_is_the_reference_formula_and_gradient():
+    torch.manual_seed(0)
+    norm = RMSNorm(48)
+    with torch.no_grad():
+        norm.weight.mul_(torch.rand(48) + 0.5)
+    x = torch.randn(3, 5, 48, requires_grad=True)
+    out, ref = norm(x), _reference_rmsnorm(x, norm.weight, 1e-5)
+    torch.testing.assert_close(out, ref, atol=1e-6, rtol=1e-6)
+    probe = torch.randn_like(out)  # any direction: the two gradients must agree in all of them
+    (g_out,) = torch.autograd.grad((out * probe).sum(), x, retain_graph=True)
+    (g_ref,) = torch.autograd.grad((ref * probe).sum(), x)
+    torch.testing.assert_close(g_out, g_ref, atol=1e-6, rtol=1e-5)
+
+
+def test_rmsnorm_follows_its_eps_buffer_however_it_changes():
+    torch.manual_seed(0)
+    norm = RMSNorm(16)
+    x = torch.randn(2, 3, 16) * 1e-2  # small, so eps shows in the result
+
+    def check(eps):
+        torch.testing.assert_close(
+            norm(x), _reference_rmsnorm(x, norm.weight, eps), atol=1e-6, rtol=1e-5
+        )
+
+    check(1e-5)
+    norm.eps.fill_(1e-2)  # in place, as load_state_dict writes it
+    check(1e-2)
+    norm.eps = torch.tensor(1e-3)  # replaced, as growth writes it
+    check(1e-3)
+    norm.load_state_dict({"weight": torch.ones(16), "eps": torch.tensor(5e-2)})
+    check(5e-2)
+    with torch.inference_mode():  # a buffer made here has no version counter
+        late = RMSNorm(16)
+        late.eps = torch.tensor(1e-2)
+        torch.testing.assert_close(
+            late(x), _reference_rmsnorm(x, late.weight, 1e-2), atol=1e-6, rtol=1e-5
+        )
+        late.eps = torch.tensor(1e-4)
+        torch.testing.assert_close(
+            late(x), _reference_rmsnorm(x, late.weight, 1e-4), atol=1e-6, rtol=1e-5
+        )
+
+
+def test_default_positions_equal_explicit_ones_at_every_length():
+    torch.manual_seed(0)
+    m = Transformer(ModelShape(2, 64, 64), 512).eval()
+    x = torch.randint(0, 512, (3, 20))
+    for t in (20, 7, 20, 13):  # tables are kept per length: going back and forth must stay right
+        explicit = m(x[:, :t], positions=torch.arange(t).expand(3, t))
+        torch.testing.assert_close(m(x[:, :t]), explicit, atol=0, rtol=0)
+
+
+def test_the_default_rope_tables_are_built_once_per_length(monkeypatch):
+    from airace_ml.model import transformer
+
+    torch.manual_seed(0)
+    m = Transformer(ModelShape(2, 64, 64), 512).eval()
+    built = []
+    real = transformer._rope_tables
+    monkeypatch.setattr(
+        transformer, "_rope_tables", lambda p: built.append(tuple(p.shape)) or real(p)
+    )
+    x = torch.randint(0, 512, (2, 10))
+    m(x), m(x), m(x[:, :6]), m(x)
+    assert built == [(1, 10), (1, 6)]
+
+
+def test_a_model_first_run_in_inference_mode_can_still_be_trained():
+    torch.manual_seed(0)
+    m = Transformer(ModelShape(2, 64, 64), 512)
+    x = torch.randint(0, 512, (2, 10))
+    with torch.inference_mode():
+        m(x)  # builds the tables for this length
+    m(x).sum().backward()  # the same tables, now under autograd
+    assert all(p.grad is not None and torch.isfinite(p.grad).all() for p in m.parameters())
 
 
 def test_cached_left_padded_batch_matches_unpadded_rows():

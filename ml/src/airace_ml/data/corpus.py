@@ -122,6 +122,9 @@ class Corpus:
 
     def __init__(self, tokens: np.ndarray, offsets: np.ndarray, tags: DocTags, info: dict) -> None:
         self._tokens = tokens
+        # The same memory as a plain array: slicing a np.memmap builds a new memmap object each
+        # time, several times the cost of an ndarray view, and the sampler slices one per document.
+        self._plain = np.asarray(tokens)
         self.offsets = offsets
         self.tags = tags
         self.info = info
@@ -154,7 +157,8 @@ class Corpus:
         return self._tokens
 
     def doc(self, i: int) -> np.ndarray:
-        """Token ids of document ``i`` as a uint16 view into the memory map."""
+        """Token ids of document ``i`` as a uint16 view into the memory map (a plain array:
+        nothing is copied)."""
         if not 0 <= i < self.n_docs:
             raise IndexError(f"document {i} out of range for a corpus of {self.n_docs}")
-        return self._tokens[self.offsets[i] : self.offsets[i + 1]]
+        return self._plain[self.offsets[i] : self.offsets[i + 1]]

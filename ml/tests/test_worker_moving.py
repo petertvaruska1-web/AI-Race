@@ -74,7 +74,7 @@ def test_a_fair_mode_run_saves_its_progress_while_it_trains(tiny_data_root, blob
     runner = JobRunner(
         tiny_data_root, "cpu", work_root=tmp_path / "work", models_dir=tmp_path / "models"
     )
-    runner.checkpoint_every = 2
+    runner.checkpoint_seconds = 0.0  # a save after every step
     runner.resume_upload_every_s = 0.0
     runner.handle_train(
         {
@@ -98,7 +98,7 @@ def test_without_fair_mode_nothing_is_uploaded(tiny_data_root, blob_server, tmp_
     runner = JobRunner(
         tiny_data_root, "cpu", work_root=tmp_path / "work", models_dir=tmp_path / "models"
     )
-    runner.checkpoint_every = 2
+    runner.checkpoint_seconds = 0.0
     runner.resume_upload_every_s = 0.0
     runner.handle_train(
         {

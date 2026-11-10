@@ -612,3 +612,24 @@ def test_generate_reports_each_token_of_each_row(tiny_lm, tiny_tok):
     )
     for row, gen in enumerate(gens):
         assert [t for r, t in seen if r == row] == gen.tokens
+
+
+def test_prompts_of_one_length_are_decoded_without_masks(tiny_lm, tiny_tok, monkeypatch):
+    calls = []
+    real = Transformer.forward
+
+    def spy(self, idx, **kwargs):
+        calls.append((kwargs.get("key_padding_mask") is None, kwargs.get("positions") is None))
+        return real(self, idx, **kwargs)
+
+    monkeypatch.setattr(Transformer, "forward", spy)
+    same = [[tiny_tok.bos_id, 20, 21, 22], [tiny_tok.bos_id, 30, 31, 32]]
+    one_length = tiny_lm.generate(same, max_new_tokens=5, temperature=0.0, top_p=1.0, seed=0)
+    assert calls and all(no_mask and no_positions for no_mask, no_positions in calls)
+    calls.clear()
+    ragged = [same[0], [tiny_tok.bos_id, 30, 31, 32, 33, 34]]
+    tiny_lm.generate(ragged, max_new_tokens=5, temperature=0.0, top_p=1.0, seed=0)
+    assert calls and not any(no_mask or no_positions for no_mask, no_positions in calls)
+    monkeypatch.undo()
+    for prompt, got in zip(same, one_length, strict=True):
+        assert got.tokens == _naive_greedy(tiny_lm, prompt, 5)

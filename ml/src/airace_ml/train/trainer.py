@@ -44,7 +44,7 @@ from airace_ml.data.corpus import DATASET_IDS, Corpus
 from airace_ml.data.prep import heldout_docs
 from airace_ml.data.sampler import DocPool, MixtureSampler, load_pools
 from airace_ml.device import pick_device
-from airace_ml.infer.lm import TorchLM
+from airace_ml.infer.lm import TorchLM, build_chat_prompt
 from airace_ml.model.checkpoint import META_NAME, CheckpointMeta, load_checkpoint, save_checkpoint
 from airace_ml.model.growth import grow
 from airace_ml.model.transformer import Transformer
@@ -80,6 +80,7 @@ MIN_EVAL_EVERY = 25  # held-out eval and samples every max(25, steps // 20) step
 EVAL_SEQS = 8  # held-out sequences per dataset
 SAMPLE_TOKENS = 32
 SAMPLE_TEMPERATURE = 0.8
+SAMPLE_TOP_P = 0.95
 FINAL_LOSS_WINDOW = 10  # final_loss is the mean loss of the last 10 applied steps
 ADAM_BETAS = (0.9, 0.95)
 ADAM_EPS = 1e-8
@@ -134,6 +135,7 @@ def train_run(
     on_event: Callable[[TrainEvent], None] | None = None,
     resume: bool = False,
     checkpoint_every: int = CHECKPOINT_EVERY,
+    checkpoint_seconds: float | None = None,
     on_resume_saved: Callable[[Path], None] | None = None,
     _hooks: TrainHooks | None = None,
 ) -> TrainResult:
@@ -142,8 +144,10 @@ def train_run(
     Everything that can be wrong with the request (the config, the data mix, the parent and its
     growth, the resume state) is checked before ``out_dir`` is touched, so a failed request
     leaves nothing behind. Every ``checkpoint_every`` steps the resume state is saved to
-    ``out_dir/resume/``; ``resume=True`` continues from there and the directory is deleted once
-    the run finishes. ``on_resume_saved(out_dir)`` is called (on the training thread) after each
+    ``out_dir/resume/``; with ``checkpoint_seconds`` the clock decides instead: a state is saved
+    after the first step that ends at least that many seconds after the last save (a small brain
+    does 200 steps in a few seconds, a big one in over a minute). ``resume=True`` continues from
+    the saved state and the directory is deleted once the run finishes. ``on_resume_saved(out_dir)`` is called (on the training thread) after each
     save, e.g. to copy the state elsewhere with :func:`copy_resume_state`. ``device=None`` picks
     one with :func:`~airace_ml.device.pick_device`.
     """
@@ -152,6 +156,15 @@ def train_run(
         raise TypeError(f"checkpoint_every must be an integer, got {checkpoint_every!r}")
     if checkpoint_every < 1:
         raise ValueError(f"checkpoint_every must be at least 1, got {checkpoint_every}")
+    if checkpoint_seconds is not None and not (
+        isinstance(checkpoint_seconds, (int, float))
+        and not isinstance(checkpoint_seconds, bool)
+        and checkpoint_seconds >= 0
+    ):
+        raise ValueError(
+            f"checkpoint_seconds must be a number of seconds >= 0 or None, "
+            f"got {checkpoint_seconds!r}"
+        )
     out_dir = Path(out_dir)
     setup = _prepare(cfg, Path(data_root) if data_root is not None else default_data_root())
     saved = _read_resume(out_dir, cfg) if resume else None
@@ -163,6 +176,7 @@ def train_run(
         on_event=on_event,
         hooks=_hooks or TrainHooks(),
         checkpoint_every=checkpoint_every,
+        checkpoint_seconds=checkpoint_seconds,
         on_resume_saved=on_resume_saved,
         started=started,
     )
@@ -396,52 +410,73 @@ def _autocast(device: torch.device) -> contextlib.AbstractContextManager:
     return contextlib.nullcontext()
 
 
-def _cpu_copy(tree):
-    """A deep copy of a nested state dict with every tensor copied to the CPU."""
+def _copy(tree, device: torch.device | None = None):
+    """A deep copy of a nested state dict: every tensor copied, onto ``device`` if one is given
+    and where it already lives otherwise."""
     if isinstance(tree, Tensor):
-        return tree.detach().to("cpu", copy=True)
+        if device is None:
+            return tree.detach().clone()
+        return tree.detach().to(device, copy=True)
     if isinstance(tree, dict):
-        return {key: _cpu_copy(value) for key, value in tree.items()}
+        return {key: _copy(value, device) for key, value in tree.items()}
     if isinstance(tree, (list, tuple)):
-        return type(tree)(_cpu_copy(value) for value in tree)
+        return type(tree)(_copy(value, device) for value in tree)
     return tree
 
 
 @dataclass
 class _Snapshot:
-    """CPU copies of the weights and optimizer state at the last snapshot step."""
+    """Copies of the weights and optimizer state at the last snapshot step, kept on the device
+    that trains (a copy to the CPU every 25 steps costs more time than the memory is worth:
+    three times the weights)."""
 
     model: dict
     optimizer: dict
 
     @classmethod
     def take(cls, model: Transformer, optimizer: torch.optim.Optimizer) -> _Snapshot:
-        return cls(_cpu_copy(model.state_dict()), _cpu_copy(optimizer.state_dict()))
+        return cls(_copy(model.state_dict()), _copy(optimizer.state_dict()))
 
     def restore(self, model: Transformer, optimizer: torch.optim.Optimizer) -> None:
         model.load_state_dict(self.model)
-        # Optimizer.load_state_dict keeps CPU tensors as given and later steps update them in
+        # Optimizer.load_state_dict keeps the tensors it is given and later steps update them in
         # place, so it gets a copy: the snapshot must survive for the next rollback.
-        optimizer.load_state_dict(_cpu_copy(self.optimizer))
+        optimizer.load_state_dict(_copy(self.optimizer))
 
 
 @torch.inference_mode()
 def _heldout_losses(
     model: Transformer, batches: dict[str, tuple[Tensor, Tensor]], device: torch.device
 ) -> dict[str, float]:
-    """Mean next-token loss on each dataset's fixed held-out batch."""
+    """Mean next-token loss on each dataset's fixed held-out batch.
+
+    The batches (all of one sequence length) go through the model together, in passes of at most
+    :data:`MICRO_BATCH_TOKENS` tokens, and each dataset's mean is taken over its own rows.
+    """
+    if not batches:
+        return {}
+    x = torch.cat([x for x, _ in batches.values()])
+    y = torch.cat([y for _, y in batches.values()])
+    rows_per_pass = max(1, MICRO_BATCH_TOKENS // x.shape[1])
     was_training = model.training
     model.eval()
     try:
-        losses = []
-        for x, y in batches.values():
+        token_losses = []
+        for start in range(0, len(x), rows_per_pass):
+            rows = slice(start, start + rows_per_pass)
             with _autocast(device):
-                logits = model(x)
-            losses.append(F.cross_entropy(logits.float().flatten(0, 1), y.flatten()))
+                logits = model(x[rows])
+                token_losses.append(
+                    F.cross_entropy(logits.flatten(0, 1), y[rows].flatten(), reduction="none")
+                )
     finally:
         model.train(was_training)
-    values = torch.stack(losses).tolist() if losses else []
-    return dict(zip(batches, values, strict=True))
+    per_row = torch.cat(token_losses).float().view(len(x), -1).mean(dim=1)
+    means, start = [], 0
+    for bx, _ in batches.values():
+        means.append(per_row[start : start + len(bx)].mean())
+        start += len(bx)
+    return dict(zip(batches, torch.stack(means).tolist(), strict=True))
 
 
 class _Run:
@@ -457,6 +492,7 @@ class _Run:
         on_event: Callable[[TrainEvent], None] | None,
         hooks: TrainHooks,
         checkpoint_every: int,
+        checkpoint_seconds: float | None = None,
         on_resume_saved: Callable[[Path], None] | None = None,
         started: float,
     ) -> None:
@@ -467,8 +503,10 @@ class _Run:
         self.on_event = on_event
         self.hooks = hooks
         self.checkpoint_every = checkpoint_every
+        self.checkpoint_seconds = checkpoint_seconds
         self.on_resume_saved = on_resume_saved
         self.started = started
+        self.last_save = started  # when the resume state was last saved (or the run began)
 
         self.sampler = setup.sampler
         self.model = setup.model.to(device).train()
@@ -547,8 +585,9 @@ class _Run:
             if step % self.eval_every == 0 or step == steps:
                 self._evaluate(step)
             interrupted = step == self.hooks.stop_after_steps and step < steps
-            if interrupted or (step % self.checkpoint_every == 0 and step < steps):
+            if interrupted or (self._save_is_due(step) and step < steps):
                 self._save_resume()
+                self.last_save = time.perf_counter()
                 if self.on_resume_saved is not None:
                     self.on_resume_saved(self.out_dir)
             if interrupted:
@@ -556,6 +595,11 @@ class _Run:
         if status == "unstable_stopped":
             self._evaluate(self.step)  # the kept (last good) weights
         return self._finish(status)
+
+    def _save_is_due(self, step: int) -> bool:
+        if self.checkpoint_seconds is None:
+            return step % self.checkpoint_every == 0
+        return time.perf_counter() - self.last_save >= self.checkpoint_seconds
 
     def _train_step(self, step: int, lr: float) -> tuple[float, bool]:
         """One batch: forward, backward and, unless the loss or gradient is a spike, the update."""
@@ -598,14 +642,16 @@ class _Run:
         for start in range(0, len(x), rows_per_pass):
             with _autocast(self.device):
                 logits = self.model(x[start : start + rows_per_pass])
-            loss = (
-                F.cross_entropy(
-                    logits.float().flatten(0, 1),
-                    y[start : start + rows_per_pass].flatten(),
-                    reduction="sum",
+                # Inside autocast the loss still runs in float32 (PyTorch casts the logits for
+                # it), without a separate float copy of them first.
+                loss = (
+                    F.cross_entropy(
+                        logits.flatten(0, 1),
+                        y[start : start + rows_per_pass].flatten(),
+                        reduction="sum",
+                    )
+                    / self.tokens_per_step
                 )
-                / self.tokens_per_step
-            )
             del logits  # not needed by backward (the loss saved what it needs): free it now
             loss.backward()
             total += loss.detach()
@@ -620,20 +666,27 @@ class _Run:
             self.on_event(event)
 
     def _evaluate(self, step: int) -> None:
-        """Held-out loss per dataset, then one sample per probe prompt."""
+        """Held-out loss per dataset, then one sample per probe prompt (written together: a
+        batch of four costs about a quarter of four turns at the model)."""
         self.heldout = _heldout_losses(self.model, self.heldout_batches, self.device)
         self._emit(HeldoutEval(step, dict(self.heldout)))
-        for kind, prompt in self.probes:
-            options = {
-                "max_new_tokens": SAMPLE_TOKENS,
-                "temperature": SAMPLE_TEMPERATURE,
-                "seed": step,
-            }
-            if kind == "doc":
-                text = self.lm.complete(prompt, **options)
-            else:
-                text = self.lm.chat_reply([("user", prompt)], **options)
-            self._emit(Sample(step, prompt, text))
+        tok, ctx_len = self.setup.tok, self.lm.ctx_len
+        reserve = min(SAMPLE_TOKENS, ctx_len // 2)  # as TorchLM.chat_reply reserves it
+        prompts = [
+            encode_doc(tok, prompt)
+            if kind == "doc"
+            else build_chat_prompt(tok, [("user", prompt)], ctx_len, reserve)
+            for kind, prompt in self.probes
+        ]
+        replies = self.lm.generate(
+            prompts,
+            max_new_tokens=SAMPLE_TOKENS,
+            temperature=SAMPLE_TEMPERATURE,
+            top_p=SAMPLE_TOP_P,
+            seed=step,
+        )
+        for (_, prompt), reply in zip(self.probes, replies, strict=True):
+            self._emit(Sample(step, prompt, tok.decode(reply.tokens)))
 
     # -- resume state ---------------------------------------------------------------------------
 
@@ -685,7 +738,10 @@ class _Run:
         if saved_snapshot is None:
             self.snapshot = _Snapshot.take(self.model, self.optimizer)
         else:
-            self.snapshot = _Snapshot(saved_snapshot["model"], saved_snapshot["optimizer"])
+            self.snapshot = _Snapshot(
+                _copy(saved_snapshot["model"], self.device),
+                _copy(saved_snapshot["optimizer"], self.device),
+            )
         self.snapshot_is_current = saved_snapshot is None
         self.sampler.set_rng_state(info["sampler"])
         self.step = info["step"]

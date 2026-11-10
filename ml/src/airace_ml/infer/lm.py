@@ -372,16 +372,29 @@ class TorchLM:
         rng: torch.Generator,
         on_token: Callable[[int, int], None] | None = None,
     ) -> list[Generation]:
-        """Left-pad, prefill once, then decode one token per step from the KV cache."""
+        """Left-pad, prefill once, then decode one token per step from the KV cache.
+
+        Prompts of one length (a single prompt above all) need no padding, so they run without
+        masks or explicit positions: the plain causal pass, and a cheaper one.
+        """
         n = len(prompts)
-        ids, mask = self._left_pad(prompts)
-        lens = mask.sum(dim=1)
-        # Positions count real tokens only, so padding never shifts a row's RoPE phase.
-        positions = (mask.long().cumsum(dim=1) - 1).clamp(min=0)
         caps = [min(max_new_tokens, self.ctx_len - len(p)) for p in prompts]
         cache = self.model.new_kv_cache()  # one per batch; it fills lazily and is never reused
-        with self._autocast():
-            logits = self.model(ids, positions=positions, key_padding_mask=mask, kv_cache=cache)
+        padded = len({len(p) for p in prompts}) > 1
+        mask = lens = None
+        if padded:
+            ids, mask = self._left_pad(prompts)
+            lens = mask.sum(dim=1)
+            # Positions count real tokens only, so padding never shifts a row's RoPE phase.
+            positions = (mask.long().cumsum(dim=1) - 1).clamp(min=0)
+            with self._autocast():
+                logits = self.model(
+                    ids, positions=positions, key_padding_mask=mask, kv_cache=cache
+                )
+        else:
+            ids = torch.tensor(prompts, dtype=torch.long, device=self.device)
+            with self._autocast():
+                logits = self.model(ids, kv_cache=cache)
         logits = logits[:, -1].float()
         gens = [Generation([], [], [], False) for _ in prompts]
         done = [False] * n
@@ -391,7 +404,9 @@ class TorchLM:
             # Clamped so a probability stays in (0, 1] even if float32 underflows to zero.
             token_p = raw.gather(1, nxt[:, None])[:, 0].clamp_min(_FLOAT_TINY)
             top1 = raw.max(dim=-1).values
-            nxt_l, token_p_l, top1_l = nxt.tolist(), token_p.tolist(), top1.tolist()
+            # One trip to the host for all three (a float64 holds a token id and a float32).
+            packed = torch.stack([nxt.double(), token_p.double(), top1.double()]).tolist()
+            nxt_l, token_p_l, top1_l = [int(t) for t in packed[0]], packed[1], packed[2]
             for i, gen in enumerate(gens):
                 if done[i]:
                     continue
@@ -406,14 +421,19 @@ class TorchLM:
                 done[i] = len(gen.tokens) >= caps[i]
             if all(done):
                 break
-            # Finished rows keep decoding harmlessly (their output is ignored); their positions
-            # are clamped so nothing is ever fed past the attention span.
-            mask = torch.cat([mask, mask.new_ones(n, 1)], dim=1)
-            pos = (lens + step).clamp(max=self.ctx_len - 1)[:, None]
-            with self._autocast():
-                logits = self.model(
-                    nxt[:, None], positions=pos, key_padding_mask=mask, kv_cache=cache
-                )
+            # Finished rows keep decoding harmlessly (their output is ignored). Padded rows get
+            # explicit positions, clamped so nothing is ever fed past the attention span; rows
+            # of one length share a cap, so their next position is always inside it.
+            if padded:
+                mask = torch.cat([mask, mask.new_ones(n, 1)], dim=1)
+                pos = (lens + step).clamp(max=self.ctx_len - 1)[:, None]
+                with self._autocast():
+                    logits = self.model(
+                        nxt[:, None], positions=pos, key_padding_mask=mask, kv_cache=cache
+                    )
+            else:
+                with self._autocast():
+                    logits = self.model(nxt[:, None], kv_cache=cache)
             logits = logits[:, -1].float()
         return gens
 

@@ -133,3 +133,12 @@ def test_tiny_data_root_conversations_are_chats(tiny_data_root, tiny_tok):
         d = c.doc(i).tolist()
         assert d[:2] == [tiny_tok.bos_id, tiny_tok.user_id] and d[-1] == tiny_tok.end_id
         assert tiny_tok.ai_id in d
+
+
+def test_documents_are_plain_array_views_of_the_memory_map(tmp_path):
+    write_corpus(tmp_path, [[1, 5, 6], [1, 7], [1, 8, 9, 10]], _tags(3), {"dataset": "web"})
+    c = Corpus.open(tmp_path)
+    doc = c.doc(2)
+    assert type(doc) is np.ndarray and doc.tolist() == [1, 8, 9, 10]  # not a np.memmap per slice
+    assert np.shares_memory(doc, c.tokens) and isinstance(c.tokens, np.memmap)  # and no copy
+    assert not doc.flags.writeable

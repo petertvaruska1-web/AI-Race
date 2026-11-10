@@ -21,6 +21,9 @@ from airace_ml.worker.blobs import download_tar, upload_dir_tar
 log = logging.getLogger(__name__)
 
 RESUME_UPLOAD_EVERY_S = 120.0
+# Seconds between the trainer's saves of its resume state on this computer. By the clock, not
+# by steps: 200 steps are 5 seconds of a small brain and over a minute of a big one.
+RESUME_SAVE_EVERY_S = 30.0
 
 
 class ResumeUploader:

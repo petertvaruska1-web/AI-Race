@@ -46,7 +46,12 @@ from airace_ml.train.trainer import CHECKPOINT_EVERY, RESUME_DIR, has_resume_sta
 from airace_ml.worker.agent import JobContext
 from airace_ml.worker.blobs import download_tar, upload_dir_tar
 from airace_ml.worker.models import ModelCache
-from airace_ml.worker.moving import RESUME_UPLOAD_EVERY_S, ResumeUploader, restore_resume
+from airace_ml.worker.moving import (
+    RESUME_SAVE_EVERY_S,
+    RESUME_UPLOAD_EVERY_S,
+    ResumeUploader,
+    restore_resume,
+)
 
 log = logging.getLogger("airace.worker")
 MAX_INTERVIEW_ANSWERS = 5
@@ -95,7 +100,9 @@ class JobRunner:
             capacity=model_cache_size,
         )
         self.bench_max_items = bench_max_items
-        # Steps between the trainer's resume saves, and seconds between uploads of them (Fair mode).
+        # Seconds between the trainer's resume saves (None: every `checkpoint_every` steps
+        # instead), and seconds between uploads of them (Fair mode).
+        self.checkpoint_seconds: float | None = RESUME_SAVE_EVERY_S
         self.checkpoint_every = CHECKPOINT_EVERY
         self.resume_upload_every_s = RESUME_UPLOAD_EVERY_S
         self._creativity: tuple[Judge | None, NoveltyIndex | None] | None = None
@@ -160,6 +167,7 @@ class JobRunner:
                 on_event=lambda e: ctx.progress(event_to_dict(e)),
                 resume=resume,
                 checkpoint_every=self.checkpoint_every,
+                checkpoint_seconds=self.checkpoint_seconds,
                 on_resume_saved=uploader.saved if uploader else None,
             )
         finally:

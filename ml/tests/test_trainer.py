@@ -847,3 +847,134 @@ def test_a_judge_recipe_step_fits_the_8gb_reference_card(gate_data_root, tmp_pat
     r = train_run(c, out_dir=tmp_path / "j", data_root=gate_data_root, device=torch.device("cuda"))
     assert r.status == "completed" and r.steps == 1 and r.tokens == 32768
     assert torch.cuda.max_memory_allocated() < 4 * 1024**3
+
+
+# -- engine 2: the same training with less waiting -------------------------------------------------
+
+
+def test_probe_samples_are_written_in_one_batch(tiny_data_root, tmp_path, monkeypatch):
+    from airace_ml.infer.lm import TorchLM
+
+    batches = []
+    real = TorchLM.generate
+
+    def spy(self, prompts, **kwargs):
+        batches.append(len(prompts))
+        return real(self, prompts, **kwargs)
+
+    monkeypatch.setattr(TorchLM, "generate", spy)
+    ev = []
+    train_run(
+        cfg(token_budget=1024 * 30, probe_prompts=["Tell me a story."]),
+        out_dir=tmp_path / "r",
+        data_root=tiny_data_root,
+        on_event=ev.append,
+    )
+    evals = [e for e in ev if isinstance(e, HeldoutEval)]
+    samples = [e for e in ev if isinstance(e, Sample)]
+    assert evals and batches == [4] * len(evals)  # the three fixed probes and the player's, together
+    assert [s.prompt for s in samples[:4]] == [
+        "Once upon a time",
+        "Hello! How are you?",
+        "The capital of France is",
+        "Tell me a story.",
+    ]
+    assert len(samples) == 4 * len(evals) and all(isinstance(s.text, str) for s in samples)
+    assert [s.step for s in samples[:4]] == [evals[0].step] * 4
+
+
+def test_heldout_losses_in_one_pass_match_each_dataset_alone():
+    torch.manual_seed(0)
+    model = Transformer(ModelShape(2, 64, 64), 512).train()
+    batches = {
+        name: (torch.randint(0, 512, (8, 64)), torch.randint(0, 512, (8, 64)))
+        for name in ("web", "books", "code")
+    }
+    got = trainer_module._heldout_losses(model, batches, torch.device("cpu"))
+    assert list(got) == ["web", "books", "code"] and model.training
+    model.eval()
+    for name, (x, y) in batches.items():
+        want = F.cross_entropy(model(x).flatten(0, 1), y.flatten()).item()
+        assert got[name] == pytest.approx(want, rel=1e-5)
+    assert trainer_module._heldout_losses(model, {}, torch.device("cpu")) == {}
+
+
+def test_resume_states_can_be_saved_by_time_instead_of_steps(tiny_data_root, tmp_path):
+    c = cfg(token_budget=1024 * 12)
+    saves = []
+    train_run(
+        c,
+        out_dir=tmp_path / "often",
+        data_root=tiny_data_root,
+        checkpoint_seconds=0.0,
+        on_resume_saved=lambda _dir: saves.append(1),
+    )
+    assert len(saves) == 11  # after every step but the last, which saves the finished AI instead
+    saves.clear()
+    train_run(
+        c,
+        out_dir=tmp_path / "never",
+        data_root=tiny_data_root,
+        checkpoint_every=2,
+        checkpoint_seconds=3600.0,
+        on_resume_saved=lambda _dir: saves.append(1),
+    )
+    assert saves == []  # the clock decides, not the step count
+    with pytest.raises(ValueError, match="checkpoint_seconds"):
+        train_run(c, out_dir=tmp_path / "bad", data_root=tiny_data_root, checkpoint_seconds=-1.0)
+    assert not (tmp_path / "bad").exists()
+
+
+def test_a_run_saved_by_time_resumes_to_the_same_ai(tiny_data_root, tmp_path, plain_run):
+    c = cfg(token_budget=1024 * 24)
+    out = tmp_path / "p"
+    part = train_run(
+        c,
+        out_dir=out,
+        data_root=tiny_data_root,
+        checkpoint_seconds=0.0,
+        _hooks=TrainHooks(stop_after_steps=12),
+    )
+    assert part.status == "interrupted" and can_resume(out, c)
+    train_run(c, out_dir=out, data_root=tiny_data_root, resume=True, checkpoint_seconds=0.0)
+    _assert_same_run(out, plain_run)
+
+
+@pytest.mark.gpu
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
+def test_rollback_snapshots_stay_on_the_card_and_survive_a_resume(
+    tiny_data_root, tmp_path, monkeypatch
+):
+    where = []
+    real = trainer_module._Snapshot.take.__func__
+
+    def take(cls, model, optimizer):
+        snapshot = real(cls, model, optimizer)
+        where.append({t.device.type for t in snapshot.model.values()})
+        return snapshot
+
+    monkeypatch.setattr(trainer_module._Snapshot, "take", classmethod(take))
+    c = cfg(token_budget=1024 * 40)
+    cuda = torch.device("cuda")
+    out = tmp_path / "p"
+    part = train_run(
+        c,
+        out_dir=out,
+        data_root=tiny_data_root,
+        device=cuda,
+        _hooks=TrainHooks(loss_override=_nan_at(35), stop_after_steps=30),
+    )
+    assert part.status == "interrupted" and where and all(d == {"cuda"} for d in where)
+    ev = []
+    res = train_run(
+        c,
+        out_dir=out,
+        data_root=tiny_data_root,
+        device=cuda,
+        resume=True,
+        on_event=ev.append,
+        _hooks=TrainHooks(loss_override=_nan_at(35)),
+    )
+    assert res.status == "completed" and res.steps == 40
+    assert any(isinstance(e, Instability) and e.action == "rollback" for e in ev)
+    assert all(torch.isfinite(p).all() for p in load_checkpoint(out)[0].parameters())

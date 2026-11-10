@@ -20,20 +20,37 @@ from airace_ml.tokenizer import VOCAB_SIZE
 
 ROPE_BASE = 10000.0
 INIT_STD = 0.02
+_ROPE_CACHE_LENGTHS = 16  # a model sees few sequence lengths; beyond this the tables start over
 
 
 class RMSNorm(nn.Module):
-    """Root-mean-square norm. ``eps`` is a saved buffer so growth can rescale it per module."""
+    """Root-mean-square norm: ``x * rsqrt(mean(x**2) + eps) * weight``, as one fused operation.
+
+    ``eps`` is a saved buffer so growth can rescale it per module. The fused operation takes it
+    as a plain number, so it is read from the buffer once and again only when the buffer changes
+    (reading a CUDA buffer on every call would stall the card on every call).
+    """
 
     def __init__(self, dim: int, eps: float = 1e-5):
         super().__init__()
         self.weight = nn.Parameter(torch.ones(dim))
         self.register_buffer("eps", torch.tensor(eps, dtype=torch.float32))
 
+    def _eps_value(self) -> float:
+        eps = self.eps
+        try:
+            version = eps._version
+        except RuntimeError:  # a buffer made in inference mode has no version counter
+            return float(eps)
+        known = self.__dict__.get("_eps_known")
+        # The buffer itself is kept (not its id, which a new tensor could reuse), with the
+        # version an in-place write such as load_state_dict's bumps.
+        if known is None or known[0] is not eps or known[1] != version:
+            known = self.__dict__["_eps_known"] = (eps, version, float(eps))
+        return known[2]
+
     def forward(self, x: Tensor) -> Tensor:
-        xf = x.float()
-        normed = xf * torch.rsqrt(xf.pow(2).mean(-1, keepdim=True) + self.eps.float())
-        return normed.to(x.dtype) * self.weight
+        return F.rms_norm(x, (x.shape[-1],), self.weight.to(x.dtype), self._eps_value())
 
 
 @dataclass
@@ -59,6 +76,19 @@ def _apply_rope(x: Tensor, cos: Tensor, sin: Tensor) -> Tensor:
     x1, x2 = x[..., : HEAD_DIM // 2], x[..., HEAD_DIM // 2 :]
     rotated = torch.cat([-x2, x1], dim=-1)
     return x * cos.to(x.dtype) + rotated * sin.to(x.dtype)
+
+
+def _in_autocast_dtype(x: Tensor) -> Tensor:
+    """``x`` in the autocast dtype while autocast is on (else ``x`` itself).
+
+    Autocast casts a float32 input of every matrix product on its own. Casting a tensor that
+    several of them read (the normalised stream: q, k and v; gate and up) here, once, gives them
+    the very same values with one pass over it instead of one each.
+    """
+    kind = x.device.type
+    if torch.is_autocast_enabled(kind):
+        return x.to(torch.get_autocast_dtype(kind))
+    return x
 
 
 class Attention(nn.Module):
@@ -127,8 +157,9 @@ class Block(nn.Module):
         cache: KVCache | None,
         layer: int,
     ) -> Tensor:
-        x = x + self.attn(self.attn_norm(x), cos, sin, attn_mask, is_causal, cache, layer)
-        return x + self.mlp(self.mlp_norm(x))
+        h = _in_autocast_dtype(self.attn_norm(x))
+        x = x + self.attn(h, cos, sin, attn_mask, is_causal, cache, layer)
+        return x + self.mlp(_in_autocast_dtype(self.mlp_norm(x)))
 
 
 def _attention_mask(
@@ -165,6 +196,8 @@ class Transformer(nn.Module):
         self.norm_f = RMSNorm(shape.d_model)
         self.lm_head = nn.Linear(shape.d_model, vocab_size, bias=False)
         self.lm_head.weight = self.tok_emb.weight  # tied
+        # RoPE tables for positions 0..t-1, by (t, device): not parameters, never saved.
+        self._rope_cache: dict[tuple[int, torch.device], tuple[Tensor, Tensor]] = {}
         self._init_weights()
 
     def _init_weights(self) -> None:
@@ -183,6 +216,24 @@ class Transformer(nn.Module):
         """Unique trainable parameters (the tied head is counted once)."""
         return sum(p.numel() for p in self.parameters())
 
+    def _default_rope(self, past: int, t: int, device: torch.device) -> tuple[Tensor, Tensor]:
+        """cos/sin tables ``[1, 1, t, HEAD_DIM]`` for positions ``past .. past + t - 1``, the
+        same for every row. Those of a whole sequence (``past == 0``: every training and scoring
+        pass) are built once per length and kept."""
+        if past:
+            return _rope_tables((past + torch.arange(t, device=device))[None])
+        key = (t, device)
+        tables = self._rope_cache.get(key)
+        if tables is None:
+            if len(self._rope_cache) >= _ROPE_CACHE_LENGTHS:
+                self._rope_cache.clear()
+            # Built outside inference mode even when the caller is in it: a table made there
+            # could never be used by a later training pass.
+            with torch.inference_mode(False):
+                tables = _rope_tables(torch.arange(t, device=device)[None])
+            self._rope_cache[key] = tables
+        return tables
+
     def forward(
         self,
         idx: Tensor,
@@ -199,9 +250,7 @@ class Transformer(nn.Module):
         """
         b, t = idx.shape
         past = kv_cache.length if kv_cache is not None else 0
-        if positions is None:
-            positions = (past + torch.arange(t, device=idx.device)).expand(b, t)
-        elif positions.shape != idx.shape:
+        if positions is not None and positions.shape != idx.shape:
             raise ValueError(
                 f"positions {tuple(positions.shape)} must match idx {tuple(idx.shape)}"
             )
@@ -210,7 +259,12 @@ class Transformer(nn.Module):
                 f"key_padding_mask {tuple(key_padding_mask.shape)} must be (B, T_total) = "
                 f"{(b, past + t)}"
             )
-        cos, sin = _rope_tables(positions)
+        if positions is None:
+            cos, sin = self._default_rope(past, t, idx.device)
+        else:
+            cos, sin = _rope_tables(positions)
+        # Cast once here rather than in every block (q and k are in the autocast dtype).
+        cos, sin = _in_autocast_dtype(cos), _in_autocast_dtype(sin)
         attn_mask, is_causal = _attention_mask(t, past, key_padding_mask, idx.device)
         x = self.tok_emb(idx)
         for layer, block in enumerate(self.blocks):
