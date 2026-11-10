@@ -16,6 +16,10 @@ from airace_ml.tokenizer import SPECIAL_TOKENS
 _FRAMING_IDS = SPECIAL_TOKENS.index("<|ai|>") + 1
 
 
+# What a pool may do to a document it hands out: (tokens, the sampler's rng) -> tokens.
+DocTransform = Callable[[np.ndarray, np.random.Generator], np.ndarray]
+
+
 class MixtureError(ValueError):
     """The requested mixture cannot be sampled. The message names the offending dataset."""
 
@@ -27,7 +31,9 @@ class DocPool:
     token, i.e. made only of the framing tokens (pad, bos, end, user, ai) such as the
     ``[<|bos|>]`` that encoding a blank text produces: training on those would teach nothing.
     A *balanced* pool draws a topic uniformly among the topics that are present, then a document
-    of that topic; otherwise every document is equally likely.
+    of that topic; otherwise every document is equally likely. A pool with a ``transform`` hands
+    each drawn document out as ``transform(doc, rng)`` returns it (casual typing, see
+    :mod:`airace_ml.data.casual`).
     """
 
     def __init__(
@@ -35,20 +41,28 @@ class DocPool:
         n_docs: int,
         fetch: Callable[[int], np.ndarray],
         topic_groups: list[np.ndarray] | None,
+        transform: DocTransform | None = None,
     ) -> None:
         self._n = n_docs
         self._fetch = fetch  # position in [0, n_docs) -> token array
         self._groups = topic_groups  # positions per present topic; None = unbalanced
+        self._transform = transform
 
     @classmethod
-    def from_corpus(cls, corpus: Corpus, doc_ids: np.ndarray, balanced: bool) -> "DocPool":
+    def from_corpus(
+        cls,
+        corpus: Corpus,
+        doc_ids: np.ndarray,
+        balanced: bool,
+        transform: DocTransform | None = None,
+    ) -> "DocPool":
         ids = np.asarray(doc_ids, dtype=np.int64)
         ids = ids[(corpus.offsets[ids + 1] - corpus.offsets[ids]) > 0]
         groups = None
         if balanced and len(ids):
             topics = corpus.tags.topic[ids]
             groups = [np.flatnonzero(topics == t) for t in np.unique(topics)]
-        return cls(len(ids), lambda pos: corpus.doc(int(ids[pos])), groups)
+        return cls(len(ids), lambda pos: corpus.doc(int(ids[pos])), groups, transform)
 
     @classmethod
     def from_docs(cls, docs: list[list[int]]) -> "DocPool":
@@ -63,9 +77,11 @@ class DocPool:
         if not self._n:
             raise MixtureError("cannot sample a document from an empty pool")
         if self._groups is None:
-            return self._fetch(int(rng.integers(self._n)))
-        group = self._groups[int(rng.integers(len(self._groups)))]
-        return self._fetch(int(group[int(rng.integers(len(group)))]))
+            doc = self._fetch(int(rng.integers(self._n)))
+        else:
+            group = self._groups[int(rng.integers(len(self._groups)))]
+            doc = self._fetch(int(group[int(rng.integers(len(group)))]))
+        return doc if self._transform is None else self._transform(doc, rng)
 
 
 class MixtureSampler:
@@ -155,12 +171,14 @@ def load_pools(
     prep: PrepConfig,
     purchases: Mapping[str, float],
     custom: Mapping[str, list[list[int]]],
+    transform: DocTransform | None = None,
 ) -> dict[str, DocPool]:
     """Build a pool for every dataset with positive weight; other datasets are never opened.
 
     ``purchases`` maps a dataset id to the fraction of it the player owns (default: all of it).
     Custom datasets (``notebook``, ``coaching``) come from ``custom`` token lists via
-    :meth:`DocPool.from_docs` (blank documents dropped, no other filtering).
+    :meth:`DocPool.from_docs` (blank documents dropped, no other filtering). ``transform`` is
+    given to the base datasets' pools only: the player's own text is read as written.
     """
     known = DATASET_IDS + CUSTOM_DATASET_IDS
     for name, w in weights.items():
@@ -181,5 +199,7 @@ def load_pools(
         else:
             corpus = Corpus.open(corpus_dir(root) / name)
             ids = eligible_docs(corpus, prep, purchases.get(name, 1.0))
-            pools[name] = DocPool.from_corpus(corpus, ids, balanced=prep.variety == "balanced")
+            pools[name] = DocPool.from_corpus(
+                corpus, ids, balanced=prep.variety == "balanced", transform=transform
+            )
     return pools
