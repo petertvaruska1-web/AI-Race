@@ -1,0 +1,20 @@
+{
+  "common": [],
+  "runs": [
+    ["tiny_adamw_lr1.5e-3", ["--lr", "1.5e-3"]],
+    ["tiny_adamw_lr4e-3", ["--lr", "4e-3"]],
+    ["tiny_adamw_lr6e-3", ["--lr", "6e-3"]],
+    ["tiny_adamw_wd0", ["--wd", "0"]],
+    ["tiny_adamw_linear0", ["--sched", "linear", "--min_ratio", "0"]],
+    ["tiny_adamw_b4096", ["--batch", "4096"]],
+    ["tiny_adamw_base_s2", ["--seed", "2"]],
+    ["tiny_muon_01", ["--opt", "muon", "--lr", "0.01", "--wd", "0"]],
+    ["tiny_muon_04", ["--opt", "muon", "--lr", "0.04", "--wd", "0"]],
+    ["tiny_muon_08", ["--opt", "muon", "--lr", "0.08", "--wd", "0"]],
+    ["tiny_muon_02_emb6e-3", ["--opt", "muon", "--lr", "0.02", "--wd", "0", "--emb_lr", "6e-3"]],
+    ["tiny_muon_02_emb1.2e-2", ["--opt", "muon", "--lr", "0.02", "--wd", "0", "--emb_lr", "1.2e-2"]],
+    ["tiny_muon_02_embwd0", ["--opt", "muon", "--lr", "0.02", "--wd", "0", "--emb_wd", "0"]],
+    ["tiny_muon_02_linear0", ["--opt", "muon", "--lr", "0.02", "--wd", "0", "--sched", "linear", "--min_ratio", "0"]],
+    ["tiny_muon_02_s2", ["--opt", "muon", "--lr", "0.02", "--wd", "0", "--seed", "2"]]
+  ]
+}

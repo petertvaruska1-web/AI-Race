@@ -1,0 +1,21 @@
+{
+  "common": [],
+  "runs": [
+    ["tiny_adamw_lr4e-3_tok16.4M", ["--lr", "4e-3", "--tokens", "16400000"]],
+    ["tiny_adamw_lr4e-3_tok18.9M", ["--lr", "4e-3", "--tokens", "18900000"]],
+    ["tiny_adamw_careful", ["--lr", "6e-4", "--clip", "0.5", "--warmup", "0.06"]],
+    ["tiny_adamw_bold", ["--lr", "1.2e-2", "--clip", "2.5", "--warmup", "0.02"]],
+    ["tiny_adamw_lr4e-3_decay0.4", ["--lr", "4e-3", "--decay", "0.4"]],
+    ["tiny_adamw_lr4e-3_decay0.4_min0.02", ["--lr", "4e-3", "--decay", "0.4", "--min_ratio", "0.02"]],
+    ["tiny_muon_015_emb1.2e-2", ["--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2"]],
+    ["tiny_muon_01_emb1.2e-2", ["--opt", "muon", "--lr", "0.01", "--wd", "0", "--emb_lr", "1.2e-2"]],
+    ["tiny_muon_02_emb2.4e-2", ["--opt", "muon", "--lr", "0.02", "--wd", "0", "--emb_lr", "2.4e-2"]],
+    ["tiny_muon_015_decay0.4", ["--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2", "--decay", "0.4"]],
+    ["tiny_muon_015_decay0.4_min0.02", ["--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2", "--decay", "0.4", "--min_ratio", "0.02"]],
+    ["tiny_muon_015_mom0.9", ["--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2", "--momentum", "0.9"]],
+    ["tiny_muon_015_ns3", ["--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2", "--ns_steps", "3"]],
+    ["tiny_muon_015_wd0.05", ["--opt", "muon", "--lr", "0.015", "--wd", "0.05", "--emb_lr", "1.2e-2"]],
+    ["tiny_muon_005_emb1.2e-2", ["--opt", "muon", "--lr", "0.005", "--wd", "0", "--emb_lr", "1.2e-2"]],
+    ["tiny_muon_015_noclip", ["--opt", "muon", "--lr", "0.015", "--wd", "0", "--emb_lr", "1.2e-2", "--clip", "0"]]
+  ]
+}
