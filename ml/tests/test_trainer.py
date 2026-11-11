@@ -156,7 +156,7 @@ def test_finishing_mixture(tiny_data_root, tmp_path):
         data_root=tiny_data_root,
     )
     share = r.tokens_per_dataset.get("code", 0) / sum(r.tokens_per_dataset.values())
-    assert 0.15 <= share <= 0.25
+    assert 0.35 <= share <= 0.45  # the decay phase: the last two fifths of the run
 
 
 def _telemetry(out_dir):
@@ -251,12 +251,15 @@ def test_rollback_halves_lr_and_stop_keeps_last_good_weights(tiny_data_root, tmp
 
 def test_finishing_mix_loss_level_is_not_instability(tiny_data_root, tmp_path):
     # Harder finishing data sits at a much higher loss than the stable phase. The detector
-    # relearns the level when the mix switches (step 41) instead of calling every step a spike.
+    # relearns the level when the mix switches (step 31 of 50) instead of calling every step a
+    # spike.
+    switch = trainer_module._decay_start(50)
+    assert switch == 30
     r = train_run(
         cfg(mixture={"creative": 1.0}, finishing_mixture={"code": 1.0}, token_budget=1024 * 50),
         out_dir=tmp_path / "f",
         data_root=tiny_data_root,
-        _hooks=TrainHooks(loss_override=lambda s, loss: loss + 10.0 if s > 40 else loss),
+        _hooks=TrainHooks(loss_override=lambda s, loss: loss + 10.0 if s > switch else loss),
     )
     assert r.status == "completed"
 
@@ -528,7 +531,7 @@ def _assert_same_run(resumed, uninterrupted):
         torch.testing.assert_close(p, q, atol=1e-6, rtol=0)
 
 
-# 30 steps: the last 6 (steps 25 to 30) are the decay phase, which trains on the finishing mix.
+# 30 steps: the last 12 (steps 19 to 30) are the decay phase, which trains on the finishing mix.
 _FINISHING = cfg(mixture={"creative": 1.0}, finishing_mixture={"code": 1.0}, token_budget=1024 * 30)
 
 
@@ -978,3 +981,94 @@ def test_rollback_snapshots_stay_on_the_card_and_survive_a_resume(
     assert res.status == "completed" and res.steps == 40
     assert any(isinstance(e, Instability) and e.action == "rollback" for e in ev)
     assert all(torch.isfinite(p).all() for p in load_checkpoint(out)[0].parameters())
+
+
+# -- engine 2: what trains a run, and what makes a run the same run -------------------------------
+
+
+def test_a_run_is_trained_by_engine_2(tiny_data_root, tmp_path, monkeypatch):
+    from airace_ml.data.casual import CASUAL_SHARE, CasualTyping
+    from airace_ml.train.optim import MuonAdamW
+
+    seen = {}
+    real_pools, real_optimizer = trainer_module.load_pools, trainer_module._make_optimizer
+
+    def pools(*args, **kwargs):
+        seen["transform"] = kwargs.get("transform")
+        return real_pools(*args, **kwargs)
+
+    def optimizer(model, style):
+        seen["optimizer"] = real_optimizer(model, style)
+        return seen["optimizer"]
+
+    monkeypatch.setattr(trainer_module, "load_pools", pools)
+    monkeypatch.setattr(trainer_module, "_make_optimizer", optimizer)
+    r = train_run(cfg(token_budget=1024 * 6), out_dir=tmp_path / "r", data_root=tiny_data_root)
+    assert isinstance(seen["transform"], CasualTyping) and seen["transform"].share == CASUAL_SHARE
+    opt = seen["optimizer"]
+    assert isinstance(opt, MuonAdamW)
+    kinds = {g["kind"]: g for g in opt.param_groups}
+    style = trainer_module.learning_style(0.5)
+    assert kinds["muon"]["peak_lr"] == style.peak_lr and kinds["adam"]["peak_lr"] == style.other_lr
+    model, _ = load_checkpoint(r.out_dir)
+    n_matrices = sum(len(g["params"]) for g in opt.param_groups if g["kind"] == "muon")
+    assert n_matrices == 7 * model.shape.n_layer  # q, k, v, o, gate, up, down of every block
+    assert r.meta.runs[-1]["engine"] == trainer_module.ENGINE_VERSION == 2
+
+
+def test_a_run_is_the_same_run_wherever_its_parents_folder_is(tiny_data_root, tmp_path):
+    import shutil
+
+    parent = train_run(
+        cfg(run_id="parent", token_budget=1024 * 6), out_dir=tmp_path / "pc1" / "parent",
+        data_root=tiny_data_root,
+    )
+    child = cfg(run_id="child", token_budget=1024 * 24, parent_dir=str(parent.out_dir))
+    full = train_run(child, out_dir=tmp_path / "full", data_root=tiny_data_root)
+    part = train_run(
+        child, out_dir=tmp_path / "pc1" / "out", data_root=tiny_data_root,
+        _hooks=TrainHooks(stop_after_steps=12),
+    )
+    assert part.status == "interrupted"
+    # The run moves to another computer: its state arrives there, and so does the parent, in
+    # another folder.
+    shutil.copytree(tmp_path / "pc1" / "out", tmp_path / "pc2" / "out")
+    shutil.copytree(parent.out_dir, tmp_path / "pc2" / "elsewhere" / "parent")
+    moved = cfg(
+        run_id="child", token_budget=1024 * 24,
+        parent_dir=str(tmp_path / "pc2" / "elsewhere" / "parent"),
+    )
+    assert can_resume(tmp_path / "pc2" / "out", moved)
+    res = train_run(moved, out_dir=tmp_path / "pc2" / "out", data_root=tiny_data_root, resume=True)
+    assert res.status == "completed"
+    _assert_same_run(tmp_path / "pc2" / "out", full.out_dir)
+    # Another parent in that folder is another run.
+    other = train_run(
+        cfg(run_id="other", token_budget=1024 * 6, seed=5), out_dir=tmp_path / "other",
+        data_root=tiny_data_root,
+    )
+    shutil.copytree(tmp_path / "pc1" / "out", tmp_path / "pc3" / "out")
+    imposter = cfg(run_id="child", token_budget=1024 * 24, parent_dir=str(other.out_dir))
+    assert not can_resume(tmp_path / "pc3" / "out", imposter)
+    with pytest.raises(ValueError, match="different run config"):
+        train_run(imposter, out_dir=tmp_path / "pc3" / "out", data_root=tiny_data_root, resume=True)
+
+
+def test_a_state_saved_by_another_engine_is_never_continued(tiny_data_root, tmp_path):
+    import json
+
+    c = cfg(token_budget=1024 * 12)
+    out = tmp_path / "p"
+    train_run(c, out_dir=out, data_root=tiny_data_root, _hooks=TrainHooks(stop_after_steps=6))
+    assert can_resume(out, c)
+    state = out / "resume" / "state.json"
+    info = json.loads(state.read_text(encoding="utf-8"))
+    assert info["run"]["engine"] == 2 and "parent_dir" not in info["run"]["config"]
+    old = {k: v for k, v in info.items() if k != "run"}  # as engine 1 wrote it: no identity
+    state.write_text(json.dumps(old), encoding="utf-8")
+    assert has_resume_state(out) and not can_resume(out, c)
+    with pytest.raises(ValueError, match="training engine"):
+        train_run(c, out_dir=out, data_root=tiny_data_root, resume=True)
+    info["run"]["engine"] = 3
+    state.write_text(json.dumps(info), encoding="utf-8")
+    assert not can_resume(out, c)

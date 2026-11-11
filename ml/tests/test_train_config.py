@@ -6,7 +6,14 @@ import pytest
 
 from airace_ml.data.prep import PrepConfig
 from airace_ml.model.shape import ModelShape
-from airace_ml.train.config import TrainRunConfig, effective_mixture, learning_style
+from airace_ml.train.config import (
+    BOLD_LR,
+    CAREFUL_LR,
+    OTHER_LR_SHARE,
+    TrainRunConfig,
+    effective_mixture,
+    learning_style,
+)
 from airace_ml.train.events import (
     Done,
     HeldoutEval,
@@ -15,16 +22,22 @@ from airace_ml.train.events import (
     Sample,
     event_to_dict,
 )
-from airace_ml.train.schedule import wsd_lr
+from airace_ml.train.schedule import DECAY_FRAC, MIN_LR_RATIO, wsd_factor, wsd_lr
 from airace_ml.train.stability import SpikeDetector
 
 
 def test_learning_style_endpoints_and_monotonic():
     lo, hi = learning_style(0.0), learning_style(1.0)
-    assert math.isclose(lo.peak_lr, 6e-4) and math.isclose(hi.peak_lr, 1.2e-2)
+    assert math.isclose(lo.peak_lr, CAREFUL_LR) and math.isclose(hi.peak_lr, BOLD_LR)
     assert (lo.clip_norm, hi.clip_norm) == (0.5, 2.5) and math.isclose(lo.warmup_frac, 0.06)
     lrs = [learning_style(i / 10).peak_lr for i in range(11)]
     assert lrs == sorted(lrs)
+    # Careful sits inside the range where the optimizer is near its best (0.005 to 0.02, ADR 0009)
+    # and so does the middle of the slider; Bold is beyond it.
+    assert 0.005 <= lo.peak_lr < learning_style(0.5).peak_lr <= 0.02 < hi.peak_lr
+    for i in range(11):  # the embedding and the gains follow the matrices
+        st = learning_style(i / 10)
+        assert math.isclose(st.other_lr, OTHER_LR_SHARE * st.peak_lr)
     with pytest.raises(ValueError):
         learning_style(1.5)
 
@@ -37,9 +50,14 @@ def test_wsd_shape():
     assert math.isclose(wsd_lr(w, T, st), st.peak_lr) and math.isclose(
         wsd_lr(500, T, st), st.peak_lr
     )
-    assert math.isclose(wsd_lr(T - 1, T, st), 0.1 * st.peak_lr, rel_tol=1e-3)
-    decay = [wsd_lr(s, T, st) for s in range(800, T)]
-    assert decay == sorted(decay, reverse=True)
+    assert math.isclose(wsd_lr(T - 1, T, st), MIN_LR_RATIO * st.peak_lr, rel_tol=1e-3)
+    decay = [wsd_lr(s, T, st) for s in range(T - int(DECAY_FRAC * T), T)]
+    assert decay == sorted(decay, reverse=True) and len(decay) == 400
+    # the factor alone is the same curve, whatever the peak
+    assert math.isclose(wsd_factor(500, T, st.warmup_frac), 1.0)
+    assert math.isclose(wsd_factor(T - 1, T, st.warmup_frac), MIN_LR_RATIO, rel_tol=1e-3)
+    for s in (0, 10, 500, 700, 999):
+        assert math.isclose(wsd_lr(s, T, st), st.peak_lr * wsd_factor(s, T, st.warmup_frac))
 
 
 def test_effective_mixture():
@@ -96,8 +114,8 @@ def test_wsd_tiny_runs_and_floor():
     for total in (1, 2, 3, 5):
         lrs = [wsd_lr(s, total, st) for s in range(total)]
         assert all(0 < lr <= st.peak_lr for lr in lrs)
-    assert math.isclose(wsd_lr(1, 2, st), 0.1 * st.peak_lr)
-    assert math.isclose(wsd_lr(50, 10, st), 0.1 * st.peak_lr)  # past the end holds the floor
+    assert math.isclose(wsd_lr(1, 2, st), MIN_LR_RATIO * st.peak_lr)
+    assert math.isclose(wsd_lr(50, 10, st), MIN_LR_RATIO * st.peak_lr)  # past the end: the floor
     with pytest.raises(ValueError):
         wsd_lr(0, 0, st)
     with pytest.raises(ValueError):
@@ -107,8 +125,8 @@ def test_wsd_tiny_runs_and_floor():
 def test_wsd_decay_starts_at_peak_and_warmup_is_linear():
     st = learning_style(0.5)
     T = 1000
-    assert math.isclose(wsd_lr(T - 200, T, st), st.peak_lr)
-    assert wsd_lr(T - 199, T, st) < st.peak_lr
+    assert math.isclose(wsd_lr(T - 400, T, st), st.peak_lr)
+    assert wsd_lr(T - 399, T, st) < st.peak_lr
     w = int(st.warmup_frac * T)
     assert math.isclose(wsd_lr(w // 2 - 1, T, st), st.peak_lr * (w // 2) / w)
 

@@ -51,11 +51,25 @@ def _lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
 
 
+# The weight matrices' peak rate at Careful and at Bold (engine 2's optimizer, ADR 0009). A
+# first AI's held-out loss is within 0.02 of its best anywhere from 0.005 to 0.02, 0.3 worse at
+# 0.04 and 0.8 worse at 0.08. So Careful sits inside the good range (never a handicap, C55), the
+# middle of the slider at its centre, and Bold at its far edge and beyond, where an AI is reshaped
+# faster and learns sloppily.
+CAREFUL_LR = 0.006
+BOLD_LR = 0.03
+# The embedding and the norm gains (AdamW) learn at this share of the matrices' rate.
+OTHER_LR_SHARE = 0.8
+
+
 @dataclass(frozen=True)
 class LearningStyle:
-    """Real optimizer settings behind the Careful <-> Bold slider."""
+    """Real optimizer settings behind the Careful <-> Bold slider: the peak rate of the weight
+    matrices (``peak_lr``), that of the embedding and the norm gains (``other_lr``), the gradient
+    clipping and the warmup."""
 
     peak_lr: float
+    other_lr: float
     clip_norm: float
     warmup_frac: float
 
@@ -63,14 +77,17 @@ class LearningStyle:
 def learning_style(boldness: float) -> LearningStyle:
     """Map boldness in [0, 1] (0 = Careful, 1 = Bold) to learning-rate settings.
 
-    Bolder means a higher peak rate (log-interpolated), looser gradient clipping and less warmup:
-    faster when it works, and a real chance of an unstable run when it does not.
+    Bolder means higher peak rates (log-interpolated), looser gradient clipping and less warmup.
+    Careful is steady and close to the best an AI can do from its reading; Bold changes the AI
+    faster and, on a long run, leaves it measurably worse.
     """
     if not _is_real(boldness) or not 0.0 <= boldness <= 1.0:  # the range test also rejects NaN
         raise ValueError(f"boldness must be a number in [0, 1], got {boldness!r}")
     t = boldness
+    peak_lr = 10 ** _lerp(math.log10(CAREFUL_LR), math.log10(BOLD_LR), t)
     return LearningStyle(
-        peak_lr=10 ** _lerp(math.log10(6e-4), math.log10(1.2e-2), t),
+        peak_lr=peak_lr,
+        other_lr=OTHER_LR_SHARE * peak_lr,
         clip_norm=_lerp(0.5, 2.5, t),
         warmup_frac=_lerp(0.06, 0.02, t),
     )

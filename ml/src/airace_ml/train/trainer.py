@@ -40,6 +40,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
+from airace_ml.data.casual import CASUAL_SHARE, CasualTyping
 from airace_ml.data.corpus import DATASET_IDS, Corpus
 from airace_ml.data.prep import heldout_docs
 from airace_ml.data.sampler import DocPool, MixtureSampler, load_pools
@@ -51,7 +52,12 @@ from airace_ml.model.transformer import Transformer
 from airace_ml.paths import TOKENIZER_VERSION, corpus_dir, tokenizer_path
 from airace_ml.paths import data_root as default_data_root
 from airace_ml.tokenizer import Tok, encode_chat, encode_doc
-from airace_ml.train.config import TrainRunConfig, effective_mixture, learning_style
+from airace_ml.train.config import (
+    LearningStyle,
+    TrainRunConfig,
+    effective_mixture,
+    learning_style,
+)
 from airace_ml.train.events import (
     Done,
     HeldoutEval,
@@ -62,7 +68,8 @@ from airace_ml.train.events import (
     event_to_dict,
     json_safe,
 )
-from airace_ml.train.schedule import DECAY_FRAC, wsd_lr
+from airace_ml.train.optim import MuonAdamW
+from airace_ml.train.schedule import DECAY_FRAC, wsd_factor
 from airace_ml.train.stability import SpikeDetector
 
 PROBE_PROMPTS: tuple[tuple[Literal["doc", "chat"], str], ...] = (
@@ -82,9 +89,10 @@ SAMPLE_TOKENS = 32
 SAMPLE_TEMPERATURE = 0.8
 SAMPLE_TOP_P = 0.95
 FINAL_LOSS_WINDOW = 10  # final_loss is the mean loss of the last 10 applied steps
-ADAM_BETAS = (0.9, 0.95)
-ADAM_EPS = 1e-8
-WEIGHT_DECAY = 0.1
+# What a run is trained by. Engine 2 (2026-11): the MuonAdamW optimizer, the longer decay, casual
+# typing of chat documents. A resume state is only ever continued by the engine that saved it,
+# and every run's summary names its engine.
+ENGINE_VERSION = 2
 
 TELEMETRY_NAME = "telemetry.jsonl"
 RESULT_NAME = "result.json"
@@ -210,7 +218,9 @@ def _prepare(cfg: TrainRunConfig, root: Path) -> _Setup:
     wanted = dict(stable)  # load a pool for every dataset either phase draws from
     for name, w in (finishing or {}).items():
         wanted[name] = max(wanted.get(name, 0.0), w)
-    pools = load_pools(root, wanted, cfg.prep, cfg.purchases, custom)
+    # Base datasets are read with casual typing; the held-out batches below are not.
+    typing = CasualTyping(tok, CASUAL_SHARE)
+    pools = load_pools(root, wanted, cfg.prep, cfg.purchases, custom, transform=typing)
     sampler = MixtureSampler(pools, stable, cfg.shape.ctx_len, cfg.seed)
     if finishing is not None:
         sampler.set_weights(finishing)  # fail now rather than at the decay start
@@ -336,9 +346,26 @@ def _newest_resume_state(out_dir: Path) -> tuple[Path, dict] | None:
     return best
 
 
+def _run_identity(cfg: TrainRunConfig) -> dict:
+    """What makes a run the same run wherever it trains: its whole config except ``parent_dir``
+    (a folder on one computer; a run that moves to another card has its parent somewhere else),
+    the version id of the parent in that folder, and the engine that trains it."""
+    config = json.loads(cfg.to_json())
+    parent_dir = config.pop("parent_dir", None)
+    parent = None
+    if parent_dir is not None:
+        try:
+            parent = _read_meta(Path(parent_dir)).version_id
+        except (OSError, ValueError, KeyError):
+            parent = f"unreadable parent in {parent_dir}"
+    return {"engine": ENGINE_VERSION, "config": config, "parent": parent}
+
+
 def _same_config(info: dict, cfg: TrainRunConfig) -> bool:
-    """The resume state's JSON part ``info`` was saved by a run of exactly ``cfg``."""
-    return info["config"] == json.loads(cfg.to_json())
+    """The resume state's JSON part ``info`` was saved by a run of exactly ``cfg`` (wherever its
+    parent's folder was), under this training engine. A state saved before runs had an identity
+    (engine 1) is never the same run: its optimizer state is another optimizer's."""
+    return info.get("run") == _run_identity(cfg)
 
 
 def copy_resume_state(out_dir: Path, dest: Path) -> bool:
@@ -375,7 +402,9 @@ def _read_resume(out_dir: Path, cfg: TrainRunConfig) -> tuple[dict, dict]:
         raise FileNotFoundError(f"no resume state in {out_dir / RESUME_DIR}")
     path, info = best
     if not _same_config(info, cfg):
-        raise ValueError(f"the resume state in {path} belongs to a different run config")
+        raise ValueError(
+            f"the resume state in {path} belongs to a different run config or training engine"
+        )
     tensors = torch.load(path / _RESUME_TENSORS, map_location="cpu", weights_only=True)
     return info, tensors
 
@@ -388,19 +417,17 @@ def _decay_start(steps: int) -> int:
     return steps - max(1, int(DECAY_FRAC * steps))
 
 
-def _make_optimizer(model: Transformer, device: torch.device) -> torch.optim.AdamW:
-    """AdamW with weight decay on matrices and embeddings only (not on norm gains)."""
-    params = list(model.parameters())  # the tied head appears once
-    groups = [
-        {"params": [p for p in params if p.dim() >= 2], "weight_decay": WEIGHT_DECAY},
-        {"params": [p for p in params if p.dim() < 2], "weight_decay": 0.0},
-    ]
-    return torch.optim.AdamW(
-        groups,
-        lr=0.0,
-        betas=ADAM_BETAS,
-        eps=ADAM_EPS,
-        fused=True if device.type == "cuda" else None,
+def _make_optimizer(model: Transformer, style: LearningStyle) -> MuonAdamW:
+    """Muon for the blocks' weight matrices, AdamW for the embedding (weight decay; it is tied
+    to the output head and appears once) and the norm gains (none)."""
+    embedding = model.tok_emb.weight
+    params = list(model.parameters())
+    return MuonAdamW(
+        [p for p in params if p.dim() >= 2 and p is not embedding],
+        [embedding],
+        [p for p in params if p.dim() < 2],
+        matrix_lr=style.peak_lr,
+        other_lr=style.other_lr,
     )
 
 
@@ -511,9 +538,9 @@ class _Run:
         self.sampler = setup.sampler
         self.model = setup.model.to(device).train()
         self.params = list(self.model.parameters())
-        self.optimizer = _make_optimizer(self.model, device)
-        self.lm = TorchLM(self.model, setup.tok)
         self.style = learning_style(cfg.boldness)
+        self.optimizer = _make_optimizer(self.model, self.style)
+        self.lm = TorchLM(self.model, setup.tok)
         self.steps = cfg.steps
         self.tokens_per_step = cfg.batch_size * cfg.shape.ctx_len
         self.decay_start = _decay_start(self.steps)
@@ -564,11 +591,12 @@ class _Run:
                 # A new data mix has a new loss level; relearn it rather than call it a spike.
                 self.detector = SpikeDetector(i + self.detector_warmup)
             step = i + 1
-            lr = wsd_lr(i, steps, self.style) * self.lr_scale
-            loss, spike = self._train_step(step, lr)
+            factor = wsd_factor(i, steps, self.style.warmup_frac) * self.lr_scale
+            loss, spike = self._train_step(step, factor)
             self.step = step
             if step == 1 or step % PROGRESS_EVERY == 0 or step == steps:
-                self._emit(Progress(step, steps, self.tokens, loss, lr))
+                # The reported rate is the weight matrices'.
+                self._emit(Progress(step, steps, self.tokens, loss, self.style.peak_lr * factor))
             if spike:
                 self.spikes += 1
                 self.snapshot.restore(self.model, self.optimizer)
@@ -601,10 +629,11 @@ class _Run:
             return step % self.checkpoint_every == 0
         return time.perf_counter() - self.last_save >= self.checkpoint_seconds
 
-    def _train_step(self, step: int, lr: float) -> tuple[float, bool]:
-        """One batch: forward, backward and, unless the loss or gradient is a spike, the update."""
+    def _train_step(self, step: int, factor: float) -> tuple[float, bool]:
+        """One batch: forward, backward and, unless the loss or gradient is a spike, the update.
+        ``factor`` is the schedule's share of each parameter group's peak rate."""
         for group in self.optimizer.param_groups:
-            group["lr"] = lr
+            group["lr"] = group["peak_lr"] * factor
         x, y = self.sampler.next_batch(self.cfg.batch_size)
         x, y = torch.from_numpy(x).to(self.device), torch.from_numpy(y).to(self.device)
         loss = self._forward_backward(x, y)
@@ -712,7 +741,8 @@ class _Run:
         torch.save(tensors, tmp / _RESUME_TENSORS)
         self._telemetry.flush()
         info = {
-            "config": json.loads(self.cfg.to_json()),
+            "run": _run_identity(self.cfg),
+            "config": json.loads(self.cfg.to_json()),  # as given, for whoever reads the file
             "step": self.step,
             "lr_scale": self.lr_scale,
             "spikes": self.spikes,
@@ -784,6 +814,7 @@ class _Run:
             "prep": self.cfg.prep.to_dict(),
             "shape": self.cfg.shape.to_dict(),
             "status": status,
+            "engine": ENGINE_VERSION,
         }
 
     def _meta(self, status: RunStatus) -> CheckpointMeta:
