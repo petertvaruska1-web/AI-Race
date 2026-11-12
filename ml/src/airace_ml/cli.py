@@ -290,7 +290,7 @@ def _parser() -> argparse.ArgumentParser:
         "on from its last saved point.",
     )
     rivals.add_argument(
-        "--out", type=Path, help="where to write the pack (default: <data root>/rivals/v1)"
+        "--out", type=Path, help="where to write the pack (default: <data root>/rivals/v2)"
     )
     rivals.add_argument(
         "--quick",

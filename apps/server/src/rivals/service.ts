@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { createReadStream, readFileSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Breakdown, GROUP_IDS, RivalReplies, type RivalReply } from "@airace/protocol";
-import type { FeedbackResult, WorldState } from "@airace/sim";
+import type { BalanceVersion, FeedbackResult, WorldState } from "@airace/sim";
 import type { AppContext } from "../app.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { seedOf } from "../feedback/service.ts";
@@ -16,20 +16,47 @@ const MODEL_URL_TTL_MS = 12 * 60 * 60 * 1000;
  * pack with one logged `rivalsJoined` input, answers their customer feedback
  * from the replies written at build time (no job), and places their models in
  * the blob store when a chat or battle needs one.
+ *
+ * Two packs can be installed: the current one (trained with engine 2) and the earlier one,
+ * which `balance-v2` worlds keep drawing from (a world made before engine 2 keeps its rivals).
+ * Their AIs' keys differ, so a key alone says which pack a rival AI is in.
  */
 export class RivalService {
+  /** The current pack (`rivalsDir`). */
   readonly loaded: LoadedPack | null;
+  /** The earlier pack (`legacyRivalsDir`), when it is installed. */
+  readonly legacy: LoadedPack | null;
   private joined = new Set<string>();
   private replyCache = new Map<string, RivalReply[]>();
   private placing = new Map<string, Promise<void>>();
 
   constructor(private readonly ctx: AppContext) {
-    this.loaded = loadRivalPack(ctx.opts.rivalsDir ?? null, ctx.catalog, ctx.log);
+    const legacyDir = ctx.opts.legacyRivalsDir ?? null;
+    const hasLegacy = legacyDir !== null && existsSync(join(legacyDir, "rivals.json"));
+    this.legacy = hasLegacy ? loadRivalPack(legacyDir, ctx.catalog, ctx.log) : null;
+    const dir = ctx.opts.rivalsDir ?? null;
+    // With the earlier pack installed, a missing current one is no warning: worlds have rivals.
+    this.loaded =
+      this.legacy && !(dir && existsSync(join(dir, "rivals.json")))
+        ? null
+        : loadRivalPack(dir, ctx.catalog, ctx.log);
     ctx.worlds.onLoad((actor) => this.attach(actor));
   }
 
+  /** The pack a world of these rules draws its rivals from: its own, else the other one. */
+  packFor(balance: BalanceVersion): LoadedPack | null {
+    return balance === "balance-v2" ? (this.legacy ?? this.loaded) : (this.loaded ?? this.legacy);
+  }
+
+  /** The pack a rival AI is in. */
+  private packOf(packKey: string): LoadedPack | null {
+    for (const p of [this.loaded, this.legacy]) if (p?.keys.has(packKey)) return p;
+    return null;
+  }
+
+  /** Whether worlds made now get rivals. */
   get installed(): boolean {
-    return this.loaded !== null;
+    return this.packFor(this.ctx.opts.balance) !== null;
   }
 
   private attach(actor: WorldActor): void {
@@ -40,12 +67,14 @@ export class RivalService {
 
   /** Rivals join a running world that has none, once the pack is installed. */
   private sync(actor: WorldActor): void {
-    if (!this.loaded || actor.isClosed()) return;
+    if (actor.isClosed()) return;
     const s = actor.state();
+    const from = this.packFor(s.balance);
+    if (!from) return;
     if (s.phase !== "running" || s.rivals !== null || this.joined.has(s.worldId)) return;
     this.joined.add(s.worldId);
     void actor
-      .submit({ kind: "system", event: { type: "rivalsJoined", pack: this.loaded.pack } })
+      .submit({ kind: "system", event: { type: "rivalsJoined", pack: from.pack } })
       .then((r) => {
         if (!r.ok) this.ctx.log.info({ worldId: s.worldId, reason: r.reason }, "rivals not seated");
       });
@@ -55,8 +84,9 @@ export class RivalService {
   replies(packKey: string): RivalReply[] {
     let list = this.replyCache.get(packKey);
     if (!list) {
-      if (!this.loaded) return [];
-      const file = join(this.loaded.dir, "replies", `${packKey}.json`);
+      const from = this.packOf(packKey);
+      if (!from) return [];
+      const file = join(from.dir, "replies", `${packKey}.json`);
       list = RivalReplies.parse(JSON.parse(readFileSync(file, "utf8")));
       this.replyCache.set(packKey, list);
     }
@@ -82,9 +112,10 @@ export class RivalService {
 
   /** Every rival AI released in `s`, as discoveries compare with it: its breakdown and traits. */
   peersIn(s: WorldState): { breakdown: Breakdown; traits: Record<string, number> }[] {
-    if (!this.loaded) return [];
     const byKey = new Map(
-      this.loaded.pack.lineages.flatMap((l) => l.versions.map((v) => [v.key, v] as const)),
+      [this.legacy, this.loaded].flatMap((p) =>
+        (p?.pack.lineages ?? []).flatMap((l) => l.versions.map((v) => [v.key, v] as const)),
+      ),
     );
     const out: { breakdown: Breakdown; traits: Record<string, number> }[] = [];
     for (const c of Object.values(s.companies)) {
@@ -109,12 +140,13 @@ export class RivalService {
 
   /** A worker's download URL for a rival AI, placing its checkpoint in the blob store first. */
   async modelUrl(packKey: string): Promise<string> {
-    if (!this.loaded) throw new Error("no rival pack");
-    const identity = createHash("sha256").update(this.loaded.pack.dataIdentity).digest("hex");
+    const from = this.packOf(packKey);
+    if (!from) throw new Error(`no rival pack holds ${packKey}`);
+    const identity = createHash("sha256").update(from.pack.dataIdentity).digest("hex");
     const key = `rivals/${identity.slice(0, 12)}/${packKey}.tar`;
     let placing = this.placing.get(key);
     if (!placing) {
-      const file = join(this.loaded.dir, "models", `${packKey}.tar`);
+      const file = join(from.dir, "models", `${packKey}.tar`);
       placing = (async () => {
         if (!(await this.ctx.blobs.exists(key)))
           await this.ctx.blobs.put(key, createReadStream(file));

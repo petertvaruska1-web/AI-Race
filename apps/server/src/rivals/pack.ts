@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { type Catalog, RivalPack } from "@airace/protocol";
 import type { Logger } from "../log.ts";
 
-export type LoadedPack = { pack: RivalPack; dir: string };
+export type LoadedPack = { pack: RivalPack; dir: string; keys: ReadonlySet<string> };
 
 /**
  * Reads `rivals.json` from the rival pack (`airace-ml build-rivals`, game-layer
@@ -30,5 +30,6 @@ export function loadRivalPack(
     return null;
   }
   if (pack.quick) log.warn({ dir }, "the rival pack is a quick build: tiny rivals for checks");
-  return { pack, dir };
+  const keys = new Set(pack.lineages.flatMap((l) => l.versions.map((v) => v.key)));
+  return { pack, dir, keys };
 }

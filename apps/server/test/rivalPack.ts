@@ -10,10 +10,20 @@ const FIXTURE = new URL("../../../packages/protocol/fixtures/rivals/rivals.json"
  * catalog's data identity unless told otherwise), two stored replies per
  * group for every version, and a small stand-in tar per version.
  */
-export function writeFixturePack(identity = "sample-0001"): { dir: string; pack: RivalPack } {
+export function writeFixturePack(
+  identity = "sample-0001",
+  /** A pack trained with engine 2: its AIs' keys carry "-e2-", as `airace-ml build-rivals` writes them. */
+  engine2 = false,
+): { dir: string; pack: RivalPack } {
   const dir = mkdtempSync(join(tmpdir(), "airace-rivals-"));
   const pack = JSON.parse(readFileSync(FIXTURE, "utf8")) as RivalPack;
   pack.dataIdentity = identity;
+  if (engine2) {
+    pack.version = "rivals-v2";
+    for (const lineage of pack.lineages) {
+      for (const v of lineage.versions) v.key = v.key.replace(/-v([0-9]+)$/, "-e2-v$1");
+    }
+  }
   mkdirSync(join(dir, "replies"));
   mkdirSync(join(dir, "models"));
   for (const lineage of pack.lineages) {

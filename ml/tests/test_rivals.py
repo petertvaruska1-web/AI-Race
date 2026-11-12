@@ -4,7 +4,13 @@ from pathlib import Path
 import pytest
 import torch
 
-from airace_ml.rivals.build import REPLIES_PER_GROUP, _Built, build_rival_pack, pack_document
+from airace_ml.rivals.build import (
+    REPLIES_PER_GROUP,
+    _Built,
+    build_rival_pack,
+    pack_document,
+    version_key,
+)
 from airace_ml.rivals.recipe import LINEAGES
 
 FIXTURE = (
@@ -43,7 +49,7 @@ def test_the_pack_document_has_exactly_the_protocol_fixtures_fields():
         "replies": [],
     }
     built = [
-        _Built(f"{r.id}-v{k}", r, step.shape, step.tokens * k, measured)
+        _Built(version_key(r, k), r, step.shape, step.tokens * k, measured)
         for r in LINEAGES
         for k, step in enumerate(r.steps[:2], start=1)
     ]

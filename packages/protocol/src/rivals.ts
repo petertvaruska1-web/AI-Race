@@ -62,7 +62,8 @@ export type RivalPackLineage = z.infer<typeof RivalPackLineage>;
 
 export const RivalPack = z
   .strictObject({
-    version: z.literal("rivals-v1"),
+    /** rivals-v2: trained with training engine 2; its AIs' keys differ from rivals-v1's. */
+    version: z.enum(["rivals-v1", "rivals-v2"]),
     dataIdentity: z.string().min(1),
     tokenizer: z.literal("tok-v1"),
     suite: z.literal("bench-v1"),

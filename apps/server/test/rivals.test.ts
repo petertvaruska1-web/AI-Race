@@ -60,6 +60,43 @@ describe("the rival service", () => {
     expect(rivalIds(again.state())).toHaveLength(4);
   });
 
+  it("a world of the earlier rules keeps the earlier pack; other worlds draw from the current one", async () => {
+    const earlier = pack();
+    const current = writeFixturePack(undefined, true);
+    temps.push(current.dir);
+    server = await start({ rivalsDir: current.dir, legacyRivalsDir: earlier.dir });
+    const { rivals } = server.ctx;
+    expect(rivals.packFor("balance-v2")?.dir).toBe(earlier.dir);
+    expect(rivals.packFor("balance-v3")?.dir).toBe(current.dir);
+    expect(rivals.packFor("balance-test")?.dir).toBe(current.dir);
+    // A rival AI's key says which pack it is in: its stored replies and its model come from there.
+    expect(rivals.replies("premium-a-v1")[0]?.reply).toBe("premium-a-v1 answers students.");
+    expect(rivals.replies("premium-a-e2-v1")[0]?.reply).toBe("premium-a-e2-v1 answers students.");
+    for (const key of ["premium-a-v1", "premium-a-e2-v1"]) {
+      const model = await fetch(await rivals.modelUrl(key));
+      expect(await model.text()).toBe(`fake-rival-${key}`);
+    }
+    await expect(rivals.modelUrl("nobody-v9")).rejects.toThrow(/no rival pack holds/);
+    // This server makes balance-test worlds: their rivals are the current pack's.
+    const o = await setup(server);
+    await eventually(() => o.actor.state().rivals);
+    const logged = JSON.stringify(await server.ctx.db.select().from(schema.worldInputs));
+    expect(logged).toContain("premium-a-e2-v1");
+    expect(logged).not.toContain('"premium-a-v1"');
+  });
+
+  it("with one pack installed, every world draws from it", async () => {
+    const only = pack();
+    server = await start({ rivalsDir: null, legacyRivalsDir: only.dir });
+    expect(server.ctx.rivals.packFor("balance-v3")?.dir).toBe(only.dir);
+    expect(server.ctx.rivals.installed).toBe(true);
+    const o = await setup(server);
+    await eventually(() => o.actor.state().rivals);
+    await server.close();
+    server = await start({ rivalsDir: only.dir });
+    expect(server.ctx.rivals.packFor("balance-v2")?.dir).toBe(only.dir);
+  });
+
   it("runs without rivals when the pack is missing or was built from other data", async () => {
     const stale = pack("another-identity");
     server = await start({ rivalsDir: stale.dir });

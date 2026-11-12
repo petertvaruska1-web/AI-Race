@@ -1,7 +1,9 @@
 """The eight rival lineages of the pack: two per business style, each a few versions that grow.
 
 Shapes are the game's brain sizes at an attention span of 256; each version continues from the
-one before (growing when the shape grows, R6) and reads another 12,582,912 tokens.
+one before (growing when the shape grows, R6) and reads another 12,582,912 tokens. The premium
+rivals end on the Large brain: players of the newer rules can train Large and Huge brains, and
+the big-budget rivals must stay worth beating.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ STEP_TOKENS = 12_582_912
 TINY = ModelShape(4, 128, 256)
 SMALL = ModelShape(6, 192, 256)
 MEDIUM = ModelShape(8, 256, 256)
+LARGE = ModelShape(10, 384, 256)
 
 
 @dataclass(frozen=True)
@@ -47,13 +50,13 @@ def _steps(*shapes: ModelShape) -> tuple[VersionStep, ...]:
 
 
 LINEAGES: tuple[LineageRecipe, ...] = (
-    LineageRecipe("premium-a", "premium", "businesses", rest_even(), _steps(SMALL, MEDIUM, MEDIUM)),
+    LineageRecipe("premium-a", "premium", "businesses", rest_even(), _steps(SMALL, MEDIUM, LARGE)),
     LineageRecipe(
         "premium-b",
         "premium",
         "researchers",
         rest_even(facts=0.35, educational=0.35),
-        _steps(SMALL, MEDIUM, MEDIUM),
+        _steps(SMALL, MEDIUM, LARGE),
     ),
     LineageRecipe(
         "budget-a",
