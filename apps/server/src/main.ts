@@ -23,9 +23,10 @@ function secretFrom(envName: string, file: string): string {
 const data = resolve(process.env.AIRACE_DATA ?? join(REPO_ROOT, "data"));
 const serverDir = join(data, "server");
 const port = Number(process.env.PORT ?? 8787);
-const balance = (process.env.AIRACE_BALANCE ?? "balance-v2") as BalanceVersion;
-if (balance !== "balance-v2" && balance !== "balance-test") {
-  throw new Error(`AIRACE_BALANCE must be balance-v2 or balance-test, got ${balance}`);
+// The rules of worlds made from now on; a world made earlier keeps the rules it recorded.
+const balance = (process.env.AIRACE_BALANCE ?? "balance-v3") as BalanceVersion;
+if (balance !== "balance-v3" && balance !== "balance-v2" && balance !== "balance-test") {
+  throw new Error(`AIRACE_BALANCE must be balance-v3, balance-v2 or balance-test, got ${balance}`);
 }
 const catalog = join(data, "catalog", "v1", "catalog.json");
 

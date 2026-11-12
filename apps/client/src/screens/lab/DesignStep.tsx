@@ -92,7 +92,7 @@ export function DesignStep({
 
       <Panel
         title="Brain size"
-        hint="A bigger brain can learn more, but costs more and takes longer to train."
+        hint="A bigger brain can learn more, but costs more and takes longer to train, and costs more to run for every customer."
       >
         <div className="grid gap-3 sm:grid-cols-3">
           {balance.brainSizes.map((b) => {

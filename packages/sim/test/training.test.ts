@@ -4,7 +4,10 @@ import {
   activeRun,
   BALANCE_V2,
   createWorld,
+  getBalance,
   type Input,
+  paramCount,
+  previewPlan,
   previewTraining,
   runProgress,
   type StepResult,
@@ -386,5 +389,49 @@ describe("world-unique ids", () => {
 describe("review", () => {
   it("needs an earlier AI to review", () => {
     expect(rejected(step(running(), train("u1", "r1", plan({ review: 0.2 }))))).toMatch(/review/i);
+  });
+});
+
+describe("balance-v3: larger brains for new worlds", () => {
+  it("keeps every brain, length and price of balance-v2 and adds to them", () => {
+    const v2 = getBalance("balance-v2");
+    const v3 = getBalance("balance-v3");
+    expect(v3.version).toBe("balance-v3");
+    expect(v3.brainSizes.slice(0, v2.brainSizes.length)).toEqual(v2.brainSizes);
+    expect(v3.lengths.slice(0, v2.lengths.length)).toEqual(v2.lengths);
+    expect(v3.brainSizes.slice(v2.brainSizes.length).map((b) => b.id)).toEqual(["large", "huge"]);
+    expect(v3.lengths.slice(v2.lengths.length).map((l) => l.id)).toEqual(["marathon"]);
+    expect({ ...v3, version: v2.version, brainSizes: v2.brainSizes, lengths: v2.lengths }).toEqual(
+      v2,
+    );
+    // The real models these are: 19.3 and 40.7 million parameters.
+    expect(paramCount(10, 384)).toBe(19_275_648);
+    expect(paramCount(12, 512)).toBe(40_645_120);
+  });
+
+  it("a world made before never gets the new brains", () => {
+    const v2 = getBalance("balance-v2");
+    for (const change of [{ brainSize: "huge" }, { brainSize: "large" }, { length: "marathon" }]) {
+      expect(previewPlan(v2, null, { ...v2.defaultPlan, ...change }).ok).toBe(false);
+    }
+  });
+
+  it("makes the Huge brain what a company grows into: years on rented compute, weeks on its own", () => {
+    const v3 = getBalance("balance-v3");
+    const plan = { ...v3.defaultPlan, brainSize: "huge", length: "marathon" };
+    const rented = previewPlan(v3, null, plan);
+    const dataCenter = v3.economy.dataCenter.pflopsPerDay;
+    const owned = previewPlan(v3, null, plan, 3 * dataCenter);
+    if (!rented.ok || !owned.ok) throw new Error("the plan should run");
+    expect(rented.preview.params).toBe(40_645_120);
+    expect(rented.preview.durationDays).toBeGreaterThan(3 * 365);
+    expect(rented.preview.cost).toBeGreaterThan(10 * v3.foundingCash);
+    expect(owned.preview.durationDays).toBeLessThan(90);
+    expect(owned.preview.cost).toBeLessThan(2 * v3.foundingCash);
+    // A first Huge brain on the shortest length is within a young company's reach.
+    const first = previewPlan(v3, null, { ...plan, length: "short" }, dataCenter);
+    if (!first.ok) throw new Error("the plan should run");
+    expect(first.preview.durationDays).toBeLessThan(30);
+    expect(first.preview.cost).toBeLessThan(v3.foundingCash);
   });
 });

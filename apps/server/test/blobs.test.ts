@@ -30,6 +30,50 @@ describe("blob store", () => {
     expect(await server.ctx.blobs.exists("checkpoints/v1/checkpoint.tar")).toBe(true);
   });
 
+  it("takes a big file in parts, and the key is absent until the last part is in", async () => {
+    server = await startTestServer();
+    const key = "checkpoints/big/checkpoint.tar";
+    const pieces = [randomBytes(300_000), randomBytes(300_000), randomBytes(1234)];
+    const url = signBlobUrl(server.ctx, key, "PUT");
+    const send = (i: number) =>
+      fetch(`${url}&part=${i}&parts=${pieces.length}`, {
+        method: "PUT",
+        body: pieces[i] as Buffer,
+      });
+    expect((await send(0)).status).toBe(204);
+    expect((await send(1)).status).toBe(204);
+    expect(await server.ctx.blobs.exists(key)).toBe(false);
+    expect((await send(2)).status).toBe(204);
+    const get = await fetch(signBlobUrl(server.ctx, key, "GET"));
+    expect(Buffer.from(await get.arrayBuffer()).equals(Buffer.concat(pieces))).toBe(true);
+    // Nothing but the blob is left in its folder.
+    expect(readdirSync(join(server.ctx.opts.blobDir, "checkpoints/big"))).toEqual([
+      "checkpoint.tar",
+    ]);
+  });
+
+  it("a part sent twice is kept once, a part out of turn is refused, and part 0 starts over", async () => {
+    server = await startTestServer();
+    const key = "resume/run.tar";
+    const pieces = [randomBytes(50_000), randomBytes(50_000), randomBytes(50_000)];
+    const url = signBlobUrl(server.ctx, key, "PUT");
+    const send = (i: number, parts = pieces.length) =>
+      fetch(`${url}&part=${i}&parts=${parts}`, { method: "PUT", body: pieces[i] as Buffer });
+    expect((await send(1)).status).toBe(409); // nothing was started
+    expect((await send(0)).status).toBe(204);
+    expect((await send(2)).status).toBe(409); // part 1 is next
+    expect((await send(1)).status).toBe(204);
+    expect((await send(1)).status).toBe(204); // its answer was lost and it came again
+    expect((await send(1, 5)).status).toBe(409); // another upload's part
+    // The sender starts over (a 409 tells it to): part 0 always may.
+    for (const i of [0, 1, 2]) expect((await send(i)).status).toBe(204);
+    const get = await fetch(signBlobUrl(server.ctx, key, "GET"));
+    expect(Buffer.from(await get.arrayBuffer()).equals(Buffer.concat(pieces))).toBe(true);
+    for (const bad of ["part=3&parts=3", "part=0&parts=0", "part=x&parts=3", "part=0"]) {
+      expect((await fetch(`${url}&${bad}`, { method: "PUT", body: "x" })).status, bad).toBe(400);
+    }
+  });
+
   it("refuses a URL signed for another method, an expired one and an unsigned one", async () => {
     server = await startTestServer();
     await server.ctx.blobs.put("a/b", Readable.from([Buffer.from("hi")]));

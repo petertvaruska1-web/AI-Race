@@ -83,6 +83,8 @@ describe("your computer", () => {
     // brain reads 25.2 million tokens in about four (the old estimate said sixteen).
     expect(realMinutes(12_600_000, paramCount(4, 128), 450_000)).toBe(1);
     expect(realMinutes(25_200_000, paramCount(8, 256), 450_000)).toBe(4);
+    // The longest run of all, a Huge brain reading the Marathon length: about half an hour.
+    expect(realMinutes(50_331_648, paramCount(12, 512), 450_000)).toBe(32);
     // A card twice as fast needs half the time; an unknown speed gives no estimate.
     expect(realMinutes(25_200_000, paramCount(8, 256), 900_000)).toBe(2);
     expect(realMinutes(25_200_000, paramCount(8, 256), 0)).toBeNull();

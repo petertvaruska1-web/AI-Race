@@ -14,7 +14,7 @@ import {
   type TrainingPlan,
 } from "@airace/protocol";
 
-export type BalanceVersion = "balance-v2" | "balance-test";
+export type BalanceVersion = "balance-v2" | "balance-v3" | "balance-test";
 export type BrainSize = { id: string; nLayer: number; dModel: number };
 export type LengthOption = { id: string; tokens: number };
 
@@ -758,6 +758,31 @@ export const BALANCE_V2: Balance = {
   economy: ECONOMY_V2,
 };
 
+/**
+ * New worlds since training engine 2 (ADR 0009): the rules of balance-v2 with two larger brains
+ * and a longer training length. Worlds made before keep balance-v2 (a world records its
+ * version, so its replay and its Lab never change).
+ *
+ * - Large (10 layers of 384, 19.3M parameters) and Huge (12 of 512, 40.7M): a Huge brain
+ *   reading the Marathon length is the longest run, about half an hour on an RTX 3050 (the
+ *   owner's limit for one run, C49).
+ * - Compute is priced as it always was, by size and text: on rented compute alone a Huge
+ *   Marathon run takes about four game years, with three data centers lent to training about
+ *   eleven weeks. Serving also costs in step with size (a Huge brain about $12 a customer a
+ *   month on rented compute, under $4 on the company's own), so the big brains are what a
+ *   company grows into, not what it starts with.
+ */
+export const BALANCE_V3: Balance = {
+  ...BALANCE_V2,
+  version: "balance-v3",
+  brainSizes: [
+    ...BALANCE_V2.brainSizes,
+    { id: "large", nLayer: 10, dModel: 384 },
+    { id: "huge", nLayer: 12, dModel: 512 },
+  ],
+  lengths: [...BALANCE_V2.lengths, { id: "marathon", tokens: 50_331_648 }],
+};
+
 /** Fast worlds for end-to-end and quick tests. */
 export const BALANCE_TEST: Balance = {
   ...BALANCE_V2,
@@ -791,6 +816,7 @@ export const BALANCE_TEST: Balance = {
 };
 
 export function getBalance(version: BalanceVersion): Balance {
+  if (version === "balance-v3") return BALANCE_V3;
   return version === "balance-v2" ? BALANCE_V2 : BALANCE_TEST;
 }
 

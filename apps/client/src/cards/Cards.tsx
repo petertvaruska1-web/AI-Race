@@ -61,11 +61,11 @@ export function labLimit(
 export const REFERENCE_TOKENS_PER_SECOND = 450_000;
 /**
  * Microseconds a training token costs on that card, measured with training engine 2 (ADR 0009):
- * a fixed part plus a part that grows with the brain (4.4 for the first AI's 1.4M-parameter
- * brain, about 10.5 for the 7.5M one).
+ * a fixed part plus a part that grows a little slower than the brain. Measured: 4.4 for the
+ * Tiny brain (1.4M parameters), 10.5 for Medium (7.5M), 21.4 for Large (19.3M), 37.4 for Huge
+ * (40.7M); this gives 4.3, 10.2, 20.6 and 37.7.
  */
-const MICROS_PER_TOKEN = 3;
-const MICROS_PER_TOKEN_PER_MILLION_PARAMS = 1;
+const microsPerToken = (params: number) => 2.6 + 1.25 * (params / 1e6) ** 0.9;
 
 /**
  * Real minutes a run of `tokens` takes on a card of this measured speed: the reference card's
@@ -80,8 +80,8 @@ export function realMinutes(
   tokensPerSecond: number,
 ): number | null {
   if (!(tokensPerSecond > 0) || !(params > 0)) return null;
-  const micros = MICROS_PER_TOKEN + (MICROS_PER_TOKEN_PER_MILLION_PARAMS * params) / 1e6;
-  const seconds = (tokens * micros * REFERENCE_TOKENS_PER_SECOND) / tokensPerSecond / 1e6;
+  const seconds =
+    (tokens * microsPerToken(params) * REFERENCE_TOKENS_PER_SECOND) / tokensPerSecond / 1e6;
   return Math.max(1, Math.round(seconds / 60));
 }
 
