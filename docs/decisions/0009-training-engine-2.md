@@ -152,5 +152,6 @@ Overall scores of each rival's three versions, earlier pack → this pack:
 
 ## 11. Still open
 - A Huge brain's saved progress (644 MB) is uploaded every two minutes in Fair mode; over a home line that is heavy. Leaving the roll-back copy out of the uploaded state would halve it.
+- The game's reference AIs for personality words are still the first gate's (`export-catalog --population runs/gate-1/runs`, trained with engine 1). Exporting from `runs/gate-2/runs` would describe new AIs against their own kind, but it changes the words of AIs scored from then on in every world; left as it is until it is looked at with real games.
 - The balance bot has no brain choice, so the economy of the Large and Huge brains is checked by priced invariants only, not by a played year.
 - A played session with the new brains (`npm run e2e` passes: solo and both two-player worlds).
