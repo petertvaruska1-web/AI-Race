@@ -21,6 +21,7 @@ from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed, InvalidHandshake, InvalidURI
 
 from airace_ml.data.identity import data_identity
+from airace_ml.engine import ENGINE_VERSION
 from airace_ml.worker.protocol import (
     JOB_TYPES,
     Cancel,
@@ -139,6 +140,7 @@ class WorkerAgent:
             data_identity=data_identity(Path(data_root)),
             gpu_name=gpu_name if gpu_name is not None else ("CPU" if device != "cuda" else "unknown"),
             speed=speed,
+            engine=ENGINE_VERSION,
         )
         self._jobs: dict[str, JobContext] = {}
         self._unreported: set[str] = set()

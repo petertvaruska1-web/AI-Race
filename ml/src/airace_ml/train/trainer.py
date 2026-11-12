@@ -45,8 +45,16 @@ from airace_ml.data.corpus import DATASET_IDS, Corpus
 from airace_ml.data.prep import heldout_docs
 from airace_ml.data.sampler import DocPool, MixtureSampler, load_pools
 from airace_ml.device import pick_device
+from airace_ml.engine import ENGINE_VERSION
 from airace_ml.infer.lm import TorchLM, build_chat_prompt
-from airace_ml.model.checkpoint import META_NAME, CheckpointMeta, load_checkpoint, save_checkpoint
+from airace_ml.infer.serving import SERVING_TEMPERATURE, SERVING_TOP_P
+from airace_ml.model.checkpoint import (
+    META_NAME,
+    WEIGHTS_NAME,
+    CheckpointMeta,
+    load_checkpoint,
+    save_checkpoint,
+)
 from airace_ml.model.growth import grow
 from airace_ml.model.transformer import Transformer
 from airace_ml.paths import TOKENIZER_VERSION, corpus_dir, tokenizer_path
@@ -86,13 +94,10 @@ CHECKPOINT_EVERY = 200  # steps between the resume points a run saves (``train_r
 MIN_EVAL_EVERY = 25  # held-out eval and samples every max(25, steps // 20) steps
 EVAL_SEQS = 8  # held-out sequences per dataset
 SAMPLE_TOKENS = 32
-SAMPLE_TEMPERATURE = 0.8
-SAMPLE_TOP_P = 0.95
+# The live samples are drawn as the finished AI will talk.
+SAMPLE_TEMPERATURE = SERVING_TEMPERATURE
+SAMPLE_TOP_P = SERVING_TOP_P
 FINAL_LOSS_WINDOW = 10  # final_loss is the mean loss of the last 10 applied steps
-# What a run is trained by. Engine 2 (2026-11): the MuonAdamW optimizer, the longer decay, casual
-# typing of chat documents. A resume state is only ever continued by the engine that saved it,
-# and every run's summary names its engine.
-ENGINE_VERSION = 2
 
 TELEMETRY_NAME = "telemetry.jsonl"
 RESULT_NAME = "result.json"
@@ -393,6 +398,26 @@ def can_resume(out_dir: Path, cfg: TrainRunConfig) -> bool:
     holds a complete resume state saved by a run of exactly ``cfg``."""
     best = _newest_resume_state(Path(out_dir))
     return best is not None and _same_config(best[1], cfg)
+
+
+def finished_run(out_dir: Path, cfg: TrainRunConfig) -> dict | None:
+    """What ``out_dir/result.json`` records, if it is the result of exactly ``cfg`` (the same run
+    by :func:`_run_identity`) trained to its end, with the checkpoint beside it; else ``None``.
+
+    A helper whose upload failed after training asks this before it trains again: the AI is
+    already made, only the upload is missing."""
+    out_dir = Path(out_dir)
+    try:
+        result = json.loads((out_dir / RESULT_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(result, dict) or result.get("run") != _run_identity(cfg):
+        return None
+    if result.get("status") not in ("completed", "unstable_stopped"):
+        return None
+    if not ((out_dir / WEIGHTS_NAME).is_file() and (out_dir / META_NAME).is_file()):
+        return None
+    return result
 
 
 def _read_resume(out_dir: Path, cfg: TrainRunConfig) -> tuple[dict, dict]:
@@ -849,7 +874,9 @@ class _Run:
         meta = self._meta(status)
         save_checkpoint(self.model, meta, self.out_dir)
         result = self._result(status, meta)
-        (self.out_dir / RESULT_NAME).write_text(_result_json(result), encoding="utf-8")
+        (self.out_dir / RESULT_NAME).write_text(
+            _result_json(result, _run_identity(self.cfg)), encoding="utf-8"
+        )
         _remove_resume_states(self.out_dir)
         summary = {
             **self._summary(status),
@@ -861,9 +888,11 @@ class _Run:
         return result
 
 
-def _result_json(result: TrainResult) -> str:
-    """``result.json``: the result as strict JSON (``out_dir`` is where the file lives)."""
+def _result_json(result: TrainResult, identity: dict) -> str:
+    """``result.json``: the result as strict JSON (``out_dir`` is where the file lives), with the
+    identity of the run it is the result of (:func:`finished_run` asks for it)."""
     d = {
+        "run": identity,
         "run_id": result.run_id,
         "status": result.status,
         "steps": result.steps,

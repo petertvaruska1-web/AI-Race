@@ -34,6 +34,7 @@ from airace_ml.evals.judge import Judge, check_judge_provenance
 from airace_ml.evals.novelty import NoveltyIndex, check_index_provenance
 from airace_ml.evals.suite import run_benchmarks, score_reply
 from airace_ml.feedback import GROUPS, customer_pool, pick_questions
+from airace_ml.infer.serving import SERVING_TEMPERATURE, SERVING_TOP_P, tidy_user_text
 from airace_ml.interviews import score_answer
 from airace_ml.minigames.content import game_items
 from airace_ml.minigames.run import play
@@ -42,7 +43,14 @@ from airace_ml.personality.fingerprint import Fingerprint, describe, measure_fin
 from airace_ml.tokenizer import Tok
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.train.events import event_to_dict
-from airace_ml.train.trainer import CHECKPOINT_EVERY, RESUME_DIR, has_resume_state, train_run
+from airace_ml.train.trainer import (
+    CHECKPOINT_EVERY,
+    RESUME_DIR,
+    can_resume,
+    finished_run,
+    has_resume_state,
+    train_run,
+)
 from airace_ml.worker.agent import JobContext
 from airace_ml.worker.blobs import download_tar, upload_dir_tar
 from airace_ml.worker.models import ModelCache
@@ -143,14 +151,46 @@ class JobRunner:
         cfg = TrainRunConfig.from_json(json.dumps(config))
         cfg.validate()
         out = work / "out"
-        resume = has_resume_state(out)
+        # Already trained here, with only the upload missing (it failed and the job came back)?
+        done = finished_run(out, cfg)
+        if done is None:
+            done = self._train(cfg, out, spec, ctx)
+        upload_dir_tar(out, out_url, exclude=(RESUME_DIR,))
+        shutil.rmtree(work, ignore_errors=True)
+        return {
+            "steps": done["steps"],
+            "final_loss": _finite(done["final_loss"]),
+            "heldout_losses": {k: _finite(v) for k, v in done["heldout_losses"].items()},
+            "status": done["status"],
+        }
+
+    def _train(
+        self, cfg: TrainRunConfig, out: Path, spec: dict[str, Any], ctx: JobContext
+    ) -> dict[str, Any]:
+        """Trains ``cfg`` into ``out``, continuing saved progress when it is this run's.
+
+        Progress is this run's when the trainer says so (:func:`can_resume`): the same settings
+        and parent, saved by the same training engine. Anything else under the run's name (other
+        settings, an older engine, a save cut short) is dropped and the run starts over, which
+        always gives the right AI; it is never a reason to fail the job.
+        """
+        resume = can_resume(out, cfg)
         if not resume:
+            if has_resume_state(out):
+                log.warning(
+                    "run %s: the progress saved here is not this run's; starting over", cfg.run_id
+                )
             shutil.rmtree(out, ignore_errors=True)
             # Fair mode: another card may have saved this run's progress to the host.
             from_url = spec.get("resumeFromUrl")
             if isinstance(from_url, str) and from_url:
-                resume = restore_resume(from_url, out) and has_resume_state(out)
+                resume = restore_resume(from_url, out) and can_resume(out, cfg)
                 if not resume:
+                    if has_resume_state(out):
+                        log.warning(
+                            "run %s: the progress the game kept is not this run's; starting over",
+                            cfg.run_id,
+                        )
                     shutil.rmtree(out, ignore_errors=True)
         resume_url = spec.get("resumeUrl")
         uploader = (
@@ -173,12 +213,10 @@ class JobRunner:
         finally:
             if uploader:
                 uploader.close()
-        upload_dir_tar(out, out_url, exclude=(RESUME_DIR,))
-        shutil.rmtree(work, ignore_errors=True)
         return {
             "steps": result.steps,
-            "final_loss": _finite(result.final_loss),
-            "heldout_losses": {k: _finite(v) for k, v in result.heldout_losses.items()},
+            "final_loss": result.final_loss,
+            "heldout_losses": result.heldout_losses,
             "status": result.status,
         }
 
@@ -244,16 +282,22 @@ class JobRunner:
         history = spec.get("history")
         if not isinstance(history, list) or not history:
             raise ValueError("the job spec needs a conversation")
-        turns = [(str(role), str(text)) for role, text in history]
+        # What a person typed reaches the AI in the chat format's form (a capital first letter);
+        # the AI's own earlier replies go back exactly as it said them.
+        turns = [
+            (str(role), tidy_user_text(str(text)) if role == "user" else str(text))
+            for role, text in history
+        ]
         lm, lock = self.models.get(_spec_str(spec, "versionId"), _spec_str(spec, "modelTarUrl"))
         with lock:
             text = lm.stream_chat_reply(
                 turns,
                 max_new_tokens=int(spec.get("maxNewTokens", 96)),
-                temperature=float(spec.get("temperature", 0.8)),
-                top_p=float(spec.get("topP", 0.95)),
+                temperature=float(spec.get("temperature", SERVING_TEMPERATURE)),
+                top_p=float(spec.get("topP", SERVING_TOP_P)),
                 seed=int(spec.get("seed", 0)),
                 on_text=ctx.chunk,
+                stop_on_loop=True,
             )
         return {"text": text}
 
@@ -271,7 +315,12 @@ class JobRunner:
             for group in groups:
                 for item in pick_questions(str(group), per_group, seed):
                     reply = lm.chat_reply(
-                        [("user", item.prompt)], max_new_tokens=96, temperature=0.8, seed=seed
+                        [("user", item.prompt)],
+                        max_new_tokens=96,
+                        temperature=SERVING_TEMPERATURE,
+                        top_p=SERVING_TOP_P,
+                        seed=seed,
+                        stop_on_loop=True,
                     )
                     results.append(
                         {
@@ -411,8 +460,10 @@ class JobRunner:
             reply = lm.chat_reply(
                 [("user", item.prompt)],
                 max_new_tokens=96,
-                temperature=0.8,
+                temperature=SERVING_TEMPERATURE,
+                top_p=SERVING_TOP_P,
                 seed=int(spec.get("seed", 0)),
+                stop_on_loop=True,
             )
         return {
             "questionId": item.id,

@@ -58,6 +58,7 @@ class Capabilities:
     data_identity: str
     gpu_name: str = "unknown"
     speed: float = 0.0
+    engine: int = 1  # the training engine it runs; a helper from before engines were named: 1
 
     def to_wire(self) -> dict[str, Any]:
         return {
@@ -66,6 +67,7 @@ class Capabilities:
             "maxParams": self.max_params,
             "gpuName": self.gpu_name,
             "speed": self.speed,
+            "engine": self.engine,
             "jobTypes": list(self.job_types),
             "slots": {t: int(self.slots.get(t, 0)) for t in JOB_TYPES},
             "dataIdentity": self.data_identity,
@@ -213,6 +215,7 @@ def parse_worker_message(raw: str | bytes) -> WorkerMsg:
                 data_identity=c["dataIdentity"],
                 gpu_name=str(c.get("gpuName", "unknown")),
                 speed=float(c.get("speed", 0.0)),
+                engine=int(c.get("engine", 1)),
             )
             return WHello(_str(d, "token"), _str(d, "workerId"), caps, tuple(d.get("running", [])))
         case "heartbeat":

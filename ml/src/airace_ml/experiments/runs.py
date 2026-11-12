@@ -38,7 +38,14 @@ PACKAGE_ROOT = Path(airace_ml.__file__).resolve().parent
 # walks the real imports of both groups, so a module they come to depend on cannot slip through.
 # infer/ is in both: the trainer samples telemetry text with it, and that sampling is part of the
 # training time G1 judges.
-TRAINING_SOURCES: tuple[str, ...] = ("train", "model", "data", "tokenizer.py", "infer")
+TRAINING_SOURCES: tuple[str, ...] = (
+    "train",
+    "model",
+    "data",
+    "tokenizer.py",
+    "infer",
+    "engine.py",
+)
 MEASURING_SOURCES: tuple[str, ...] = ("evals", "personality", "infer", "skills", "minipy")
 # Modules either group imports that no digest holds, and why that is safe.
 UNDIGESTED: dict[str, str] = {

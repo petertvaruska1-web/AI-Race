@@ -23,6 +23,7 @@ from typing import Protocol
 import torch
 from torch import Tensor
 
+from airace_ml.infer.serving import is_looping
 from airace_ml.model.transformer import Transformer
 from airace_ml.tokenizer import Role, Tok, encode_chat, encode_doc
 
@@ -48,13 +49,15 @@ class Generation:
     and ``top1_probs[i]`` the probability of the most likely token at that step, both from the
     raw softmax at temperature 1 (before temperature and top-p), so they measure the model's own
     confidence. ``stopped`` is True when generation ended on a stop token rather than on a length
-    limit.
+    limit. ``looped`` is True when it was ended because the reply had fallen into a loop (only
+    with ``stop_on_loop``); the tokens are everything generated up to that point.
     """
 
     tokens: list[int]
     token_probs: list[float]
     top1_probs: list[float]
     stopped: bool
+    looped: bool = False
 
 
 class LanguageModel(Protocol):
@@ -185,16 +188,23 @@ class TorchLM:
         temperature: float = 0.8,
         top_p: float = 0.95,
         seed: int = 0,
+        stop_on_loop: bool = False,
     ) -> str:
         """The model's next reply to ``history``, as text (special tokens removed).
 
         Room for the reply is reserved in the prompt, but never more than half the context, so a
-        small model still sees a useful amount of history.
+        small model still sees a useful amount of history. ``stop_on_loop`` ends a reply that
+        has fallen into a loop (see :meth:`generate`).
         """
         reserve = min(max_new_tokens, self.ctx_len // 2)
         prompt = build_chat_prompt(self.tok, history, self.ctx_len, reserve)
         gen = self.generate(
-            [prompt], max_new_tokens=max_new_tokens, temperature=temperature, top_p=top_p, seed=seed
+            [prompt],
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            seed=seed,
+            stop_on_loop=stop_on_loop,
         )[0]
         return self.tok.decode(gen.tokens)
 
@@ -207,6 +217,7 @@ class TorchLM:
         top_p: float = 0.95,
         seed: int = 0,
         on_text: Callable[[str], None],
+        stop_on_loop: bool = False,
     ) -> str:
         """:meth:`chat_reply`, calling ``on_text`` with each new piece of the reply as it is made.
 
@@ -223,6 +234,7 @@ class TorchLM:
             top_p=top_p,
             seed=seed,
             on_text=on_text,
+            stop_on_loop=stop_on_loop,
         )
 
     def stream_reply(
@@ -235,6 +247,7 @@ class TorchLM:
         top_p: float = 0.95,
         seed: int = 0,
         on_text: Callable[[str], None],
+        stop_on_loop: bool = False,
     ) -> str:
         """One reply to ``prompt``, streamed: as a chat turn, or (``chat=False``) as the
         continuation of a plain document, the way the benchmark asks non-chat items."""
@@ -246,6 +259,7 @@ class TorchLM:
                 top_p=top_p,
                 seed=seed,
                 on_text=on_text,
+                stop_on_loop=stop_on_loop,
             )
         return self.stream_ids(
             encode_doc(self.tok, prompt),
@@ -254,6 +268,7 @@ class TorchLM:
             top_p=top_p,
             seed=seed,
             on_text=on_text,
+            stop_on_loop=stop_on_loop,
         )
 
     def stream_ids(
@@ -265,6 +280,7 @@ class TorchLM:
         top_p: float,
         seed: int,
         on_text: Callable[[str], None],
+        stop_on_loop: bool = False,
     ) -> str:
         """Generate after ``prompt`` (token ids), calling ``on_text`` with each new piece."""
         tokens: list[int] = []
@@ -290,6 +306,7 @@ class TorchLM:
             top_p=top_p,
             seed=seed,
             on_token=on_token,
+            stop_on_loop=stop_on_loop,
         )[0]
         flush(final=True)
         return self.tok.decode(gen.tokens)
@@ -326,6 +343,7 @@ class TorchLM:
         seed: int,
         stop_ids: Sequence[int] | None = None,
         on_token: Callable[[int, int], None] | None = None,
+        stop_on_loop: bool = False,
     ) -> list[Generation]:
         """Generate up to ``max_new_tokens`` tokens after each prompt.
 
@@ -334,7 +352,10 @@ class TorchLM:
         empty sequence means never stop early. A prompt longer than ``ctx_len - 1`` keeps its last
         tokens (and its leading ``<|bos|>``), and a row stops once prompt plus reply reach
         ``ctx_len``. ``on_token(row, token_id)``, if given, is called for each token as it is
-        added to a row's reply (for streaming).
+        added to a row's reply (for streaming). With ``stop_on_loop`` a row also ends once its
+        reply's tail is one short token sequence said over and over
+        (:func:`~airace_ml.infer.serving.is_looping`): it is marked ``looped`` and keeps every
+        token it generated, nothing is taken back.
         """
         if max_new_tokens < 0:
             raise ValueError(f"max_new_tokens must be >= 0, got {max_new_tokens}")
@@ -357,7 +378,7 @@ class TorchLM:
                     emit = lambda row, token, lo=lo: on_token(lo + row, token)
                 out.extend(
                     self._generate_chunk(
-                        chunk, max_new_tokens, temperature, top_p, stops, rng, emit
+                        chunk, max_new_tokens, temperature, top_p, stops, rng, emit, stop_on_loop
                     )
                 )
         return out
@@ -371,6 +392,7 @@ class TorchLM:
         stops: frozenset[int],
         rng: torch.Generator,
         on_token: Callable[[int, int], None] | None = None,
+        stop_on_loop: bool = False,
     ) -> list[Generation]:
         """Left-pad, prefill once, then decode one token per step from the KV cache.
 
@@ -418,6 +440,9 @@ class TorchLM:
                 gen.top1_probs.append(top1_l[i])
                 if on_token is not None:
                     on_token(i, nxt_l[i])
+                if stop_on_loop and is_looping(gen.tokens):
+                    gen.looped = done[i] = True
+                    continue
                 done[i] = len(gen.tokens) >= caps[i]
             if all(done):
                 break

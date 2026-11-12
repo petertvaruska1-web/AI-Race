@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from airace_ml.evals.suite import CATEGORIES
+from airace_ml.infer.serving import SERVING_TEMPERATURE, SERVING_TOP_P
 from airace_ml.model.checkpoint import load_checkpoint
 from airace_ml.paths import REPO_ROOT
 from airace_ml.worker.agent import JobContext
@@ -12,6 +13,15 @@ from airace_ml.worker.blobs import download_tar
 from airace_ml.worker.jobs import JobRunner
 
 RESULT_FIXTURES = REPO_ROOT / "packages" / "protocol" / "fixtures" / "worker"
+
+
+# How an AI's words are drawn when it talks to people (chat, customers, keynotes).
+SERVING = {
+    "max_new_tokens": 96,
+    "temperature": SERVING_TEMPERATURE,
+    "top_p": SERVING_TOP_P,
+    "stop_on_loop": True,
+}
 
 
 def _config(run_id: str, d_model: int = 64, parent: bool = False) -> dict:
@@ -194,6 +204,27 @@ def test_generate_streams_the_reply_and_downloads_a_model_once(runner, trained, 
     assert runner.models.downloads - downloads == 1
 
 
+def test_a_typed_message_reaches_the_ai_tidied_and_is_answered_as_it_talks(
+    runner, trained, tmp_path
+):
+    url = trained[0]
+    spec = {
+        "versionId": "v-talk",
+        "modelTarUrl": f"{url}/blobs/a.tar?sig=1",
+        "history": [["user", "  hello there "], ["ai", "hi. who are you?"], ["user", "a friend"]],
+        "seed": 5,
+    }
+    typed = runner.handle_generate(spec, Recorder(tmp_path).ctx)["text"]
+    lm, _ = runner.models.get("v-talk", spec["modelTarUrl"])
+    # The player's turns start with a capital and lose the blanks around them; the AI's own
+    # earlier words go back exactly as it said them; no settings in the spec means the serving
+    # ones.
+    carried = [("user", "Hello there"), ("ai", "hi. who are you?"), ("user", "A friend")]
+    assert typed == lm.chat_reply(carried, seed=5, **SERVING)
+    tidy = {**spec, "history": [list(turn) for turn in carried]}
+    assert runner.handle_generate(tidy, Recorder(tmp_path).ctx)["text"] == typed
+
+
 def test_feedback_asks_every_group_and_scores_the_real_replies(runner, trained, tmp_path):
     url = trained[0]
     groups = ["students", "creators", "developers", "businesses", "everyday", "researchers"]
@@ -210,8 +241,8 @@ def test_feedback_asks_every_group_and_scores_the_real_replies(runner, trained, 
     assert all(0.0 <= r["score"] <= 1.0 for r in result["results"])
     lm, _ = runner.models.get("v-feedback", spec["modelTarUrl"])
     for r in result["results"]:
-        # Exactly what the model says to that question with that seed (R1).
-        expected = lm.chat_reply([("user", r["question"])], max_new_tokens=96, seed=11)
+        # Exactly what the model says to that question with that seed (R1), drawn as it talks.
+        expected = lm.chat_reply([("user", r["question"])], seed=11, **SERVING)
         assert r["reply"] == expected
     fixture = json.loads((RESULT_FIXTURES / "result-feedback.json").read_text())["message"]
     assert set(result) == set(fixture)
@@ -359,6 +390,8 @@ def test_a_keynote_answers_its_customer_question(runner, trained):
     result = runner.handle_keynote(spec, None)
     assert result["questionId"] == question.id and result["prompt"] == question.prompt
     assert isinstance(result["reply"], str) and 0.0 <= result["score"] <= 1.0
+    lm, _ = runner.models.get("v-game-a", spec["modelTarUrl"])
+    assert result["reply"] == lm.chat_reply([("user", question.prompt)], seed=4, **SERVING)
     with pytest.raises(ValueError):
         runner.handle_keynote({**spec, "questionId": "no-such-question"}, None)
 

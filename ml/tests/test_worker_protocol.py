@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from airace_ml.engine import ENGINE_VERSION
 from airace_ml.paths import REPO_ROOT
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.worker.protocol import (
@@ -65,9 +66,19 @@ def test_whello_names_the_capabilities_in_camel_case():
     assert hello.capabilities.data_identity == "sample-0001"
     wire = json.loads(dumps(hello))["capabilities"]
     assert set(wire) == {
-        "device", "vramMb", "maxParams", "gpuName", "speed", "jobTypes", "slots", "dataIdentity"
-    }
+        "device", "vramMb", "maxParams", "gpuName", "speed", "engine", "jobTypes", "slots",
+        "dataIdentity",
+    }  # fmt: skip
     assert wire["gpuName"] == "NVIDIA GeForce RTX 3050" and wire["speed"] == 30000
+    # The shared example names the engine this code runs: the game's side reads the same file.
+    assert wire["engine"] == message["capabilities"]["engine"] == ENGINE_VERSION
+
+
+def test_a_hello_from_before_engines_were_named_is_engine_1():
+    _, message = _fixture(FIXTURES / "worker" / "whello.json")
+    del message["capabilities"]["engine"]
+    hello = parse_worker_message(json.dumps(message))
+    assert isinstance(hello, WHello) and hello.capabilities.engine == 1
 
 
 @pytest.mark.parametrize(

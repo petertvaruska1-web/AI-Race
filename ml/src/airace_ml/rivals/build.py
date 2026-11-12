@@ -38,6 +38,7 @@ from airace_ml.experiments.configs import (
 from airace_ml.experiments.runs import GateRun, GateRuns, _cached, _write_json
 from airace_ml.feedback import GROUPS, customer_pool
 from airace_ml.infer.lm import TorchLM
+from airace_ml.infer.serving import SERVING_TEMPERATURE, SERVING_TOP_P
 from airace_ml.model.checkpoint import load_checkpoint
 from airace_ml.model.shape import ModelShape
 from airace_ml.paths import judge_dir, novelty_path, tokenizer_path
@@ -123,7 +124,15 @@ def _measure(
     replies = []
     for group in GROUPS:
         for k, q in enumerate(customer_pool(group)[:per_group]):
-            reply = lm.chat_reply([("user", q.prompt)], max_new_tokens=96, temperature=0.8, seed=k)
+            # Drawn as a player's AI answers its customers (the worker's feedback job).
+            reply = lm.chat_reply(
+                [("user", q.prompt)],
+                max_new_tokens=96,
+                temperature=SERVING_TEMPERATURE,
+                top_p=SERVING_TOP_P,
+                seed=k,
+                stop_on_loop=True,
+            )
             replies.append(
                 {
                     "group": group,
