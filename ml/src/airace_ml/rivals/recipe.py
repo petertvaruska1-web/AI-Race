@@ -2,8 +2,8 @@
 
 Shapes are the game's brain sizes at an attention span of 256; each version continues from the
 one before (growing when the shape grows, R6) and reads another 12,582,912 tokens. The premium
-rivals end on the Large brain: players of the newer rules can train Large and Huge brains, and
-the big-budget rivals must stay worth beating.
+rivals end on the Large brain and twice that text: players of the newer rules can train Large
+and Huge brains, and the big-budget rivals must stay worth beating.
 """
 
 from __future__ import annotations
@@ -49,14 +49,18 @@ def _steps(*shapes: ModelShape) -> tuple[VersionStep, ...]:
     return tuple(VersionStep(s, STEP_TOKENS) for s in shapes)
 
 
+# A Large brain shows what it can do only on more text (measured: on 12.6M tokens it ends level
+# with the Medium brain it grew from), so the premium rivals' last version reads twice as much.
+PREMIUM_STEPS = (*_steps(SMALL, MEDIUM), VersionStep(LARGE, 2 * STEP_TOKENS))
+
 LINEAGES: tuple[LineageRecipe, ...] = (
-    LineageRecipe("premium-a", "premium", "businesses", rest_even(), _steps(SMALL, MEDIUM, LARGE)),
+    LineageRecipe("premium-a", "premium", "businesses", rest_even(), PREMIUM_STEPS),
     LineageRecipe(
         "premium-b",
         "premium",
         "researchers",
         rest_even(facts=0.35, educational=0.35),
-        _steps(SMALL, MEDIUM, LARGE),
+        PREMIUM_STEPS,
     ),
     LineageRecipe(
         "budget-a",

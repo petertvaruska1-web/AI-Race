@@ -116,8 +116,41 @@ Five of seven, as before, but not the same five.
 - **What was tried on the facts specialist** (`docs/handoff/upgrade-2026-11-10/specialist.py`, the gate's recipe, 2–3 seeds each; one run varies by about ±5): no casual typing 70.8 against 68.8 (about 2 points); learning style Careful 63.5, a quarter 71.4, middle 68.8–71.2, three quarters 75.4; embedding rate at a quarter of the matrices' 72.1 (71.4–72.8, the steadiest); no embedding weight decay 71.0; the earlier schedule 72.1. Nothing reaches 77: it is how this optimizer learns a small, heavily repeated dataset, and it is accepted for what it gives everywhere else. Its held-out loss on the facts is lower than engine 1's (0.43 against 0.45); the lost answers are in a few relations (an animal's legs 97% → 81%, a chemical symbol 88% → 77%).
 - G7's known gap (cleaning barely lowers garbled output) is unchanged.
 
-## 9. Still open
-- The rival pack for worlds of the newer rules (`data/rivals/v2`) is being built at the time of writing; until it is there, new worlds draw their rivals from the earlier pack.
+## 9. Continuing and growing under engine 2 (Tiny and Small brains, even mix, product trainer)
+
+| What was trained | held-out loss |
+|---|---|
+| Tiny, one run of 12.6M tokens | 2.447–2.452 |
+| Tiny, one run of 25.2M | 2.357 |
+| Tiny, 12.6M then 12.6M more (learning style in the middle / Careful / half and a quarter of Careful's rate) | 2.387 / 2.382 / 2.393, 2.410 |
+| Small, one run of 12.6M | 2.352 |
+| Small, one run of 25.2M | 2.236 |
+| Tiny 12.6M grown to Small, then 12.6M (middle / three quarters / Bold) | 2.338 / 2.349 / 2.364 |
+| the same with 5 and 8 Newton–Schulz iterations instead of 3 | 2.338, 2.342 |
+
+- Two runs in a row cost about 0.03 against one run of the same reading (the second run warms up and settles again). No learning rate does better than the slider's Careful-to-middle range, so a continuing run keeps the slider as it is.
+- A grown brain ends a little ahead of a brand-new brain of its size on the same reading (2.338 against 2.352) and far behind one that read both runs' text at that size (2.236). With engine 1 the head start was bigger (0.06) only because a new brain learned so slowly. Growth keeps what the AI knew (R6); how good the bigger brain becomes is decided by how much it reads at its new size. That is what the Long and Marathon lengths are for, and why the premium rivals' Large version reads twice the usual text.
+- The gate's G5 shows the same: grown 2.339 against 2.385 not grown (engine 1: 2.380 against 2.452).
+
+## 10. The rival pack trained with engine 2 (`data/rivals/v2`, about 75 minutes on the RTX 3050)
+Overall scores of each rival's three versions, earlier pack → this pack:
+
+| Rival | first | second | third |
+|---|---|---|---|
+| premium-a | 49.7 → 56.3 | 57.5 → 58.2 | 60.2 → 63.6 |
+| premium-b | 43.4 → 51.3 | 49.2 → 53.6 | 53.2 → 58.3 |
+| budget-a | 25.8 → 38.9 | 37.2 → 45.6 | 44.4 → 52.5 |
+| budget-b | 29.6 → 39.8 | 42.1 → 48.3 | 50.2 → 50.6 |
+| specialist-code | 23.5 → 37.6 | 44.2 → 48.8 | 50.3 → 54.6 |
+| specialist-stories | 29.7 → 36.6 | 46.6 → 49.2 | 56.6 → 50.6 |
+| consumer-a | 39.6 → 50.2 | 51.5 → 58.0 | 55.1 → 57.8 |
+| consumer-b | 23.9 → 34.6 | 37.0 → 49.2 | 48.0 → 54.3 |
+
+- First versions are 7 to 13 points stronger, second versions 1 to 12; by the third the two packs are close (held-out loss is lower for every version of the new pack, by 0.12–0.19, 0.03–0.12 and 0.01–0.06): small brains reach what they can hold sooner, and then the old pack catches up.
+- The story specialist's third version is weaker than before in knowledge (58 → 45) and instructions (62 → 48) while better in stories (40 → 43): the same pattern as the gate's facts specialist, a heavy mix keeps less of its minority skills.
+- The premium rivals end on the Large brain. On the usual 12.6M tokens that version scored level with the Medium one before it (58.2 → 58.5; premium-b 53.6 → 55.1), so it reads 25.2M: 63.6 and 58.3, held-out loss 2.123 and 2.201 (2.207 and 2.281 on 12.6M).
+
+## 11. Still open
 - A Huge brain's saved progress (644 MB) is uploaded every two minutes in Fair mode; over a home line that is heavy. Leaving the roll-back copy out of the uploaded state would halve it.
 - The balance bot has no brain choice, so the economy of the Large and Huge brains is checked by priced invariants only, not by a played year.
 - A played session with the new brains (`npm run e2e` passes: solo and both two-player worlds).

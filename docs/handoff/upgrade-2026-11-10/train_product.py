@@ -34,7 +34,19 @@ p.add_argument("--parent", default=None)
 p.add_argument("--replay", type=float, default=0.0)
 p.add_argument("--mix", default="even")
 p.add_argument("--cleaning", default="standard")
+p.add_argument("--lr-scale", type=float, default=1.0)  # scales both ends of the learning-style slider
+p.add_argument("--warmup", type=float, default=None)  # the warm-up share of the run
+p.add_argument("--ns-steps", type=int, default=None)  # Newton-Schulz iterations
 a = p.parse_args()
+
+import airace_ml.train.config as config_module  # noqa: E402
+
+config_module.CAREFUL_LR *= a.lr_scale
+config_module.BOLD_LR *= a.lr_scale
+if a.ns_steps is not None:
+    from airace_ml.train.optim import MuonAdamW
+
+    MuonAdamW.__init__.__kwdefaults__["ns_steps"] = a.ns_steps
 
 out = Path("runs/upgrade") / a.name
 shutil.rmtree(out, ignore_errors=True)
