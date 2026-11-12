@@ -219,8 +219,10 @@ export class ChatService {
         : signBlobUrl(this.ctx, checkpointKey(p.versionId), "GET", MODEL_URL_TTL_MS),
       history: p.history,
       maxNewTokens: 96,
-      temperature: 0.8,
-      topP: 0.95,
+      // How an AI talks everywhere (ml: airace_ml/infer/serving.py; ADR 0009): calmer than the
+      // old 0.8 / 0.95, which made the same AIs ramble.
+      temperature: 0.6,
+      topP: 0.9,
       seed: p.seed,
     };
   }

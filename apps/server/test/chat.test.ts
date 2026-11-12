@@ -76,8 +76,8 @@ describe("playground chat", () => {
     expect(spec).toMatchObject({
       versionId: o.versionId,
       maxNewTokens: 96,
-      temperature: 0.8,
-      topP: 0.95,
+      temperature: 0.6,
+      topP: 0.9,
     });
     expect(spec.history).toEqual([["user", "Tell me a story <|end|>"]]);
     expect(await (await fetch(spec.modelTarUrl)).text()).toBe("fake-checkpoint");

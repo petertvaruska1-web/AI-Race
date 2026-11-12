@@ -12,6 +12,8 @@ export type CardView = {
   /** × of the reference speed (an RTX 3050). */
   speed: number;
   online: boolean;
+  /** Its helper is from an older version of the game: no work until it is set up again. */
+  outdated?: boolean;
   /** The PC running the game; it counts as the world host's. */
   house: boolean;
 };
@@ -73,5 +75,5 @@ export function shortCardName(gpuName: string | null): string {
 
 /** The cards that train for `userId`: their own (Fair off), or everyone's (Fair on). */
 export function usableCards(cards: CardView[], userId: string, fairMode: boolean): CardView[] {
-  return cards.filter((c) => c.online && (fairMode || c.userId === userId));
+  return cards.filter((c) => c.online && !c.outdated && (fairMode || c.userId === userId));
 }

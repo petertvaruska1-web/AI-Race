@@ -33,6 +33,13 @@ export type JobType = z.infer<typeof JobType>;
 const Slots = z.number().int().min(0);
 export const JobId = z.uuid();
 
+/**
+ * The training engine this game expects of its helpers (ml: `airace_ml/engine.py`; ADR 0009).
+ * A helper that runs another engine would train differently, so it gets no work until it is
+ * updated. The shared `whello` example names the same number; both sides test against it.
+ */
+export const TRAINING_ENGINE = 2;
+
 export const WorkerCapabilities = z.object({
   device: z.enum(["cuda", "cpu"]),
   vramMb: z.number().int().min(0),
@@ -41,6 +48,8 @@ export const WorkerCapabilities = z.object({
   gpuName: z.string().max(120).default("unknown"),
   /** Training tokens a second on the reference model (0: not measured). */
   speed: z.number().min(0).default(0),
+  /** The training engine it runs; a helper from before engines were named runs the first. */
+  engine: z.number().int().min(1).default(1),
   jobTypes: z.array(JobType).min(1),
   /** A worker from before feedback or battle jobs sends no slot for them: it gets none. */
   slots: z.object({

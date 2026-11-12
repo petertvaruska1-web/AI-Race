@@ -304,4 +304,33 @@ describe("waiting and failing", () => {
     expect(runOf(o.actor, o.userId).failure).toMatch(/couldn't be saved/);
     expect(cashOf(o.actor, o.userId)).toBe(BALANCE_TEST.foundingCash);
   });
+
+  it("a run that fails still fails in the world when its saved progress can't be removed", async () => {
+    server = await start();
+    const w = await worker(server);
+    const o = await setup(server);
+    // The disk refuses deletions (a locked file): that is housekeeping, never the run's fate.
+    server.ctx.blobs.delete = async () => {
+      throw new Error("the disk refuses");
+    };
+    await send(o.ws, o.worldId, { type: "startTraining", plan: plan() });
+    const lease = await w.nextLease();
+    w.failed(lease.jobId, "the config is impossible", false);
+    await eventually(() => runOf(o.actor, o.userId).status === "failed");
+    expect(cashOf(o.actor, o.userId)).toBe(BALANCE_TEST.foundingCash);
+  });
+
+  it("forgets a run's telemetry when the helper starts the run over", async () => {
+    server = await start();
+    const w = await worker(server);
+    const o = await setup(server);
+    await send(o.ws, o.worldId, { type: "startTraining", plan: plan() });
+    const lease = await w.nextLease();
+    for (const step of [1, 10, 20]) w.progress(lease.jobId, { type: "progress", step });
+    // The helper could not continue what was saved, so the run's first step arrives again.
+    for (const step of [1, 10]) w.progress(lease.jobId, { type: "progress", step });
+    const steps = async () =>
+      (await server?.ctx.db.select().from(schema.trainingEvents))?.map((e) => [e.idx, e.step]);
+    await eventually(async () => JSON.stringify(await steps()) === "[[0,1],[1,10]]");
+  });
 });

@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { JobType, ServerToWorker, WorkerCapabilities, WorkerMessage } from "@airace/protocol";
+import {
+  type JobType,
+  type ServerToWorker,
+  TRAINING_ENGINE,
+  type WorkerCapabilities,
+  type WorkerMessage,
+} from "@airace/protocol";
 import { and, asc, eq, lt, notInArray, or } from "drizzle-orm";
 import type { AppContext } from "../app.ts";
 import { schema } from "../db/index.ts";
@@ -362,9 +368,10 @@ export class JobBroker {
   private async dispatch(): Promise<void> {
     const identity = this.ctx.catalog?.dataIdentity;
     if (this.closed || !identity) return;
-    // A worker with other data would train on something the game doesn't describe.
+    // A worker with other data would train on something the game doesn't describe, and one
+    // with another training engine would train it differently: neither gets work.
     const workers = [...this.workers.values()]
-      .filter((c) => c.caps.dataIdentity === identity)
+      .filter((c) => c.caps.dataIdentity === identity && c.caps.engine === TRAINING_ENGINE)
       .sort((a, b) => b.caps.speed - a.caps.speed || (a.workerId < b.workerId ? -1 : 1));
     if (workers.length === 0) return;
     const playing = this.playgroundWorlds();

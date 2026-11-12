@@ -94,6 +94,16 @@ describe("training fits the player's card", () => {
     expect(JSON.stringify(logged)).not.toContain("startTraining");
   });
 
+  it("a helper from an older version of the game trains for nobody until it is updated", async () => {
+    server = await start();
+    const o = await anaWorld(server, false);
+    await worker(server, { engine: 1 });
+    expect(await attempt(o.ws, o.worldId, { type: "startTraining", plan: plan() })).toBe(
+      "Connect your computer to do this.",
+    );
+    expect((await limit(o.ws, o.worldId)).data).toEqual({ maxBrain: null, tokensPerSecond: 0 });
+  });
+
   it("refuses a brain too big for the player's card (Fair off) and lets a fitting one through", async () => {
     server = await start();
     const o = await anaWorld(server, false);

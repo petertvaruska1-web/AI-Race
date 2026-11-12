@@ -14,8 +14,6 @@ import { useWindows } from "../store/windows.ts";
 import { WindowFrame, type WindowProps } from "../windows/WindowFrame.tsx";
 
 export const NO_CARD = "Connect your computer to do this.";
-/** The reference model's parameters, on which a card's speed is measured (2 layers of 64). */
-const REFERENCE_PARAMS = paramCount(2, 64);
 
 const named = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
 
@@ -59,9 +57,22 @@ export function labLimit(
   };
 }
 
+/** What an RTX 3050 measures on the helper's speed test (the server's `SPEED_REFERENCE`). */
+export const REFERENCE_TOKENS_PER_SECOND = 450_000;
 /**
- * Real minutes a run of `tokens` takes: the card's measured speed scaled to this brain (speed
- * goes down as the brain grows). Null when the speed isn't known.
+ * Microseconds a training token costs on that card, measured with training engine 2 (ADR 0009):
+ * a fixed part plus a part that grows with the brain (4.4 for the first AI's 1.4M-parameter
+ * brain, about 10.5 for the 7.5M one).
+ */
+const MICROS_PER_TOKEN = 3;
+const MICROS_PER_TOKEN_PER_MILLION_PARAMS = 1;
+
+/**
+ * Real minutes a run of `tokens` takes on a card of this measured speed: the reference card's
+ * measured cost of a token for this brain, scaled by how the card compares on the speed test.
+ * (The old estimate took speed as falling in step with the brain's size from the tiny test
+ * model, which made a mid-sized brain look almost four times slower than it trains.) Null when
+ * the speed isn't known.
  */
 export function realMinutes(
   tokens: number,
@@ -69,8 +80,9 @@ export function realMinutes(
   tokensPerSecond: number,
 ): number | null {
   if (!(tokensPerSecond > 0) || !(params > 0)) return null;
-  const perSecond = (tokensPerSecond * REFERENCE_PARAMS) / params;
-  return Math.max(1, Math.round(tokens / perSecond / 60));
+  const micros = MICROS_PER_TOKEN + (MICROS_PER_TOKEN_PER_MILLION_PARAMS * params) / 1e6;
+  const seconds = (tokens * micros * REFERENCE_TOKENS_PER_SECOND) / tokensPerSecond / 1e6;
+  return Math.max(1, Math.round(seconds / 60));
 }
 
 /** The top bar's chip: your card, or the way to connect one. */
@@ -145,6 +157,7 @@ export function CardsPanel({ view }: { view: WorldView }) {
                     memory(c.vramMb),
                     c.speed > 0 ? `${c.speed}× speed` : "",
                     c.house ? "runs the game" : "",
+                    c.outdated ? "needs an update: run the helper's setup file again" : "",
                   ]
                     .filter(Boolean)
                     .join(" · ")

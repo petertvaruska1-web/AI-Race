@@ -1,4 +1,9 @@
-import type { JobType, ServerToWorker, WorkerCapabilities } from "@airace/protocol";
+import {
+  type JobType,
+  type ServerToWorker,
+  TRAINING_ENGINE,
+  type WorkerCapabilities,
+} from "@airace/protocol";
 import WebSocket from "ws";
 import type { TestServer } from "./harness.ts";
 
@@ -13,6 +18,8 @@ export type FakeWorkerOptions = {
   running?: string[];
   gpuName?: string;
   speed?: number;
+  /** The training engine it says it runs (the game's own unless a test says otherwise). */
+  engine?: number;
   vramMb?: number;
   maxParams?: number;
   /**
@@ -61,6 +68,7 @@ export class FakeWorker {
         maxParams: o.maxParams ?? 50_000_000,
         gpuName: o.gpuName ?? "CPU",
         speed: o.speed ?? 0,
+        engine: o.engine ?? TRAINING_ENGINE,
         jobTypes,
         slots: {
           train: 1,

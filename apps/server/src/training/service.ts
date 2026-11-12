@@ -350,11 +350,7 @@ export class TrainingService {
     // A run that continues from saved progress keeps its telemetry (a few steps may repeat).
     if (attempt > 1 && !(await this.ctx.blobs.exists(resumeKey(p.runId)))) {
       // A new attempt starts again from the parent (ADR 0008 item 8): earlier telemetry is void.
-      await db.delete(schema.trainingEvents).where(eq(schema.trainingEvents.runId, p.runId));
-      this.events.set(p.runId, []);
-      this.revealed.set(p.runId, 0);
-      this.published.set(p.runId, 0);
-      this.ctx.gateway.publish(streamName(p), { kind: "reset" });
+      await this.resetTelemetry(p);
     }
     await db
       .update(schema.trainingRuns)
@@ -363,8 +359,24 @@ export class TrainingService {
     await this.submit(p.worldId, { type: "computeStarted", runId: p.runId });
   }
 
+  /** Forgets a run's telemetry so far and tells its watchers to clear their charts. */
+  private async resetTelemetry(p: TrainPayload): Promise<void> {
+    await this.ctx.db.delete(schema.trainingEvents).where(eq(schema.trainingEvents.runId, p.runId));
+    this.events.set(p.runId, []);
+    this.revealed.set(p.runId, 0);
+    this.published.set(p.runId, 0);
+    this.ctx.gateway.publish(streamName(p), { kind: "reset" });
+  }
+
   private async trainProgress(p: TrainPayload, event: unknown): Promise<void> {
-    const list = await this.loadEvents(p.runId);
+    let list = await this.loadEvents(p.runId);
+    // A helper that could not continue the saved progress (it was another engine's, or cut
+    // short) starts the run over: its first step arrives again, and what came before is void.
+    const first = event as { type?: unknown; step?: unknown } | null;
+    if (first?.type === "progress" && first.step === 1 && (list.at(-1)?.step ?? 0) > 1) {
+      await this.resetTelemetry(p);
+      list = await this.loadEvents(p.runId);
+    }
     const given = (event as { step?: unknown } | null)?.step;
     const step = Number.isInteger(given) ? (given as number) : (list.at(-1)?.step ?? 0);
     await this.ctx.db
@@ -373,8 +385,17 @@ export class TrainingService {
     list.push({ step, event });
   }
 
+  /** Drops a finished run's saved progress. Housekeeping: it never holds up what the world
+   *  is told about the run. */
+  private async dropResume(runId: string): Promise<void> {
+    try {
+      await this.ctx.blobs.delete(resumeKey(runId));
+    } catch (err) {
+      this.ctx.log.warn({ runId, err }, "could not delete a finished run's saved progress");
+    }
+  }
+
   private async trainDone(p: TrainPayload, result: unknown): Promise<void> {
-    await this.ctx.blobs.delete(resumeKey(p.runId));
     const parsed = TrainJobResult.safeParse(result);
     if (!parsed.success) {
       this.ctx.log.error({ runId: p.runId, issues: parsed.error.issues }, "bad training result");
@@ -400,15 +421,17 @@ export class TrainingService {
         unstable: r.status === "unstable_stopped",
       },
     });
+    await this.dropResume(p.runId);
   }
 
   private async trainFailed(p: TrainPayload, reason: string): Promise<void> {
-    await this.ctx.blobs.delete(resumeKey(p.runId));
+    // The world hears first: a clean-up that fails must never leave a run "training" for ever.
     await this.ctx.db
       .update(schema.trainingRuns)
       .set({ status: "failed" })
       .where(eq(schema.trainingRuns.id, p.runId));
     await this.submit(p.worldId, { type: "trainingFailed", runId: p.runId, reason });
+    await this.dropResume(p.runId);
   }
 
   /** The notebook a run recorded, as paragraphs (none when its text is gone). */

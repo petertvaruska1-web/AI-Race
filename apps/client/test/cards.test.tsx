@@ -1,8 +1,9 @@
 import type { Catalog } from "@airace/protocol";
+import { paramCount } from "@airace/sim";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import sampleCatalog from "../../../packages/protocol/fixtures/catalog.sample.json";
-import { CardsPanel } from "../src/cards/Cards.tsx";
+import { CardsPanel, realMinutes } from "../src/cards/Cards.tsx";
 import { TopBar } from "../src/components/TopBar.tsx";
 import { Lab } from "../src/screens/lab/LabLayout.tsx";
 import { type CardView, useCards } from "../src/store/cards.ts";
@@ -56,13 +57,13 @@ describe("your computer", () => {
   });
 
   it("names the card in the chip when it is online", () => {
-    cardsAre([card({})], { maxBrain: "medium", tokensPerSecond: 30_000 });
+    cardsAre([card({})], { maxBrain: "medium", tokensPerSecond: 450_000 });
     render(<TopBar view={viewOf(runningWorld("balance-v2"))} />);
     expect(screen.getByRole("button", { name: "Your computer: RTX 3050 · online" })).toBeTruthy();
   });
 
   it("disables brains too big for the card and estimates real minutes", () => {
-    cardsAre([card({})], { maxBrain: "small", tokensPerSecond: 30_000 });
+    cardsAre([card({})], { maxBrain: "small", tokensPerSecond: 450_000 });
     render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
     fireEvent.click(screen.getByRole("button", { name: "3 Design" }));
     const medium = screen.getByRole("button", { name: /^Medium/ }) as HTMLButtonElement;
@@ -74,6 +75,17 @@ describe("your computer", () => {
     expect(screen.getByTestId("real-minutes").textContent).toMatch(
       /^About \d+ minutes? on your card\.$/,
     );
+  });
+
+  it("estimates real minutes from what a token was measured to cost", () => {
+    // On the reference card (an RTX 3050 measures 450,000 on the speed test) the first AI, 12.6
+    // million tokens into the Tiny brain, trains in about a minute, and the 7.5-million-parameter
+    // brain reads 25.2 million tokens in about four (the old estimate said sixteen).
+    expect(realMinutes(12_600_000, paramCount(4, 128), 450_000)).toBe(1);
+    expect(realMinutes(25_200_000, paramCount(8, 256), 450_000)).toBe(4);
+    // A card twice as fast needs half the time; an unknown speed gives no estimate.
+    expect(realMinutes(25_200_000, paramCount(8, 256), 900_000)).toBe(2);
+    expect(realMinutes(25_200_000, paramCount(8, 256), 0)).toBeNull();
   });
 });
 

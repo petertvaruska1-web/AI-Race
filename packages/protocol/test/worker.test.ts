@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ServerToWorker, WORKER_SCHEMAS, WorkerMessage } from "../src/index.ts";
+import { ServerToWorker, TRAINING_ENGINE, WORKER_SCHEMAS, WorkerMessage } from "../src/index.ts";
 
 const DIR = new URL("../fixtures/worker/", import.meta.url);
 
@@ -40,11 +40,17 @@ describe("worker protocol fixtures", () => {
 
   it("reads a hello from a helper that doesn't name or time its card", () => {
     const { message } = JSON.parse(readFileSync(new URL("whello.json", DIR), "utf8"));
-    const { gpuName: _, speed: __, ...older } = message.capabilities;
+    const { gpuName: _, speed: __, engine: ___, ...older } = message.capabilities;
     const parsed = WorkerMessage.parse({ ...message, capabilities: older });
     if (parsed.type !== "whello") throw new Error("not a hello");
     expect(parsed.capabilities.gpuName).toBe("unknown");
     expect(parsed.capabilities.speed).toBe(0);
+    expect(parsed.capabilities.engine).toBe(1); // from before engines were named
+  });
+
+  it("expects the training engine the shared hello names (the helper tests the same file)", () => {
+    const { message } = JSON.parse(readFileSync(new URL("whello.json", DIR), "utf8"));
+    expect(message.capabilities.engine).toBe(TRAINING_ENGINE);
   });
 
   it("reads an eval spec and result from before discoveries", () => {

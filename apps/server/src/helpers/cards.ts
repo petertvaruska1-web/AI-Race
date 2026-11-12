@@ -1,10 +1,14 @@
-import type { Query } from "@airace/protocol";
+import { type Query, TRAINING_ENGINE } from "@airace/protocol";
 import type { AppContext } from "../app.ts";
 import { HttpError } from "../auth.ts";
 import type { WorkerConn } from "../jobs/broker.ts";
 
-/** Training tokens a second that count as 1.0× speed (an RTX 3050 on the reference model). */
-export const SPEED_REFERENCE = 30_000;
+/**
+ * Training tokens a second on the helper's speed test that count as 1.0× speed: what an RTX 3050
+ * measures there (about 450,000; the old 30,000 made that card read "15× speed"). The client's
+ * minute estimate (`realMinutes`) uses the same number.
+ */
+export const SPEED_REFERENCE = 450_000;
 
 /** A graphics card as every player in the world sees it (never its key or worker id). */
 export type CardView = {
@@ -15,6 +19,8 @@ export type CardView = {
   /** × of the reference speed, to one decimal. */
   speed: number;
   online: boolean;
+  /** Its helper is from an older version of the game: it gets no work until set up again. */
+  outdated: boolean;
   /** The PC running the game (it counts as the world host's card). */
   house: boolean;
 };
@@ -74,6 +80,7 @@ export class CardsService {
           vramMb: 0,
           speed: 0,
           online: false,
+          outdated: false,
           house: false,
         });
       }
@@ -101,6 +108,7 @@ function view(userId: string, playerName: string, c: WorkerConn): CardView {
     vramMb: c.caps.vramMb,
     speed: Math.round((10 * c.caps.speed) / SPEED_REFERENCE) / 10,
     online: true,
+    outdated: c.caps.engine !== TRAINING_ENGINE,
     house: c.ownerUserId === null,
   };
 }

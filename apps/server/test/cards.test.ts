@@ -58,7 +58,7 @@ describe("cards in a world", () => {
       token: key,
       workerId: "ana-pc",
       gpuName: "NVIDIA GeForce RTX 3050",
-      speed: 30_000,
+      speed: 450_000,
       vramMb: 8192,
     });
     const pushed = await benWs.next("stream", (m) => m.sub === `cards:${ana.worldId}`);
@@ -83,10 +83,20 @@ describe("cards in a world", () => {
     expect(gone).toBeTruthy();
   });
 
+  it("marks a card whose helper is from an older version of the game", async () => {
+    server = await startTestServer();
+    const ana = await createGuestWorld(server);
+    await FakeWorker.connect(server, { engine: 1 });
+    const anaWs = await connectAs(server, ana.cookie);
+    openSockets.push(anaWs);
+    const mine = (await cards(anaWs, ana.worldId)).data as { cards: Card[] };
+    expect(mine.cards).toEqual([expect.objectContaining({ online: true, outdated: true })]);
+  });
+
   it("the house card counts as the world host's, and outsiders can't look", async () => {
     server = await startTestServer();
     const ana = await createGuestWorld(server);
-    await FakeWorker.connect(server, { gpuName: "NVIDIA GeForce RTX 3050", speed: 15_000 });
+    await FakeWorker.connect(server, { gpuName: "NVIDIA GeForce RTX 3050", speed: 225_000 });
     const anaWs = await connectAs(server, ana.cookie);
     openSockets.push(anaWs);
     const mine = (await cards(anaWs, ana.worldId)).data as { cards: Card[] };

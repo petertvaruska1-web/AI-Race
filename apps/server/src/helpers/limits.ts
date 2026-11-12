@@ -1,4 +1,4 @@
-import type { Command, Query } from "@airace/protocol";
+import { type Command, type Query, TRAINING_ENGINE } from "@airace/protocol";
 import {
   type Balance,
   type BrainSize,
@@ -30,10 +30,12 @@ const named = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
  * house card when they host the world); with it on, every member's card and the house card.
  */
 export function trainingCards(conns: WorkerConn[], s: WorldState, userId: string): WorkerConn[] {
+  // A helper that needs an update gets no work (the broker), so it trains for nobody.
+  const current = conns.filter((c) => c.caps.engine === TRAINING_ENGINE);
   if (s.fairMode) {
-    return conns.filter((c) => c.ownerUserId === null || !!s.members[c.ownerUserId]);
+    return current.filter((c) => c.ownerUserId === null || !!s.members[c.ownerUserId]);
   }
-  return conns.filter((c) =>
+  return current.filter((c) =>
     c.ownerUserId === null ? userId === s.hostUserId : c.ownerUserId === userId,
   );
 }
