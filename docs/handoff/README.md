@@ -58,6 +58,8 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
    - Cloud: the template `docs/handoff/final-review/cloud-sync.sh`. It also copies briefs, deferred minors and final-review artefacts, and takes the commit trailer and branch from the environment.
 
 ## 4. Immediate next step
+**Latest (2026-11-12): training engine 2 is built on `m2-two-friends`** (the top entry of `docs/progress.md`; spec `docs/superpowers/specs/2026-11-10-training-engine-2-design.md`; measurements and every value in `docs/decisions/0009-training-engine-2.md`). Open, in order: the gate rerun with engine 2 (`airace-ml gate --out runs/gate-2`, result into ADR 0009 section 8), the rivals rebuilt as a second pack for `balance-v3` worlds, `npm run e2e`, and a played session with the Large and Huge brains. The measuring scripts are in `docs/handoff/upgrade-2026-11-10/` (run from `ml/`); their runs are in `ml/runs/upgrade/` (not in git).
+
 **Milestone 1 is closed** (2026-10-22, owner decision C4): merged into `main` and tagged `m1-complete`. The gate stands at 5 of 7 with two accepted gaps (`docs/reports/m1-feasibility.md`).
 
 **Milestone 2 starts on branch `m2-two-friends`.** Its plan is `docs/superpowers/plans/2026-10-22-m2-two-friends.md` (28 tasks).

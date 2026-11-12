@@ -29,7 +29,7 @@
 - The trainer writes all probe samples in one batch; generation skips the padding masks when nothing is padded; held-out losses are computed in one pass.
 - Token data is read through a plain array view of the memory map; rollback snapshots stay on the training device; resume states are saved by time (about every 30 s) instead of every 200 steps.
 - Rejected: `torch.compile` (needs a community compiler package on every Windows helper), merged q/k/v and gate/up matrices (measured slower), larger batches (the card is already full at 8,192 tokens; ADR 0005's per-token finding stands).
-- Acceptance: every existing model, growth, inference and trainer test passes unchanged in meaning; first AI at most 45 s on the RTX 3050 (70 s today); a timing table in ADR 0009.
+- Acceptance: every existing model, growth, inference and trainer test passes unchanged in meaning; first AI at most 45 s on the RTX 3050 (70 s today); a timing table in ADR 0009. **As built (2026-11-12): 54.9 s; the 45 s target was not reached (ADR 0009 section 5 says why), while the time to a given quality fell by about half.**
 
 ### 3.2 Smarter: how conversations are read and answered
 - **Casual typing (training).** When the sampler hands out a document with user turns, with probability `CASUAL_SHARE` it retypes every user turn of that document the way people type: all lowercase; lowercase with no final punctuation; no final punctuation; or only the first letter lowercased. The AI's replies are never changed. It is the same conversation with real-world typing, applied to every base dataset alike (not the player's notebook or lessons), deterministic from the run's seed, and part of the engine version. No corpus rebuild.
@@ -50,6 +50,7 @@
 - What a card may train follows measured memory, not `vram_mb * 10,000`; resume states of big brains shrink (no duplicate snapshot in the uploaded copy) to fit the blob limit.
 - Rivals for new worlds are rebuilt with engine 2 in a second pack; pack v1 stays for existing worlds.
 - Built after §3.1–§3.3 and §3.5 are verified.
+- **As built (2026-11-12, ADR 0009 section 6):** `balance-v3` with Large, Huge and a Marathon length (the longest run about 32 minutes); card limits from measured memory; uploads in parts with a 1 GiB blob limit instead of smaller resume states (the free tunnel's 100 MB limit per upload made parts necessary anyway); the economy checked by priced invariants in the sim's tests, not by the balance bot (it has no brain choice). Rivals are not rebuilt yet.
 
 ### 3.5 Reliability
 1. A run with a parent that moves to another card failed for good ("belongs to a different run config"): the resume check compared the parent's folder path. It now compares the run's content and the parent's version id; a state that cannot be continued is discarded and the run starts over.

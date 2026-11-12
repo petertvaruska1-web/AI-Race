@@ -57,3 +57,47 @@ Raw step throughput (tokens a second, 8,192-token batches): tiny 272k → **344k
 - Lower temperature for bench-v1, battles, games and the fingerprint: recorded scores must stay comparable (C56).
 - Tightening "standard" cleaning: typo pages are 10.7% of the web pool and 2.5% of conversations at standard; garble in replies is already under 1% at the new serving settings. To be measured again after the gate.
 - Architecture changes (QK-norm, untied head): they would need a second model family for growth and old checkpoints; the optimizer gave more for less.
+- Fewer launches in the optimizer's Newton–Schulz step (`baddbmm`) and a sampler prefetch thread: at most 2% and 5% of the smallest brain's run, nothing on the larger ones; the prefetch would also complicate exact resume.
+
+## 5. Engine 2 as built (RTX 3050, the product trainer, nothing else running)
+
+| Run | engine 1 | engine 2 |
+|---|---|---|
+| First AI (Tiny 4×128, 12.6M tokens): time | 70.4 s | 54.9 s |
+| First AI: held-out loss (mean of the 8 datasets) | 2.568 | 2.447–2.452 |
+| Small 6×192, 12.6M tokens: held-out loss | 2.439 | 2.315 |
+| Medium 8×256, 6.3M tokens: time | 102 s | 78.2 s |
+| Medium 8×256, 25.2M tokens: held-out loss | 2.189 | 2.114–2.117 |
+
+- The spec's target of 45 s for the first AI was not reached. Of the 54.9 s, forward and backward are 35.2 s, which is the floor without compiling the model (not dependable on Windows). What did fall by about half is the time to a given quality: engine 1 needs 18.9M tokens (about 106 s) for the loss engine 2 reaches in 12.6M (55 s).
+- First AI by the product path, casual questions answered right (as written / all lowercase / lowercase without "?"): engine 1 67 / 34 / 17%, engine 2 85 / 66 / 65%; well-formed replies at the old and new talking settings: 50% → 80–82%.
+- A lineage as a player builds one (Medium brain, three runs, each continuing the last; 144 s, 424 s and 476 s on the card): held-out conversations 2.179 → 1.900 → 1.818; the third AI answers the fact questions 100% as written and 93–94% typed in lowercase without "?".
+
+## 6. Larger brains (new worlds: `balance-v3`)
+Measured with the product trainer at the longest attention span (512), 3.1M tokens each:
+
+| Brain | parameters | training tokens a second | µs a token | peak card memory | saved progress |
+|---|---|---|---|---|---|
+| Tiny 4×128 (span 256) | 1.38M | 229,000 | 4.4 | – | – |
+| Medium 8×256 | 7.48M | 95,000 | 10.5 | 1,380 MB | 126 MB |
+| Large 10×384 | 19.28M | 46,700 | 21.4 | 2,318 MB | 312 MB |
+| Huge 12×512 | 40.65M | 26,700 | 37.4 | 3,532 MB | 644 MB |
+
+**Decisions:**
+- `balance-v3` is `balance-v2` plus the Large and Huge brains and a Marathon length of 50,331,648 tokens; new worlds get it, a world made earlier keeps the version it recorded (C56). The longest run (Huge, Marathon) is about 32 minutes on the RTX 3050 (C49: about half an hour).
+- Compute keeps its price (6 × parameters × tokens): on rented compute alone a Huge Marathon run is about 1,530 game days and $4.9M; with three data centers lent to training, 78 days and about $250,000; a first Huge brain on the Short length with one data center, 27 days and $85,000. Serving keeps its price per customer and million parameters (Huge: about $12 a customer a month rented, under $4 on the company's own centers). The big brains are what a company grows into. The balance bot does not play them yet (it has no brain choice); the invariants above are tests in `packages/sim/test/training.test.ts`.
+- The Lab's minute estimate: a token costs `2.6 + 1.25 × (millions of parameters)^0.9` µs on the reference card (4.3, 10.2, 20.6, 37.7 against the measured column), scaled by the card's speed-test result against the RTX 3050's 450,000. The old estimate scaled the tiny test model by size and was about four times too slow for Medium.
+- A card's largest brain comes from measured memory: a run peaks at about 1,000 MB + 68 MB per million parameters, and 500 MB is left for everything else on the card (`max_params_for_vram`). 8 GB and 6 GB cards train Huge, 4 GB Large, 2 GB Medium. The old rule (10,000 parameters per MB) let a 4 GB card start a Huge run it could not hold.
+- Uploads over 32 MB go in parts (`&part=i&parts=n` on the same signed address; the blob appears when the last part is in): the free Cloudflare tunnel friends play through refuses a single upload over 100 MB, which a Huge brain's checkpoint (163 MB) and every saved progress from Medium up exceed. The blob limit is 1 GiB.
+
+## 7. Helpers and reliability
+- A helper names its training engine in its hello (`airace_ml/engine.py`, `TRAINING_ENGINE` in `packages/protocol/src/worker.ts`, tied by the shared `whello` example). One from an older version gets no work, trains for nobody, and its card says "needs an update: run the helper's setup file again".
+- A run already trained on a helper whose upload failed is uploaded, not trained again (`finished_run`); saved progress that is not this run's (other settings, an older engine, a save cut short) is dropped and the run starts over; the game then clears the run's charts.
+- The world is told that a run finished or failed before the saved progress is cleaned up, so a failing delete cannot leave a run "training".
+- A helper keeps its PC awake while it works on a job, and so do the long commands (`train`, `bench`, `build-novelty-index`, `build-judge`, `build-rivals`, `gate`): `airace_ml/awake.py`. Nothing in the PC's power settings is changed.
+- Cards: 1.0× speed is what an RTX 3050 measures on the speed test (it read "15×").
+
+## 8. Still open
+- The feasibility gate has not been run again with engine 2 (`airace-ml gate --out runs/gate-2`); its result belongs here.
+- The rival pack was built with engine 1 and answers drawn at the old talking settings, so rivals are weaker against engine-2 players than they were designed to be. A second pack for `balance-v3` worlds needs the server to pick a pack by a world's rules.
+- A Huge brain's saved progress (644 MB) is uploaded every two minutes in Fair mode; over a home line that is heavy. Leaving the roll-back copy out of the uploaded state would halve it.
