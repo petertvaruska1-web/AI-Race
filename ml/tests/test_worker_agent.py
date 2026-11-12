@@ -196,3 +196,17 @@ def test_refuses_a_tar_that_escapes_its_folder(blob_server, tmp_path):
     with pytest.raises(UnsafeTarError):
         download_tar(f"{url}/blobs/evil.tar", tmp_path / "dest")
     assert not (tmp_path / "evil").exists()
+
+
+def test_a_cards_memory_decides_the_largest_brain_it_trains():
+    from airace_ml.model.shape import ModelShape
+    from airace_ml.worker.agent import MAX_PARAMS, max_params_for_vram
+
+    medium, large, huge = (
+        ModelShape(n, d, 512).param_count() for n, d in ((8, 256), (10, 384), (12, 512))
+    )
+    assert max_params_for_vram(8192) == MAX_PARAMS >= huge  # the owner's RTX 3050
+    assert max_params_for_vram(6144) >= huge
+    assert large <= max_params_for_vram(4096) < huge  # a Huge run peaks at 3.5 GB: too tight
+    assert medium <= max_params_for_vram(2048) < large
+    assert max_params_for_vram(1024) == 1  # too small for any brain, but still a positive number

@@ -49,6 +49,7 @@ import torch
 from safetensors import SafetensorError
 
 import airace_ml.evals.judge as judge_module
+from airace_ml.awake import stay_awake
 from airace_ml.catalog import write_catalog
 from airace_ml.console import use_utf8_output as _use_utf8_output
 from airace_ml.data.identity import data_identity
@@ -380,6 +381,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = None
     try:
         args = _parser().parse_args(argv)
+        if args.run.__name__ in _LONG_RUNS:
+            # Hours of training must not end because the PC went to sleep for idleness.
+            with stay_awake():
+                return args.run(args)
         return args.run(args)
     except _Exit as e:
         return e.status
@@ -391,6 +396,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _interrupted(e.hint)
     except KeyboardInterrupt:
         return _interrupted(getattr(args, "interrupt_hint", ""))
+
+
+# Commands that compute for minutes or hours on their own (the worker keeps the PC awake per
+# job instead; chat waits for a person).
+_LONG_RUNS = frozenset(
+    {
+        "_cmd_train",
+        "_cmd_bench",
+        "_cmd_build_novelty_index",
+        "_cmd_build_judge",
+        "_cmd_build_rivals",
+        "_cmd_gate",
+    }
+)
 
 
 def _interrupted(hint: str) -> int:

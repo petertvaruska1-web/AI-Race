@@ -63,6 +63,18 @@ tr._Run._train_step = timed("step (total)", tr._Run._train_step, sync=True)
 tr._Snapshot.take = classmethod(timed("snapshot", tr._Snapshot.take.__func__, sync=True))
 tr._Run._evaluate = timed("held-out + samples", tr._Run._evaluate, sync=True)
 tr._Run._save_resume = timed("resume save", tr._Run._save_resume, sync=True)
+SAVED = {"bytes": 0}
+_save = tr._Run._save_resume
+
+
+def _measured_save(self, *args, **kwargs):
+    result = _save(self, *args, **kwargs)
+    size = sum(f.stat().st_size for f in (out / tr.RESUME_DIR).rglob("*") if f.is_file())
+    SAVED["bytes"] = max(SAVED["bytes"], size)
+    return result
+
+
+tr._Run._save_resume = _measured_save
 tr._prepare = timed("setup", tr._prepare)
 
 if a.mix == "even":
@@ -93,6 +105,8 @@ line = {
     "final_loss": round(res.final_loss, 4),
     "heldout": {k: round(v, 3) for k, v in res.heldout_losses.items()},
     "parts_s": {k: round(v, 2) for k, v in sorted(T.items(), key=lambda kv: -kv[1])},
+    "peak_vram_mb": round(torch.cuda.max_memory_reserved() / 2**20),
+    "resume_mb": round(SAVED["bytes"] / 2**20, 1),
 }
 print(json.dumps(line))
 with open("runs/upgrade/product_runs.jsonl", "a", encoding="utf-8") as f:

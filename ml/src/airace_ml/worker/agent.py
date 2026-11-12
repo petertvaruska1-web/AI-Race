@@ -20,6 +20,7 @@ from typing import Any
 from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed, InvalidHandshake, InvalidURI
 
+from airace_ml.awake import stay_awake
 from airace_ml.data.identity import data_identity
 from airace_ml.engine import ENGINE_VERSION
 from airace_ml.worker.protocol import (
@@ -46,6 +47,20 @@ HEARTBEAT_S = 5.0
 BACKOFF_START_S = 1.0
 BACKOFF_MAX_S = 30.0
 MAX_PARAMS = 85_000_000
+# Measured on an RTX 3050 with training engine 2 at the longest attention span (ADR 0009): a run
+# peaks at about 1,000 MB plus 68 MB per million parameters (Medium 1,380 MB, Large 2,320, Huge
+# 3,530). Another 500 MB is left for the desktop and the game on the same card.
+TRAIN_BASE_MB = 1000
+TRAIN_MB_PER_MILLION_PARAMS = 68
+OTHER_USE_MB = 500
+
+
+def max_params_for_vram(vram_mb: int) -> int:
+    """The largest brain (in parameters) a graphics card of this memory trains with room to
+    spare; at least 1, since the game expects a positive number even of a card too small."""
+    room_mb = vram_mb - TRAIN_BASE_MB - OTHER_USE_MB
+    return max(1, min(MAX_PARAMS, room_mb * 1_000_000 // TRAIN_MB_PER_MILLION_PARAMS))
+
 CLOSE_UNAUTHORIZED = 4401
 MAX_MESSAGE_BYTES = 8 * 1024 * 1024
 
@@ -129,8 +144,8 @@ class WorkerAgent:
         self.capabilities = Capabilities(
             device="cuda" if device == "cuda" else "cpu",
             vram_mb=vram,
-            # A GPU holds about 10k parameters' training state per MB; the CPU is bounded by time.
-            max_params=MAX_PARAMS if device != "cuda" else min(MAX_PARAMS, vram * 10_000),
+            # A GPU is bounded by its memory; the CPU by time.
+            max_params=MAX_PARAMS if device != "cuda" else max_params_for_vram(vram),
             # The game's job types in their usual order, then any others (tests register some).
             job_types=tuple(
                 [t for t in JOB_TYPES if t in self.handlers]
@@ -285,7 +300,9 @@ class WorkerAgent:
         log.info("job %s (%s) started", lease.job_id, lease.job_type)
         try:
             ctx.work_dir.mkdir(parents=True, exist_ok=True)
-            msg: WorkerMsg = Done(lease.job_id, handler(lease.spec, ctx))
+            # A PC that falls asleep mid-job drops out of the game: it stays awake while it works.
+            with stay_awake():
+                msg: WorkerMsg = Done(lease.job_id, handler(lease.spec, ctx))
         except JobError as e:
             msg = Failed(lease.job_id, str(e), e.retryable)
         except ValueError as e:  # a spec or config that can't run: trying again won't help
