@@ -120,4 +120,4 @@ Five of seven, as before, but not the same five.
 - The rival pack for worlds of the newer rules (`data/rivals/v2`) is being built at the time of writing; until it is there, new worlds draw their rivals from the earlier pack.
 - A Huge brain's saved progress (644 MB) is uploaded every two minutes in Fair mode; over a home line that is heavy. Leaving the roll-back copy out of the uploaded state would halve it.
 - The balance bot has no brain choice, so the economy of the Large and Huge brains is checked by priced invariants only, not by a played year.
-- `npm run e2e` and a played session with the new brains.
+- A played session with the new brains (`npm run e2e` passes: solo and both two-player worlds).
