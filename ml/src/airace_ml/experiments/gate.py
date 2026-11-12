@@ -108,6 +108,7 @@ from airace_ml.experiments.runs import (
     source_digest,
 )
 from airace_ml.infer.lm import LanguageModel, TorchLM
+from airace_ml.infer.serving import SERVING_TEMPERATURE, SERVING_TOP_P
 from airace_ml.model.checkpoint import META_NAME, CheckpointMeta, load_checkpoint
 from airace_ml.model.growth import grow
 from airace_ml.model.shape import ModelShape
@@ -1360,8 +1361,9 @@ class _Gate:
         return criterion, used
 
     def legibility(self) -> tuple[GateCriterion, list[GateRun]]:
-        """G2: the first model of every seed answers the 20 probe prompts; the transcript and
-        the per-reply judgements in the report are the first seed's."""
+        """G2: the first model of every seed answers the 20 probe prompts, its replies drawn as
+        the game draws an AI's replies; the transcript and the per-reply judgements in the
+        report are the first seed's."""
         self.announce("G2", "the first model of each seed answers 20 probe prompts")
         probes = load_probes()
         chosen = [p for p in probes if p.kind == "open"][:10] + [
@@ -1378,9 +1380,12 @@ class _Gate:
                 lm.chat_reply(
                     [("user", probe.text)],
                     max_new_tokens=LEGIBILITY_REPLY_TOKENS,
-                    temperature=SAMPLE_TEMPERATURE,
-                    top_p=SAMPLE_TOP_P,
+                    # Legibility is what a player reads: replies are drawn as the game draws
+                    # them (ADR 0009; until engine 2 both were 0.8 / 0.95 with no loop stop).
+                    temperature=SERVING_TEMPERATURE,
+                    top_p=SERVING_TOP_P,
                     seed=i,
+                    stop_on_loop=True,
                 )
                 for i, probe in enumerate(asked)
             ]
