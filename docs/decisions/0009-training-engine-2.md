@@ -97,7 +97,27 @@ Measured with the product trainer at the longest attention span (512), 3.1M toke
 - A helper keeps its PC awake while it works on a job, and so do the long commands (`train`, `bench`, `build-novelty-index`, `build-judge`, `build-rivals`, `gate`): `airace_ml/awake.py`. Nothing in the PC's power settings is changed.
 - Cards: 1.0× speed is what an RTX 3050 measures on the speed test (it read "15×").
 
-## 8. Still open
-- The feasibility gate has not been run again with engine 2 (`airace-ml gate --out runs/gate-2`); its result belongs here.
-- The rival pack was built with engine 1 and answers drawn at the old talking settings, so rivals are weaker against engine-2 players than they were designed to be. A second pack for `balance-v3` worlds needs the server to pick a pack by a world's rules.
+## 8. The feasibility gate with engine 2 (2026-11-12, `docs/reports/2026-11-12-gate-engine-2.md`)
+
+| | engine 1 (`m1-feasibility.md`) | engine 2 |
+|---|---|---|
+| G1 Speed | PASS: first AI 68.5 s on the card, 1,008 s on the CPU; 124 tokens/s in chat | PASS: 50.4 s, 1,028 s; 126–168 tokens/s |
+| G2 Legibility (needs 60% well-formed) | FAIL: 59% | PASS: 80% as the game talks (58% at the earlier drawing settings) |
+| G3 Differentiation | PASS | FAIL on one of four leads: knowledge |
+| G4 Seed variation | PASS | PASS |
+| G5 Growth | PASS: grown model gains 0.072 | PASS: gains 0.045 (both models are better: 2.339 against 2.385; engine 1: 2.380 against 2.452) |
+| G6 Forgetting | PASS | PASS |
+| G7 Preparation | FAIL: garble 2.4% thorough against 2.9% light | FAIL: 2.2% against 2.4% (fact-checking works: false facts preferred 47.7% against 71.1%) |
+
+Five of seven, as before, but not the same five.
+
+- **G2 is measured as the game talks.** The gate drew its replies at temperature 0.8 / top-p 0.95, which the game no longer uses anywhere a person reads an AI. At those settings engine 2 changes nothing (58% against 59%): the gain a player sees comes from the calmer drawing and the loop stop, not from the optimizer.
+- **G3, knowledge.** Every AI knows more: the conversation-heavy model's knowledge rose from 46 to 64, the code- and story-heavy ones from 7 to 27 and 23 (means over the three seeds). The facts specialist itself fell from 77.4 to 71.2, so its lead (7.8) is under the bar (10.4, twice the seed spread). The other three leads grew or held (creativity +30.6, coding +15.6, instruction +14.5). Every specialist's overall score rose: code 23.6 → 37.9, stories 26.1 → 38.4, conversations 38.4 → 49.9, facts 42.6 → 49.7.
+- **What was tried on the facts specialist** (`docs/handoff/upgrade-2026-11-10/specialist.py`, the gate's recipe, 2–3 seeds each; one run varies by about ±5): no casual typing 70.8 against 68.8 (about 2 points); learning style Careful 63.5, a quarter 71.4, middle 68.8–71.2, three quarters 75.4; embedding rate at a quarter of the matrices' 72.1 (71.4–72.8, the steadiest); no embedding weight decay 71.0; the earlier schedule 72.1. Nothing reaches 77: it is how this optimizer learns a small, heavily repeated dataset, and it is accepted for what it gives everywhere else. Its held-out loss on the facts is lower than engine 1's (0.43 against 0.45); the lost answers are in a few relations (an animal's legs 97% → 81%, a chemical symbol 88% → 77%).
+- G7's known gap (cleaning barely lowers garbled output) is unchanged.
+
+## 9. Still open
+- The rival pack for worlds of the newer rules (`data/rivals/v2`) is being built at the time of writing; until it is there, new worlds draw their rivals from the earlier pack.
 - A Huge brain's saved progress (644 MB) is uploaded every two minutes in Fair mode; over a home line that is heavy. Leaving the roll-back copy out of the uploaded state would halve it.
+- The balance bot has no brain choice, so the economy of the Large and Huge brains is checked by priced invariants only, not by a played year.
+- `npm run e2e` and a played session with the new brains.
