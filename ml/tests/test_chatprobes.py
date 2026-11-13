@@ -299,3 +299,84 @@ def test_lessons_greedy():
 def test_module_imports_without_torch_heavy_names():
     assert hasattr(cp, "SMALL_TALK") and hasattr(cp, "STYLES")
     assert list(itertools.islice(cp.STYLES, 1)) == ["clean"]
+
+
+# -- whole-word matching ----------------------------------------------------------------------
+
+
+def test_lessons_need_the_whole_key_word():
+    for wrong in ("I am a human.", "Let's start.", "You steal it.", "A cavern."):
+        lm = FakeLM(default=wrong)
+        assert cp.lessons(lambda pairs, lm=lm: lm).passed == 0, wrong
+    right = FakeLM({q: f"Well, {a.upper()}" for q, a in cp.LESSONS})
+    assert cp.lessons(lambda pairs: right).rate == 1.0
+
+
+def test_identity_name_must_be_a_whole_word():
+    lm = FakeLM({"What is your name?": "I like my pipe."}, default="")
+    items = cp.identity(lm, with_line=True, names=("Pip",)).examples
+    assert [ok for q, _, ok in items if q == "What is your name?"] == [False]
+    lm = FakeLM({"What is your name?": "I am in orbital."}, default="")
+    items = cp.identity(lm, with_line=True, names=("Orbit",)).examples
+    assert [ok for q, _, ok in items if q == "What is your name?"] == [False]
+    lm = FakeLM({"What is your name?": "I am pip!"}, default="")
+    items = cp.identity(lm, with_line=True, names=("Pip",)).examples
+    assert [ok for q, _, ok in items if q == "What is your name?"] == [True]
+
+
+def test_holds_matches_whole_words_and_phrases():
+    assert not cp._holds("It has seventeen.", ["seven"])
+    assert not cp._holds("It has 17.", ["7"])
+    assert not cp._holds("It has fourteen.", ["four"])
+    assert cp._holds("It has four legs.", ["four"])
+    assert cp._holds("It has 7 legs.", ["7"])
+    assert cp._holds("It is Dark  Red today", ["dark red"])
+    assert not cp._holds("It is red dark", ["dark red"])
+    assert not cp._holds("anything", [])
+
+
+# -- followups never loop for ever ------------------------------------------------------------
+
+
+class _TinyKB:
+    def __init__(self, facts_by_relation):
+        from airace_ml.skills.kb import Fact
+
+        self.relations = {
+            name: type(
+                "R", (), {"name": name, "chat_templates": (("About {s}?", "{s} is {o}."),)}
+            )()
+            for name in facts_by_relation
+        }
+        self._facts = {
+            name: [Fact(s, name, o) for s, o in pairs] for name, pairs in facts_by_relation.items()
+        }
+
+    def facts_for(self, name):
+        return list(self._facts[name])
+
+    def accepted_answers(self, fact):
+        return [fact.obj]
+
+
+def _held(prefix, want):
+    return next(
+        f"{prefix}{i}" for i in range(1000) if is_probe_subject("r", f"{prefix}{i}") == want
+    )
+
+
+def test_followups_returns_what_exists_and_raises_when_nothing_can_be_built():
+    a, b = _held("a", False), _held("b", True)
+    some = _TinyKB({"r": [(a, "red"), (b, "blue")]})
+    score = cp.followups(FakeLM(default="blue"), some, n=50)
+    assert 1 <= score.total < 50 and score.rate == 1.0
+    import pytest
+
+    with pytest.raises(ValueError, match="follow-up"):
+        cp.followups(FakeLM(), _TinyKB({"r": [(a, "red")]}), n=5)  # one subject only
+    with pytest.raises(ValueError, match="follow-up"):
+        cp.followups(FakeLM(), _TinyKB({"r": [(a, "red"), (_held("c", False), "blue")]}), n=5)
+    with pytest.raises(ValueError, match="follow-up"):  # every pair's answers overlap
+        cp.followups(FakeLM(), _TinyKB({"r": [(a, "red"), (b, "red")]}), n=5)
+    with pytest.raises(ValueError, match="follow-up"):
+        cp.followups(FakeLM(), _TinyKB({}), n=5)

@@ -32,6 +32,7 @@ SMALL_TALK = [
     "Can we be friends?", "What can you do?",
 ]  # fmt: skip
 
+
 def _cap_first(text: str) -> str:
     return text[:1].upper() + text[1:]
 
@@ -66,6 +67,7 @@ LESSONS: tuple[tuple[str, str], ...] = (
 )
 
 _CASUAL_TOKENS = 24
+_FOLLOWUP_TRIES = 50  # draws per wanted item before giving up on finding more
 _CHAT_TOKENS = 96
 _EXAMPLES_PER_SIDE = 4
 _ENDINGS = (".", "!", "?", '"', "'", "”", "’")
@@ -92,9 +94,18 @@ def _score(items: list[tuple[str, str, bool]]) -> ProbeScore:
     return ProbeScore(sum(i[2] for i in items), len(items), failed + right)
 
 
+def _holds_word(text: str, phrase: str) -> bool:
+    """Whether ``phrase`` appears in ``text`` as whole words, ignoring case and the amount of
+    space between its words ("four" is not in "fourteen", "7" is not in "17")."""
+    words = phrase.split()
+    if not words:
+        return False
+    pattern = r"\s+".join(re.escape(w) for w in words)
+    return re.search(rf"(?<!\w){pattern}(?!\w)", text, re.IGNORECASE) is not None
+
+
 def _holds(reply: str, answers: list[str]) -> bool:
-    text = reply.lower()
-    return any(a.lower() in text for a in answers)
+    return any(_holds_word(reply, a) for a in answers)
 
 
 def _greedy(lm: TorchLM, history: list, max_new_tokens: int, system: str | None = None) -> str:
@@ -148,8 +159,11 @@ def followups(lm: TorchLM, kb: KB, *, n: int = 60, seed: int = 0) -> ProbeScore:
     turn. Pairs whose answers could be mistaken for each other are left out."""
     rng = np.random.default_rng(seed)
     names = [name for name in kb.relations if len(kb.facts_for(name)) >= 2]
-    items = []
-    while len(items) < n:
+    items: list[tuple[str, str, bool]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for _ in range(_FOLLOWUP_TRIES * n):
+        if len(items) >= n or not names:
+            break
         relation = kb.relations[names[int(rng.integers(len(names)))]]
         facts = kb.facts_for(relation.name)
         a = facts[int(rng.integers(len(facts)))]
@@ -163,6 +177,10 @@ def followups(lm: TorchLM, kb: KB, *, n: int = 60, seed: int = 0) -> ProbeScore:
         ):
             continue
         ask_b = FOLLOWUP_TEMPLATES[int(rng.integers(len(FOLLOWUP_TEMPLATES)))].format(b=b.subject)
+        key = (relation.name, a.subject, b.subject, ask_b)
+        if key in seen:
+            continue
+        seen.add(key)
         history = [
             ("user", _first_question(relation, a.subject)),
             ("ai", relation.chat_templates[0][1].format(s=a.subject, o=a.obj)),
@@ -170,6 +188,11 @@ def followups(lm: TorchLM, kb: KB, *, n: int = 60, seed: int = 0) -> ProbeScore:
         ]
         reply = _greedy(lm, history, _CASUAL_TOKENS)
         items.append((ask_b, reply, _holds(reply, b_answers)))
+    if not items:
+        raise ValueError(
+            "no follow-up item can be built: it needs a relation with two subjects, one of them "
+            "a probe subject, whose answers differ"
+        )
     return _score(items)
 
 
@@ -189,7 +212,7 @@ def identity(
             if not with_line:
                 ok = not human
             elif question in NAME_QUESTIONS:
-                ok = name.lower() in reply.lower()
+                ok = _holds_word(reply, name)
             else:
                 ok = _AI_WORD.search(reply) is not None and not human
             items.append((question, reply, ok))
@@ -240,5 +263,5 @@ def lessons(train: Callable[[list[tuple[str, str]]], TorchLM], *, n: int = 10) -
     items = []
     for question, answer in pairs:
         reply = _greedy(lm, [("user", question)], _CASUAL_TOKENS)
-        items.append((question, reply, _key_word(answer) in reply.lower()))
+        items.append((question, reply, _holds_word(reply, _key_word(answer))))
     return _score(items)
