@@ -225,12 +225,21 @@ def _cut_off(text: str, hit_limit: bool) -> bool:
 
 
 def small_talk(
-    lm: TorchLM, well_formed: Callable[[str], bool], *, samples: int = 3
+    lm: TorchLM,
+    well_formed: Callable[[str], bool],
+    *,
+    samples: int = 3,
+    fits: Callable[[str, str], bool] | None = None,
+    transcript: list[dict] | None = None,
 ) -> dict[str, float]:
     """Small talk over :data:`SMALL_TALK`, ``samples`` seeds each. The rates of replies that are
     ``well_formed`` (as the caller judges), claim a ``person_life``, are ``cut_off`` (used every
-    allowed token and stop mid-sentence) and ``looped``."""
+    allowed token and stop mid-sentence) and ``looped``; with ``fits`` (prompt and reply in, a
+    verdict out) also the rate that ``fits`` its question. Each reply, with its prompt, seed and
+    verdicts, is appended to ``transcript`` when one is given."""
     counts = {"well_formed": 0, "person_life": 0, "cut_off": 0, "looped": 0}
+    if fits is not None:
+        counts["fits"] = 0
     total = 0
     for seed in range(samples):
         for prompt in SMALL_TALK:
@@ -243,10 +252,17 @@ def small_talk(
                 stop_on_loop=True,
             )
             total += 1
-            counts["well_formed"] += bool(well_formed(reply))
+            formed = bool(well_formed(reply))
+            counts["well_formed"] += formed
             counts["person_life"] += claims_person_life(reply)
             counts["cut_off"] += _cut_off(reply, gen.hit_limit)
             counts["looped"] += gen.looped
+            said = {"prompt": prompt, "sample": seed, "reply": reply, "well_formed": formed}
+            if fits is not None:
+                said["fits"] = bool(fits(prompt, reply))
+                counts["fits"] += said["fits"]
+            if transcript is not None:
+                transcript.append(said)
     return {k: v / total if total else 0.0 for k, v in counts.items()}
 
 

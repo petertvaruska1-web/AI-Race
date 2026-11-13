@@ -88,7 +88,8 @@ def test_compare_knows_that_a_lower_loss_is_better():
     said = rep.compare(_card(yardstick_loss=2.640, heldout=2.530), baseline)
     assert len(said) == 2 and "2.640" in said[1] and "2.600" in said[1]
     assert set(rep.TOLERANCE) == {
-        "well_formed", "casual", "followups", "bench_overall", "yardstick_loss", "heldout",
+        "well_formed", "fits", "casual", "followups", "bench_overall", "yardstick_loss",
+        "heldout",
     }  # fmt: skip
     (bench,) = rep.compare(_card(bench_overall=37.5), _card(bench_overall=40.0))
     assert "37.5" in bench and "40.0" in bench
@@ -178,3 +179,27 @@ def test_the_reports_have_one_row_per_model_and_one_column_per_measure(tmp_path)
     first = next(row for row in rows if row.startswith("| first-s1 "))
     assert "| 2.600 |" in first and "| 80% |" in first and "| 40.0 |" in first
     assert any(row.startswith("| large (stopped early) ") for row in rows)
+
+
+# -- fits the question ----------------------------------------------------------------------------
+
+
+def test_compare_flags_a_six_point_drop_in_fits():
+    assert rep.TOLERANCE["fits"] == 0.04
+    assert rep.compare(_card(fits=0.48), _card(fits=0.50)) == []
+    (said,) = rep.compare(_card(fits=0.44), _card(fits=0.50))
+    assert "fit" in said and "44%" in said and "50%" in said
+
+
+def test_a_baseline_with_another_fit_threshold_is_unlike():
+    tools = {**MEASURED_WITH["instruments"], "fit_threshold": 4.1, "fit_pairs": 1000}
+    card = _card(measured_with={**MEASURED_WITH, "instruments": tools})
+    for changed in ({"fit_threshold": 4.3}, {"fit_pairs": 900}):
+        baseline = _card(measured_with={**MEASURED_WITH, "instruments": {**tools, **changed}})
+        (said,) = rep.unlike(card, baseline)
+        assert "fit threshold" in said
+
+
+def test_fits_is_the_column_right_after_well_formed():
+    assert sc.MEASURES.index("fits") == sc.MEASURES.index("well_formed") + 1
+    assert "fits" in sc.RATES and rep.COLUMNS["fits"] == "Fits the question"

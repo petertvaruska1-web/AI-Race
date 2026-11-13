@@ -27,11 +27,13 @@ from __future__ import annotations
 
 import datetime
 import math
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 
 from airace_ml.data.corpus import Corpus
@@ -79,6 +81,11 @@ MEASURED_DIR = "measured"
 YARDSTICK_DATASET = "conversations"
 YARDSTICK_SEQS = 128  # held-out rows the yardstick loss is taken over (the trainer takes 8)
 MEASURE_SEED = 0
+FIT_PAIRS = 1000  # held-out first exchanges the fit threshold is taken over
+FIT_MIN_PAIRS = 50  # fewer cannot set a 90th percentile worth the name
+FIT_PERCENTILE = 90
+FIT_FILE = "fit_threshold.json"
+_WORD = re.compile(r"\w")
 
 TINY = ModelShape(4, 128, 256)
 SMALL = ModelShape(6, 192, 256)
@@ -138,6 +145,7 @@ MEASURES: tuple[str, ...] = (
     "yardstick_loss",
     "bench_overall",
     "well_formed",
+    "fits",
     "casual",
     "followups",
     "identity_line",
@@ -149,6 +157,7 @@ MEASURES: tuple[str, ...] = (
 RATES = frozenset(
     {
         "well_formed",
+        "fits",
         "casual",
         "followups",
         "identity_line",
@@ -201,19 +210,25 @@ FULL = CardScale("full")
 @dataclass
 class Instruments:
     """What judges the replies: the judge and novelty index creativity needs (``None``: creativity
-    is not measured), the well-formed rule, and a ``label`` that tells these instruments apart in
-    the measurement caches."""
+    is not measured), the well-formed rule, the rule for a reply that fits its question (prompt
+    and reply in; ``None``: not measured) with the threshold and the number of real replies it was
+    set on, and a ``label`` that tells these instruments apart in the measurement caches."""
 
     judge: Judge | None
     novelty: NoveltyIndex | None
     well_formed: Callable[[str], bool]
     label: str
+    fits: Callable[[str, str], bool] | None = None
+    fit_threshold: float | None = None
+    fit_pairs: int | None = None
 
     def key(self) -> dict[str, Any]:
         return {
             "label": self.label,
             "judge": asdict(self.judge.calibration) if self.judge is not None else None,
             "novelty": len(self.novelty) if self.novelty is not None else None,
+            "fit_threshold": self.fit_threshold,
+            "fit_pairs": self.fit_pairs,
         }
 
 
@@ -251,8 +266,75 @@ def _identity(root: Path, what: str) -> str:
         ) from e
 
 
-def _load_instruments(root: Path, device: torch.device, identity: str) -> Instruments:
-    """The yardstick root's judge and novelty index, both built from its data."""
+# -- fitting the question -----------------------------------------------------------------------
+
+
+def fit_pairs(root: Path, tok: Tok, limit: int = FIT_PAIRS) -> list[tuple[list, str]]:
+    """``([("user", question)], reply)`` for the first exchange of each held-out conversation
+    document of ``root`` (the trainer's held-out documents, in corpus order) that opens with a
+    user turn answered by an AI turn; the first ``limit`` of them."""
+    corpus = Corpus.open(corpus_dir(Path(root)) / YARDSTICK_DATASET)
+    pairs: list[tuple[list, str]] = []
+    for i in heldout_docs(corpus):
+        if len(pairs) >= limit:
+            break
+        doc = corpus.doc(int(i)).tolist()
+        if len(doc) < 2 or doc[0] != tok.bos_id or doc[1] != tok.user_id:
+            continue
+        ends = [k for k, t in enumerate(doc) if t == tok.end_id]
+        if len(ends) < 2 or ends[0] + 1 >= len(doc) or doc[ends[0] + 1] != tok.ai_id:
+            continue
+        question = tok.decode(doc[2 : ends[0]])
+        reply = tok.decode(doc[ends[0] + 2 : ends[1]])
+        pairs.append(([("user", question)], reply))
+    return pairs
+
+
+def fit_threshold(judge: Judge, root: Path, identity: str, out: Path) -> tuple[float, int]:
+    """The fit threshold of the yardstick ``root`` (whose data identity is ``identity``) and the
+    number of real replies it was set on: the :data:`FIT_PERCENTILE` th percentile of the judge's
+    :meth:`~airace_ml.evals.judge.Judge.reply_nlls` over :func:`fit_pairs`. Cached in ``out``
+    while the yardstick, the judge and the measuring code are unchanged."""
+    key = {
+        "yardstick": identity,
+        "judge": asdict(judge.calibration) if judge.calibration is not None else None,
+        "code": source_digest(CARD_SOURCES),
+        "pairs": FIT_PAIRS,
+        "percentile": FIT_PERCENTILE,
+    }
+
+    def compute() -> dict[str, Any]:
+        pairs = fit_pairs(root, judge.tok)
+        if len(pairs) < FIT_MIN_PAIRS:
+            raise ScorecardSetupError(
+                f"the yardstick root {root} holds {len(pairs)} held-out conversations that open "
+                f"with a question and its answer; the fit threshold needs at least "
+                f"{FIT_MIN_PAIRS}"
+            )
+        losses = [v for v in judge.reply_nlls(pairs) if math.isfinite(v)]
+        if not losses:
+            raise ScorecardSetupError(f"the judge scores no real reply of {root}")
+        return {"threshold": float(np.percentile(losses, FIT_PERCENTILE)), "pairs": len(pairs)}
+
+    value = _cached(Path(out) / FIT_FILE, key, compute)
+    return value["threshold"], value["pairs"]
+
+
+def fits_rule(judge: Judge, threshold: float) -> Callable[[str, str], bool]:
+    """A reply fits its question when it holds a word character and the judge's loss on it as
+    the answer (:meth:`~airace_ml.evals.judge.Judge.reply_nll`) is at most ``threshold``."""
+
+    def fits(prompt: str, reply: str) -> bool:
+        if _WORD.search(reply) is None:
+            return False
+        return judge.reply_nll([("user", prompt)], reply) <= threshold
+
+    return fits
+
+
+def _load_instruments(root: Path, device: torch.device, identity: str, out: Path) -> Instruments:
+    """The yardstick root's judge and novelty index, both built from its data, and its fit
+    threshold (:func:`fit_threshold`)."""
     missing = []
     if not (judge_dir(root) / CALIBRATION_NAME).is_file():
         missing.append(
@@ -270,8 +352,15 @@ def _load_instruments(root: Path, device: torch.device, identity: str) -> Instru
         novelty = _load_novelty(root, identity)
     except GateSetupError as e:
         raise ScorecardSetupError(str(e)) from e
+    threshold, pairs = fit_threshold(judge, root, identity, out)
     return Instruments(
-        judge, novelty, lambda reply: is_well_formed(reply, judge), "reference judge"
+        judge,
+        novelty,
+        lambda reply: is_well_formed(reply, judge),
+        "reference judge",
+        fits=fits_rule(judge, threshold),
+        fit_threshold=threshold,
+        fit_pairs=pairs,
     )
 
 
@@ -384,7 +473,14 @@ class _Card:
             max_items_per_category=s.bench_items,
             seed=MEASURE_SEED,
         )
-        talk = chatprobes.small_talk(lm, self.instruments.well_formed, samples=s.small_talk_samples)
+        transcript: list[dict] = []
+        talk = chatprobes.small_talk(
+            lm,
+            self.instruments.well_formed,
+            samples=s.small_talk_samples,
+            fits=self.instruments.fits,
+            transcript=transcript,
+        )
         casual = chatprobes.casual_facts(
             lm, kb, per_relation=s.casual_per_relation, seed=MEASURE_SEED
         )
@@ -397,6 +493,7 @@ class _Card:
                 "yardstick_loss": yardstick_loss(model, self.yardstick_root),
                 "bench_overall": report.overall,
                 "well_formed": talk["well_formed"],
+                "fits": talk.get("fits"),
                 "casual": sum(score.passed for score in casual.values()) / casual_total
                 if casual_total
                 else 0.0,
@@ -410,6 +507,7 @@ class _Card:
             "bench": {c: score.score for c, score in report.scores.items()},
             "casual_by_style": {style: score.rate for style, score in casual.items()},
             "examples": {
+                "small_talk": transcript,
                 "followups": follow.examples,
                 "identity_line": named.examples,
                 "identity_no_line": unnamed.examples,
@@ -487,7 +585,7 @@ def run_scorecard(
         )
     tok = Tok.load(tokenizer_path(data_root))
     if instruments is None:
-        instruments = _load_instruments(yardstick_root, device, yardstick)
+        instruments = _load_instruments(yardstick_root, device, yardstick, out)
     on_status(
         f"scorecard: {', '.join(chosen)} on {device.type}; data {data_root}, yardstick "
         f"{yardstick_root}; into {out}"

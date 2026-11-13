@@ -27,6 +27,7 @@ LABELS: dict[str, str] = {
     "yardstick_loss": "yardstick conversation loss",
     "bench_overall": "bench-v1 overall",
     "well_formed": "well-formed replies",
+    "fits": "replies that fit the question",
     "casual": "facts typed casually",
     "followups": "follow-ups answered",
     "identity_line": "knows its name and that it is an AI",
@@ -41,6 +42,7 @@ COLUMNS: dict[str, str] = {
     "yardstick_loss": "Yardstick loss",
     "bench_overall": "Bench",
     "well_formed": "Well-formed",
+    "fits": "Fits the question",
     "casual": "Casual facts",
     "followups": "Follow-ups",
     "identity_line": "Identity (named)",
@@ -53,6 +55,7 @@ COLUMNS: dict[str, str] = {
 # shares, bench in points, losses in nats per token).
 TOLERANCE: dict[str, float] = {
     "well_formed": 0.04,
+    "fits": 0.04,
     "casual": 0.05,
     "followups": 0.05,
     "bench_overall": 2.0,
@@ -102,6 +105,13 @@ def unlike(card: Mapping[str, Any], baseline: Mapping[str, Any]) -> list[str]:
         found.append("the judge differs")
     if tools.get("novelty") != old_tools.get("novelty"):
         found.append("the novelty index differs")
+    fit = (tools.get("fit_threshold"), tools.get("fit_pairs"))
+    old_fit = (old_tools.get("fit_threshold"), old_tools.get("fit_pairs"))
+    if fit != old_fit:
+        found.append(
+            f"the fit threshold differs ({fit[0]} over {fit[1]} replies here, {old_fit[0]} over "
+            f"{old_fit[1]} in the baseline)"
+        )
     if tools.get("label") != old_tools.get("label"):
         found.append(f"the instruments differ ({tools.get('label')} vs {old_tools.get('label')})")
     if now.get("yardstick_rows") != before.get("yardstick_rows"):

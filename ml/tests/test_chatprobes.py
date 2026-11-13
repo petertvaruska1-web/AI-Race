@@ -256,6 +256,37 @@ def test_small_talk_person_life_looped_and_well_formed():
     assert len(lm.calls) == len(cp.SMALL_TALK)
 
 
+def test_small_talk_fits_comes_from_the_callable_and_the_transcript_holds_every_reply():
+    lm = FakeLM(fn=lambda history: f"About: {history[-1][1]}")
+    asked = []
+
+    def fits(prompt, reply):
+        asked.append((prompt, reply))
+        return prompt in ("Hello!", "Hi there.")
+
+    transcript = []
+    r = cp.small_talk(lm, lambda text: True, samples=2, fits=fits, transcript=transcript)
+    assert r["fits"] == 2 / len(cp.SMALL_TALK)
+    assert asked == [(p, f"About: {p}") for _ in range(2) for p in cp.SMALL_TALK]
+    assert len(transcript) == 2 * len(cp.SMALL_TALK)
+    assert transcript[1] == {
+        "prompt": "Hi there.",
+        "sample": 0,
+        "reply": "About: Hi there.",
+        "well_formed": True,
+        "fits": True,
+    }
+    assert transcript[-1]["sample"] == 1 and transcript[-1]["fits"] is False
+    without = []
+    assert "fits" not in cp.small_talk(lm, lambda text: False, samples=1, transcript=without)
+    assert without[0] == {
+        "prompt": "Hello!",
+        "sample": 0,
+        "reply": "About: Hello!",
+        "well_formed": False,
+    }
+
+
 def test_small_talk_uses_different_seeds():
     lm = FakeLM(default="ok.")
     cp.small_talk(lm, lambda text: True, samples=3)

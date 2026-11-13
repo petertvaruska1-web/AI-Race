@@ -41,12 +41,18 @@ from airace_ml.data.identity import data_identity
 from airace_ml.data.prep import PrepConfig, heldout_docs
 from airace_ml.device import pick_device
 from airace_ml.evals.creativity import STORY_PROMPTS, STORY_TOKENS, distinct_2
-from airace_ml.infer.lm import ContinuationScore, LanguageModel, TorchLM
+from airace_ml.infer.lm import (
+    _MIN_CHAT_BUDGET,
+    ContinuationScore,
+    LanguageModel,
+    TorchLM,
+    build_chat_prompt,
+)
 from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME, load_checkpoint
 from airace_ml.model.shape import ModelShape
 from airace_ml.paths import corpus_dir, judge_dir, tokenizer_path
 from airace_ml.skills.checkers import words
-from airace_ml.tokenizer import SPECIAL_TOKENS, Tok
+from airace_ml.tokenizer import SPECIAL_TOKENS, Role, Tok
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.train.events import TrainEvent
 from airace_ml.train.trainer import RESUME_DIR, can_resume, train_run
@@ -153,6 +159,34 @@ class Judge:
         texts = [[int(t) for t in ids if t >= _FIRST_TEXT_ID][:limit] for ids in token_lists]
         scores = self.lm.score_continuations([[self.tok.bos_id] for _ in texts], texts)
         return [_nll(score) for score in scores]
+
+    def reply_nll(self, history: Sequence[tuple[Role, str]], reply: str) -> float:
+        """The mean negative log-probability per token of ``reply`` and its closing ``<|end|>``
+        as the answer to ``history`` (see :meth:`reply_nlls`)."""
+        return self.reply_nlls([(history, reply)])[0]
+
+    def reply_nlls(self, pairs: Sequence[tuple[Sequence[tuple[Role, str]], str]]) -> list[float]:
+        """For each ``(history, reply)``, the mean negative log-probability per token of the
+        reply's tokens and its closing ``<|end|>``, after the chat prompt for ``history`` (the
+        prompt :func:`~airace_ml.infer.lm.build_chat_prompt` gives, the oldest of it left out when
+        prompt and reply do not fit in the judge's span; the reply is kept whole, unless it alone
+        leaves no room for a prompt, when its end is cut). ``inf`` for an empty or blank reply. All
+        pairs go to the model in one call."""
+        ctx_len = self.lm.ctx_len
+        contexts, continuations, order = [], [], []
+        out = [math.inf] * len(pairs)
+        for i, (history, reply) in enumerate(pairs):
+            if not reply.strip():
+                continue
+            scored = [*self.tok.encode(reply), self.tok.end_id][: ctx_len - _MIN_CHAT_BUDGET]
+            contexts.append(build_chat_prompt(self.tok, history, ctx_len, reserve=len(scored)))
+            continuations.append(scored)
+            order.append(i)
+        if order:
+            scores = self.lm.score_continuations(contexts, continuations)
+            for i, score in zip(order, scores, strict=True):
+                out[i] = _nll(score)
+        return out
 
 
 def judge_train_config(seed: int = 1234) -> TrainRunConfig:

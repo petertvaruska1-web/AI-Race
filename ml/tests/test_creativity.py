@@ -481,6 +481,53 @@ def test_nll_per_token_on_a_real_model(tiny_tok):
     assert math.isfinite(got[0]) and math.isfinite(got[1]) and got[2:] == [INF, INF]
 
 
+def _direct_reply_nll(model, prompt: list[int], reply: list[int]) -> float:
+    """The mean loss of ``reply`` after ``prompt``, from one plain forward pass."""
+    ids = torch.tensor([prompt + reply])
+    with torch.no_grad():
+        logp = torch.log_softmax(model.eval()(ids)[0].float(), dim=-1)
+    start = len(prompt)
+    picked = [logp[start - 1 + k, t].item() for k, t in enumerate(reply)]
+    return -sum(picked) / len(picked)
+
+
+def test_reply_nll_scores_the_reply_and_its_end_after_the_chat_prompt(tiny_tok):
+    model = tiny_judge_model(tiny_tok.vocab_size)
+    judge = Judge(TorchLM(model, tiny_tok, CPU), tiny_tok)
+    history = [("user", "How are you?")]
+    reply = "I am good, thank you."
+    prompt = encode_chat(tiny_tok, history, add_generation_prompt=True)
+    scored = [*tiny_tok.encode(reply), tiny_tok.end_id]
+    want = _direct_reply_nll(model, prompt, scored)
+    assert judge.reply_nll(history, reply) == pytest.approx(want, abs=1e-5)
+    other = [("user", "Tell me about cats.")], "Cats are small animals."
+    assert judge.reply_nlls([(history, reply), other]) == pytest.approx(
+        [want, judge.reply_nll(*other)], abs=1e-5
+    )
+    assert judge.reply_nlls([]) == []
+
+
+def test_reply_nll_trims_a_long_prompt_and_keeps_the_whole_reply(tiny_tok):
+    from airace_ml.infer.lm import build_chat_prompt
+
+    model = tiny_judge_model(tiny_tok.vocab_size)
+    judge = Judge(TorchLM(model, tiny_tok, CPU), tiny_tok)
+    history = [("user", "The little dog ran to the park and played all day. " * 8)]
+    reply = "That sounds like a happy dog."
+    scored = [*tiny_tok.encode(reply), tiny_tok.end_id]
+    prompt = build_chat_prompt(tiny_tok, history, 64, reserve=len(scored))
+    assert len(encode_chat(tiny_tok, history, add_generation_prompt=True)) + len(scored) > 64
+    want = _direct_reply_nll(model, prompt, scored)
+    assert judge.reply_nll(history, reply) == pytest.approx(want, abs=1e-5)
+
+
+def test_an_empty_reply_has_no_loss_to_score(tiny_tok):
+    judge = Judge(TorchLM(tiny_judge_model(tiny_tok.vocab_size), tiny_tok, CPU), tiny_tok)
+    history = [("user", "Hello!")]
+    assert judge.reply_nll(history, "") == INF and judge.reply_nll(history, " \n ") == INF
+    assert judge.reply_nlls([(history, ""), (history, "Hi.")])[0] == INF
+
+
 def test_judge_load_needs_only_its_directory(tmp_path, tiny_tok, tiny_tok_path):
     model = tiny_judge_model(tiny_tok.vocab_size)
     built = tmp_path / "built"

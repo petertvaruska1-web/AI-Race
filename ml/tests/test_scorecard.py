@@ -5,6 +5,8 @@ import numpy as np
 import pytest
 import torch
 
+from airace_ml.evals.judge import Judge, JudgeCalibration
+from airace_ml.experiments import chatprobes
 from airace_ml.experiments import scorecard as sc
 from airace_ml.experiments import scorecard_report as rep
 from airace_ml.experiments.configs import (
@@ -15,8 +17,11 @@ from airace_ml.experiments.configs import (
     QUICK_SHAPE,
     mix_heavy,
 )
+from airace_ml.infer.lm import TorchLM
 from airace_ml.model.shape import ModelShape
 from airace_ml.model.transformer import Transformer
+from airace_ml.paths import corpus_dir
+from airace_ml.tokenizer import Tok
 from airace_ml.train.trainer import EVAL_SEQS, _heldout_batches, _heldout_losses
 
 TINY, SMALL = ModelShape(4, 128, 256), ModelShape(6, 192, 256)
@@ -43,10 +48,18 @@ QUICK = sc.CardScale(
 CPU = torch.device("cpu")
 
 
-def _instruments(label: str = "test") -> sc.Instruments:
+def _instruments(label: str = "test", threshold: float = 3.5) -> sc.Instruments:
     """No judge or novelty index (creativity is not measured); a reply is well-formed when it
-    holds three words."""
-    return sc.Instruments(None, None, lambda reply: len(reply.split()) >= 3, label)
+    holds three words, and fits its question when it is shorter than the question."""
+    return sc.Instruments(
+        None,
+        None,
+        lambda reply: len(reply.split()) >= 3,
+        label,
+        fits=lambda prompt, reply: len(reply) < len(prompt),
+        fit_threshold=threshold,
+        fit_pairs=5,
+    )
 
 
 def _card(data_root, out, said, recipes=tuple(sc.RECIPES), timing=False, label="test"):
@@ -116,6 +129,67 @@ def test_yardstick_loss_is_the_trainers_held_out_conversation_loss(tiny_data_roo
     assert sc.yardstick_loss(model, tiny_data_root) == pytest.approx(trainer_says, abs=1e-6)
 
 
+# -- the fit threshold -----------------------------------------------------------------------
+
+
+def _toy_judge(tok: Tok) -> Judge:
+    torch.manual_seed(0)
+    calibration = JudgeCalibration(2.0, 6.0, 5.0, 0.5)
+    return Judge(TorchLM(Transformer(QUICK_SHAPE, tok.vocab_size), tok, CPU), tok, calibration)
+
+
+def test_fit_pairs_are_the_first_exchanges_of_held_out_conversations(tiny_data_root, tiny_tok):
+    from airace_ml.data.corpus import Corpus
+    from airace_ml.data.prep import heldout_docs
+
+    corpus = Corpus.open(corpus_dir(tiny_data_root) / "conversations")
+    held = [int(i) for i in heldout_docs(corpus)]
+    pairs = sc.fit_pairs(tiny_data_root, tiny_tok)
+    assert len(pairs) == len(held) > 0  # every toy chat opens with the user, then the AI
+    for (history, reply), i in zip(pairs, held, strict=True):
+        text = tiny_tok.decode(corpus.doc(i).tolist())
+        assert history[0][0] == "user" and len(history) == 1
+        assert history[0][1] in text and reply in text and reply
+    assert sc.fit_pairs(tiny_data_root, tiny_tok, limit=2) == pairs[:2]
+
+
+def test_the_fit_threshold_is_the_90th_percentile_and_is_cached(
+    tiny_data_root, tiny_tok, tmp_path, monkeypatch
+):
+    judge = _toy_judge(tiny_tok)
+    with pytest.raises(sc.ScorecardSetupError, match="50"):  # the toy corpus holds 5
+        sc.fit_threshold(judge, tiny_data_root, "toy", tmp_path)
+    monkeypatch.setattr(sc, "FIT_MIN_PAIRS", 3)
+    pairs = sc.fit_pairs(tiny_data_root, tiny_tok)
+    want = float(np.percentile(judge.reply_nlls(pairs), 90))
+    assert sc.fit_threshold(judge, tiny_data_root, "toy", tmp_path) == (
+        pytest.approx(want),
+        len(pairs),
+    )
+
+    def refuse(pairs):
+        raise AssertionError("the threshold must come from its cache")
+
+    monkeypatch.setattr(judge, "reply_nlls", refuse)
+    again = sc.fit_threshold(judge, tiny_data_root, "toy", tmp_path)
+    assert again == (pytest.approx(want), len(pairs))
+    monkeypatch.undo()
+    monkeypatch.setattr(sc, "FIT_MIN_PAIRS", 3)
+    calls = []
+    real = judge.reply_nlls
+    monkeypatch.setattr(judge, "reply_nlls", lambda pairs: calls.append(1) or real(pairs))
+    sc.fit_threshold(judge, tiny_data_root, "other yardstick", tmp_path)
+    assert calls == [1]  # another yardstick is measured again
+
+
+def test_a_reply_fits_when_it_has_a_word_and_its_loss_is_under_the_threshold(tiny_tok):
+    judge = _toy_judge(tiny_tok)
+    nll = judge.reply_nll([("user", "Hello!")], "Hi there.")
+    assert sc.fits_rule(judge, nll)("Hello!", "Hi there.")
+    assert not sc.fits_rule(judge, nll - 1e-3)("Hello!", "Hi there.")
+    assert not sc.fits_rule(judge, math.inf)("Hello!", "...!")  # no word at all
+
+
 # -- the card ---------------------------------------------------------------------------------
 
 
@@ -140,10 +214,21 @@ def test_the_card_has_every_recipe_model_and_measure(scored, tiny_data_root):
     assert all(model["yardstick_span"] == 64 for model in card["models"].values())
     assert card["measured_with"] == {
         "yardstick": card["yardstick_identity"],
-        "instruments": {"label": "test", "judge": None, "novelty": None},
+        "instruments": {
+            "label": "test",
+            "judge": None,
+            "novelty": None,
+            "fit_threshold": 3.5,
+            "fit_pairs": 5,
+        },
         "yardstick_rows": sc.YARDSTICK_SEQS,
         "scale": {"name": "test", **QUICK.probes()},
     }
+    talk = card["models"]["small"]["examples"]["small_talk"]
+    assert len(talk) == len(chatprobes.SMALL_TALK) * QUICK.small_talk_samples
+    assert {tuple(t) for t in talk} == {("prompt", "sample", "reply", "well_formed", "fits")}
+    fit_share = sum(t["fits"] for t in talk) / len(talk)
+    assert card["models"]["small"]["measures"]["fits"] == pytest.approx(fit_share)
     assert card["engine"] == sc.ENGINE_VERSION and card["scale"] == "test"
     assert card["data_root"] == card["yardstick_root"] == str(tiny_data_root)
     assert any("training" in line for line in said)
