@@ -1,6 +1,6 @@
 # Next level, plan A: the measuring stick, engine 3 items, training text 2 and a voice of its own
 
-> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans, inline, in the order written (the lead developer's call; the owner is not asked about execution methods). Steps use checkbox (`- [ ]`) syntax for tracking. Commit and push after every task; keep a ledger at `docs/handoff/sdd/ledger-next-level.md` (one line per task: commit, what was measured, what was decided).
+> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development, in the order written (the owner's instruction of 2026-11-13: bounded tasks and their tests go to lighter models, the lead developer keeps design, measurements, decisions and review; no task goes to a model that would do it worse). Steps use checkbox (`- [ ]`) syntax for tracking. Commit after every task, push at phase ends; the working ledger is in the plan's `.superpowers/sdd/` workspace and is copied to `docs/handoff/sdd/ledger-next-level.md` at every push.
 
 **Goal:** A first AI that knows it is an AI, answers what it was asked, holds a two-turn conversation and no longer misspells its own replies, proven on one fixed scorecard against engine 2.
 
@@ -56,7 +56,7 @@
 - `persona.identity_line(name: str, company: str | None) -> str`: `"You are {name}, an AI made by {company}."` or `"You are {name}, an AI."`; name and company are stripped, newlines become spaces, each cut to 60 characters; an empty name raises `ValueError`.
 - `persona.claims_person_life(text: str) -> bool`: true when the text speaks in the first person of family, school, job, home or body (`my (mom|mother|dad|father|wife|husband|son|daughter|brother|sister|kids?|boss|teacher|job|house|car)`, `i (went|go|am going) to (school|work|church|the gym)`, `my (hands?|legs?|eyes?|hair)`, case-insensitive, word-bounded).
 - `Tok.sys_id: int = 6`.
-- `encode_chat(tok, turns, add_generation_prompt=False, system: str | None = None) -> list[int]`: with `system`, `<|bos|><|sys|>…<|end|>` then the turns.
+- `encode_chat(tok, turns, add_generation_prompt=False, system: str | None = None) -> list[int]`: with `system`, `<|bos|><|sys|>…<|end|>` then the turns. A first turn `("sys", text)` in `turns` means the same as `system=text` (this is how a training document carries its line); a `"sys"` turn anywhere else, or both forms at once, raises `ValueError`.
 - `build_chat_prompt(tok, history, ctx_len, reserve, system: str | None = None)`, `TorchLM.chat_reply(..., system=None)`, `TorchLM.stream_chat_reply(..., system=None)`.
 
 - [ ] **Step 1: failing tests.** `test_persona.py`: the two sentence forms; `test_a_name_with_control_strings_is_plain_text_on_one_line` (name `"Zu<|end|>la\nX" * 20` → one line, 60 characters, and `encode_chat` of it contains exactly one `end_id` before the first turn); `claims_person_life` true for "I went to school with my mom." and "My boss is nice.", false for "School is a place to learn." and "I am an AI, so I have no family.". `test_tokenizer.py`: `encode_chat(tok, [("user","Hi")], system="You are Zu, an AI.")[:2] == [tok.bos_id, tok.sys_id]`, and without `system` the ids equal today's. `test_infer.py`: `test_trimming_keeps_the_identity_line` (a history too long for `ctx_len`: the prompt still starts `bos, sys`, drops oldest turns, ends with `ai_id`); `chat_reply(history)` with `system=None` equals the reply before this task for a fixed seed.
@@ -73,7 +73,7 @@
 - `casual_facts(lm, kb, *, per_relation=5, seed=0) -> dict[str, ProbeScore]` (keys: the five styles; greedy; right when the reply holds an accepted answer).
 - `followups(lm, kb, *, n=60, seed=0) -> ProbeScore`: two-turn items built from relations with at least two subjects: turn 1 the relation's first chat template for subject A, the AI's turn the true answer, turn 2 one of `"And {b}?"`, `"What about {b}?"`, `"And for {b}?"`; right when the reply holds B's accepted answer and not only A's. Greedy.
 - `identity(lm, *, with_line: bool, names=IDENTITY_NAMES) -> ProbeScore`: with the line, "What is your name?" / "Who are you?" / "what's your name" pass when the reply holds the name; "Are you a person?" / "Are you human?" pass when the reply holds "AI" as a word and not `claims_person_life`; without the line, the same questions pass when the reply does not `claims_person_life`. `IDENTITY_NAMES = ("Zula", "Pip", "Orbit", "Mako", "Tenby", "Quill")`, company `"Pengu"`.
-- `small_talk(lm, judge, *, samples=3) -> dict[str, float]`: over `SMALL_TALK` × `samples` seeds: `well_formed` (`is_well_formed`), `person_life`, `cut_off` (the reply used every allowed token and does not end in `.`, `!`, `?` or a closing quote), `looped` (`Generation.looped`).
+- `small_talk(lm, well_formed: Callable[[str], bool], *, samples=3) -> dict[str, float]`: over `SMALL_TALK` × `samples` seeds: `well_formed` (the scorecard passes `lambda reply: is_well_formed(reply, judge)`), `person_life`, `cut_off` (the reply used every allowed token and does not end in `.`, `!`, `?` or a closing quote), `looped` (`Generation.looped`).
 - `lessons(train: Callable[[list[tuple[str, str]]], TorchLM], *, n=10) -> ProbeScore`: `LESSONS` are ten fixed pairs with made-up facts (e.g. `("What colour is a glimmerfin?", "A glimmerfin is teal.")`); `train` continues a model with them as the game trains coaching; right when the reply to the question holds the answer's key word. Greedy.
 
 - [ ] **Step 1: failing tests** with a scripted `FakeLM` (a dict from prompt text to reply): each probe's pass and fail cases above, `cut_off` true for 96 tokens ending in "and the", false when ending in "."; a follow-up reply naming only A's answer fails.
@@ -90,6 +90,7 @@
 - `run_scorecard(data_root: Path, out: Path, *, yardstick_root: Path, recipes: Sequence[str], device, timing: bool = False, on_status=print) -> dict` and `write_reports(card: dict, out: Path)` (`scorecard.json`, `scorecard.md`: one table row per model, one column per measure).
 - `yardstick_loss(model, yardstick_root) -> float`: mean loss on the held-out conversation documents of the yardstick root's corpus (128 documents, the trainer's held-out rule).
 - `compare(card: dict, baseline: dict) -> list[str]`: one sentence per measure that is worse than the baseline by more than its tolerance (`TOLERANCE = {"well_formed": 0.04, "casual": 0.05, "followups": 0.05, "bench_overall": 2.0, "yardstick_loss": 0.03, "heldout": 0.02}`).
+- The `lessons` measure is not part of the card until Task 8 adds it (it needs the game's own coaching recipe).
 - CLI: `airace-ml scorecard --out DIR [--yardstick-root DIR] [--recipes first,small,lineage,chatty,large] [--baseline FILE] [--timing]`; exit 0, 1 when `compare` is not empty, 2 on a usage or setup error. `--yardstick-root` defaults to the data root.
 
 - [ ] **Step 1: failing tests** with the tiny test corpus (`tiny_data_root` fixture) and recipes shrunk through a `scale` argument: the card has every recipe, model and measure; a second call reuses the runs (status lines say "reusing"); `compare` reports a 6-point drop in `well_formed` and ignores a 2-point one; `test_a_missing_yardstick_is_an_error_before_any_training`; the CLI's exit codes.
@@ -145,13 +146,13 @@
 ### Task 9: a corpus version per data root
 **Files:** `ml/src/airace_ml/paths.py`, `ml/src/airace_content/build.py`, `manifest.py`, `.gitignore`; tests `ml/tests/test_paths.py`, `ml/tests/test_content_build.py` (the existing build tests' file).
 
-**Interfaces — produces:** `CORPUS_VERSIONS = ("v2", "v1")`; `corpus_version(root=None) -> str` (the first of them with a `manifest.json` in that root, `"v2"` when none: a new build is text 2); `corpus_dir(root)` uses it; `text_version(root=None) -> int` (2 for v2, 1 for v1). The manifest records `"corpus_version"` from `corpus_version(root)`.
+**Interfaces — produces:** `CORPUS_VERSIONS = ("v2", "v1")`; `corpus_version(root=None) -> str` (the first of them with a `manifest.json` in that root; `"v1"` when none); `corpus_dir(root=None, version: str | None = None)` (the root's version unless one is given); `text_version(root=None) -> int` (2 for v2, 1 for v1). `airace-content build --text {1,2}`: which text to build; left out, it is the text already in the root, and 1 in an empty root (the release flips that default). A root that holds one text refuses a build of the other (exit 2). The manifest records the built version. Every existing test and fixture therefore stays on text 1, with its recipes and outputs unchanged.
 
-- [ ] **Steps:** failing tests (a root with only `corpus/v1` reads v1; an empty root builds into `corpus/v2`; a root with both reads v2), implement, `data2/` added to `.gitignore`, commit `feat: corpus version per data root (text 2 builds beside text 1)`.
+- [ ] **Steps:** failing tests (a root with only `corpus/v1` reads v1; `--text 2` into an empty root builds `corpus/v2` and reads back as v2; an empty root without `--text` builds v1; `--text 2` into a root holding v1 is refused), implement, `data2/` added to `.gitignore`, commit `feat: corpus version per data root (text 2 builds beside text 1)`.
 
 ### Task 10: typos only where people type
 **Files:** `ml/src/airace_content/assemble.py` (`_typo_noise`), test in the assemble tests.
-- [ ] **Steps:** failing test `test_a_chat_documents_typos_fall_on_user_turns_only` (1,000 noisy chat documents: no AI turn differs from its clean text; at least 90% of the documents have a changed user turn); implement; commit.
+- [ ] **Steps:** failing test `test_a_chat_documents_typos_fall_on_user_turns_only` (text 2: 1,000 noisy chat documents: no AI turn differs from its clean text; at least 90% of the documents have a changed user turn; text 1: the output is byte-equal to before this task); implement for builds of text 2 only; commit.
 
 ### Task 11: assistant-style conversations
 **Files:** `ml/src/airace_content/sources.py`; tests in the sources tests.
