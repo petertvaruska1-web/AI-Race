@@ -36,11 +36,26 @@ The first AI trained in 53.0 s.
 - Well-formed replies: 77–80% for a first AI, 90% for a new Small brain, and only 60% for the grown Small brain (60 replies each; to be looked at in the growth task).
 - Loops are gone (0–2%); cut-off replies are 3–7%, already under the 10% target.
 
+**A second talk measure, and what it showed (same day).** Reading the replies (`docs/handoff/next-level/talk_show.py`) showed that the gate's well-formed rule fails good short replies ("You're welcome." to "Thank you.", "I'm good." to "How are you?") because it wants a minimum length and never sees the question. The card therefore also carries **fits the question**: the judge's loss of the reply given the question, no higher than the 90th percentile of 1,000 real held-out replies (2.524), with no minimum length; and it stores every small-talk reply with both verdicts.
+
+| Model | well-formed | fits the question |
+|---|---|---|
+| First AI, seeds 1 and 2 | 77%, 80% | 77%, 78% |
+| Small | 90% | 90% |
+| Second generation (grown to Small) | 60% | 77% |
+| Third generation (grown to Medium) | 77% | 90% |
+| Conversation-heavy Small | 75% | 90% |
+| Large | 83% | 97% |
+
+- The grown Small brain's 60% was mostly the length rule: it answers briefly. By "fits" it is level with a first AI and behind a new Small brain (77% against 90%), so something real remains for the growth task.
+- "Fits" still passes fluent answers to another question ("What is your name?" → "We call a group of monkeys a troop.") and fails a bare "Yes." to "Do you like dogs?": the loss is mostly about how fluent the reply is. An **on-topic** check is added next (is the reply more likely after its own question than after other questions), calibrated on real against shuffled question-reply pairs so that its own error rate is known. Until then no decision rests on small-talk rates alone; follow-ups, identity and casual facts are exact.
+
 **Targets fixed from the baseline** (the spec's section 7 rules):
 
 | | baseline | target |
 |---|---|---|
-| First AI: well-formed | 77–80% | at least 90% |
+| First AI: fits the question (and on topic, once measured) | 77–78% | at least 90% |
+| First AI: well-formed (the gate's rule, for continuity) | 77–80% | not lower |
 | First AI: facts typed in lowercase without "?" | 64–65% | at least 80% |
 | Says its name when told / says it is an AI when not told | 0% | at least 60% for Tiny, 85% for Small and larger |
 | Follow-ups, Small | 8% | at least 60% |
