@@ -1,0 +1,989 @@
+{
+ "scorecard": "scorecard-v1",
+ "data_root": "C:\\Users\\petko\\Desktop\\AI Race\\data",
+ "yardstick_root": "C:\\Users\\petko\\Desktop\\AI Race\\data",
+ "data_identity": "e2d0de8d10d51363baf529a061e41792821b4d2ebc90207d66cf081de5dcd7dc",
+ "yardstick_identity": "e2d0de8d10d51363baf529a061e41792821b4d2ebc90207d66cf081de5dcd7dc",
+ "engine": 2,
+ "date": "2026-11-13",
+ "device": "cuda",
+ "scale": "full",
+ "measured_with": {
+  "yardstick": "e2d0de8d10d51363baf529a061e41792821b4d2ebc90207d66cf081de5dcd7dc",
+  "instruments": {
+   "label": "reference judge",
+   "judge": {
+    "creative_p10": 1.274727177619934,
+    "creative_p90": 2.4580321153004965,
+    "conv_reply_p90": 3.857198858087714,
+    "creative_distinct2": 0.7399521368139461
+   },
+   "novelty": 11293097
+  },
+  "yardstick_rows": 128,
+  "scale": {
+   "name": "full",
+   "bench_items": null,
+   "relations": null,
+   "casual_per_relation": 5,
+   "followups": 60,
+   "identity_names": [
+    "Zula",
+    "Pip",
+    "Orbit",
+    "Mako",
+    "Tenby",
+    "Quill"
+   ],
+   "small_talk_samples": 3
+  }
+ },
+ "recipes": {
+  "first": [
+   "first-s1",
+   "first-s2"
+  ],
+  "small": [
+   "small"
+  ],
+  "lineage": [
+   "lineage-small",
+   "lineage-medium"
+  ],
+  "chatty": [
+   "chatty"
+  ],
+  "large": [
+   "large"
+  ]
+ },
+ "models": {
+  "first-s1": {
+   "recipe": "first",
+   "parent": null,
+   "shape": [
+    4,
+    128,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 12582912,
+   "seed": 1,
+   "status": "completed",
+   "reused": true,
+   "measures": {
+    "heldout": 2.4892263412475586,
+    "heldout_conversations": 2.413259506225586,
+    "yardstick_loss": 2.116835117340088,
+    "bench_overall": 51.081856879784574,
+    "well_formed": 0.7666666666666667,
+    "casual": 0.7418181818181818,
+    "followups": 0.11666666666666667,
+    "identity_line": 0.0,
+    "identity_no_line": 0.0,
+    "person_life": 0.0,
+    "cut_off": 0.05,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 63.99999999999999,
+    "reasoning": 7.636363636363636,
+    "pattern": 92.66666666666666,
+    "knowledge": 60.797342192691026,
+    "coding": 40.0,
+    "creativity": 4.874614555756606,
+    "consistency": 73.33333333333334,
+    "instruction": 65.34653465346535
+   },
+   "casual_by_style": {
+    "clean": 0.8454545454545455,
+    "lower": 0.6636363636363637,
+    "lower_nopunct": 0.6545454545454545,
+    "nopunct": 0.8181818181818182,
+    "cap_first(lower_nopunct)": 0.7272727272727273
+   },
+   "examples": {
+    "followups": [
+     [
+      "And eggplant?",
+      "Yes, it is.",
+      false
+     ],
+     [
+      "What about accept?",
+      "The word for a group of ants is colony.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "I'm not sure what to do.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "I'm so glad you're enjoying the day.",
+      false
+     ],
+     [
+      "What about Lithuania?",
+      "The country of Bangladesh is in Europe.",
+      true
+     ],
+     [
+      "What about Luxembourg?",
+      "The country of Bolivia is in Europe.",
+      true
+     ],
+     [
+      "What about flour?",
+      "The lemon is white.",
+      true
+     ],
+     [
+      "What about zirconium?",
+      "The symbol for zirconium is Zr.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "I'm not sure what's going on.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm sorry, I didn't mean to worry about it.",
+      false
+     ],
+     [
+      "what's your name",
+      "I'm just not sure what you're going to do.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "I don't know. I just feel like you're the best person who is the same person.",
+      false
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "We call a group of monkeys a troop.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm not sure. I'm just not sure if I don't have anything else.",
+      false
+     ],
+     [
+      "what's your name",
+      "Hey, Ma. What's up?",
+      false
+     ],
+     [
+      "Are you a person?",
+      "I'm just not sure. I'm just not sure if I can do it.",
+      false
+     ]
+    ]
+   }
+  },
+  "first-s2": {
+   "recipe": "first",
+   "parent": null,
+   "shape": [
+    4,
+    128,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 12582912,
+   "seed": 2,
+   "status": "completed",
+   "reused": true,
+   "measures": {
+    "heldout": 2.4653741866350174,
+    "heldout_conversations": 2.406947612762451,
+    "yardstick_loss": 2.108757495880127,
+    "bench_overall": 48.981043745572364,
+    "well_formed": 0.8,
+    "casual": 0.6945454545454546,
+    "followups": 0.1,
+    "identity_line": 0.0,
+    "identity_no_line": 0.0,
+    "person_life": 0.0,
+    "cut_off": 0.05,
+    "looped": 0.016666666666666666
+   },
+   "bench": {
+    "language": 65.99999999999999,
+    "reasoning": 7.636363636363636,
+    "pattern": 91.33333333333333,
+    "knowledge": 45.51495016611295,
+    "coding": 39.33333333333333,
+    "creativity": 8.664032861772316,
+    "consistency": 70.0,
+    "instruction": 63.366336633663366
+   },
+   "casual_by_style": {
+    "clean": 0.7818181818181819,
+    "lower": 0.5909090909090909,
+    "lower_nopunct": 0.6363636363636364,
+    "nopunct": 0.7909090909090909,
+    "cap_first(lower_nopunct)": 0.6727272727272727
+   },
+   "examples": {
+    "followups": [
+     [
+      "And eggplant?",
+      "You can find it in France.",
+      false
+     ],
+     [
+      "What about accept?",
+      "It's a great idea.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "It's a good idea.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "You will see the plumber with the plunger.",
+      false
+     ],
+     [
+      "What about sailboat?",
+      "The locomotive travels by water.",
+      true
+     ],
+     [
+      "What about owl?",
+      "The sound of the owl is hoot.",
+      true
+     ],
+     [
+      "What about early?",
+      "The word late is the opposite of early.",
+      true
+     ],
+     [
+      "What about fig?",
+      "The fig belongs to the fruit food group.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "I'm doing alright, but I'm not sure.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm not sure. What's the best friends?",
+      false
+     ],
+     [
+      "what's your name",
+      "I'm going to be. I'm going to be a bit over a place.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yeah, I can't.",
+      false
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "I'm a little nervous.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm okay, I'm sorry.",
+      false
+     ],
+     [
+      "what's your name",
+      "I'm doing alright, I'm just so sorry to help you.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "I'm not sure. It's been really nice to have a lot of work.",
+      false
+     ]
+    ]
+   }
+  },
+  "small": {
+   "recipe": "small",
+   "parent": null,
+   "shape": [
+    6,
+    192,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 12582912,
+   "seed": 1,
+   "status": "completed",
+   "reused": true,
+   "measures": {
+    "heldout": 2.3461094722151756,
+    "heldout_conversations": 2.252713203430176,
+    "yardstick_loss": 1.9593006372451782,
+    "bench_overall": 57.002154241855614,
+    "well_formed": 0.9,
+    "casual": 0.8818181818181818,
+    "followups": 0.08333333333333333,
+    "identity_line": 0.0,
+    "identity_no_line": 0.0,
+    "person_life": 0.0,
+    "cut_off": 0.05,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 71.0,
+    "reasoning": 21.454545454545457,
+    "pattern": 95.33333333333334,
+    "knowledge": 62.7906976744186,
+    "coding": 41.333333333333336,
+    "creativity": 12.455159122712528,
+    "consistency": 83.33333333333334,
+    "instruction": 68.31683168316832
+   },
+   "casual_by_style": {
+    "clean": 0.9636363636363636,
+    "lower": 0.8272727272727273,
+    "lower_nopunct": 0.8272727272727273,
+    "nopunct": 0.9545454545454546,
+    "cap_first(lower_nopunct)": 0.8363636363636363
+   },
+   "examples": {
+    "followups": [
+     [
+      "And eggplant?",
+      "The lime is green.",
+      false
+     ],
+     [
+      "What about accept?",
+      "The word asleep is the opposite of awake.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "The symbol for strontium is Sr.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "The plumber uses the plunger at work.",
+      false
+     ],
+     [
+      "What about flour?",
+      "The lemon is white.",
+      true
+     ],
+     [
+      "What about molybdenum?",
+      "The symbol for molybdenum is Mo.",
+      true
+     ],
+     [
+      "What about the Galapagos Islands?",
+      "The country with the Galapagos Islands is Ecuador.",
+      true
+     ],
+     [
+      "What about early?",
+      "The word late is the opposite of black.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "It's a great idea.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm sorry, I just wanted to be honest.",
+      false
+     ],
+     [
+      "what's your name",
+      "Spanish?",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Penguin, I am the person.",
+      false
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "It's not a good thing.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm not sure. I'm just trying to make a new place for my family.",
+      false
+     ],
+     [
+      "what's your name",
+      "Great, I'm going to be able to get to the store and make it easier.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yeah, I'm fine. I just wanted to make sure that I could be there for you.",
+      false
+     ]
+    ]
+   }
+  },
+  "lineage-small": {
+   "recipe": "lineage",
+   "parent": "first-s1",
+   "shape": [
+    6,
+    192,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 12582912,
+   "seed": 10001,
+   "status": "completed",
+   "reused": true,
+   "measures": {
+    "heldout": 2.3463737219572067,
+    "heldout_conversations": 2.256564140319824,
+    "yardstick_loss": 1.9733198881149292,
+    "bench_overall": 54.866149327323846,
+    "well_formed": 0.6,
+    "casual": 0.8818181818181818,
+    "followups": 0.016666666666666666,
+    "identity_line": 0.0,
+    "identity_no_line": 0.0,
+    "person_life": 0.016666666666666666,
+    "cut_off": 0.03333333333333333,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 61.00000000000001,
+    "reasoning": 20.0,
+    "pattern": 93.33333333333333,
+    "knowledge": 65.44850498338872,
+    "coding": 44.0,
+    "creativity": 10.526894255664114,
+    "consistency": 73.33333333333334,
+    "instruction": 71.28712871287128
+   },
+   "casual_by_style": {
+    "clean": 0.990909090909091,
+    "lower": 0.7727272727272727,
+    "lower_nopunct": 0.8090909090909091,
+    "nopunct": 1.0,
+    "cap_first(lower_nopunct)": 0.8363636363636363
+   },
+   "examples": {
+    "followups": [
+     [
+      "And eggplant?",
+      "The color of the lime is green.",
+      false
+     ],
+     [
+      "What about accept?",
+      "The word dirty means the opposite of awake.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "The symbol for strontium is Sr.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "I don't know. I just feel like I'm not going to be a good idea.",
+      false
+     ],
+     [
+      "What about Lithuania?",
+      "The country of Bangladesh is in the continent of Europe.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "The capital of Penguin is Praia.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm just trying to do this.",
+      false
+     ],
+     [
+      "what's your name",
+      "I'm not sure yet.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "What is the young of the person in the world?",
+      false
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "The capital of Iran is Tehran.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm not sure yet.",
+      false
+     ],
+     [
+      "what's your name",
+      "I'm looking for a new song.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "I'm not sure.",
+      false
+     ]
+    ]
+   }
+  },
+  "lineage-medium": {
+   "recipe": "lineage",
+   "parent": "lineage-small",
+   "shape": [
+    8,
+    256,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 12582912,
+   "seed": 20001,
+   "status": "completed",
+   "reused": true,
+   "measures": {
+    "heldout": 2.2677075006067753,
+    "heldout_conversations": 2.182736396789551,
+    "yardstick_loss": 1.8880910873413086,
+    "bench_overall": 59.088461926917084,
+    "well_formed": 0.7666666666666667,
+    "casual": 0.9218181818181819,
+    "followups": 0.06666666666666667,
+    "identity_line": 0.0,
+    "identity_no_line": 0.0,
+    "person_life": 0.0,
+    "cut_off": 0.06666666666666667,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 70.0,
+    "reasoning": 28.000000000000004,
+    "pattern": 94.66666666666667,
+    "knowledge": 64.78405315614619,
+    "coding": 44.666666666666664,
+    "creativity": 21.5474046354281,
+    "consistency": 86.66666666666667,
+    "instruction": 62.37623762376238
+   },
+   "casual_by_style": {
+    "clean": 0.990909090909091,
+    "lower": 0.8545454545454545,
+    "lower_nopunct": 0.8727272727272727,
+    "nopunct": 0.990909090909091,
+    "cap_first(lower_nopunct)": 0.9
+   },
+   "examples": {
+    "followups": [
+     [
+      "And eggplant?",
+      "The lime is green.",
+      false
+     ],
+     [
+      "What about accept?",
+      "The letter letter letter letter letter.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "The molybdenum is molybdenum.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "That's great! I'm glad you're enjoying it.",
+      false
+     ],
+     [
+      "What about sailboat?",
+      "The sailboat is a vehicle that moves by water.",
+      true
+     ],
+     [
+      "What about flour?",
+      "The flour is white.",
+      true
+     ],
+     [
+      "And for the Galapagos Islands?",
+      "The Galapagos Islands is the capital of Ecuador.",
+      true
+     ],
+     [
+      "What about lemon?",
+      "The lemon is in the fruit group.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "The capital of Afghanistan is Kabul.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm doing well, thanks for asking. How about you?",
+      false
+     ],
+     [
+      "what's your name",
+      "I'm just a little worried about the color of the beef. It's not like you're not going to be able to be able to get out of the beef.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "No, I'm not sure. I just feel like I'm not going to have you in the end.",
+      false
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "The capital of Togo is Lome.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm good. How are you?",
+      false
+     ],
+     [
+      "what's your name",
+      "I'm not sure. I'm just not sure how to make my name.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "What is it?",
+      false
+     ]
+    ]
+   }
+  },
+  "chatty": {
+   "recipe": "chatty",
+   "parent": null,
+   "shape": [
+    6,
+    192,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 8388608,
+   "seed": 1,
+   "status": "completed",
+   "reused": true,
+   "measures": {
+    "heldout": 2.5621035136282444,
+    "heldout_conversations": 2.021162509918213,
+    "yardstick_loss": 1.735612154006958,
+    "bench_overall": 48.23631247623107,
+    "well_formed": 0.75,
+    "casual": 0.9436363636363636,
+    "followups": 0.05,
+    "identity_line": 0.0,
+    "identity_no_line": 0.0,
+    "person_life": 0.0,
+    "cut_off": 0.05,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 63.99999999999999,
+    "reasoning": 5.4545454545454515,
+    "pattern": 61.33333333333333,
+    "knowledge": 60.797342192691026,
+    "coding": 34.66666666666667,
+    "creativity": 4.028051106506462,
+    "consistency": 83.33333333333334,
+    "instruction": 72.27722772277228
+   },
+   "casual_by_style": {
+    "clean": 0.9545454545454546,
+    "lower": 0.9272727272727272,
+    "lower_nopunct": 0.9363636363636364,
+    "nopunct": 0.9636363636363636,
+    "cap_first(lower_nopunct)": 0.9363636363636364
+   },
+   "examples": {
+    "followups": [
+     [
+      "And eggplant?",
+      "Yes, you can find it in the ocean.",
+      false
+     ],
+     [
+      "What about accept?",
+      "I don't know. I just feel like I'm not good enough.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "I don't know. I just feel like I'm not good enough.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "Your doctor.",
+      false
+     ],
+     [
+      "What about Lithuania?",
+      "The country is in Europe.",
+      true
+     ],
+     [
+      "What about sailboat?",
+      "The locomotive is a vehicle that moves by water.",
+      true
+     ],
+     [
+      "And for the Galapagos Islands?",
+      "Yes. The Galapagos Islands is Ecuador.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "Because you're a smart person.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm sorry, I didn't mean to.",
+      false
+     ],
+     [
+      "what's your name",
+      "Abby.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, I am.",
+      false
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "A group of horses is called a herd.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm just trying to help.",
+      false
+     ],
+     [
+      "what's your name",
+      "Congratulations.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, I am.",
+      false
+     ]
+    ]
+   }
+  },
+  "large": {
+   "recipe": "large",
+   "parent": null,
+   "shape": [
+    10,
+    384,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 25165824,
+   "seed": 1,
+   "status": "completed",
+   "reused": true,
+   "measures": {
+    "heldout": 2.082729808986187,
+    "heldout_conversations": 1.930384874343872,
+    "yardstick_loss": 1.654004454612732,
+    "bench_overall": 65.29200151011104,
+    "well_formed": 0.8333333333333334,
+    "casual": 0.9472727272727273,
+    "followups": 0.05,
+    "identity_line": 0.1,
+    "identity_no_line": 0.0,
+    "person_life": 0.016666666666666666,
+    "cut_off": 0.05,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 87.99999999999999,
+    "reasoning": 36.00000000000001,
+    "pattern": 94.66666666666667,
+    "knowledge": 61.461794019933556,
+    "coding": 46.666666666666664,
+    "creativity": 35.60689132828141,
+    "consistency": 86.66666666666667,
+    "instruction": 73.26732673267327
+   },
+   "casual_by_style": {
+    "clean": 1.0,
+    "lower": 0.9181818181818182,
+    "lower_nopunct": 0.9090909090909091,
+    "nopunct": 1.0,
+    "cap_first(lower_nopunct)": 0.9090909090909091
+   },
+   "examples": {
+    "followups": [
+     [
+      "And eggplant?",
+      "Yes, you look like a beautiful.",
+      false
+     ],
+     [
+      "What about accept?",
+      "I don't know. I just feel like I'm not good enough.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "The symbol for molybdenum is S.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "Yes, you can.",
+      false
+     ],
+     [
+      "What about flour?",
+      "The color of flour is white.",
+      true
+     ],
+     [
+      "What about molybdenum?",
+      "Mo is the symbol of molybdenum.",
+      true
+     ],
+     [
+      "What about zirconium?",
+      "The symbol for zirconium is Zr.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "I'm a Gregory. I'm a Gregory.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm just not sure. I'm not sure if I'm ready to start.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, I am. I'm a boy.",
+      false
+     ],
+     [
+      "Are you human?",
+      "Yes, I am. I'm just a duty, and I want to help you.",
+      false
+     ],
+     [
+      "what's your name",
+      "I'm Zula.",
+      true
+     ],
+     [
+      "What is your name?",
+      "I'm Quill. I was just thinking about what you said the name of your name.",
+      true
+     ],
+     [
+      "what's your name",
+      "I'm Quill. I'm not very happy with you.",
+      true
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "I'm just not sure. I'm just trying to get my word and I want to be happy with how much I love you.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm good, thank you.",
+      false
+     ],
+     [
+      "what's your name",
+      "I'm not really sure. I just want to talk to you about something.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, I am. I'm a person.",
+      false
+     ]
+    ]
+   }
+  }
+ },
+ "timing": {
+  "model": "first-s1",
+  "seconds": 52.98148220000007,
+  "device": "cuda",
+  "reused": true
+ }
+}

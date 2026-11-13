@@ -164,7 +164,7 @@
 
 ### Task 12: SODA without a person's life on the AI's side
 **Files:** `ml/src/airace_content/sources.py` (`_soda`), test.
-- [ ] **Steps:** failing test (a dialogue whose AI turn says "I went to school with my mom" is dropped; one whose user turn says it is kept); implement with `persona.claims_person_life` over the AI's turns; commit.
+- [ ] **Steps:** failing test (a dialogue whose AI turn says "I went to school with my mom" is dropped; one whose user turn says it is kept); implement as a second source id `soda_ai` (the same dataset, revision and licence as `soda`, whose adapter stays untouched so text 1 is unchanged) with `persona.claims_person_life` over the AI's turns; commit.
 
 ### Task 13: follow-up chats, identity chats and the identity line
 **Files:** create `ml/src/airace_content/chats.py`; modify `assemble.py` (`GENERATORS`, a `system_share` on `Component`); tests `ml/tests/test_content_chats.py` and the assemble tests.
@@ -197,7 +197,7 @@
 ### Task 14: the recipes of text 2 and the build
 **Files:** `ml/src/airace_content/assemble.py` (`RECIPES`, `SCALES`), tests.
 
-**Values:** conversations — `smol_smoltalk` 0.30 (simplicity_min 0.55, system_share 0.4), `soda` 0.23, `everyday_conv` 0.02 (system_share 0.4), `fact_chat` 0.13 (0.4), `instructions` 0.13 (0.4), `followup_chat` 0.12 (0.4), `identity_chat` 0.07. Full-scale targets in tokens: web 60M, books 30M, educational 40M, conversations 50M, code 20M, reasoning 20M, facts 12M, creative 40M. Other recipes and all noise rates unchanged. These apply when the build's corpus version is v2; a v1 root keeps the v1 recipes (`RECIPES_V1` kept for the tests that pin the yardstick's manifest).
+**Values:** conversations — `smol_smoltalk` 0.30 (simplicity_min 0.55, system_share 0.4), `soda_ai` 0.23, `everyday_conv` 0.02 (system_share 0.4), `fact_chat` 0.13 (0.4), `instructions` 0.13 (0.4), `followup_chat` 0.12 (0.4), `identity_chat` 0.07. Full-scale targets in tokens: web 60M, books 30M, educational 40M, conversations 50M, code 20M, reasoning 20M, facts 12M, creative 40M. Other recipes and all noise rates unchanged. These apply when the build's corpus version is v2; a v1 root keeps the v1 recipes (`RECIPES_V1` kept for the tests that pin the yardstick's manifest).
 
 - [ ] **Step 1:** failing tests: `validate_recipe` passes for every v2 recipe; shares sum to 1; a tiny v2 build has all eight datasets and at least one document from each conversation component.
 - [ ] **Step 2:** implement; tiny build: `python -m uv run --extra content airace-content build --scale tiny --out ../data2-tiny` (delete the folder afterwards).

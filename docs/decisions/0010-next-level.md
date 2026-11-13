@@ -14,8 +14,43 @@ Every task of the plan that measures something writes its numbers and its decisi
 - Everyday conversations keep coming from `HuggingFaceTB/everyday-conversations-llama3.1-2k` (apache-2.0, already in the manifest).
 - Checked on the dataset cards on 2026-11-13; the revision is pinned in `airace_content/sources.py` when the source is added (plan A, Task 11).
 
-## 3. The scorecard baseline (engine 2, text 1)
-(Task 4.)
+## 3. The scorecard baseline (engine 2, text 1; `docs/reports/2026-11-scorecard-engine2.md`)
+`airace-ml scorecard --out runs/scorecard-engine2 --timing` on 2026-11-13, RTX 3050, nothing else running during the timed run. Probes are scored on whole words (a reply holding "seventeen" does not answer "seven").
+
+| Model | held-out loss | yardstick loss | bench-v1 | well-formed | casual facts (all five ways / lowercase, no "?") | follow-ups | says its name (told) | says it is an AI (not told) | cut off |
+|---|---|---|---|---|---|---|---|---|---|
+| First AI, seed 1 (Tiny, 12.6M) | 2.489 | 2.117 | 51.1 | 77% | 74% / 65% | 12% | 0% | 0% | 5% |
+| First AI, seed 2 | 2.465 | 2.109 | 49.0 | 80% | 69% / 64% | 10% | 0% | 0% | 5% |
+| Small, 12.6M | 2.346 | 1.959 | 57.0 | 90% | 88% / 83% | 8% | 0% | 0% | 5% |
+| Second generation (Tiny grown to Small) | 2.346 | 1.973 | 54.9 | 60% | 88% / 81% | 2% | 0% | 0% | 3% |
+| Third generation (grown to Medium) | 2.268 | 1.888 | 59.1 | 77% | 92% / 87% | 7% | 0% | 0% | 7% |
+| Conversation-heavy Small, 8.4M | 2.562 | 1.736 | 48.2 | 75% | 94% / 94% | 5% | 0% | 0% | 5% |
+| Large, 25.2M | 2.083 | 1.654 | 65.3 | 83% | 95% / 91% | 5% | 10% | 0% | 5% |
+
+The first AI trained in 53.0 s.
+
+**What the baseline says:**
+- **Follow-up questions are barely answered at all** (2–12%), by any brain. This is the largest gap the card shows.
+- **No AI says its name when told it, or says it is an AI when asked**, as expected: nothing in text 1 teaches either.
+- **Claims of a person's life in small talk are rare** (0–2% by the word list): the visible problem is the invented name and the missing "I am an AI", not family talk. The spec's target for life claims (at most 5%) is already met and stays as a guard; the measure that carries the target is "says it is an AI (not told)".
+- Well-formed replies: 77–80% for a first AI, 90% for a new Small brain, and only 60% for the grown Small brain (60 replies each; to be looked at in the growth task).
+- Loops are gone (0–2%); cut-off replies are 3–7%, already under the 10% target.
+
+**Targets fixed from the baseline** (the spec's section 7 rules):
+
+| | baseline | target |
+|---|---|---|
+| First AI: well-formed | 77–80% | at least 90% |
+| First AI: facts typed in lowercase without "?" | 64–65% | at least 80% |
+| Says its name when told / says it is an AI when not told | 0% | at least 60% for Tiny, 85% for Small and larger |
+| Follow-ups, Small | 8% | at least 60% |
+| Third generation: bench-v1 overall | 59.1 | at least 64 |
+| Life claims in small talk | 0–2% | at most 5% (guard) |
+| Cut-off replies | 3–7% | at most 10% (guard) |
+| First AI: training time | 53.0 s | at most 55 s |
+| Lessons answered after one run | measured in Task 8 | at least 7 of 10 |
+
+**Rulings on the measuring stick itself** (plan A, Task 3): the yardstick loss is the trainer's held-out rule over 128 packed rows of text 1's held-out conversations; a baseline measured with another yardstick, judge, novelty index or scale is refused; cards of different training text are not compared on their own held-out losses; a lost measure or a run that stopped early counts as worse.
 
 ## 4. Engine 3 items
 (Tasks 5–8: numbers and keep/remove for each.)
