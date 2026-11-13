@@ -50,7 +50,9 @@ class Generation:
     raw softmax at temperature 1 (before temperature and top-p), so they measure the model's own
     confidence. ``stopped`` is True when generation ended on a stop token rather than on a length
     limit. ``looped`` is True when it was ended because the reply had fallen into a loop (only
-    with ``stop_on_loop``); the tokens are everything generated up to that point.
+    with ``stop_on_loop``); the tokens are everything generated up to that point. ``hit_limit`` is
+    True when generation ended because the reply used every token it was allowed (a length
+    limit), so it may have been cut off mid-sentence.
     """
 
     tokens: list[int]
@@ -58,6 +60,7 @@ class Generation:
     top1_probs: list[float]
     stopped: bool
     looped: bool = False
+    hit_limit: bool = False
 
 
 class LanguageModel(Protocol):
@@ -209,6 +212,28 @@ class TorchLM:
         small model still sees a useful amount of history. ``stop_on_loop`` ends a reply that
         has fallen into a loop (see :meth:`generate`).
         """
+        return self.chat_generation(
+            history,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            seed=seed,
+            stop_on_loop=stop_on_loop,
+            system=system,
+        )[0]
+
+    def chat_generation(
+        self,
+        history: Sequence[tuple[Role, str]],
+        *,
+        max_new_tokens: int = 96,
+        temperature: float = 0.8,
+        top_p: float = 0.95,
+        seed: int = 0,
+        stop_on_loop: bool = False,
+        system: str | None = None,
+    ) -> tuple[str, Generation]:
+        """:meth:`chat_reply` with the :class:`Generation` too (to see how the reply ended)."""
         reserve = min(max_new_tokens, self.ctx_len // 2)
         prompt = build_chat_prompt(self.tok, history, self.ctx_len, reserve, system)
         gen = self.generate(
@@ -219,7 +244,7 @@ class TorchLM:
             seed=seed,
             stop_on_loop=stop_on_loop,
         )[0]
-        return self.tok.decode(gen.tokens)
+        return self.tok.decode(gen.tokens), gen
 
     def stream_chat_reply(
         self,
@@ -457,7 +482,8 @@ class TorchLM:
                 if stop_on_loop and is_looping(gen.tokens):
                     gen.looped = done[i] = True
                     continue
-                done[i] = len(gen.tokens) >= caps[i]
+                if len(gen.tokens) >= caps[i]:
+                    gen.hit_limit = done[i] = True
             if all(done):
                 break
             # Finished rows keep decoding harmlessly (their output is ignored). Padded rows get

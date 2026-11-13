@@ -14,29 +14,13 @@ import torch
 sys.path.insert(0, str(Path(__file__).parent))
 import fastmodel  # noqa: E402
 
+from airace_ml.experiments.chatprobes import SMALL_TALK, STYLES  # noqa: E402
 from airace_ml.evals.judge import Judge, _has_reply_words  # noqa: E402
 from airace_ml.infer.lm import TorchLM  # noqa: E402
 from airace_ml.model.checkpoint import load_checkpoint  # noqa: E402
 from airace_ml.paths import data_root, judge_dir, tokenizer_path  # noqa: E402
 from airace_ml.skills.kb import load_kb  # noqa: E402
 from airace_ml.tokenizer import Tok, encode_chat  # noqa: E402
-
-SMALL_TALK = [
-    "Hello!", "Hi there.", "How are you?", "Good morning.", "What is your name?", "Thank you.",
-    "Can you help me?", "Tell me a story.", "What do you like to do?", "I am happy today.",
-    "Tell me a joke.", "What is your favorite color?", "Do you like dogs?", "I feel sad.",
-    "What should I eat for lunch?", "Goodbye.", "Tell me about cats.", "How was your day?",
-    "Can we be friends?", "What can you do?",
-]
-
-STYLES = {
-    "clean": lambda s: s,
-    "lower": lambda s: s.lower(),
-    "lower_nopunct": lambda s: s.lower().rstrip(".?!"),
-    "nopunct": lambda s: s.rstrip(".?!"),
-    "cap_first(lower_nopunct)": lambda s: (lambda t: t[:1].upper() + t[1:])(s.lower().rstrip(".?!")),
-}
-
 
 def main():
     p = argparse.ArgumentParser()

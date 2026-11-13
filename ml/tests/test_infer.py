@@ -675,3 +675,14 @@ def test_prompts_of_one_length_are_decoded_without_masks(tiny_lm, tiny_tok, monk
     monkeypatch.undo()
     for prompt, got in zip(same, one_length, strict=True):
         assert got.tokens == _naive_greedy(tiny_lm, prompt, 5)
+
+
+def test_hit_limit_marks_replies_that_used_every_token(tiny_lm, tiny_tok):
+    prompt = tiny_tok.encode("Once upon a time")
+    cut = tiny_lm.generate([prompt], max_new_tokens=3, temperature=0, top_p=1, seed=0, stop_ids=[])
+    assert cut[0].hit_limit and len(cut[0].tokens) == 3 and not cut[0].stopped
+    none = tiny_lm.generate([prompt], max_new_tokens=0, temperature=0, top_p=1, seed=0)
+    assert not none[0].hit_limit
+    text, gen = tiny_lm.chat_generation([("user", "Hi")], max_new_tokens=2, temperature=0)
+    assert text == tiny_lm.chat_reply([("user", "Hi")], max_new_tokens=2, temperature=0)
+    assert gen.hit_limit
