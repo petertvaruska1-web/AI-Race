@@ -94,7 +94,7 @@ from airace_content.textproc import (
 )
 from airace_content.topics import tag_topic
 from airace_ml.data.corpus import DATASET_IDS, NOISE_KINDS, TOPICS, DocTags, write_corpus
-from airace_ml.paths import CORPUS_VERSION, TOKENIZER_VERSION, corpus_dir, tokenizer_path
+from airace_ml.paths import TOKENIZER_VERSION, corpus_dir, corpus_version, tokenizer_path
 from airace_ml.skills.facts import plan_false_facts
 from airace_ml.skills.kb import load_kb
 from airace_ml.tokenizer import VOCAB_SIZE, Tok, encode_chat, encode_doc, train_tokenizer
@@ -454,8 +454,13 @@ def build_corpus(
     retrain_tokenizer: bool = False,
     progress: Progress = silent,
     pin: Callable[[SourceSpec], str | None] | None = None,
+    text: int | None = None,
 ) -> BuildSummary:
     """Build the corpora of ``datasets`` under ``corpus_dir(out_root)`` (see the module docstring).
+
+    ``text`` is which text to build, 1 or 2: it names the folder (``corpus/v1`` or ``corpus/v2``),
+    is recorded in the manifest and reaches the assembly. Left out, it is the text the root
+    already holds, and 1 in an empty root. A root that holds one text refuses a build of the other.
 
     A build of only some datasets reuses the shared artifacts of the corpus when they are there
     (``false_facts.json``, ``simple_vocab.txt``, ``known_vocab.txt``), so the rebuilt datasets tell
@@ -475,7 +480,19 @@ def build_corpus(
     selected = _selection(datasets)
     partial = len(selected) < len(DATASET_IDS)
     out_root = Path(out_root)
-    root, tok_path = corpus_dir(out_root), tokenizer_path(out_root)
+    held = corpus_version(out_root)
+    has_text = (corpus_dir(out_root, held) / "manifest.json").exists()
+    if text is None:
+        text = int(held[1:])
+    elif text not in (1, 2):
+        raise BuildError(f"unknown text {text!r}; expected 1 or 2")
+    version = f"v{text}"
+    if has_text and held != version:
+        raise BuildError(
+            f"{out_root} already holds text {held[1:]}, and a build of text {text} would mix them; "
+            "a build of the other text needs its own --out"
+        )
+    root, tok_path = corpus_dir(out_root, version), tokenizer_path(out_root)
     train_tok = retrain_tokenizer or not tok_path.exists()
     if train_tok and partial:
         reason = (
@@ -543,6 +560,7 @@ def build_corpus(
             stream(seed, f"assemble/{ds}"),
             stats=stats[ds],
             progress=progress,
+            text=text,
         )
         if not assembled[ds]:
             raise BuildError(f"dataset {ds!r} got no documents from its sources and generators")
@@ -578,7 +596,12 @@ def build_corpus(
         progress(f"training the tokenizer on {sample_bytes / 1e6:.1f} MB of text")
         tok = train_tokenizer(sample, trial, vocab_size=VOCAB_SIZE)
         record = tokenizer_record(
-            trial, scale=scale, seed=seed, sample_bytes=sample_bytes, vocab_size=tok.vocab_size
+            trial,
+            scale=scale,
+            seed=seed,
+            sample_bytes=sample_bytes,
+            vocab_size=tok.vocab_size,
+            corpus_version=version,
         )
     else:
         trial, tok, record = None, frozen, None
@@ -597,7 +620,7 @@ def build_corpus(
                 component_tokens[doc.component] += len(doc_ids)
             info = {
                 "dataset": ds,
-                "corpus_version": CORPUS_VERSION,
+                "corpus_version": version,
                 "tokenizer_version": TOKENIZER_VERSION,
                 "scale": scale,
                 "seed": seed,
@@ -620,10 +643,13 @@ def build_corpus(
     # Reused files keep the record of the build that made them (they were made at this scale).
     write_record(
         root / SHARED_RECORD_FILE,
-        earlier_shared if reused and earlier_shared else shared_record(scale, seed),
+        earlier_shared if reused and earlier_shared else shared_record(scale, seed, version),
     )
     progress("writing the manifest")
     write_manifest(
-        root, make_manifest(entries, read_manifest(root) if partial else None, revisions)
+        root,
+        make_manifest(
+            entries, read_manifest(root) if partial else None, revisions, corpus_version=version
+        ),
     )
     return BuildSummary(entries, train_tok, time.perf_counter() - started)

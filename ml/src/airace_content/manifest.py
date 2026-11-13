@@ -20,7 +20,7 @@ from pathlib import Path
 
 from airace_content.sources import SOURCES, SourceSpec
 from airace_ml.data.corpus import DATASET_IDS
-from airace_ml.paths import CORPUS_VERSION, TOKENIZER_VERSION
+from airace_ml.paths import TOKENIZER_VERSION
 from airace_ml.skills.facts import FalseFactPlan
 
 MANIFEST_FILE = "manifest.json"
@@ -77,13 +77,19 @@ def tokenizer_record_path(tok_path: Path) -> Path:
 
 
 def tokenizer_record(
-    tok_file: Path, *, scale: str, seed: int, sample_bytes: int, vocab_size: int
+    tok_file: Path,
+    *,
+    scale: str,
+    seed: int,
+    sample_bytes: int,
+    vocab_size: int,
+    corpus_version: str = "v1",
 ) -> dict:
     """What a build records about the tokenizer it made: the scale and seed of the build, the
     bytes of text it was trained on, its size, and the digest of ``tok_file``."""
     return {
         "tokenizer_version": TOKENIZER_VERSION,
-        "corpus_version": CORPUS_VERSION,
+        "corpus_version": corpus_version,
         "scale": scale,
         "seed": seed,
         "sample_bytes": sample_bytes,
@@ -105,8 +111,8 @@ def read_tokenizer_record(tok_path: Path) -> dict | None:
     return record if record.get("sha256") == digest else None
 
 
-def shared_record(scale: str, seed: int) -> dict:
-    return {"corpus_version": CORPUS_VERSION, "scale": scale, "seed": seed}
+def shared_record(scale: str, seed: int, corpus_version: str = "v1") -> dict:
+    return {"corpus_version": corpus_version, "scale": scale, "seed": seed}
 
 
 def read_shared_record(corpus_root: Path) -> dict | None:
@@ -117,6 +123,7 @@ def make_manifest(
     datasets: dict[str, dict],
     previous: dict | None = None,
     revisions: Mapping[str, str] | None = None,
+    corpus_version: str = "v1",
 ) -> dict:
     """The manifest for ``datasets`` (one entry per built dataset), merged into ``previous``:
     entries of datasets that were not rebuilt are kept. ``sources`` lists every source that feeds
@@ -153,7 +160,7 @@ def make_manifest(
         if spec.id in feeds
     ]
     return {
-        "corpus_version": CORPUS_VERSION,
+        "corpus_version": corpus_version,
         "tokenizer_version": TOKENIZER_VERSION,
         "sources": sources,
         "datasets": ordered,

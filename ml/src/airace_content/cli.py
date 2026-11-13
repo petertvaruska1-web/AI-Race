@@ -1,7 +1,7 @@
 """``airace-content``: build the training corpora.
 
     airace-content build --scale {tiny,full} [--datasets a,b] [--out PATH]
-                         [--retrain-tokenizer] [--fixtures DIR]
+                         [--text {1,2}] [--retrain-tokenizer] [--fixtures DIR]
 
 Sources are streamed from the Hugging Face hub, except that ``--fixtures DIR`` (tiny scale only)
 reads them from local ``<source id>.jsonl`` files, so a tiny build can run offline. Exit codes:
@@ -30,7 +30,7 @@ from airace_content.sources import (
 )
 from airace_ml.console import use_utf8_output
 from airace_ml.data.corpus import DATASET_IDS
-from airace_ml.paths import corpus_dir, data_root
+from airace_ml.paths import corpus_dir, corpus_version, data_root
 
 
 class _UsageError(Exception):
@@ -53,6 +53,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     build.add_argument(
         "--out", type=Path, help="data root to build into (default: AIRACE_DATA or <repo>/data)"
+    )
+    build.add_argument(
+        "--text",
+        type=int,
+        choices=(1, 2),
+        help="which text to build (default: the text the data root holds, 1 in an empty root)",
     )
     build.add_argument(
         "--retrain-tokenizer",
@@ -80,6 +86,16 @@ def _datasets(value: str | None) -> list[str]:
             f"unknown dataset(s) {', '.join(unknown)}; expected some of {', '.join(DATASET_IDS)}"
         )
     return list(dict.fromkeys(names))
+
+
+def _check_text(text: int | None, out_root: Path) -> None:
+    """Refuse a build of one text into a data root that already holds the other."""
+    held = corpus_version(out_root)
+    if text is not None and f"v{text}" != held and (corpus_dir(out_root) / "manifest.json").exists():
+        raise _UsageError(
+            f"{out_root} already holds text {held[1:]}, and a build of text {text} would mix "
+            "them; a build of the other text needs its own --out"
+        )
 
 
 def format_summary(summary: BuildSummary, out_root: Path) -> str:
@@ -153,6 +169,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise _UsageError("--fixtures works only with --scale tiny")
             if not args.fixtures.is_dir():
                 raise _UsageError(f"fixture directory not found: {args.fixtures}")
+        _check_text(args.text, args.out if args.out is not None else data_root())
     except _UsageError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -170,6 +187,7 @@ def main(argv: list[str] | None = None) -> int:
             retrain_tokenizer=args.retrain_tokenizer,
             progress=_progress,
             pin=None if args.fixtures is not None else resolve_revision,
+            text=args.text,
         )
     except (BuildError, SourceFormatError, DatasetsUnavailable) as e:
         print(f"error: {e}", file=sys.stderr)

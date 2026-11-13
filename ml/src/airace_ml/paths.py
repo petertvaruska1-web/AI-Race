@@ -7,7 +7,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 TOKENIZER_VERSION = "tok-v1"
-CORPUS_VERSION = "v1"
+# The corpus folders a data root may hold, newest first: "v2" is text 2, "v1" is text 1.
+CORPUS_VERSIONS = ("v2", "v1")
 
 
 def data_root() -> Path:
@@ -20,8 +21,25 @@ def tokenizer_path(root: Path | None = None) -> Path:
     return (root or data_root()) / "tokenizer" / TOKENIZER_VERSION / "tokenizer.json"
 
 
-def corpus_dir(root: Path | None = None) -> Path:
-    return (root or data_root()) / "corpus" / CORPUS_VERSION
+def corpus_version(root: Path | None = None) -> str:
+    """The text a data root holds: the first of ``CORPUS_VERSIONS`` that has a manifest there,
+    "v1" when none has (an empty root is text 1 until a build says otherwise)."""
+    base = (root or data_root()) / "corpus"
+    for version in CORPUS_VERSIONS:
+        if (base / version / "manifest.json").exists():
+            return version
+    return "v1"
+
+
+def text_version(root: Path | None = None) -> int:
+    """The text a data root holds as a number: 2 for "v2", 1 for "v1"."""
+    return int(corpus_version(root)[1:])
+
+
+def corpus_dir(root: Path | None = None, version: str | None = None) -> Path:
+    """The corpus folder of a data root: the text it holds, or ``version`` when one is given."""
+    root = root or data_root()
+    return root / "corpus" / (version or corpus_version(root))
 
 
 def novelty_path(root: Path | None = None) -> Path:

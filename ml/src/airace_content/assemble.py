@@ -575,6 +575,7 @@ def apply_noise(
     kb: KB | None = None,
     plan: FalseFactPlan | None = None,
     dataset_id: str = "",
+    text: int = 1,
 ) -> list[AssembledDoc]:
     """Dirty a dataset's documents and tag what was done.
 
@@ -647,6 +648,7 @@ def assemble_dataset(
     *,
     stats: dict | None = None,
     progress: Progress = silent,
+    text: int = 1,
 ) -> list[AssembledDoc]:
     """One dataset's documents, by its recipe: each component's share of the scale's documents
     (tiny) or tokens (full), in component order, then the recipe's noise.
@@ -719,6 +721,8 @@ def assemble_dataset(
                 info |= {"rows_read": collector.rows_read, "passes": collector.passes}
             stats["components"].append(info)
     docs = [doc for collector in collectors for doc in collector.docs]
-    noisy = apply_noise(docs, recipe.noise, np.random.default_rng(seeds[-1]), kb, plan, dataset_id)
+    noisy = apply_noise(
+        docs, recipe.noise, np.random.default_rng(seeds[-1]), kb, plan, dataset_id, text=text
+    )
     progress(f"{dataset_id}: {len(noisy):,} documents assembled")
     return noisy
