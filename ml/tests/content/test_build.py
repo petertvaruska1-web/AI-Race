@@ -1,5 +1,6 @@
 import ast
 import difflib
+import hashlib
 import io
 import itertools
 import json
@@ -1426,3 +1427,30 @@ def test_an_error_naming_a_non_ascii_path_prints_on_a_cp1252_redirect(tmp_path, 
     err = err_bytes.getvalue().decode("utf-8")
     assert err.splitlines()[-1].startswith("error: the tokenizer is trained on")
     assert "Петко_data" in err
+
+
+# --- text 2: typos fall where people type --------------------------------------------------------
+
+_USER_LINE = "Hello there, how are you doing today? I would like some help with my garden."
+_AI_LINE = "I am fine, thank you very much. Tell me what plants you are growing at home."
+
+
+def test_a_chat_documents_typos_fall_on_user_turns_only():
+    docs = [Collected([("user", _USER_LINE), ("ai", _AI_LINE)]) for _ in range(1000)]
+    out = apply_noise(docs, NoiseRates(typo=1.0), np.random.default_rng(0), text=2)
+    assert all(d.content[1] == ("ai", _AI_LINE) for d in out)  # no AI turn differs
+    changed = [d for d in out if d.content[0][1] != _USER_LINE]
+    assert len(changed) >= 900
+    assert all(d.noise_kind == _KIND["typo"] for d in changed)
+    assert all(d.noise_kind == _NONE for d in out if d.content[0][1] == _USER_LINE)
+
+
+def test_in_text_1_a_chat_documents_typos_are_exactly_what_they_were():
+    """The digest was taken from the code before text 2 existed."""
+    docs = [Collected([("user", _USER_LINE), ("ai", _AI_LINE)]) for _ in range(200)]
+    for kwargs in ({}, {"text": 1}):
+        out = apply_noise(docs, NoiseRates(typo=0.5), np.random.default_rng(7), **kwargs)
+        blob = json.dumps([[d.content, d.noise_kind] for d in out]).encode()
+        assert hashlib.sha256(blob).hexdigest() == (
+            "37974ef806527600b86e9c6263a1f3ecc74163de3e3272abfe74f5214e38b2ab"
+        )

@@ -548,9 +548,14 @@ def source_of_copies(
 
 
 def _typo_noise(
-    docs: list[Collected], origins: list[bytes], rate: float, rng: np.random.Generator
+    docs: list[Collected],
+    origins: list[bytes],
+    rate: float,
+    rng: np.random.Generator,
+    text: int = 1,
 ) -> list[AssembledDoc]:
-    """Typos in ``rate`` of the documents; a chat gets them in each of its turns and stays a chat."""
+    """Typos in ``rate`` of the documents; a chat stays a chat and gets them in each of its turns
+    (text 1) or only in its user turns, where people type (text 2)."""
     quota = int(rate * len(docs) + 0.5)
     chosen = set(rng.permutation(len(docs))[:quota].tolist())
     out: list[AssembledDoc] = []
@@ -562,7 +567,13 @@ def _typo_noise(
             if isinstance(new, str):
                 new = add_typos(new, rng, letter_rate)
             else:
-                new = [(role, add_typos(text, rng, letter_rate)) for role, text in new]
+                new = [
+                    (
+                        role,
+                        add_typos(line, rng, letter_rate) if text == 1 or role == "user" else line,
+                    )
+                    for role, line in new
+                ]
         kind = _TYPO if new != doc.content else _NONE
         out.append(AssembledDoc(new, kind, False, doc.topic, origin, doc.component))
     return out
@@ -583,7 +594,8 @@ def apply_noise(
     component. Plain documents go through ``inject_noise``; each duplicate copy it appends takes
     the origin, topic and component of the document it was copied from. A spam document replaced
     its original, so it loses the original's topic (not its origin). A dataset with chats may only
-    have typo noise (a chat with typos keeps its turns); any other kind raises ``ValueError``.
+    have typo noise (a chat with typos keeps its turns; in text 2 only its user turns have them);
+    any other kind raises ``ValueError``.
     The duplicates of a dataset in ``STRUCTURED_DATASETS`` are exact copies; those of every other
     dataset carry typos in ``COPY_TYPO_SHARE`` of the cases.
     """
@@ -600,7 +612,7 @@ def apply_noise(
                 f"those kinds rewrite or copy a document as plain text, and chats take only "
                 f"{list(CHAT_NOISE_KINDS)} noise"
             )
-        return _typo_noise(docs, origins, rates.typo, rng)
+        return _typo_noise(docs, origins, rates.typo, rng, text)
 
     texts = [doc.content for doc in docs]
     copy_typo_share = 0.0 if dataset_id in STRUCTURED_DATASETS else COPY_TYPO_SHARE
