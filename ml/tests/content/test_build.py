@@ -49,6 +49,7 @@ from airace_content.build import (
     build_corpus,
     heldout_mask,
     purchase_ranks,
+    sources_needed,
     stream,
     tokenizer_texts,
 )
@@ -121,6 +122,8 @@ def test_tokenizer_is_frozen_on_rebuild(tmp_path):
 # --- shared helpers ----------------------------------------------------------------------------
 
 FETCH = fixture_fetch(FIX)
+# the sources the text-1 recipes read; the ones added for text 2 are read by their own recipes only
+TEXT1_SOURCES = sources_needed(DATASET_IDS, simple_vocab=True)
 _NONE = NOISE_KINDS.index("none")
 _KIND = {name: i for i, name in enumerate(NOISE_KINDS)}
 CORPUS_FILES = ("tokens.bin", "offsets.npy", "info.json")
@@ -186,7 +189,9 @@ def test_sources_are_the_designed_ones():
         "gutenberg": ("sedthh/gutenberg_english", None, "train"),
         "gsm8k": ("openai/gsm8k", "main", "train"),
         "mbpp": ("google-research-datasets/mbpp", "full", "train"),
+        "smol_smoltalk": ("HuggingFaceTB/smol-smoltalk", None, "train"),
     }
+    assert SOURCES["smol_smoltalk"].license == "apache-2.0"
     licenses = {s.id: s.license for s in SOURCES.values()}
     assert licenses["tinystories"] == "cdla-sharing-1.0" and licenses["gutenberg"] == "mit"
     assert licenses["tinystories_requests"] == "cdla-sharing-1.0"
@@ -242,7 +247,7 @@ def test_no_content_module_imports_datasets_on_import():
 
 
 def test_fixtures_exercise_every_adapter_rule():
-    rows = {sid: list(FETCH(spec, 100)) for sid, spec in SOURCES.items()}
+    rows = {sid: list(FETCH(SOURCES[sid], 100)) for sid in TEXT1_SOURCES}
     assert all(5 <= len(r) <= 20 for r in rows.values())
     books = rows["gutenberg"]
     assert any(not is_childrens_book(r["METADATA"]) for r in books)
@@ -439,6 +444,58 @@ def test_chat_adapters():
         [("user", "Hi"), ("ai", "Hello!")]
     ]
     assert row_to_content("everyday_conv", {"messages": messages[:2]}) == []
+
+
+def _smol_row(*turns: tuple[str, str], source: str = "smol-magpie-ultra-short") -> dict:
+    return {"source": source, "messages": [{"role": r, "content": c} for r, c in turns]}
+
+
+def test_the_text_1_recipes_read_none_of_the_text_2_sources():
+    assert {"smol_smoltalk"} <= set(SOURCES)
+    assert not {"smol_smoltalk"} & set(TEXT1_SOURCES)
+
+
+def test_smol_smoltalk_keeps_only_the_two_apache_parts():
+    row = _smol_row(("user", "Hi"), ("assistant", "Hello!"))
+    assert row_to_content("smol_smoltalk", row) == [[("user", "Hi"), ("ai", "Hello!")]]
+    constrained = dict(row, source="smol-contraints")  # the dataset's own spelling
+    assert row_to_content("smol_smoltalk", constrained) == [[("user", "Hi"), ("ai", "Hello!")]]
+    for other in ("smol-rewrite", "smol-summarize", "self-oss-instruct", "", None):
+        assert row_to_content("smol_smoltalk", dict(row, source=other)) == []
+    assert row_to_content("smol_smoltalk", {"messages": row["messages"]}) == []
+
+
+def test_smol_smoltalk_drops_system_turns_and_needs_a_user_first():
+    kept = _smol_row(("system", "Be nice."), ("user", "Hi"), ("assistant", "Hello!"))
+    assert row_to_content("smol_smoltalk", kept) == [[("user", "Hi"), ("ai", "Hello!")]]
+    assistant_first = _smol_row(("assistant", "Hello!"), ("user", "Hi"), ("assistant", "Hey"))
+    assert row_to_content("smol_smoltalk", assistant_first) == []
+
+
+def test_smol_smoltalk_wants_two_to_six_turns():
+    pairs = [("user", "Q"), ("assistant", "A")]
+    assert row_to_content("smol_smoltalk", _smol_row(*pairs * 3)) != []  # 6 turns
+    assert row_to_content("smol_smoltalk", _smol_row(*pairs * 3, ("user", "More"))) == []  # 7
+    assert row_to_content("smol_smoltalk", _smol_row(("user", "Hi"))) == []  # 1
+
+
+def test_smol_smoltalk_cuts_long_ai_turns_but_not_long_user_turns():
+    turns = (("user", "Hi"), ("assistant", "a" * 600))
+    assert row_to_content("smol_smoltalk", _smol_row(*turns)) != []
+    assert (
+        row_to_content("smol_smoltalk", _smol_row(("user", "Hi"), ("assistant", "a" * 601))) == []
+    )
+    assert (
+        row_to_content("smol_smoltalk", _smol_row(("user", "u" * 900), ("assistant", "ok"))) != []
+    )
+
+
+def test_smol_smoltalk_drops_code_maths_and_long_numbers():
+    for bad in ("Use ```x```", r"It is \(x\)", "So $$x$$", "In 2024 it was"):
+        assert row_to_content("smol_smoltalk", _smol_row(("user", bad), ("assistant", "ok"))) == []
+        assert row_to_content("smol_smoltalk", _smol_row(("user", "Hi"), ("assistant", bad))) == []
+    fine = "It has 365 days, 12 months and 7.5 hours; call 555."
+    assert row_to_content("smol_smoltalk", _smol_row(("user", "Hi"), ("assistant", fine))) != []
 
 
 def test_text_adapters():
@@ -1064,7 +1121,7 @@ def test_no_heldout_text_has_a_variant_in_training(tiny_build):
 def test_manifest_and_shared_artifacts(tiny_build):
     root = corpus_dir(tiny_build.root)
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-    assert [s["id"] for s in manifest["sources"]] == list(SOURCES)
+    assert [s["id"] for s in manifest["sources"]] == TEXT1_SOURCES  # no text-2 source
     for s in manifest["sources"]:
         assert s["license"] == SOURCES[s["id"]].license and s["homepage"]
     feeds = {s["id"]: s["feeds"] for s in manifest["sources"]}

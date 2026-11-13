@@ -13,7 +13,7 @@ import pytest
 from huggingface_hub.errors import HfHubHTTPError
 
 from airace_content import sources
-from airace_content.build import BuildError, build_corpus
+from airace_content.build import BuildError, build_corpus, sources_needed
 from airace_content.cli import main
 from airace_content.manifest import make_manifest, read_manifest
 from airace_content.sources import (
@@ -29,6 +29,7 @@ from airace_ml.data.corpus import DATASET_IDS
 from airace_ml.paths import corpus_dir
 
 FIX = Path(__file__).parents[1] / "fixtures" / "sources"
+TEXT1_SOURCES = sources_needed(DATASET_IDS, simple_vocab=True)
 HEAD = "1f2e3d4c5b6a79880011223344556677deadbeef"
 ROWS = [{"question": f"Q{i}", "answer": f"a {i}\n#### {i}"} for i in range(6)]
 # The sources are pinned (ADR 0004); the lookup of a head is tested on an unpinned copy.
@@ -211,12 +212,12 @@ def test_a_build_reads_every_source_at_its_pinned_revision_and_records_it(tmp_pa
     root = tmp_path / "data"
     lines: list[str] = []
     build_corpus("tiny", root, spy, seed=0, pin=_pin(looked_up), progress=lines.append)
-    assert sorted(looked_up) == sorted(SOURCES)  # once per source, however often it is read
+    assert sorted(looked_up) == sorted(TEXT1_SOURCES)  # once per source, however often it is read
     assert all(revision == f"{sid}-rev" for sid, revision in spy.seen) and spy.seen
     assert any(line.startswith("pinning fineweb at fineweb-rev") for line in lines)
     manifest = read_manifest(corpus_dir(root))
     assert {s["id"]: s["revision"] for s in manifest["sources"]} == {
-        sid: f"{sid}-rev" for sid in SOURCES
+        sid: f"{sid}-rev" for sid in TEXT1_SOURCES
     }
 
 
@@ -259,7 +260,7 @@ def test_make_manifest_takes_the_revision_actually_used(unpinned):
 
 
 def test_the_command_line_pins_every_source_and_records_it(monkeypatch, tmp_path, waits, unpinned):
-    by_repo = {(s.hf_path, s.hf_config): s for s in SOURCES.values()}
+    by_repo = {(SOURCES[i].hf_path, SOURCES[i].hf_config): SOURCES[i] for i in TEXT1_SOURCES}
     fixtures = fixture_fetch(FIX)
     loads: list[dict] = []
 
@@ -280,15 +281,15 @@ def test_the_command_line_pins_every_source_and_records_it(monkeypatch, tmp_path
     monkeypatch.setattr(huggingface_hub, "HfApi", FakeApi)
     root = tmp_path / "data"
     assert main(["build", "--scale", "tiny", "--out", str(root)]) == 0
-    assert sorted(set(infos)) == sorted({s.hf_path for s in SOURCES.values()})
-    assert len(infos) == len(SOURCES)  # one lookup per source, not per read
+    assert sorted(set(infos)) == sorted({SOURCES[i].hf_path for i in TEXT1_SOURCES})
+    assert len(infos) == len(TEXT1_SOURCES)  # one lookup per source, not per read
     assert loads and all(
         load["revision"] == f"sha-of-{load['path'].replace('/', '-')}" for load in loads
     )
     manifest = json.loads((corpus_dir(root) / "manifest.json").read_text(encoding="utf-8"))
     used = {s["id"]: s["revision"] for s in manifest["sources"]}
-    assert set(used) == set(SOURCES) and all(
-        used[s.id] == f"sha-of-{s.hf_path.replace('/', '-')}" for s in SOURCES.values()
+    assert set(used) == set(TEXT1_SOURCES) and all(
+        used[i] == f"sha-of-{SOURCES[i].hf_path.replace('/', '-')}" for i in TEXT1_SOURCES
     )
     assert set(manifest["datasets"]) == set(DATASET_IDS)
 

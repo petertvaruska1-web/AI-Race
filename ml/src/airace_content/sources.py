@@ -67,6 +67,8 @@ _PINNED: dict[str, str] = {
     "gutenberg": "28973b04f28fd7be4a6186a042bc26159d4366ca",
     "gsm8k": "740312add88f781978c0658806c59bc2815b9866",
     "mbpp": "4bb6404fdc6cacfda99d4ac4205087b89d32030c",
+    # added for text 2 (2026-11-13): read only by the recipes that use them
+    "smol_smoltalk": "f73fe857d519ff6ac5af2ea67c4d3834da7b8bcc",
 }
 
 # Licenses as the dataset cards state them, re-verified against the hub on 2026-10-21 (ADR 0004).
@@ -99,6 +101,7 @@ SOURCES: dict[str, SourceSpec] = {
         _spec("gutenberg", "sedthh/gutenberg_english", None, "train", "mit"),
         _spec("gsm8k", "openai/gsm8k", "main", "train", "mit"),
         _spec("mbpp", "google-research-datasets/mbpp", "full", "train", "cc-by-4.0"),
+        _spec("smol_smoltalk", "HuggingFaceTB/smol-smoltalk", None, "train", "apache-2.0"),
     )
 }
 
@@ -491,6 +494,32 @@ def _everyday(row: dict) -> list[Content]:
     return [turns] if len(turns) >= MIN_CHAT_TURNS else []
 
 
+# The parts of smol-smoltalk that are not rewrites of other public datasets (ADR 0010 section 2);
+# "smol-contraints" is the dataset's own spelling.
+_SMOL_PARTS = frozenset({"smol-magpie-ultra-short", "smol-contraints"})
+_SMOL_MIN_TURNS, _SMOL_MAX_TURNS = 2, 6
+_SMOL_MAX_AI_CHARS = 600
+_SMOL_NOT_PLAIN = re.compile(
+    r"```|\\\(|\$\$|\d{4}"
+)  # a code fence, a LaTeX bracket, $$ or 4 digits in a row
+
+
+def _smol(row: dict) -> list[Content]:
+    if row.get("source") not in _SMOL_PARTS:
+        return []
+    turns: list[tuple[Role, str]] = [
+        (_EVERYDAY_ROLES[m["role"]], str(m.get("content") or "").strip())
+        for m in row.get("messages") or []
+        if m.get("role") in _EVERYDAY_ROLES and str(m.get("content") or "").strip()
+    ]
+    if not _SMOL_MIN_TURNS <= len(turns) <= _SMOL_MAX_TURNS or turns[0][0] != "user":
+        return []
+    for role, text in turns:
+        if _SMOL_NOT_PLAIN.search(text) or (role == "ai" and len(text) > _SMOL_MAX_AI_CHARS):
+            return []
+    return [turns]
+
+
 def _gutenberg(row: dict) -> list[Content]:
     if not is_childrens_book(row.get("METADATA")):
         return []
@@ -619,6 +648,7 @@ _ADAPTERS: dict[str, Callable[[dict], list[Content]]] = {
     "gutenberg": _gutenberg,
     "gsm8k": _gsm8k,
     "mbpp": _mbpp,
+    "smol_smoltalk": _smol,
 }
 assert set(_ADAPTERS) == set(SOURCES)
 
@@ -650,6 +680,10 @@ def _messages(row: dict) -> bool:
     )
 
 
+def _smol_format(row: dict) -> bool:
+    return _messages(row) and isinstance(row.get("source"), str)
+
+
 def _book(row: dict) -> bool:
     return _strings("TEXT")(row) and _subjects(row.get("METADATA")) is not None
 
@@ -668,6 +702,7 @@ _ROW_FORMATS: dict[str, tuple[Callable[[dict], bool], str]] = {
     "gutenberg": (_book, "'TEXT' as a string and 'METADATA' as JSON with 'subjects'"),
     "gsm8k": (_strings("question", "answer"), "'question' and 'answer' as strings"),
     "mbpp": (_strings("text", "code"), "'text' and 'code' as strings"),
+    "smol_smoltalk": (_smol_format, "'messages' as a list of {role, content} and 'source'"),
 }
 assert set(_ROW_FORMATS) == set(SOURCES)
 
@@ -695,6 +730,9 @@ def row_to_content(source_id: str, row: dict) -> list[Content]:
     * fineweb_edu: rows with ``int_score >= 3``;
     * soda: ``speakers[0]`` is the user, every other speaker the AI; at least 2 turns;
     * everyday_conv: "user" is the user, "assistant" the AI, system turns dropped; at least 2 turns;
+    * smol_smoltalk: rows of the parts ``smol-magpie-ultra-short`` and ``smol-contraints`` only,
+      as user/ai turns (system turns dropped); 2 to 6 turns, the first a user's, no AI turn over
+      600 characters, no turn with a code fence, LaTeX brackets, ``$$`` or 4 digits in a row;
     * gsm8k: ``Question: {q}\\nAnswer: {reasoning} The answer is {final}.`` without the
       calculator annotations;
     * mbpp: ``# {text}\\n{code}`` with tabs as 4 spaces and LF line endings;

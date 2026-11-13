@@ -11,12 +11,13 @@ from airace_content import progress as progress_module
 from airace_content.assemble import RECIPES, SCALES
 from airace_content.build import build_corpus, sources_needed
 from airace_content.cli import main
-from airace_content.sources import SOURCES, fixture_fetch
+from airace_content.sources import fixture_fetch
 from airace_ml.data.corpus import DATASET_IDS
 from airace_ml.paths import corpus_dir
 
 FIX = Path(__file__).parents[1] / "fixtures" / "sources"
 FETCH = fixture_fetch(FIX)
+TEXT1_SOURCES = sources_needed(DATASET_IDS, simple_vocab=True)
 
 
 def _lines(**kwargs) -> list[str]:
@@ -53,7 +54,7 @@ def test_a_build_reports_each_stage_in_order(loud):
     # every source is checked first
     needed = sources_needed(DATASET_IDS, simple_vocab=True)
     checks = [i for i, line in enumerate(lines) if line.startswith("checking source ")]
-    assert len(checks) == len(needed) == len(SOURCES)
+    assert len(checks) == len(needed) == len(TEXT1_SOURCES)
     assert checks == list(range(len(needed)))
     # then the simple vocabulary, and each dataset assembled: a line when each source opens
     simple = _index(lines, r"^simple vocabulary: opening tinystories")

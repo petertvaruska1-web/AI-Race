@@ -14,7 +14,7 @@ from huggingface_hub.errors import HfHubHTTPError, OfflineModeIsEnabled
 import airace_content.cli as cli_module
 from airace_content import sources
 from airace_content.assemble import RECIPES
-from airace_content.build import BuildError, build_corpus
+from airace_content.build import BuildError, build_corpus, sources_needed
 from airace_content.cli import main
 from airace_content.manifest import KNOWN_VOCAB_FILE
 from airace_content.sources import (
@@ -31,6 +31,7 @@ from airace_ml.paths import corpus_dir, tokenizer_path
 from tests.content.test_build import _assert_same_corpus
 
 FIX = Path(__file__).parents[1] / "fixtures" / "sources"
+TEXT1_SOURCES = sources_needed(DATASET_IDS, simple_vocab=True)
 ROWS = [{"question": f"Q{i}", "answer": f"a {i}\n#### {i}"} for i in range(10)]
 SPEC = SOURCES["gsm8k"]
 
@@ -280,7 +281,7 @@ def test_a_late_source_in_the_wrong_format_fails_before_anything_is_read(tmp_pat
     fetch = Recording("cosmo_stories", rows=[{"title": "x", "body": "y"}])
     with pytest.raises(SourceFormatError, match="cosmo_stories"):
         build_corpus("tiny", root, fetch, seed=0)
-    assert len(fetch.calls) <= len(SOURCES)  # one look at each source, no assembly
+    assert len(fetch.calls) <= len(TEXT1_SOURCES)  # one look at each source, no assembly
     assert all(rows <= FORMAT_CHECK_ROWS for _, rows in fetch.calls)
     assert _nothing_written(root)
 
@@ -344,7 +345,7 @@ def test_a_source_with_no_rows_is_left_to_the_build(tmp_path):
 
 def test_a_build_over_a_flaky_hub_gives_the_corpus_of_a_steady_one(monkeypatch, waits, tmp_path):
     """The point of resuming exactly: the same seed, the same corpus, drops or no drops."""
-    by_repo = {(s.hf_path, s.hf_config): s for s in SOURCES.values()}
+    by_repo = {(SOURCES[i].hf_path, SOURCES[i].hf_config): SOURCES[i] for i in TEXT1_SOURCES}
     steady_fetch = fixture_fetch(FIX)
 
     def hub(drop_every: int | None):
