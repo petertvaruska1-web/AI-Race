@@ -2,6 +2,13 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-11-13 — The next-level plan for the training system (written; waiting for the owner's go)
+- **Asked by the owner:** a full plan to take the training system "to the highest level", saved for later sessions.
+- **Design:** `docs/superpowers/specs/2026-11-13-ai-training-next-level-design.md`. Seven phases, each passed on one fixed scorecard: the measuring stick, small engine 3 items, training text 2 (conversations in which the AI is an AI, typos only on the user's side, pools twice as large), a voice of its own (an AI is told its name and company and has learned to read that), brain design 2 (only if a screening shows it earns its place), one release, and training that behaves on other people's computers.
+- **Found while planning (measured):** the conversation text is 63% two people chatting, which is why AIs invent names and talk about school; typos were being put into the AI's own answers; the optimizer and the step size have no head-room left (bigger steps: 10% faster, worse; smaller: slower, no better); a larger vocabulary would hold at most 14% more text for the largest disruption possible, so tok-v1 stays.
+- **Plan A (phases A–D, 19 tasks):** `docs/superpowers/plans/2026-11-13-next-level-a-text-and-voice.md`. Plans for brain design 2, the release and other computers are written when their gates are reached.
+- **Next:** on the owner's go, plan A from Task 1. Two things the owner may still veto are in the spec's section 0 (an AI knows its name; the first AI's default reading leans toward conversations).
+
 ## 2026-11-12 — Training engine 2 (built; gate run again: 5 of 7)
 - **What changed for players:** AIs learn about one and a half times as much from the same reading and train faster; they cope with messages typed in lowercase or without punctuation; they ramble less; new worlds can train two bigger brains (Large, Huge) and a longer Marathon length; friends' computers can train big brains through the free link; a helper keeps its PC awake while it trains.
 - **Measured on the RTX 3050** (ADR `docs/decisions/0009-training-engine-2.md`): first AI 70 s → 55 s with held-out loss 2.57 → 2.45; fact questions typed in lowercase without "?" answered right 17% → 65% (first AI), 93% for a three-run Medium lineage; well-formed replies 50% → 80%. Large trains at 46,700 tokens a second, Huge at 26,700; the longest run (Huge, Marathon) takes about 32 minutes.

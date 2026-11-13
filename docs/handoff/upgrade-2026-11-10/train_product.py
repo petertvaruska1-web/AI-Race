@@ -37,6 +37,7 @@ p.add_argument("--cleaning", default="standard")
 p.add_argument("--lr-scale", type=float, default=1.0)  # scales both ends of the learning-style slider
 p.add_argument("--warmup", type=float, default=None)  # the warm-up share of the run
 p.add_argument("--ns-steps", type=int, default=None)  # Newton-Schulz iterations
+p.add_argument("--batch-tokens", type=int, default=None)  # tokens a step (the product uses 8,192)
 a = p.parse_args()
 
 import airace_ml.train.config as config_module  # noqa: E402
@@ -105,6 +106,7 @@ cfg = TrainRunConfig(
     prep=PrepConfig(cleaning=a.cleaning),
     parent_dir=a.parent,
     replay=a.replay,
+    **({"batch_tokens": a.batch_tokens} if a.batch_tokens else {}),
 )
 t0 = time.perf_counter()
 res = tr.train_run(cfg, out_dir=out, device=torch.device("cuda"), checkpoint_seconds=30.0)

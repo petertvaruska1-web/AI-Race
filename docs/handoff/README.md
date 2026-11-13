@@ -58,6 +58,8 @@ First written 2026-10-07 by the local Claude Code session (Windows desktop). **U
    - Cloud: the template `docs/handoff/final-review/cloud-sync.sh`. It also copies briefs, deferred minors and final-review artefacts, and takes the commit trailer and branch from the environment.
 
 ## 4. Immediate next step
+**Next work (2026-11-13): the next-level plan for the training system**, on the owner's go: spec `docs/superpowers/specs/2026-11-13-ai-training-next-level-design.md`, plan A `docs/superpowers/plans/2026-11-13-next-level-a-text-and-voice.md` (start at Task 1; inline, commit and push per task, ledger `docs/handoff/sdd/ledger-next-level.md`). The paragraph below is the state it starts from.
+
 **Latest (2026-11-12): training engine 2 is built on `m2-two-friends`** (the top entry of `docs/progress.md`; spec `docs/superpowers/specs/2026-11-10-training-engine-2-design.md`; measurements and every value in `docs/decisions/0009-training-engine-2.md`). The gate was run again with engine 2 (5 of 7; `docs/reports/2026-11-12-gate-engine-2.md`). The second rival pack is built on the owner's PC (`data/rivals/v2`). Open: a played session with the Large and Huge brains, and ADR 0009 section 11 (`npm run e2e` passed on 2026-11-12). The measuring scripts are in `docs/handoff/upgrade-2026-11-10/` (run from `ml/`); their runs are in `ml/runs/upgrade/` (not in git).
 
 **Milestone 1 is closed** (2026-10-22, owner decision C4): merged into `main` and tagged `m1-complete`. The gate stands at 5 of 7 with two accepted gaps (`docs/reports/m1-feasibility.md`).
