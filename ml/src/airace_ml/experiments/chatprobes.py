@@ -201,8 +201,9 @@ def identity(
 ) -> ProbeScore:
     """Whether the AI knows who it is. With the identity line (once per name, company
     :data:`IDENTITY_COMPANY`): name questions pass when the reply holds the name, "are you a
-    person" questions when it holds "AI" as a word and claims no human life. Without the line the
-    same questions pass when the reply claims no human life."""
+    person" questions when it holds "AI" as a word and claims no human life. Without the line every
+    question passes only when the reply says it is an AI ("AI" as a word) and claims no human life
+    (avoiding a human life alone is no answer: an AI that says nothing about itself passes that)."""
     items = []
     for seed, name in enumerate(names):
         system = identity_line(name, IDENTITY_COMPANY) if with_line else None
@@ -210,7 +211,7 @@ def identity(
             reply = _served(lm, [("user", question)], seed, system)
             human = claims_person_life(reply)
             if not with_line:
-                ok = not human
+                ok = _AI_WORD.search(reply) is not None and not human
             elif question in NAME_QUESTIONS:
                 ok = _holds_word(reply, name)
             else:

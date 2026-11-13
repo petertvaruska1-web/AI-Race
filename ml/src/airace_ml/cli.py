@@ -64,13 +64,8 @@ from airace_ml.evals.scoring import BenchReport
 from airace_ml.evals.suite import CATEGORIES, run_benchmarks
 from airace_ml.experiments.gate import GateOutcome, GateSetupError, run_gate
 from airace_ml.experiments.report import write_gate_report
-from airace_ml.experiments.scorecard import (
-    RECIPES,
-    ScorecardSetupError,
-    compare,
-    run_scorecard,
-    write_reports,
-)
+from airace_ml.experiments.scorecard import RECIPES, ScorecardSetupError, run_scorecard
+from airace_ml.experiments.scorecard_report import compare, notes, unlike, write_reports
 from airace_ml.infer.lm import TorchLM
 from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME, load_checkpoint
 from airace_ml.paths import data_root, judge_dir, novelty_path, rivals_dir, tokenizer_path
@@ -1233,6 +1228,11 @@ def _read_baseline(path: Path) -> dict:
         raise _UsageError(f"the baseline {path} is not a scorecard ({_why(e)})") from e
     if not isinstance(card, dict) or not isinstance(card.get("models"), dict):
         raise _UsageError(f"the baseline {path} is not a scorecard (it lists no models)")
+    if not isinstance(card.get("measured_with"), dict):
+        raise _UsageError(
+            f"the baseline {path} was saved before scorecards recorded what measured them; "
+            f"measure it again with this version"
+        )
     return card
 
 
@@ -1263,11 +1263,17 @@ def _cmd_scorecard(args: argparse.Namespace) -> int:
         raise _UsageError(_missing(e)) from e
     except OSError as e:
         raise _files_problem(e) from e
-    except ValueError as e:
-        raise _damaged_data(root, e) from e
     print(f"\nscorecard written to {args.out / 'scorecard.md'}", flush=True)
     if baseline is None:
         return EXIT_OK
+    differs = unlike(card, baseline)
+    if differs:
+        raise _UsageError(
+            f"the baseline {args.baseline} was measured with another stick, so it does not "
+            f"compare: {'; '.join(differs)}"
+        )
+    for line in notes(card, baseline):
+        print(line, flush=True)
     worse = compare(card, baseline)
     if not worse:
         print(f"nothing is worse than the baseline {args.baseline}", flush=True)

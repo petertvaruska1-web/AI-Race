@@ -11,9 +11,16 @@ novelty index, so the stick never moves while the training text does.
 Runs train under ``out/runs/<model>`` through :class:`~airace_ml.experiments.runs.GateRuns`, so a
 finished run is reused while its recipe, data, training code and device are unchanged. Each
 model's measurements are cached in ``out/measured/<model>.json`` and reused while the run, the
-measuring code (:data:`CARD_SOURCES`), the yardstick and the scale are unchanged.
-:func:`write_reports` writes ``scorecard.json`` and ``scorecard.md``; :func:`compare` lists what got
-worse than a saved baseline by more than its :data:`TOLERANCE`.
+measuring code (:data:`CARD_SOURCES`), the yardstick (its data, judge, novelty index, and the
+number and length of its rows) and the probe sizes are unchanged. The card records what it was
+measured with (``measured_with``), so a baseline measured with another stick is refused.
+:mod:`~airace_ml.experiments.scorecard_report` writes the reports and compares cards; it is kept
+out of :data:`CARD_SOURCES`, so its wording and tolerances can change without measuring again.
+
+The ``lineage`` recipe continues ``first-s1`` (seed 1) as ``lineage-small`` with seed 10,001 and
+then as ``lineage-medium`` with seed 20,001 (the gate's ``CONTINUATION_SEED_OFFSET``): the trainer
+seeds its data sampler with the run's seed alone, so a continuation that kept its parent's seed
+would read its parent's batches again instead of new text (what the gate's G5 found).
 """
 
 from __future__ import annotations
@@ -30,7 +37,7 @@ import torch
 from airace_ml.data.corpus import Corpus
 from airace_ml.data.identity import data_identity
 from airace_ml.data.prep import heldout_docs
-from airace_ml.data.sampler import DocPool, MixtureSampler
+from airace_ml.data.sampler import DocPool, MixtureError, MixtureSampler
 from airace_ml.engine import ENGINE_VERSION
 from airace_ml.evals.judge import CALIBRATION_NAME, Judge, is_well_formed
 from airace_ml.evals.novelty import NoveltyIndex
@@ -51,7 +58,6 @@ from airace_ml.experiments.runs import (
     GateRuns,
     _cached,
     _read_json,
-    _write_json,
     source_digest,
 )
 from airace_ml.infer.lm import TorchLM
@@ -153,44 +159,6 @@ RATES = frozenset(
     }
 )
 LOSSES = frozenset({"heldout", "heldout_conversations", "yardstick_loss"})
-LABELS: dict[str, str] = {
-    "heldout": "held-out loss",
-    "heldout_conversations": "held-out conversation loss",
-    "yardstick_loss": "yardstick conversation loss",
-    "bench_overall": "bench-v1 overall",
-    "well_formed": "well-formed replies",
-    "casual": "facts typed casually",
-    "followups": "follow-ups answered",
-    "identity_line": "knows its name and that it is an AI",
-    "identity_no_line": "claims no human life without its name",
-    "person_life": "claims a human life in small talk",
-    "cut_off": "replies cut off",
-    "looped": "replies stopped in a loop",
-}
-COLUMNS: dict[str, str] = {
-    "heldout": "Held-out loss",
-    "heldout_conversations": "Held-out conv. loss",
-    "yardstick_loss": "Yardstick loss",
-    "bench_overall": "Bench",
-    "well_formed": "Well-formed",
-    "casual": "Casual facts",
-    "followups": "Follow-ups",
-    "identity_line": "Identity (named)",
-    "identity_no_line": "No life claim (unnamed)",
-    "person_life": "Life claims",
-    "cut_off": "Cut off",
-    "looped": "Loops",
-}
-# How much worse than the baseline a measure may get before compare() reports it (rates as
-# shares, bench in points, losses in nats per token).
-TOLERANCE: dict[str, float] = {
-    "well_formed": 0.04,
-    "casual": 0.05,
-    "followups": 0.05,
-    "bench_overall": 2.0,
-    "yardstick_loss": 0.03,
-    "heldout": 0.02,
-}
 
 
 class ScorecardSetupError(ValueError):
@@ -260,7 +228,10 @@ def yardstick_loss(model: Transformer, yardstick_root: Path) -> float:
     corpus = Corpus.open(corpus_dir(Path(yardstick_root)) / YARDSTICK_DATASET)
     pool = DocPool.from_corpus(corpus, heldout_docs(corpus), balanced=False)
     if not len(pool):
-        raise ValueError(f"the yardstick root {yardstick_root} holds no held-out conversations")
+        raise ScorecardSetupError(
+            f"the yardstick root {yardstick_root} holds no held-out conversations; rebuild its data "
+            f"with: airace-content build --scale full"
+        )
     sampler = MixtureSampler(
         {YARDSTICK_DATASET: pool}, {YARDSTICK_DATASET: 1.0}, model.shape.ctx_len, 0
     )
@@ -362,8 +333,17 @@ class _Card:
             self.trained[step.name] = self.runs.train(self.config(step), self.device, parent)
         return self.trained[step.name]
 
-    def measured(self, run: GateRun) -> dict[str, Any]:
-        """The (cached) measurements of ``run``."""
+    def measured_with(self) -> dict[str, Any]:
+        """What every measurement of this call was taken with (the stick, not the models)."""
+        return {
+            "yardstick": self.yardstick,
+            "instruments": self.instruments.key(),
+            "yardstick_rows": YARDSTICK_SEQS,
+            "scale": {"name": self.scale.name, **self.scale.probes()},
+        }
+
+    def measured(self, run: GateRun, span: int) -> dict[str, Any]:
+        """The (cached) measurements of ``run``, whose yardstick rows are ``span`` tokens long."""
         key = {
             "run": run.token,
             "code": source_digest(CARD_SOURCES),
@@ -371,7 +351,8 @@ class _Card:
             "instruments": self.instruments.key(),
             "probes": self.scale.probes(),
             "suite": SUITE_VERSION,
-            "yardstick_seqs": YARDSTICK_SEQS,
+            "yardstick_rows": YARDSTICK_SEQS,
+            "yardstick_span": span,
             "seed": MEASURE_SEED,
         }
         fresh: list[int] = []
@@ -438,8 +419,8 @@ class _Card:
     def model_entry(self, recipe: str, step: Step, run: GateRun) -> dict[str, Any]:
         record = _read_json(run.dir / GATE_RUN_FILE) or {}
         losses = (record.get("result") or {}).get("heldout_losses") or {}
-        measured = self.measured(run)
         cfg = self.config(step)
+        measured = self.measured(run, cfg.shape.ctx_len)
         measures = {
             "heldout": run.heldout_mean,
             "heldout_conversations": _finite(losses.get(YARDSTICK_DATASET)),
@@ -449,6 +430,7 @@ class _Card:
             "recipe": recipe,
             "parent": step.parent,
             "shape": [cfg.shape.n_layer, cfg.shape.d_model, cfg.shape.ctx_len],
+            "yardstick_span": cfg.shape.ctx_len,
             "tokens": cfg.token_budget,
             "seed": step.seed,
             "status": run.status,
@@ -527,7 +509,16 @@ def run_scorecard(
     models: dict[str, Any] = {}
     for recipe in chosen:
         for step in RECIPES[recipe]:
-            models[step.name] = card.model_entry(recipe, step, card.train(step))
+            try:
+                run = card.train(step)
+            except MixtureError:
+                raise
+            except ValueError as e:  # a corpus the trainer cannot read
+                raise ScorecardSetupError(
+                    f"the training data under {data_root} cannot be used ({e}); rebuild it with: "
+                    f"airace-content build --scale full"
+                ) from e
+            models[step.name] = card.model_entry(recipe, step, run)
     first = card.trained.get("first-s1")
     clock = None
     if timing and first is not None:
@@ -547,102 +538,8 @@ def run_scorecard(
         "date": datetime.datetime.now(datetime.UTC).astimezone().date().isoformat(),
         "device": device.type,
         "scale": scale.name,
+        "measured_with": card.measured_with(),
         "recipes": {r: [s.name for s in RECIPES[r]] for r in chosen},
         "models": models,
         "timing": clock,
     }
-
-
-# -- reports ------------------------------------------------------------------------------------
-
-
-def _shown(key: str, value: object) -> str:
-    number = _finite(value)
-    if number is None:
-        return "n/a"
-    if key in RATES:
-        return f"{number:.0%}"
-    if key in LOSSES:
-        return f"{number:.3f}"
-    return f"{number:.1f}"
-
-
-def _difference(key: str, amount: float) -> str:
-    if key in RATES:
-        return f"{100 * amount:.0f} points"
-    if key in LOSSES:
-        return f"{amount:.3f}"
-    return f"{amount:.1f} points"
-
-
-def compare(card: Mapping[str, Any], baseline: Mapping[str, Any]) -> list[str]:
-    """One sentence for each measure of :data:`TOLERANCE` on which a model of ``card`` is worse
-    than the same model of ``baseline`` by more than its tolerance (a loss going up, anything
-    else going down). Models or measures the baseline lacks are not compared."""
-    found = []
-    before_models = baseline.get("models") or {}
-    for name, model in (card.get("models") or {}).items():
-        before = (before_models.get(name) or {}).get("measures") or {}
-        now = model.get("measures") or {}
-        for key, tolerance in TOLERANCE.items():
-            new, old = _finite(now.get(key)), _finite(before.get(key))
-            if new is None or old is None:
-                continue
-            worse = new - old if key in LOSSES else old - new
-            if worse > tolerance + 1e-9:
-                found.append(
-                    f"{name}: {LABELS[key]} {_shown(key, new)} against {_shown(key, old)} in the "
-                    f"baseline, worse by {_difference(key, worse)} (allowed "
-                    f"{_difference(key, tolerance)})."
-                )
-    return found
-
-
-def _markdown(card: Mapping[str, Any]) -> str:
-    lines = [
-        "# Scorecard",
-        "",
-        (
-            f"Data root: {card['data_root']}; yardstick root: {card['yardstick_root']}; "
-            f"engine {card['engine']}; {card['date']}"
-        ),
-        "",
-    ]
-    if card.get("scale") != FULL.name:
-        lines += [f"Scale: {card.get('scale')} (shrunk recipes: a check of the setup only).", ""]
-    clock = card.get("timing")
-    if clock:
-        when = "reused: the time of its own earlier training" if clock["reused"] else "trained now"
-        lines += [
-            (
-                f"First AI ({clock['model']}) trained in {clock['seconds']:.1f} s on "
-                f"{clock['device']} ({when})."
-            ),
-            "",
-        ]
-    heading = ["Model", "Recipe", *(COLUMNS[key] for key in MEASURES)]
-    lines.append("| " + " | ".join(heading) + " |")
-    lines.append("| " + " | ".join("---" for _ in heading) + " |")
-    for name, model in card["models"].items():
-        shown = name if model.get("status") == "completed" else f"{name} (stopped early)"
-        cells = [shown, model["recipe"], *(_shown(k, model["measures"].get(k)) for k in MEASURES)]
-        lines.append("| " + " | ".join(cells) + " |")
-    lines += [
-        "",
-        (
-            "Losses are per token (lower is better); bench-v1 is 0-100. Rates are shares of "
-            "replies: well-formed, casual facts, follow-ups and identity are better higher; life "
-            "claims, cut-off replies and loops better lower."
-        ),
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def write_reports(card: Mapping[str, Any], out: Path) -> None:
-    """``scorecard.json`` (the whole card) and ``scorecard.md`` (one row per model, one column per
-    measure) in ``out``."""
-    out = Path(out)
-    out.mkdir(parents=True, exist_ok=True)
-    _write_json(out / "scorecard.json", card)
-    (out / "scorecard.md").write_text(_markdown(card), encoding="utf-8")

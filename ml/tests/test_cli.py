@@ -1457,12 +1457,19 @@ def test_a_damaged_tokenizer_file_is_a_plain_error(command, trained, data_root_c
 # -- scorecard ------------------------------------------------------------------------------------
 
 
-def _score_card(well_formed: float = 0.8) -> dict:
+def _score_card(well_formed: float = 0.8, rows: int = 128, data: str = "text-v1") -> dict:
     measures = {key: 0.5 for key in scorecard.MEASURES}
     measures.update(well_formed=well_formed, bench_overall=40.0, yardstick_loss=2.6, heldout=2.5)
     return {
         "data_root": "d",
         "yardstick_root": "d",
+        "data_identity": data,
+        "measured_with": {
+            "yardstick": "yardstick-v1",
+            "instruments": {"label": "reference judge", "judge": {"p90": 4.0}, "novelty": 9},
+            "yardstick_rows": rows,
+            "scale": {"name": "full"},
+        },
         "engine": 2,
         "date": "2026-11-13",
         "device": "cpu",
@@ -1473,8 +1480,16 @@ def _score_card(well_formed: float = 0.8) -> dict:
                 "recipe": "first",
                 "parent": None,
                 "status": "completed",
+                "yardstick_span": 256,
                 "measures": measures,
-            }
+            },
+            "small": {
+                "recipe": "small",
+                "parent": None,
+                "status": "completed",
+                "yardstick_span": 256,
+                "measures": measures,
+            },
         },
         "timing": None,
     }
@@ -1573,3 +1588,45 @@ def test_scorecard_keeps_the_pc_awake_and_needs_the_gpu_or_an_asked_for_cpu(tmp_
     assert code == 2 and not seen and "no usable GPU" in err and "--device cpu" in err
     code, _, err = _run([*argv, "--device", "cpu"])
     assert code == 0, err
+
+
+def test_scorecard_against_a_baseline_says_what_it_did_not_compare(tmp_path, monkeypatch):
+    saved = _score_card(data="text-v1")
+    del saved["models"]["small"]
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps(saved), encoding="utf-8")
+    _fake_scorecard(monkeypatch, _score_card(data="text-v2"))
+    argv = ["scorecard", "--out", str(tmp_path / "c"), "--baseline", str(baseline)]
+    code, stdout, err = _run([*argv, *_common(tmp_path)])
+    assert code == 0, err
+    assert "small" in stdout and "Not in the baseline" in stdout
+    assert "training text" in stdout and "nothing is worse than the baseline" in stdout
+
+
+def test_scorecard_refuses_a_baseline_measured_differently(tmp_path, monkeypatch):
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps(_score_card(rows=8)), encoding="utf-8")
+    _fake_scorecard(monkeypatch, _score_card(well_formed=0.1))
+    argv = ["scorecard", "--out", str(tmp_path / "c"), "--baseline", str(baseline)]
+    code, stdout, err = _run([*argv, *_common(tmp_path)])
+    assert code == 2 and err.startswith("error: ") and "yardstick rows" in err
+    assert "worse" not in stdout  # no comparison with a stick of another length
+
+
+def test_scorecard_refuses_a_baseline_from_before_cards_said_how_they_measured(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(cli, "run_scorecard", lambda *a, **k: pytest.fail("it must not run"))
+    old = _score_card()
+    del old["measured_with"]
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps(old), encoding="utf-8")
+    argv = ["scorecard", "--out", str(tmp_path / "c"), "--baseline", str(baseline)]
+    code, _, err = _run([*argv, *_common(tmp_path)])
+    assert code == 2 and "measure it again" in err
+
+
+def test_an_unexpected_error_in_measuring_is_not_blamed_on_the_data(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "run_scorecard", _raising(ValueError("a probe went wrong")))
+    with pytest.raises(ValueError, match="a probe went wrong"):
+        main(["scorecard", "--out", str(tmp_path / "c"), *_common(tmp_path)])

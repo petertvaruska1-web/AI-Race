@@ -1,10 +1,12 @@
 import json
 import math
 
+import numpy as np
 import pytest
 import torch
 
 from airace_ml.experiments import scorecard as sc
+from airace_ml.experiments import scorecard_report as rep
 from airace_ml.experiments.configs import (
     BALANCED_MIX,
     QUICK_BATCH_TOKENS,
@@ -135,6 +137,13 @@ def test_the_card_has_every_recipe_model_and_measure(scored, tiny_data_root):
         assert "creativity" not in model["bench"]  # no judge was given
     assert card["models"]["lineage-medium"]["shape"] == [3, 96, 64]  # the toy stand-in
     assert card["models"]["lineage-medium"]["parent"] == "lineage-small"
+    assert all(model["yardstick_span"] == 64 for model in card["models"].values())
+    assert card["measured_with"] == {
+        "yardstick": card["yardstick_identity"],
+        "instruments": {"label": "test", "judge": None, "novelty": None},
+        "yardstick_rows": sc.YARDSTICK_SEQS,
+        "scale": {"name": "test", **QUICK.probes()},
+    }
     assert card["engine"] == sc.ENGINE_VERSION and card["scale"] == "test"
     assert card["data_root"] == card["yardstick_root"] == str(tiny_data_root)
     assert any("training" in line for line in said)
@@ -147,6 +156,8 @@ def test_a_second_call_reuses_every_run_and_measurement(scored):
         assert any(line.startswith(f"  {name}:") and "reusing" in line for line in said), name
         assert again["models"][name]["measures"] == card["models"][name]["measures"]
         assert again["models"][name]["reused"] is True
+    cached = json.loads((out / "measured" / "first-s1.json").read_text("utf-8"))
+    assert cached["key"]["yardstick_span"] == 64 and cached["key"]["yardstick_rows"] == 128
     # the parent of the lineage is trained once, under its own name
     assert sorted(p.name for p in (out / "runs").iterdir()) == sorted(card["models"])
 
@@ -203,65 +214,25 @@ def test_an_unknown_recipe_is_an_error_before_any_training(tiny_data_root, tmp_p
     assert not (tmp_path / "card").exists()
 
 
-# -- compare ----------------------------------------------------------------------------------
-
-
-def _measures(**changes) -> dict:
-    base = {key: 0.5 for key in sc.MEASURES}
-    base.update(bench_overall=40.0, heldout=2.5, heldout_conversations=2.4, yardstick_loss=2.6)
-    return {**base, **changes}
-
-
-def _plain_card(**changes) -> dict:
-    return {"models": {"first-s1": {"recipe": "first", "measures": _measures(**changes)}}}
-
-
-def test_compare_reports_a_six_point_drop_and_ignores_a_two_point_one():
-    baseline = _plain_card(well_formed=0.80)
-    assert sc.compare(_plain_card(well_formed=0.78), baseline) == []
-    (said,) = sc.compare(_plain_card(well_formed=0.74), baseline)
-    assert "first-s1" in said and "well-formed" in said and "74%" in said and "80%" in said
-    assert sc.compare(_plain_card(well_formed=0.95), baseline) == []  # better is never reported
-
-
-def test_compare_knows_that_a_lower_loss_is_better():
-    baseline = _plain_card(yardstick_loss=2.600, heldout=2.500)
-    assert sc.compare(_plain_card(yardstick_loss=2.400, heldout=2.300), baseline) == []
-    assert sc.compare(_plain_card(yardstick_loss=2.620, heldout=2.515), baseline) == []
-    said = sc.compare(_plain_card(yardstick_loss=2.640, heldout=2.530), baseline)
-    assert len(said) == 2 and "2.640" in said[0] and "2.600" in said[0]
-    assert set(sc.TOLERANCE) == {
-        "well_formed", "casual", "followups", "bench_overall", "yardstick_loss", "heldout",
-    }  # fmt: skip
-    (bench,) = sc.compare(_plain_card(bench_overall=37.5), _plain_card(bench_overall=40.0))
-    assert "37.5" in bench and "40.0" in bench
-
-
-def test_compare_skips_models_and_measures_the_baseline_does_not_have():
-    card = {"models": {"small": {"measures": _measures(well_formed=0.1)}}}
-    assert sc.compare(card, _plain_card()) == []
-    baseline = _plain_card()
-    del baseline["models"]["first-s1"]["measures"]["casual"]
-    assert sc.compare(_plain_card(casual=0.0), baseline) == []
-
-
-# -- reports ----------------------------------------------------------------------------------
-
-
-def test_the_reports_have_one_row_per_model_and_one_column_per_measure(scored, tmp_path):
+def test_the_card_writes_its_reports(scored, tmp_path):
     _, card, _, _, _ = scored
-    sc.write_reports(card, tmp_path)
-    assert json.loads((tmp_path / "scorecard.json").read_text("utf-8")) == json.loads(
-        json.dumps(card)
-    )
-    lines = (tmp_path / "scorecard.md").read_text("utf-8").splitlines()
-    header = next(line for line in lines if line.startswith("Data root:"))
-    assert card["data_root"] in header and card["date"] in header and "engine 2" in header
-    rows = [line for line in lines if line.startswith("| ")]
-    assert len(rows) == 2 + len(card["models"])  # the heading, its rule, one row per model
-    assert all(row.count("|") == rows[0].count("|") for row in rows)
-    assert rows[0].count("|") == 3 + len(sc.MEASURES)  # model, recipe, then the measures
-    first = next(row for row in rows if row.startswith("| first-s1 "))
-    m = card["models"]["first-s1"]["measures"]
-    assert f"| {m['yardstick_loss']:.3f} |" in first
-    assert f"| {m['well_formed']:.0%} |" in first
+    rep.write_reports(card, tmp_path)
+    assert json.loads((tmp_path / "scorecard.json").read_text("utf-8")) == card
+    assert "| first-s1 |" in (tmp_path / "scorecard.md").read_text("utf-8")
+
+
+def test_no_held_out_conversations_is_a_setup_error_naming_the_root(tiny_data_root, monkeypatch):
+    monkeypatch.setattr(sc, "heldout_docs", lambda corpus: np.zeros(0, np.int64))
+    with pytest.raises(sc.ScorecardSetupError, match="held-out conversations") as caught:
+        sc.yardstick_loss(Transformer(QUICK_SHAPE, 512), tiny_data_root)
+    assert str(tiny_data_root) in str(caught.value)
+
+
+def test_training_data_that_cannot_be_read_is_a_setup_error(tiny_data_root, tmp_path, monkeypatch):
+    def refuse(self, cfg, device, parent=None):
+        raise ValueError("the corpus offsets are cut short")
+
+    monkeypatch.setattr(sc.GateRuns, "train", refuse)
+    with pytest.raises(sc.ScorecardSetupError, match="cut short") as caught:
+        _card(tiny_data_root, tmp_path / "card", [], recipes=["small"])
+    assert str(tiny_data_root) in str(caught.value)

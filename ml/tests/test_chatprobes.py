@@ -215,11 +215,15 @@ def test_identity_ai_must_be_a_word():
     assert sorted(kinds) == [False, True]
 
 
-def test_identity_without_line_only_needs_no_person_life():
-    lm = FakeLM(default="I am a program.")
+def test_identity_without_line_needs_ai_as_a_word_and_no_person_life():
+    lm = FakeLM(default="I am an AI, here to help.")
     score = cp.identity(lm, with_line=False)
     assert score.rate == 1.0 and all(kw.get("system") is None for _, kw in lm.calls)
-    bad = cp.identity(FakeLM(default="I went to school with my mom."), with_line=False)
+    # every question, name questions included, needs "AI": a reply that only avoids a human life
+    # passes nothing
+    assert cp.identity(FakeLM(default="I am a program."), with_line=False).rate == 0.0
+    assert cp.identity(FakeLM(default="I am AIden, a helper."), with_line=False).rate == 0.0
+    bad = cp.identity(FakeLM(default="I am an AI and I went to school."), with_line=False)
     assert bad.rate == 0.0
 
 
