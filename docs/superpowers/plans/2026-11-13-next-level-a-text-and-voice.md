@@ -157,9 +157,9 @@
 ### Task 11: assistant-style conversations
 **Files:** `ml/src/airace_content/sources.py`; tests in the sources tests.
 
-**Interfaces — produces:** source `smol_smoltalk` (`HuggingFaceTB/smol-smoltalk`, split `train`, licence `apache-2.0`, revision pinned in `REVISIONS`), adapter `_smol(row) -> list[Content]`: user/assistant turns kept, system turns dropped; a conversation is kept when it has 2–6 turns, every AI turn is at most 600 characters, no turn holds a code fence, `\\(`, `$$` or more than 3 digits in a row, and the first turn is a user's.
+**Interfaces — produces:** source `smol_smoltalk` (`HuggingFaceTB/smol-smoltalk`, split `train`, licence `apache-2.0`, revision pinned in `REVISIONS`), adapter `_smol(row) -> list[Content]`: only rows whose `source` is `smol-magpie-ultra-short` or `smol-contraints` (the card's spelling; ADR 0010 section 2 says why the others are left out); user/assistant turns kept, system turns dropped; a conversation is kept when it has 2–6 turns, every AI turn is at most 600 characters, no turn holds a code fence, `\\(`, `$$` or more than 3 digits in a row, and the first turn is a user's.
 
-- [ ] **Step 1:** open the dataset card at the pinned revision (WebFetch) and confirm the licence and that no subset in it carries another licence; if one does, exclude that subset by its `source` column and record it. Write the finding into ADR 0010.
+- [x] **Step 1 (done 2026-11-13, ADR 0010 section 2):** the card is apache-2.0, but rows taken from existing public datasets keep their originals' licences; only the two sources named above are used. Pin the dataset's current revision in `REVISIONS`.
 - [ ] **Step 2–4:** failing adapter tests (kept and dropped examples for each rule), implement, pass; commit.
 
 ### Task 12: SODA without a person's life on the AI's side
