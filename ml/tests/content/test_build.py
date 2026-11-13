@@ -189,8 +189,11 @@ def test_sources_are_the_designed_ones():
         "gutenberg": ("sedthh/gutenberg_english", None, "train"),
         "gsm8k": ("openai/gsm8k", "main", "train"),
         "mbpp": ("google-research-datasets/mbpp", "full", "train"),
+        "soda_ai": ("allenai/soda", None, "train"),
         "smol_smoltalk": ("HuggingFaceTB/smol-smoltalk", None, "train"),
     }
+    assert SOURCES["soda_ai"].license == SOURCES["soda"].license
+    assert SOURCES["soda_ai"].revision == SOURCES["soda"].revision
     assert SOURCES["smol_smoltalk"].license == "apache-2.0"
     licenses = {s.id: s.license for s in SOURCES.values()}
     assert licenses["tinystories"] == "cdla-sharing-1.0" and licenses["gutenberg"] == "mit"
@@ -451,8 +454,8 @@ def _smol_row(*turns: tuple[str, str], source: str = "smol-magpie-ultra-short") 
 
 
 def test_the_text_1_recipes_read_none_of_the_text_2_sources():
-    assert {"smol_smoltalk"} <= set(SOURCES)
-    assert not {"smol_smoltalk"} & set(TEXT1_SOURCES)
+    assert {"smol_smoltalk", "soda_ai"} <= set(SOURCES)
+    assert not {"smol_smoltalk", "soda_ai"} & set(TEXT1_SOURCES)
 
 
 def test_smol_smoltalk_keeps_only_the_two_apache_parts():
@@ -496,6 +499,22 @@ def test_smol_smoltalk_drops_code_maths_and_long_numbers():
         assert row_to_content("smol_smoltalk", _smol_row(("user", "Hi"), ("assistant", bad))) == []
     fine = "It has 365 days, 12 months and 7.5 hours; call 555."
     assert row_to_content("smol_smoltalk", _smol_row(("user", "Hi"), ("assistant", fine))) != []
+
+
+def test_soda_ai_drops_a_dialogue_where_the_ai_claims_a_person_life():
+    said = ["Hi there", "I went to school with my mom", "Nice"]
+    speakers = ["A", "B", "A"]
+    assert row_to_content("soda_ai", {"dialogue": said, "speakers": speakers}) == []
+    user_says = {"dialogue": ["I went to school with my mom", "Nice", "Yes"], "speakers": speakers}
+    assert row_to_content("soda_ai", user_says) == [
+        [("user", "I went to school with my mom"), ("ai", "Nice"), ("user", "Yes")]
+    ]
+    # the source it is made from is unchanged: soda keeps both
+    assert len(row_to_content("soda", {"dialogue": said, "speakers": speakers})) == 1
+    assert row_to_content("soda_ai", {"dialogue": ["Hi", "Hello"], "speakers": ["A", "B"]}) == [
+        [("user", "Hi"), ("ai", "Hello")]
+    ]
+    assert row_to_content("soda_ai", {"dialogue": ["Alone"], "speakers": ["A"]}) == []
 
 
 def test_text_adapters():

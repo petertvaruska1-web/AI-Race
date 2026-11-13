@@ -30,6 +30,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from airace_ml.persona import claims_person_life
 from airace_ml.tokenizer import Role
 
 Content = str | list[tuple[Role, str]]
@@ -69,6 +70,7 @@ _PINNED: dict[str, str] = {
     "mbpp": "4bb6404fdc6cacfda99d4ac4205087b89d32030c",
     # added for text 2 (2026-11-13): read only by the recipes that use them
     "smol_smoltalk": "f73fe857d519ff6ac5af2ea67c4d3834da7b8bcc",
+    "soda_ai": "fdc848ab0183208ea7808206c91c724414d0a071",
 }
 
 # Licenses as the dataset cards state them, re-verified against the hub on 2026-10-21 (ADR 0004).
@@ -101,6 +103,8 @@ SOURCES: dict[str, SourceSpec] = {
         _spec("gutenberg", "sedthh/gutenberg_english", None, "train", "mit"),
         _spec("gsm8k", "openai/gsm8k", "main", "train", "mit"),
         _spec("mbpp", "google-research-datasets/mbpp", "full", "train", "cc-by-4.0"),
+        # SODA again, for the dialogues whose AI side claims no person's life (same licence)
+        _spec("soda_ai", "allenai/soda", None, "train", "cc-by-4.0"),
         _spec("smol_smoltalk", "HuggingFaceTB/smol-smoltalk", None, "train", "apache-2.0"),
     )
 }
@@ -482,6 +486,16 @@ def _soda(row: dict) -> list[Content]:
     return [turns] if len(turns) >= MIN_CHAT_TURNS else []
 
 
+def _soda_ai(row: dict) -> list[Content]:
+    """SODA's dialogues, without those where an AI turn speaks of a person's life."""
+    return [
+        chat
+        for chat in _soda(row)
+        if isinstance(chat, list)
+        and not any(role == "ai" and claims_person_life(text) for role, text in chat)
+    ]
+
+
 _EVERYDAY_ROLES: dict[str, Role] = {"user": "user", "assistant": "ai"}
 
 
@@ -648,6 +662,7 @@ _ADAPTERS: dict[str, Callable[[dict], list[Content]]] = {
     "gutenberg": _gutenberg,
     "gsm8k": _gsm8k,
     "mbpp": _mbpp,
+    "soda_ai": _soda_ai,
     "smol_smoltalk": _smol,
 }
 assert set(_ADAPTERS) == set(SOURCES)
@@ -702,6 +717,7 @@ _ROW_FORMATS: dict[str, tuple[Callable[[dict], bool], str]] = {
     "gutenberg": (_book, "'TEXT' as a string and 'METADATA' as JSON with 'subjects'"),
     "gsm8k": (_strings("question", "answer"), "'question' and 'answer' as strings"),
     "mbpp": (_strings("text", "code"), "'text' and 'code' as strings"),
+    "soda_ai": (_dialogue, "'dialogue' and 'speakers' as lists"),
     "smol_smoltalk": (_smol_format, "'messages' as a list of {role, content} and 'source'"),
 }
 assert set(_ROW_FORMATS) == set(SOURCES)
@@ -730,6 +746,8 @@ def row_to_content(source_id: str, row: dict) -> list[Content]:
     * fineweb_edu: rows with ``int_score >= 3``;
     * soda: ``speakers[0]`` is the user, every other speaker the AI; at least 2 turns;
     * everyday_conv: "user" is the user, "assistant" the AI, system turns dropped; at least 2 turns;
+    * soda_ai: soda, less the dialogues where an AI turn speaks of a person's life
+      (``claims_person_life``);
     * smol_smoltalk: rows of the parts ``smol-magpie-ultra-short`` and ``smol-contraints`` only,
       as user/ai turns (system turns dropped); 2 to 6 turns, the first a user's, no AI turn over
       600 characters, no turn with a code fence, LaTeX brackets, ``$$`` or 4 digits in a row;
