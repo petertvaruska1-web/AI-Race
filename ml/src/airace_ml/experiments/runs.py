@@ -46,7 +46,15 @@ TRAINING_SOURCES: tuple[str, ...] = (
     "infer",
     "engine.py",
 )
-MEASURING_SOURCES: tuple[str, ...] = ("evals", "personality", "infer", "skills", "minipy")
+MEASURING_SOURCES: tuple[str, ...] = (
+    "evals",
+    "personality",
+    "infer",
+    "skills",
+    "minipy",
+    "experiments/chatprobes.py",  # the scorecard's talk probes
+    "persona.py",
+)
 # Modules either group imports that no digest holds, and why that is safe.
 UNDIGESTED: dict[str, str] = {
     "__init__.py": "the empty package marker",

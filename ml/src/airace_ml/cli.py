@@ -8,6 +8,8 @@
     airace-ml build-judge [--budget-tokens N]
     airace-ml build-rivals [--out DIR] [--quick]
     airace-ml gate --out DIR [--seeds 1,2,3] [--cpu-speed] [--quick]
+    airace-ml scorecard --out DIR [--yardstick-root DIR] [--recipes first,small,...] [--baseline FILE]
+        [--timing]
 
 Every command also takes ``--data-root PATH`` (default: ``AIRACE_DATA`` or ``<repo>/data``) and
 ``--device {cpu,cuda}`` (default: the GPU when there is one). ``build-judge``, ``bench`` and
@@ -23,7 +25,8 @@ went unstable, the disk filled up); 130 when the user interrupts a run. Each of 
 ``error: ...`` line on stderr and never a traceback; anything unexpected is a bug and propagates.
 A training run that goes unstable and stops early still saved its last good weights, so it exits 0
 and says so. ``gate`` exits 0 when every criterion passed and 1 when any failed (its summary says
-which; that is a verdict, not an error).
+which; that is a verdict, not an error). ``scorecard`` exits 1 when a measure is worse than the
+``--baseline`` by more than its tolerance (a verdict too).
 
 ``main`` returns the exit code and never calls ``sys.exit`` (argparse's own exits are turned into
 return values), so it can be driven from tests and from other tools.
@@ -61,6 +64,13 @@ from airace_ml.evals.scoring import BenchReport
 from airace_ml.evals.suite import CATEGORIES, run_benchmarks
 from airace_ml.experiments.gate import GateOutcome, GateSetupError, run_gate
 from airace_ml.experiments.report import write_gate_report
+from airace_ml.experiments.scorecard import (
+    RECIPES,
+    ScorecardSetupError,
+    compare,
+    run_scorecard,
+    write_reports,
+)
 from airace_ml.infer.lm import TorchLM
 from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME, load_checkpoint
 from airace_ml.paths import data_root, judge_dir, novelty_path, rivals_dir, tokenizer_path
@@ -185,6 +195,16 @@ def _seeds(text: str) -> tuple[int, ...]:
             f"{text!r} repeats a seed; give each seed once, like 1,2,3"
         )
     return seeds
+
+
+def _recipes(text: str) -> tuple[str, ...]:
+    """An argparse type: different scorecard recipes, separated by commas only."""
+    names = tuple(text.split(",")) if text else ()
+    if not names or any(n not in RECIPES for n in names) or len(set(names)) != len(names):
+        raise argparse.ArgumentTypeError(
+            f"{text!r} is not a comma-separated list of different recipes from {','.join(RECIPES)}"
+        )
+    return names
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -321,6 +341,34 @@ def _parser() -> argparse.ArgumentParser:
     gate.add_argument("--cpu-speed", action="store_true", help="also measure the CPU's speed")
     gate.add_argument("--quick", action="store_true", help="a short run, for checking the setup")
 
+    card = add(
+        "scorecard",
+        _cmd_scorecard,
+        "train the fixed recipes and measure every model the same way (hours on an RTX 3050)",
+        "Run the same command again: finished runs and measurements are reused, and an "
+        "unfinished run carries on from its last saved point.",
+    )
+    card.add_argument("--out", type=Path, required=True, help="folder for the runs and the card")
+    card.add_argument(
+        "--yardstick-root",
+        type=Path,
+        metavar="DIR",
+        help="data root whose judge, novelty index and held-out conversations every model is "
+        "measured against (default: the data root)",
+    )
+    card.add_argument(
+        "--recipes",
+        type=_recipes,
+        default=tuple(RECIPES),
+        help=f"comma-separated recipes to train and measure (default {','.join(RECIPES)})",
+    )
+    card.add_argument(
+        "--baseline", type=Path, metavar="FILE", help="a saved scorecard.json to compare against"
+    )
+    card.add_argument(
+        "--timing", action="store_true", help="record how long the first AI took to train"
+    )
+
     catalog = add(
         "export-catalog",
         _cmd_export_catalog,
@@ -408,6 +456,7 @@ _LONG_RUNS = frozenset(
         "_cmd_build_judge",
         "_cmd_build_rivals",
         "_cmd_gate",
+        "_cmd_scorecard",
     }
 )
 
@@ -1172,3 +1221,58 @@ def _cmd_gate(args: argparse.Namespace) -> int:
         raise _files_problem(e) from e
     _print_gate_summary(outcome, report)
     return EXIT_OK if outcome.passed else EXIT_FAILED
+
+
+def _read_baseline(path: Path) -> dict:
+    """The scorecard saved at ``path``; a usage error if it is missing or is not a scorecard."""
+    try:
+        card = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as e:
+        raise _UsageError(f"cannot find the baseline {path}") from e
+    except (OSError, ValueError) as e:
+        raise _UsageError(f"the baseline {path} is not a scorecard ({_why(e)})") from e
+    if not isinstance(card, dict) or not isinstance(card.get("models"), dict):
+        raise _UsageError(f"the baseline {path} is not a scorecard (it lists no models)")
+    return card
+
+
+def _cmd_scorecard(args: argparse.Namespace) -> int:
+    device = _device(args)
+    _require_gpu_unless_cpu_asked(args, device, "the scorecard")
+    root = _data_root(args)
+    yardstick = args.yardstick_root if args.yardstick_root is not None else root
+    _require_folder_path(args.out, "--out")
+    baseline = _read_baseline(args.baseline) if args.baseline is not None else None
+    _announce_device(args, device)
+    try:
+        card = run_scorecard(
+            root,
+            args.out,
+            yardstick_root=yardstick,
+            recipes=args.recipes,
+            device=device,
+            timing=args.timing,
+            on_status=lambda line: print(line, flush=True),
+        )
+        write_reports(card, args.out)
+    except ScorecardSetupError as e:
+        raise _UsageError(str(e)) from e
+    except MixtureError as e:
+        raise _UsageError(f"the training data cannot supply a recipe's mix: {e}") from e
+    except FileNotFoundError as e:
+        raise _UsageError(_missing(e)) from e
+    except OSError as e:
+        raise _files_problem(e) from e
+    except ValueError as e:
+        raise _damaged_data(root, e) from e
+    print(f"\nscorecard written to {args.out / 'scorecard.md'}", flush=True)
+    if baseline is None:
+        return EXIT_OK
+    worse = compare(card, baseline)
+    if not worse:
+        print(f"nothing is worse than the baseline {args.baseline}", flush=True)
+        return EXIT_OK
+    print(f"worse than the baseline {args.baseline}:")
+    for line in worse:
+        print(f"  {line}", flush=True)
+    return EXIT_FAILED

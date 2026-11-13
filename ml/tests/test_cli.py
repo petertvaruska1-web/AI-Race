@@ -19,6 +19,7 @@ from airace_ml import cli
 from airace_ml.cli import main
 from airace_ml.data.sampler import MixtureError
 from airace_ml.evals.judge import JudgeBuildError
+from airace_ml.experiments import scorecard
 from airace_ml.experiments.gate import TITLES, GateCriterion, GateOutcome, GateSetupError
 from airace_ml.infer.lm import TorchLM
 from airace_ml.model.shape import ModelShape
@@ -1451,3 +1452,124 @@ def test_a_damaged_tokenizer_file_is_a_plain_error(command, trained, data_root_c
     assert err.startswith("error: ") and "Traceback" not in err and err.count("\n") == 1
     assert f"the tokenizer at {tokenizer_path(data_root_copy)} is damaged" in err
     assert "airace-content build" in err and "--data-root" in err
+
+
+# -- scorecard ------------------------------------------------------------------------------------
+
+
+def _score_card(well_formed: float = 0.8) -> dict:
+    measures = {key: 0.5 for key in scorecard.MEASURES}
+    measures.update(well_formed=well_formed, bench_overall=40.0, yardstick_loss=2.6, heldout=2.5)
+    return {
+        "data_root": "d",
+        "yardstick_root": "d",
+        "engine": 2,
+        "date": "2026-11-13",
+        "device": "cpu",
+        "scale": "full",
+        "recipes": {"first": ["first-s1"]},
+        "models": {
+            "first-s1": {
+                "recipe": "first",
+                "parent": None,
+                "status": "completed",
+                "measures": measures,
+            }
+        },
+        "timing": None,
+    }
+
+
+def _fake_scorecard(monkeypatch, card: dict | None = None) -> dict:
+    seen: dict = {}
+
+    def fake(root, out, **options):
+        seen.update(root=root, out=out, **options)
+        options["on_status"]("  first-s1: training (6 steps, 1,024 tokens, on cpu)")
+        return card if card is not None else _score_card()
+
+    monkeypatch.setattr(cli, "run_scorecard", fake)
+    return seen
+
+
+def test_scorecard_measures_and_writes_its_reports(tmp_path, monkeypatch):
+    seen = _fake_scorecard(monkeypatch)
+    out = tmp_path / "card"
+    code, stdout, err = _run(["scorecard", "--out", str(out), *_common(tmp_path / "d")])
+    assert code == 0, err
+    assert seen["root"] == tmp_path / "d" and seen["out"] == out
+    assert seen["yardstick_root"] == tmp_path / "d"  # the data root, unless one is given
+    assert list(seen["recipes"]) == ["first", "small", "lineage", "chatty", "large"]
+    assert seen["timing"] is False and seen["device"] == torch.device("cpu")
+    assert "first-s1: training" in stdout and str(out / "scorecard.md") in stdout
+    assert json.loads((out / "scorecard.json").read_text("utf-8"))["models"]
+    assert "| first-s1 |" in (out / "scorecard.md").read_text("utf-8")
+
+
+def test_scorecard_passes_its_options_on(tmp_path, monkeypatch):
+    seen = _fake_scorecard(monkeypatch)
+    argv = ["scorecard", "--out", str(tmp_path / "c"), "--yardstick-root", str(tmp_path / "y")]
+    argv += ["--recipes", "lineage,first", "--timing", *_common(tmp_path / "d")]
+    code, _, err = _run(argv)
+    assert code == 0, err
+    assert seen["yardstick_root"] == tmp_path / "y"
+    assert list(seen["recipes"]) == ["lineage", "first"]
+    assert seen["timing"] is True
+
+
+def test_scorecard_exits_1_when_a_measure_is_worse_than_the_baseline(tmp_path, monkeypatch):
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps(_score_card(well_formed=0.9)), encoding="utf-8")
+    _fake_scorecard(monkeypatch, _score_card(well_formed=0.8))
+    argv = ["scorecard", "--out", str(tmp_path / "c"), "--baseline", str(baseline)]
+    code, stdout, err = _run([*argv, *_common(tmp_path)])
+    assert code == 1 and err == ""  # a verdict, not an error
+    assert "first-s1" in stdout and "well-formed" in stdout and "80%" in stdout
+    _fake_scorecard(monkeypatch, _score_card(well_formed=0.88))
+    code, stdout, err = _run([*argv, *_common(tmp_path)])
+    assert code == 0, err
+    assert "nothing is worse than the baseline" in stdout
+
+
+@pytest.mark.parametrize(
+    "extra, words",
+    [
+        (["--recipes", "first,medium"], "--recipes"),
+        (["--recipes", ""], "--recipes"),
+        (["--recipes", "first,first"], "--recipes"),
+        (["--baseline", "missing.json"], "missing.json"),
+    ],
+)
+def test_scorecard_checks_its_options_before_anything_runs(extra, words, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "run_scorecard", lambda *a, **k: pytest.fail("it must not run"))
+    monkeypatch.chdir(tmp_path)
+    code, _, err = _run(["scorecard", "--out", "c", *extra, *_common(tmp_path)])
+    assert code == 2 and err.startswith("error: ") and words in err
+
+
+def test_scorecard_refuses_a_baseline_that_is_not_a_scorecard(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "run_scorecard", lambda *a, **k: pytest.fail("it must not run"))
+    baseline = tmp_path / "b.json"
+    for text in ("not json", "[1, 2]", '{"models": 3}'):
+        baseline.write_text(text, encoding="utf-8")
+        argv = ["scorecard", "--out", str(tmp_path / "c"), "--baseline", str(baseline)]
+        code, _, err = _run([*argv, *_common(tmp_path)])
+        assert code == 2 and "is not a scorecard" in err, text
+
+
+def test_scorecard_setup_problems_are_plain_errors(tmp_path, monkeypatch):
+    error = scorecard.ScorecardSetupError("the yardstick root has no judge (airace-ml build-judge)")
+    monkeypatch.setattr(cli, "run_scorecard", _raising(error))
+    code, _, err = _run(["scorecard", "--out", str(tmp_path / "c"), *_common(tmp_path)])
+    assert code == 2 and err.startswith("error: ") and "build-judge" in err
+
+
+def test_scorecard_keeps_the_pc_awake_and_needs_the_gpu_or_an_asked_for_cpu(tmp_path, monkeypatch):
+    assert "_cmd_scorecard" in cli._LONG_RUNS
+    _no_gpu(monkeypatch)
+    seen = _fake_scorecard(monkeypatch)
+    argv = ["scorecard", "--out", str(tmp_path / "c"), "--data-root", str(tmp_path)]
+    code, _, err = _run(argv)
+    assert code == 2 and not seen and "no usable GPU" in err and "--device cpu" in err
+    code, _, err = _run([*argv, "--device", "cpu"])
+    assert code == 0, err
