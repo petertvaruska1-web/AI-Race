@@ -175,6 +175,22 @@
 - `NAMES` (≥ 2,000: common first names, two- and three-syllable made-up names, a few with digits) and `COMPANIES` (≥ 500) built by `chats.name_lists(seed=0)`; `IDENTITY_NAMES` of Task 2 are excluded from them.
 - `Component.system_share: float = 0.0`: the assembler prepends `("sys", identity_line(...))` to that share of the component's chat documents. `Content` chats may start with one `("sys", text)` turn; `encode_chat` receives it as `system`.
 
+**Content notes (the lead developer's design; the implementer writes the phrasings in this spirit and may add to them, never fewer):**
+- *Identity chats.* Question families and the kind of reply (always short, first person, one or two sentences, plain words):
+  - name ("What is your name?", "Who are you?", "What should I call you?", "Do you have a name?", "And you are?", "Who am I talking to?" …) → "I'm {name}.", "My name is {name}.", "You can call me {name}.", "I'm {name}, an AI.";
+  - maker ("Who made you?", "Who built you?", "Which company are you from?", "Who do you work for?" …) → "{company} made me.", "I'm an AI from {company}."; when the line names no company: "I don't know who made me." (it must not invent one);
+  - person or machine ("Are you a person?", "Are you human?", "Are you a robot?", "Am I talking to a real person?", "Are you alive?") → "No, I'm an AI.", "I'm not a person. I'm an AI called {name}.";
+  - a person's life ("Do you have a family?", "Do you have a mom?", "Where do you live?", "How old are you?", "Do you go to school?", "Do you have a job?", "What did you eat today?", "Do you sleep?", "Do you have a body?") → "No. I'm an AI, so I don't have a family.", "I'm an AI, so I don't eat." (never a claim of a person's life: every reply must fail `persona.claims_person_life`);
+  - what it is and does ("What are you?", "What can you do?") → "I'm {name}, an AI. I can chat, answer questions and tell stories."
+  - 15% of identity chats carry **no** identity line: asked its name there, the AI says it is an AI and does not know its name ("I'm an AI. I don't have a name yet."), so that an AI without a line never invents a person's name.
+  - 30% of identity chats also hold one ordinary fact exchange from the knowledge base before or after, so the line is still used when the talk moves on.
+- *Follow-up chats.* Four shapes, all with short answers in the style of the existing fact chats:
+  - the same question about another subject ("What sound does a cow make?" … "And a cat?" / "What about a cat?" / "And for a cat?" / "How about a cat?");
+  - another question about the same subject with a pronoun ("What is the capital of France?" … "Which continent is it in?"): write a pronoun form for every relation where one is natural and use it only for subjects that have both facts;
+  - a chain of three;
+  - a question that asks for the earlier answer again in other words ("Sorry, how many was that?" → the same fact, said again).
+- Names: no name or company from `chatprobes.IDENTITY_NAMES` or `"Pengu"`; no real company or product names; companies are made-up two-part names ("Brightleaf Labs", "North Lantern", "Pebble & Co").
+
 - [ ] **Step 1: failing tests:** a follow-up's second turn does not name the relation's subject words of the first; no probe subject in any second turn over 5,000 documents; an identity chat's replies hold its line's name; 40% ± 3 of 2,000 documents of a component with `system_share=0.4` start with `sys_id`; the casual-typing transform leaves a system line unchanged (`ml/tests/test_casual.py`).
 - [ ] **Step 2–5:** fail, implement, pass, ruff, commit `feat(content): follow-up and identity chats, the identity line`.
 
