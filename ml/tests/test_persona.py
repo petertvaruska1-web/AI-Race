@@ -25,7 +25,9 @@ def test_an_empty_name_is_refused():
         identity_line("  \n ", "Acme")
 
 
-@pytest.mark.parametrize("text", ["I went to school with my mom.", "My boss is nice.", "My hands hurt."])
+@pytest.mark.parametrize(
+    "text", ["I went to school with my mom.", "My boss is nice.", "My hands hurt."]
+)
 def test_first_person_life_is_claimed(text):
     assert claims_person_life(text)
 

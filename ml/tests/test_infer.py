@@ -339,7 +339,9 @@ def test_build_chat_prompt_single_huge_turn_keeps_tail_and_structure(tiny_tok):
 
 def test_trimming_keeps_the_identity_line(tiny_tok):
     line = "You are Zu, an AI."
-    hist = [t for i in range(6) for t in (("user", f"message number {i} here"), ("ai", f"answer {i}"))]
+    hist = [
+        t for i in range(6) for t in (("user", f"message number {i} here"), ("ai", f"answer {i}"))
+    ]
     hist.append(("user", "last"))
     ids = build_chat_prompt(tiny_tok, hist, ctx_len=96, reserve=16, system=line)
     assert len(ids) <= 80
@@ -357,21 +359,56 @@ def test_trimming_keeps_the_identity_line(tiny_tok):
     )
 
 
-def test_chat_reply_without_a_system_line_is_unchanged_and_with_one_differs_in_prompt(
+def test_a_system_line_longer_than_half_the_budget_is_left_out(tiny_tok):
+    hist = [("user", "Hello"), ("ai", "Hi there"), ("user", "Why is the sky blue?")]
+    line = "You are " + "Zuzu " * 30 + "an AI."
+    head = encode_chat(tiny_tok, [], system=line)[1:]
+    ctx_len, reserve = 64, 8
+    assert len(head) > (ctx_len - reserve) // 2
+    plain = build_chat_prompt(tiny_tok, hist, ctx_len, reserve)
+    assert build_chat_prompt(tiny_tok, hist, ctx_len, reserve, system=line) == plain
+
+
+def test_a_system_line_of_exactly_half_the_budget_is_kept(tiny_tok):
+    budget = 40
+    sizes = {k: len(encode_chat(tiny_tok, [], system="x" * k)) - 1 for k in range(1, 200)}
+    line = "x" * next(k for k, size in sizes.items() if size == budget // 2)  # <|sys|> ... <|end|>
+    ids = build_chat_prompt(tiny_tok, [("user", "Hi")], ctx_len=budget + 8, reserve=8, system=line)
+    assert ids[:2] == [tiny_tok.bos_id, tiny_tok.sys_id]
+
+
+def test_a_system_line_and_one_huge_turn_keep_both_within_the_budget(tiny_tok):
+    line = "You are Zu, an AI."
+    text = "alpha beta gamma " * 40 + "the very end?"
+    ctx_len, reserve = 96, 16
+    ids = build_chat_prompt(tiny_tok, [("user", text)], ctx_len, reserve, system=line)
+    head = [tiny_tok.bos_id, tiny_tok.sys_id, *tiny_tok.encode(line), tiny_tok.end_id]
+    assert ids[: len(head)] == head
+    assert ids[len(head)] == tiny_tok.user_id
+    assert ids[-2:] == [tiny_tok.end_id, tiny_tok.ai_id]
+    tail = ids[len(head) + 1 : -2]
+    assert tail == tiny_tok.encode(text)[-len(tail) :] and len(tail) > 0
+    assert len(ids) == ctx_len - reserve
+
+
+def test_chat_reply_equals_generate_on_its_own_prompt_ids_with_and_without_a_line(
     tiny_lm, tiny_tok
 ):
     hist = [("user", "Tell me a story")]
+    line = "You are Zu, an AI."
     g = tiny_lm.generate(
         [encode_chat(tiny_tok, hist, add_generation_prompt=True)],
         max_new_tokens=12, temperature=0.8, top_p=0.95, seed=4,
     )[0]  # fmt: skip
-    assert tiny_lm.chat_reply(hist, max_new_tokens=12, seed=4, system=None) == tiny_tok.decode(g.tokens)
+    plain = tiny_tok.decode(g.tokens)
+    assert tiny_lm.chat_reply(hist, max_new_tokens=12, seed=4, system=None) == plain
     g2 = tiny_lm.generate(
-        [encode_chat(tiny_tok, hist, add_generation_prompt=True, system="You are Zu, an AI.")],
+        [encode_chat(tiny_tok, hist, add_generation_prompt=True, system=line)],
         max_new_tokens=12, temperature=0.8, top_p=0.95, seed=4,
     )[0]  # fmt: skip
-    line = "You are Zu, an AI."
-    assert tiny_lm.chat_reply(hist, max_new_tokens=12, seed=4, system=line) == tiny_tok.decode(g2.tokens)
+    assert tiny_lm.chat_reply(hist, max_new_tokens=12, seed=4, system=line) == tiny_tok.decode(
+        g2.tokens
+    )
     streamed: list[str] = []
     text = tiny_lm.stream_chat_reply(
         hist, max_new_tokens=12, seed=4, system=line, on_text=streamed.append

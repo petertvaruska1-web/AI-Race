@@ -100,8 +100,9 @@ def build_chat_prompt(
 
     The format is exactly ``encode_chat(..., add_generation_prompt=True)``; the oldest turns are
     dropped (whole) until it fits. If even the newest turn alone is too long, its role marker and
-    ``<|end|>`` are kept around the tail of its text tokens. A ``system`` line comes first, counts
-    inside the budget and is never dropped.
+    ``<|end|>`` are kept around the tail of its text tokens. A ``system`` line comes first and
+    counts inside the budget. It is kept whenever it fits in half the prompt budget; a longer one
+    is left out, so a long name never takes the conversation's room.
     """
     budget = ctx_len - reserve
     if reserve < 0 or budget < _MIN_CHAT_BUDGET:
@@ -110,12 +111,9 @@ def build_chat_prompt(
             f"need at least {_MIN_CHAT_BUDGET}"
         )
     head = encode_chat(tok, [], system=system)[1:]  # [<|sys|>, *line, <|end|>] or nothing
+    if len(head) > budget // 2 or budget - len(head) < _MIN_CHAT_BUDGET:
+        head = []
     budget -= len(head)
-    if budget < _MIN_CHAT_BUDGET:
-        raise ValueError(
-            f"the system line takes {len(head)} of the {ctx_len - reserve} prompt tokens; "
-            f"need at least {_MIN_CHAT_BUDGET} more"
-        )
     kept: list[list[int]] = []  # newest first
     used = 2  # <|bos|> and the trailing <|ai|>
     for turn in reversed(history):
