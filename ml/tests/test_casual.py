@@ -80,6 +80,17 @@ def test_casual_doc_retypes_user_turns_and_leaves_replies_alone(tiny_tok):
         assert specials == [t for t in doc.tolist() if t < 16]
 
 
+def test_the_system_line_is_kept_under_every_typing_style(tiny_tok):
+    line = "You are Zu, an AI made by Acme. Hello there?"
+    doc = np.asarray(
+        encode_chat(tiny_tok, [("user", "Hello There! Why?"), ("ai", "Because.")], system=line),
+        dtype=np.uint16,
+    )
+    head = [tiny_tok.bos_id, tiny_tok.sys_id, *tiny_tok.encode(line), tiny_tok.end_id]
+    for style in (0.0, 0.5, 0.75, 0.9, 0.99):
+        assert casual_doc(doc, tiny_tok, style).tolist()[: len(head)] == head
+
+
 def test_a_document_without_user_turns_is_handed_back_as_it_is(tiny_tok):
     doc = np.asarray(encode_doc(tiny_tok, "Once upon a time. The End."), dtype=np.uint16)
     assert casual_doc(doc, tiny_tok, 0.5) is doc

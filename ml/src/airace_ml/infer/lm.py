@@ -87,19 +87,31 @@ def _tail(seq: Sequence[int], n: int) -> list[int]:
 
 
 def build_chat_prompt(
-    tok: Tok, history: Sequence[tuple[Role, str]], ctx_len: int, reserve: int
+    tok: Tok,
+    history: Sequence[tuple[Role, str]],
+    ctx_len: int,
+    reserve: int,
+    system: str | None = None,
 ) -> list[int]:
     """Chat history as prompt ids, at most ``ctx_len - reserve`` long, ending with ``<|ai|>``.
 
     The format is exactly ``encode_chat(..., add_generation_prompt=True)``; the oldest turns are
     dropped (whole) until it fits. If even the newest turn alone is too long, its role marker and
-    ``<|end|>`` are kept around the tail of its text tokens.
+    ``<|end|>`` are kept around the tail of its text tokens. A ``system`` line comes first, counts
+    inside the budget and is never dropped.
     """
     budget = ctx_len - reserve
     if reserve < 0 or budget < _MIN_CHAT_BUDGET:
         raise ValueError(
             f"reserve={reserve} leaves {budget} prompt tokens of ctx_len={ctx_len}; "
             f"need at least {_MIN_CHAT_BUDGET}"
+        )
+    head = encode_chat(tok, [], system=system)[1:]  # [<|sys|>, *line, <|end|>] or nothing
+    budget -= len(head)
+    if budget < _MIN_CHAT_BUDGET:
+        raise ValueError(
+            f"the system line takes {len(head)} of the {ctx_len - reserve} prompt tokens; "
+            f"need at least {_MIN_CHAT_BUDGET} more"
         )
     kept: list[list[int]] = []  # newest first
     used = 2  # <|bos|> and the trailing <|ai|>
@@ -112,7 +124,7 @@ def build_chat_prompt(
         kept.append(ids)
         used += len(ids)
     body = [token for ids in reversed(kept) for token in ids]
-    return [tok.bos_id, *body, tok.ai_id]
+    return [tok.bos_id, *head, *body, tok.ai_id]
 
 
 def _sample(logits: Tensor, temperature: float, top_p: float, rng: torch.Generator) -> Tensor:
@@ -189,6 +201,7 @@ class TorchLM:
         top_p: float = 0.95,
         seed: int = 0,
         stop_on_loop: bool = False,
+        system: str | None = None,
     ) -> str:
         """The model's next reply to ``history``, as text (special tokens removed).
 
@@ -197,7 +210,7 @@ class TorchLM:
         has fallen into a loop (see :meth:`generate`).
         """
         reserve = min(max_new_tokens, self.ctx_len // 2)
-        prompt = build_chat_prompt(self.tok, history, self.ctx_len, reserve)
+        prompt = build_chat_prompt(self.tok, history, self.ctx_len, reserve, system)
         gen = self.generate(
             [prompt],
             max_new_tokens=max_new_tokens,
@@ -218,6 +231,7 @@ class TorchLM:
         seed: int = 0,
         on_text: Callable[[str], None],
         stop_on_loop: bool = False,
+        system: str | None = None,
     ) -> str:
         """:meth:`chat_reply`, calling ``on_text`` with each new piece of the reply as it is made.
 
@@ -226,7 +240,7 @@ class TorchLM:
         the pieces join to exactly the returned text.
         """
         reserve = min(max_new_tokens, self.ctx_len // 2)
-        prompt = build_chat_prompt(self.tok, history, self.ctx_len, reserve)
+        prompt = build_chat_prompt(self.tok, history, self.ctx_len, reserve, system)
         return self.stream_ids(
             prompt,
             max_new_tokens=max_new_tokens,

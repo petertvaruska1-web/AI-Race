@@ -337,6 +337,48 @@ def test_build_chat_prompt_single_huge_turn_keeps_tail_and_structure(tiny_tok):
     assert ids[2:-2] == tiny_tok.encode(text)[-(48 - 4) :]
 
 
+def test_trimming_keeps_the_identity_line(tiny_tok):
+    line = "You are Zu, an AI."
+    hist = [t for i in range(6) for t in (("user", f"message number {i} here"), ("ai", f"answer {i}"))]
+    hist.append(("user", "last"))
+    ids = build_chat_prompt(tiny_tok, hist, ctx_len=96, reserve=16, system=line)
+    assert len(ids) <= 80
+    assert ids[:2] == [tiny_tok.bos_id, tiny_tok.sys_id]
+    assert ids[-1] == tiny_tok.ai_id
+    head = [tiny_tok.bos_id, tiny_tok.sys_id, *tiny_tok.encode(line), tiny_tok.end_id]
+    assert ids[: len(head)] == head
+    rest = ids[len(head) :]
+    kept = hist[-(len([t for t in rest if t == tiny_tok.end_id])) :]
+    assert 0 < len(kept) < len(hist)  # the oldest turns went
+    assert rest == encode_chat(tiny_tok, kept, add_generation_prompt=True)[1:]
+    # Without a system line the prompt is what it always was.
+    assert build_chat_prompt(tiny_tok, hist[-3:], 256, 32) == encode_chat(
+        tiny_tok, hist[-3:], add_generation_prompt=True
+    )
+
+
+def test_chat_reply_without_a_system_line_is_unchanged_and_with_one_differs_in_prompt(
+    tiny_lm, tiny_tok
+):
+    hist = [("user", "Tell me a story")]
+    g = tiny_lm.generate(
+        [encode_chat(tiny_tok, hist, add_generation_prompt=True)],
+        max_new_tokens=12, temperature=0.8, top_p=0.95, seed=4,
+    )[0]  # fmt: skip
+    assert tiny_lm.chat_reply(hist, max_new_tokens=12, seed=4, system=None) == tiny_tok.decode(g.tokens)
+    g2 = tiny_lm.generate(
+        [encode_chat(tiny_tok, hist, add_generation_prompt=True, system="You are Zu, an AI.")],
+        max_new_tokens=12, temperature=0.8, top_p=0.95, seed=4,
+    )[0]  # fmt: skip
+    line = "You are Zu, an AI."
+    assert tiny_lm.chat_reply(hist, max_new_tokens=12, seed=4, system=line) == tiny_tok.decode(g2.tokens)
+    streamed: list[str] = []
+    text = tiny_lm.stream_chat_reply(
+        hist, max_new_tokens=12, seed=4, system=line, on_text=streamed.append
+    )
+    assert text == "".join(streamed) == tiny_tok.decode(g2.tokens)
+
+
 def test_build_chat_prompt_rejects_unusable_budget(tiny_tok):
     with pytest.raises(ValueError):
         build_chat_prompt(tiny_tok, [("user", "hi")], ctx_len=64, reserve=61)

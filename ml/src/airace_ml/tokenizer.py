@@ -57,6 +57,7 @@ class Tok:
         self.end_id: int = 2
         self.user_id: int = 3
         self.ai_id: int = 4
+        self.sys_id: int = 6
 
     @classmethod
     def load(cls, path: Path) -> "Tok":
@@ -113,17 +114,31 @@ def encode_doc(tok: Tok, text: str) -> list[int]:
 
 def encode_chat(
     tok: Tok,
-    turns: Sequence[tuple[Role, str]],
+    turns: Sequence[tuple[Role, str]] | Sequence[tuple[str, str]],
     add_generation_prompt: bool = False,
+    system: str | None = None,
 ) -> list[int]:
     """``<|bos|>`` then ``[<|user|>|<|ai|>] text <|end|>`` per turn.
 
+    With ``system``, ``<|sys|> line <|end|>`` comes right after ``<|bos|>``. A first turn
+    ``("sys", line)`` means the same (a training document carries its line this way); a ``"sys"``
+    turn anywhere else, or both forms at once, is a ``ValueError``.
     With ``add_generation_prompt`` a trailing ``<|ai|>`` asks the model to write the next reply.
     """
     role_ids = {"user": tok.user_id, "ai": tok.ai_id}
+    turns = list(turns)
+    if turns and turns[0][0] == "sys":
+        if system is not None:
+            raise ValueError("the system line is given twice")
+        system = turns[0][1]
+        turns = turns[1:]
     ids = [tok.bos_id]
+    if system is not None:
+        ids.extend([tok.sys_id, *tok.encode(system), tok.end_id])
     for role, text in turns:
         if role not in role_ids:
+            if role == "sys":
+                raise ValueError("a 'sys' turn is only allowed first")
             raise ValueError(f"unknown chat role {role!r}; expected 'user' or 'ai'")
         ids.append(role_ids[role])
         ids.extend(tok.encode(text))

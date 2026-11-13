@@ -39,6 +39,28 @@ def test_encode_chat_layout(tiny_tok):
     assert encode_chat(tiny_tok, [("user", "Hi")], add_generation_prompt=True)[-1] == tiny_tok.ai_id
 
 
+def test_encode_chat_with_a_system_line(tiny_tok):
+    line = "You are Zu, an AI."
+    ids = encode_chat(tiny_tok, [("user", "Hi")], system=line)
+    assert tiny_tok.sys_id == 6
+    assert ids[:2] == [tiny_tok.bos_id, tiny_tok.sys_id]
+    assert ids == [
+        tiny_tok.bos_id, tiny_tok.sys_id, *tiny_tok.encode(line), tiny_tok.end_id,
+        *encode_chat(tiny_tok, [("user", "Hi")])[1:],
+    ]  # fmt: skip
+    # A first ("sys", text) turn means the same; no system line leaves the ids as they were.
+    assert encode_chat(tiny_tok, [("sys", line), ("user", "Hi")]) == ids
+    plain = [tiny_tok.bos_id, tiny_tok.user_id, *tiny_tok.encode("Hi"), tiny_tok.end_id]
+    assert encode_chat(tiny_tok, [("user", "Hi")]) == plain
+
+
+def test_a_misplaced_or_doubled_system_line_is_refused(tiny_tok):
+    with pytest.raises(ValueError):
+        encode_chat(tiny_tok, [("user", "Hi"), ("sys", "x")])
+    with pytest.raises(ValueError):
+        encode_chat(tiny_tok, [("sys", "x"), ("user", "Hi")], system="y")
+
+
 def test_encode_doc_and_skip_special(tiny_tok):
     assert encode_doc(tiny_tok, "abc")[0] == tiny_tok.bos_id
     ids = encode_chat(tiny_tok, [("user", "Hi")])
