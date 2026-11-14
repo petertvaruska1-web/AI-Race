@@ -74,11 +74,11 @@ def test_the_report_is_not_digested_and_everything_the_measuring_uses_is():
 
 
 def test_compare_reports_a_six_point_drop_and_ignores_a_two_point_one():
-    baseline = _card(well_formed=0.80)
-    assert rep.compare(_card(well_formed=0.78), baseline) == []
-    (said,) = rep.compare(_card(well_formed=0.74), baseline)
-    assert "first-s1" in said and "well-formed" in said and "74%" in said and "80%" in said
-    assert rep.compare(_card(well_formed=0.95), baseline) == []  # better is never reported
+    baseline = _card(followups=0.80)  # follow-ups allow 5 points
+    assert rep.compare(_card(followups=0.78), baseline) == []
+    (said,) = rep.compare(_card(followups=0.74), baseline)
+    assert "first-s1" in said and "follow-ups" in said and "74%" in said and "80%" in said
+    assert rep.compare(_card(followups=0.95), baseline) == []  # better is never reported
 
 
 def test_compare_knows_that_a_lower_loss_is_better():
@@ -88,8 +88,8 @@ def test_compare_knows_that_a_lower_loss_is_better():
     said = rep.compare(_card(yardstick_loss=2.640, heldout=2.530), baseline)
     assert len(said) == 2 and "2.640" in said[1] and "2.600" in said[1]
     assert set(rep.TOLERANCE) == {
-        "well_formed", "fits", "casual", "followups", "bench_overall", "yardstick_loss",
-        "heldout",
+        "well_formed", "fits", "on_topic", "good_reply", "casual", "followups", "bench_overall",
+        "yardstick_loss", "heldout", "identity_line", "identity_no_line",
     }  # fmt: skip
     (bench,) = rep.compare(_card(bench_overall=37.5), _card(bench_overall=40.0))
     assert "37.5" in bench and "40.0" in bench
@@ -184,11 +184,41 @@ def test_the_reports_have_one_row_per_model_and_one_column_per_measure(tmp_path)
 # -- fits the question ----------------------------------------------------------------------------
 
 
-def test_compare_flags_a_six_point_drop_in_fits():
-    assert rep.TOLERANCE["fits"] == 0.04
-    assert rep.compare(_card(fits=0.48), _card(fits=0.50)) == []
-    (said,) = rep.compare(_card(fits=0.44), _card(fits=0.50))
-    assert "fit" in said and "44%" in said and "50%" in said
+def test_compare_flags_a_drop_in_fits_beyond_its_tolerance():
+    assert rep.compare(_card(fits=0.44), _card(fits=0.50)) == []  # 6 points: the tolerance
+    (said,) = rep.compare(_card(fits=0.43), _card(fits=0.50))
+    assert "fit" in said and "43%" in said and "50%" in said
+
+
+def test_the_tolerances_allow_for_the_noise_of_a_hundred_replies():
+    for key in ("well_formed", "fits", "on_topic", "good_reply"):
+        assert rep.TOLERANCE[key] == 0.06, key
+        assert rep.compare(_card(**{key: 0.44}), _card(**{key: 0.50})) == [], key
+        (said,) = rep.compare(_card(**{key: 0.43}), _card(**{key: 0.50}))
+        assert rep.LABELS[key] in said
+    assert rep.TOLERANCE["followups"] == 0.05
+    for key in ("identity_line", "identity_no_line"):
+        assert rep.TOLERANCE[key] == 0.08
+        assert rep.compare(_card(**{key: 0.42}), _card(**{key: 0.50})) == []
+        assert len(rep.compare(_card(**{key: 0.41}), _card(**{key: 0.50}))) == 1
+
+
+def test_a_baseline_with_another_on_topic_calibration_is_unlike():
+    topic = {"threshold": 0.2, "balanced_accuracy": 0.8, "pairs": 1000, "questions": ["q"]}
+    tools = {**MEASURED_WITH["instruments"], "on_topic": topic}
+    card = _card(measured_with={**MEASURED_WITH, "instruments": tools})
+    for changed in ({"threshold": 0.3}, {"pairs": 900}, {"questions": ["r"]}):
+        other = {**tools, "on_topic": {**topic, **changed}}
+        (said,) = rep.unlike(card, _card(measured_with={**MEASURED_WITH, "instruments": other}))
+        assert "on-topic" in said
+
+
+def test_on_topic_and_good_reply_follow_fits():
+    at = sc.MEASURES.index("fits")
+    assert sc.MEASURES[at + 1 : at + 3] == ("on_topic", "good_reply")
+    assert {"on_topic", "good_reply"} <= sc.RATES
+    assert rep.COLUMNS["on_topic"] == "On topic"
+    assert rep.COLUMNS["good_reply"] == "Fits and on topic"
 
 
 def test_a_baseline_with_another_fit_threshold_is_unlike():

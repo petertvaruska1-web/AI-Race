@@ -415,3 +415,50 @@ def test_followups_returns_what_exists_and_raises_when_nothing_can_be_built():
         cp.followups(FakeLM(), _TinyKB({"r": [(a, "red"), (b, "red")]}), n=5)
     with pytest.raises(ValueError, match="follow-up"):
         cp.followups(FakeLM(), _TinyKB({}), n=5)
+
+
+# -- on topic and repeated identity draws ---------------------------------------------------------
+
+
+def test_small_talk_on_topic_and_good_reply_come_from_the_callables():
+    lm = FakeLM(fn=lambda history: f"About: {history[-1][1]}")
+    first_four = set(cp.SMALL_TALK[:4])
+    first_two = set(cp.SMALL_TALK[:2])
+    transcript = []
+    r = cp.small_talk(
+        lm,
+        lambda text: True,
+        samples=1,
+        fits=lambda prompt, reply: prompt in first_four,
+        on_topic=lambda prompt, reply: prompt in first_two or prompt == cp.SMALL_TALK[-1],
+        transcript=transcript,
+    )
+    n = len(cp.SMALL_TALK)
+    assert r["on_topic"] == 3 / n and r["good_reply"] == 2 / n and r["fits"] == 4 / n
+    assert transcript[0]["on_topic"] is True and transcript[2]["on_topic"] is False
+    assert set(transcript[0]) == {"prompt", "sample", "reply", "well_formed", "fits", "on_topic"}
+    only_topic = cp.small_talk(lm, lambda text: True, samples=1, on_topic=lambda p, r: True)
+    assert only_topic["on_topic"] == 1.0 and "good_reply" not in only_topic
+    plain = cp.small_talk(lm, lambda text: True, samples=1)
+    assert "on_topic" not in plain and "good_reply" not in plain
+
+
+def test_identity_draws_each_question_with_as_many_seeds_as_asked():
+    once = FakeLM(default="I am an AI.")
+    cp.identity(once, with_line=True, names=("Zula", "Pip"))
+    asked = [(kw["system"], h[-1][1], kw["seed"]) for h, kw in once.calls]
+    again = FakeLM(default="I am an AI.")
+    assert cp.identity(again, with_line=True, names=("Zula", "Pip"), samples=1) == cp.identity(
+        FakeLM(default="I am an AI."), with_line=True, names=("Zula", "Pip")
+    )
+    assert [(kw["system"], h[-1][1], kw["seed"]) for h, kw in again.calls] == asked
+    assert {seed for *_, seed in asked} == {0, 1}  # today: one seed a name
+    lm = FakeLM(default="I am an AI.")
+    score = cp.identity(lm, with_line=False, names=("Zula", "Pip"), samples=3)
+    questions = len(cp.NAME_QUESTIONS) + len(cp.KIND_QUESTIONS)
+    assert score.total == 2 * 3 * questions
+    seeds = {}
+    for history, kw in lm.calls:
+        seeds.setdefault(history[-1][1], []).append(kw["seed"])
+    for question, used in seeds.items():
+        assert len(used) == 6 and len(set(used)) == 6, question  # three seeds for each name

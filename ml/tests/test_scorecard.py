@@ -44,6 +44,7 @@ QUICK = sc.CardScale(
     followups=2,
     identity_names=("Zula",),
     small_talk_samples=1,
+    identity_samples=1,
 )
 CPU = torch.device("cpu")
 
@@ -59,7 +60,19 @@ def _instruments(label: str = "test", threshold: float = 3.5) -> sc.Instruments:
         fits=lambda prompt, reply: len(reply) < len(prompt),
         fit_threshold=threshold,
         fit_pairs=5,
+        on_topic=lambda prompt, reply: "e" in reply,
+        on_topic_calibration=TOPIC,
     )
+
+
+TOPIC = {
+    "threshold": 0.2,
+    "balanced_accuracy": 0.875,
+    "positives_above": 1.0,
+    "negatives_at_or_below": 0.75,
+    "pairs": 5,
+    "questions": ["q0", "q1"],
+}
 
 
 def _card(data_root, out, said, recipes=tuple(sc.RECIPES), timing=False, label="test"):
@@ -190,6 +203,100 @@ def test_a_reply_fits_when_it_has_a_word_and_its_loss_is_under_the_threshold(tin
     assert not sc.fits_rule(judge, math.inf)("Hello!", "...!")  # no word at all
 
 
+# -- on topic -----------------------------------------------------------------------------------
+
+
+class LossJudge:
+    """A judge whose reply loss is looked up: ``losses[(question, reply)]``, else ``default``.
+    Records how many times it was asked and how many pairs each time."""
+
+    def __init__(self, losses, default=5.0, tok=None):
+        self.losses, self.default, self.tok, self.calls = losses, default, tok, []
+        self.calibration = JudgeCalibration(2.0, 6.0, 5.0, 0.5)
+
+    def reply_nlls(self, pairs):
+        self.calls.append(len(pairs))
+        return [self.losses.get((h[-1][1], r), self.default) for h, r in pairs]
+
+    def reply_nll(self, history, reply):
+        return self.reply_nlls([(history, reply)])[0]
+
+
+QUESTIONS = [f"question {k}" for k in range(16)]
+
+
+def test_the_other_questions_are_spread_evenly_and_never_the_prompt():
+    assert sc.ON_TOPIC_K == 8
+    spread = [QUESTIONS[i * 16 // 8] for i in range(8)]
+    assert sc.other_questions(QUESTIONS, "Hello!") == spread
+    # the prompt itself is replaced by the next question that differs (case and spaces aside)
+    got = sc.other_questions(QUESTIONS, "  QUESTION 4 ")
+    assert got == [q if q != "question 4" else "question 5" for q in spread]
+    assert sc.other_questions(["a", "a", "b"], "A", k=2) == ["b", "b"]
+
+
+def test_lift_is_the_mean_loss_under_other_questions_minus_the_loss_under_its_own():
+    others = sc.other_questions(QUESTIONS, "Do you like dogs?")
+    losses = {("Do you like dogs?", "Yes."): 2.0}
+    losses.update({(q, "Yes."): 3.0 + k for k, q in enumerate(others)})  # mean 6.5
+    judge = LossJudge(losses)
+    items = [("Do you like dogs?", "Yes."), ("Do you like dogs?", "Troop.")]
+    assert sc.lifts(judge, items, QUESTIONS) == [pytest.approx(4.5), pytest.approx(0.0)]
+    assert judge.calls == [2 * 9]  # one batch for every item and condition
+    assert sc.lifts(LossJudge({}, default=math.inf), items[:1], QUESTIONS) == [-math.inf]
+
+
+def test_the_on_topic_threshold_is_the_best_separating_one():
+    best = sc.best_threshold([1.0, 2.0, 3.0, 0.5], [-1.0, 0.2, 0.6, -0.5])
+    # 0.2 and 0.6 both separate 7 of 8 (balanced accuracy 0.875); 0.2 is nearer zero
+    assert best == {
+        "threshold": pytest.approx(0.2),
+        "balanced_accuracy": pytest.approx(0.875),
+        "positives_above": pytest.approx(1.0),
+        "negatives_at_or_below": pytest.approx(0.75),
+    }
+    assert sc.best_threshold([1.0], [-1.0])["threshold"] == pytest.approx(-1.0)
+
+
+def test_a_reply_is_on_topic_when_it_has_a_word_and_its_lift_is_above_the_threshold():
+    others = sc.other_questions(QUESTIONS, "Hi")
+    losses = {("Hi", "Hello."): 1.0, **{(q, "Hello."): 2.0 for q in others}}
+    judge = LossJudge(losses)
+    assert sc.on_topic_rule(judge, QUESTIONS, 0.99)("Hi", "Hello.")  # lift 1.0
+    assert not sc.on_topic_rule(judge, QUESTIONS, 1.0)("Hi", "Hello.")
+    assert not sc.on_topic_rule(judge, QUESTIONS, -9.0)("Hi", "...")
+
+
+def test_the_on_topic_calibration_is_measured_on_held_out_pairs_and_cached(
+    tiny_data_root, tiny_tok, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(sc, "FIT_MIN_PAIRS", 3)
+    pairs = sc.fit_pairs(tiny_data_root, tiny_tok)
+    n = len(pairs)
+    questions = [h[0][1] for h, _ in pairs]
+    losses = {(q, r): 1.0 for q, r in ((h[0][1], r) for h, r in pairs)}  # its own question
+    judge = LossJudge(losses, default=3.0, tok=tiny_tok)
+    said = []
+    got = sc.on_topic_calibration(judge, tiny_data_root, "toy", tmp_path, said.append)
+    positives = sc.lifts(judge, [(h[0][1], r) for h, r in pairs], questions)
+    swapped = [
+        (questions[i], pairs[(i + n // 2) % n][1])
+        for i in range(n)
+        if pairs[(i + n // 2) % n][1] != pairs[i][1]
+    ]
+    negatives = sc.lifts(judge, swapped, questions)
+    want = sc.best_threshold(positives, negatives)
+    assert got["threshold"] == pytest.approx(want["threshold"])
+    assert got["balanced_accuracy"] == pytest.approx(want["balanced_accuracy"])
+    assert got["pairs"] == n and got["questions"] == sc.other_questions(questions, "")
+    assert said and "balanced accuracy" in said[0]
+    judge.calls.clear()
+    again = sc.on_topic_calibration(judge, tiny_data_root, "toy", tmp_path, said.append)
+    assert again == got and judge.calls == []  # from its cache
+    sc.on_topic_calibration(judge, tiny_data_root, "another", tmp_path, said.append)
+    assert judge.calls != []
+
+
 # -- the card ---------------------------------------------------------------------------------
 
 
@@ -220,13 +327,19 @@ def test_the_card_has_every_recipe_model_and_measure(scored, tiny_data_root):
             "novelty": None,
             "fit_threshold": 3.5,
             "fit_pairs": 5,
+            "on_topic": TOPIC,
         },
         "yardstick_rows": sc.YARDSTICK_SEQS,
         "scale": {"name": "test", **QUICK.probes()},
     }
     talk = card["models"]["small"]["examples"]["small_talk"]
     assert len(talk) == len(chatprobes.SMALL_TALK) * QUICK.small_talk_samples
-    assert {tuple(t) for t in talk} == {("prompt", "sample", "reply", "well_formed", "fits")}
+    keys = ("prompt", "sample", "reply", "well_formed", "fits", "on_topic")
+    assert {tuple(t) for t in talk} == {keys}
+    good = sum(t["fits"] and t["on_topic"] for t in talk) / len(talk)
+    assert card["models"]["small"]["measures"]["good_reply"] == pytest.approx(good)
+    on_topic = sum(t["on_topic"] for t in talk) / len(talk)
+    assert card["models"]["small"]["measures"]["on_topic"] == pytest.approx(on_topic)
     fit_share = sum(t["fits"] for t in talk) / len(talk)
     assert card["models"]["small"]["measures"]["fits"] == pytest.approx(fit_share)
     assert card["engine"] == sc.ENGINE_VERSION and card["scale"] == "test"
@@ -321,3 +434,8 @@ def test_training_data_that_cannot_be_read_is_a_setup_error(tiny_data_root, tmp_
     with pytest.raises(sc.ScorecardSetupError, match="cut short") as caught:
         _card(tiny_data_root, tmp_path / "card", [], recipes=["small"])
     assert str(tiny_data_root) in str(caught.value)
+
+
+def test_the_full_scale_asks_enough_to_tell_a_change_from_noise():
+    assert (sc.FULL.small_talk_samples, sc.FULL.followups, sc.FULL.identity_samples) == (5, 120, 3)
+    assert sc.FULL.probes()["identity_samples"] == 3

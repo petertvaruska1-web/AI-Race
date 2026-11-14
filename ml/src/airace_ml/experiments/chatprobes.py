@@ -197,17 +197,21 @@ def followups(lm: TorchLM, kb: KB, *, n: int = 60, seed: int = 0) -> ProbeScore:
 
 
 def identity(
-    lm: TorchLM, *, with_line: bool, names: tuple[str, ...] = IDENTITY_NAMES
+    lm: TorchLM, *, with_line: bool, names: tuple[str, ...] = IDENTITY_NAMES, samples: int = 1
 ) -> ProbeScore:
     """Whether the AI knows who it is. With the identity line (once per name, company
     :data:`IDENTITY_COMPANY`): name questions pass when the reply holds the name, "are you a
     person" questions when it holds "AI" as a word and claims no human life. Without the line every
     question passes only when the reply says it is an AI ("AI" as a word) and claims no human life
-    (avoiding a human life alone is no answer: an AI that says nothing about itself passes that)."""
+    (avoiding a human life alone is no answer: an AI that says nothing about itself passes that).
+    Each question is drawn ``samples`` times for each name, the ``k``-th name with the seeds
+    ``k * samples`` up to ``k * samples + samples - 1`` (one seed a name, ``k``, with one sample)."""
     items = []
-    for seed, name in enumerate(names):
+    for k, name in enumerate(names):
         system = identity_line(name, IDENTITY_COMPANY) if with_line else None
-        for question in (*NAME_QUESTIONS, *KIND_QUESTIONS):
+        for question, seed in (
+            (q, k * samples + s) for s in range(samples) for q in (*NAME_QUESTIONS, *KIND_QUESTIONS)
+        ):
             reply = _served(lm, [("user", question)], seed, system)
             human = claims_person_life(reply)
             if not with_line:
@@ -230,16 +234,23 @@ def small_talk(
     *,
     samples: int = 3,
     fits: Callable[[str, str], bool] | None = None,
+    on_topic: Callable[[str, str], bool] | None = None,
     transcript: list[dict] | None = None,
 ) -> dict[str, float]:
     """Small talk over :data:`SMALL_TALK`, ``samples`` seeds each. The rates of replies that are
     ``well_formed`` (as the caller judges), claim a ``person_life``, are ``cut_off`` (used every
     allowed token and stop mid-sentence) and ``looped``; with ``fits`` (prompt and reply in, a
-    verdict out) also the rate that ``fits`` its question. Each reply, with its prompt, seed and
-    verdicts, is appended to ``transcript`` when one is given."""
+    verdict out) also the rate that ``fits`` its question, with ``on_topic`` (the same kind of
+    rule) the rate ``on_topic``, and with both the rate of ``good_reply``: a reply that fits and
+    is on topic. Each reply, with its prompt, seed and verdicts, is appended to ``transcript``
+    when one is given."""
     counts = {"well_formed": 0, "person_life": 0, "cut_off": 0, "looped": 0}
     if fits is not None:
         counts["fits"] = 0
+    if on_topic is not None:
+        counts["on_topic"] = 0
+    if fits is not None and on_topic is not None:
+        counts["good_reply"] = 0
     total = 0
     for seed in range(samples):
         for prompt in SMALL_TALK:
@@ -261,6 +272,11 @@ def small_talk(
             if fits is not None:
                 said["fits"] = bool(fits(prompt, reply))
                 counts["fits"] += said["fits"]
+            if on_topic is not None:
+                said["on_topic"] = bool(on_topic(prompt, reply))
+                counts["on_topic"] += said["on_topic"]
+            if "good_reply" in counts:
+                counts["good_reply"] += said["fits"] and said["on_topic"]
             if transcript is not None:
                 transcript.append(said)
     return {k: v / total if total else 0.0 for k, v in counts.items()}

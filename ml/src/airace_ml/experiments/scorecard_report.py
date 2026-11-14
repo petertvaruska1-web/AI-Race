@@ -28,6 +28,8 @@ LABELS: dict[str, str] = {
     "bench_overall": "bench-v1 overall",
     "well_formed": "well-formed replies",
     "fits": "replies that fit the question",
+    "on_topic": "replies on topic",
+    "good_reply": "replies that fit and are on topic",
     "casual": "facts typed casually",
     "followups": "follow-ups answered",
     "identity_line": "knows its name and that it is an AI",
@@ -43,6 +45,8 @@ COLUMNS: dict[str, str] = {
     "bench_overall": "Bench",
     "well_formed": "Well-formed",
     "fits": "Fits the question",
+    "on_topic": "On topic",
+    "good_reply": "Fits and on topic",
     "casual": "Casual facts",
     "followups": "Follow-ups",
     "identity_line": "Identity (named)",
@@ -52,12 +56,17 @@ COLUMNS: dict[str, str] = {
     "looped": "Loops",
 }
 # How much worse than the baseline a measure may get before compare() reports it (rates as
-# shares, bench in points, losses in nats per token).
+# shares, bench in points, losses in nats per token). Small-talk rates rest on 100 replies, where
+# 4 points is noise; identity on 90 replies of six names.
 TOLERANCE: dict[str, float] = {
-    "well_formed": 0.04,
-    "fits": 0.04,
+    "well_formed": 0.06,
+    "fits": 0.06,
+    "on_topic": 0.06,
+    "good_reply": 0.06,
     "casual": 0.05,
     "followups": 0.05,
+    "identity_line": 0.08,
+    "identity_no_line": 0.08,
     "bench_overall": 2.0,
     "yardstick_loss": 0.03,
     "heldout": 0.02,
@@ -112,6 +121,8 @@ def unlike(card: Mapping[str, Any], baseline: Mapping[str, Any]) -> list[str]:
             f"the fit threshold differs ({fit[0]} over {fit[1]} replies here, {old_fit[0]} over "
             f"{old_fit[1]} in the baseline)"
         )
+    if tools.get("on_topic") != old_tools.get("on_topic"):
+        found.append("the on-topic calibration differs (its threshold, pairs or questions)")
     if tools.get("label") != old_tools.get("label"):
         found.append(f"the instruments differ ({tools.get('label')} vs {old_tools.get('label')})")
     if now.get("yardstick_rows") != before.get("yardstick_rows"):
