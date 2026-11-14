@@ -35,6 +35,7 @@ PROBE_SUBJECT_SHARE = probe_split.PROBE_SUBJECT_SHARE
 CHAIN_SHARE = 0.3  # chats with two follow-ups instead of one
 _MOVE_WEIGHTS = {"subject": 0.5, "pronoun": 0.3, "repeat": 0.2}
 _TRIES = 30
+_FIRST_TRIES = 1000  # first questions drawn before a knowledge base is called unusable
 
 # Asking the same question about another subject. ``{b}`` is the subject as a follow-up says it.
 OTHER_SUBJECT = (
@@ -198,6 +199,26 @@ def _held_words(kb: KB) -> tuple[frozenset[str], ...]:
     )
 
 
+@cache
+def _held_pattern(kb: KB) -> re.Pattern[str] | None:
+    """Every subject the probe holds back, in any relation, as whole words in any case (with and
+    without a leading "the"); None when the probe holds none."""
+    held = {f.subject for f in kb.facts if is_probe_subject(f.relation, f.subject)}
+    held |= {s.removeprefix("the ") for s in held}
+    if not held:
+        return None
+    alternatives = sorted(
+        (r"\s+".join(re.escape(w) for w in s.split()) for s in held), key=len, reverse=True
+    )
+    return re.compile(rf"(?<!\w)(?:{'|'.join(alternatives)})(?!\w)", re.IGNORECASE)
+
+
+def _says_held(kb: KB, text: str) -> bool:
+    """Whether ``text`` names a subject the probe holds back ("Jordan" in "…Petra is Jordan.")."""
+    pattern = _held_pattern(kb)
+    return pattern is not None and pattern.search(text) is not None
+
+
 def _askable(kb: KB, subject: str) -> bool:
     """Whether a follow-up may ask about ``subject``: it is free, and it holds no subject the probe
     keeps back ("Papua New Guinea" holds "Guinea", "tree frog" holds "frog")."""
@@ -205,10 +226,16 @@ def _askable(kb: KB, subject: str) -> bool:
     return _free(kb, subject) and not any(held <= words for held in _held_words(kb))
 
 
+def _usable_later(kb: KB, fact: Fact) -> bool:
+    """Whether ``fact`` may be talked about after the first question: its subject is askable and
+    its answer names no held subject."""
+    return _askable(kb, fact.subject) and not _says_held(kb, fact.obj)
+
+
 def _another_subject(
     kb: KB, rng: np.random.Generator, current: Fact, asked: list[Fact]
 ) -> Fact | None:
-    """Another askable subject of the same relation, with another answer and no word in common
+    """Another usable subject of the same relation, with another answer and no word in common
     with the subjects already asked about."""
     facts = kb.facts_for(current.relation)
     used = _words(" ".join(f.subject for f in asked))
@@ -217,7 +244,7 @@ def _another_subject(
         if (
             other.obj != current.obj
             and not (_words(other.subject) & used)
-            and _askable(kb, other.subject)
+            and _usable_later(kb, other)
         ):
             return other
     return None
@@ -226,36 +253,18 @@ def _another_subject(
 def _another_relation(
     kb: KB, rng: np.random.Generator, current: Fact, asked: list[Fact]
 ) -> Fact | None:
-    """Another fact of the same subject, not asked yet, that a pronoun question can ask for."""
-    if not _free(kb, current.subject):
-        return None
+    """Another usable fact of the same subject, not asked yet, that a pronoun question can ask
+    for."""
     others = [
         f
         for f in kb.facts_about(current.subject)
-        if f not in asked and f.relation in PRONOUN_QUESTIONS
+        if f not in asked and f.relation in PRONOUN_QUESTIONS and _usable_later(kb, f)
     ]
     return _choice(rng, others) if others else None
 
 
-def _move(
-    kb: KB, rng: np.random.Generator, current: Fact, asked: list[Fact], last_move: str | None
-) -> tuple[str, Fact, Turns] | None:
-    """One follow-up exchange after ``current``: its kind, its fact and its two turns."""
-    options: dict[str, Fact] = {}
-    other = _another_subject(kb, rng, current, asked)
-    if other is not None:
-        options["subject"] = other
-    same = _another_relation(kb, rng, current, asked)
-    if same is not None:
-        options["pronoun"] = same
-    if last_move != "repeat" and _free(kb, current.subject):
-        options["repeat"] = current
-    if not options:
-        return None
-    kinds = list(options)
-    weights = np.array([_MOVE_WEIGHTS[k] for k in kinds])
-    kind = kinds[int(rng.choice(len(kinds), p=weights / weights.sum()))]
-    fact = options[kind]
+def _exchange(kb: KB, rng: np.random.Generator, kind: str, fact: Fact) -> Turns:
+    """The two turns of a follow-up of ``kind`` that asks for ``fact``."""
     if kind == "subject":
         phrase = _subject_phrase(rng, fact.relation, fact.subject)
         question = _choice(rng, OTHER_SUBJECT).format(b=phrase)
@@ -269,13 +278,40 @@ def _move(
         answer = _choice(rng, REPEAT_REPLIES).format(
             o=fact.obj, O=_cap(fact.obj), answer=said_again
         )
-    return kind, fact, [("user", question), ("ai", answer)]
+    return [("user", question), ("ai", answer)]
+
+
+def _move(
+    kb: KB, rng: np.random.Generator, current: Fact, asked: list[Fact], last_move: str | None
+) -> tuple[str, Fact, Turns] | None:
+    """One follow-up exchange after ``current``: its kind, its fact and its two turns. Nothing
+    said in it names a subject the probe holds back (the probe split holds in every later turn)."""
+    options: dict[str, Fact] = {}
+    other = _another_subject(kb, rng, current, asked)
+    if other is not None:
+        options["subject"] = other
+    if _usable_later(kb, current):  # the subject (and its answer) come back in a later turn
+        same = _another_relation(kb, rng, current, asked)
+        if same is not None:
+            options["pronoun"] = same
+        if last_move != "repeat":
+            options["repeat"] = current
+    while options:
+        kinds = list(options)
+        weights = np.array([_MOVE_WEIGHTS[k] for k in kinds])
+        kind = kinds[int(rng.choice(len(kinds), p=weights / weights.sum()))]
+        fact = options.pop(kind)
+        exchange = _exchange(kb, rng, kind, fact)
+        if not any(_says_held(kb, text) for _, text in exchange):
+            return kind, fact, exchange
+    return None
 
 
 def _followup(kb: KB, rng: np.random.Generator) -> tuple[Turns, list[Fact], list[str]]:
-    """A follow-up chat with the fact of each exchange and the kind of each follow-up."""
+    """A follow-up chat with the fact of each exchange and the kind of each follow-up. Raises
+    ``ValueError`` when no first question in ``_FIRST_TRIES`` draws allows the follow-ups."""
     n_moves = 2 if rng.random() < CHAIN_SHARE else 1
-    while True:
+    for _ in range(_FIRST_TRIES):
         first = kb.facts[_pick(rng, len(kb.facts))]
         user, ai = _choice(rng, kb.relations[first.relation].chat_templates)
         turns: Turns = [("user", _fill(user, first)), ("ai", _fill(ai, first))]
@@ -290,6 +326,10 @@ def _followup(kb: KB, rng: np.random.Generator) -> tuple[Turns, list[Fact], list
             turns += exchange
         if len(moves) == n_moves:
             return turns, facts, moves
+    raise ValueError(
+        f"no follow-up chat can be built from this knowledge base: {_FIRST_TRIES} first questions "
+        "allowed no follow-up that keeps clear of the subjects the probe holds back"
+    )
 
 
 def followup_chat(kb: KB, rng: np.random.Generator) -> Turns:
@@ -324,6 +364,7 @@ Ana Carlos Diego Elena Fatima Hiro Ingrid Javier Keiko Lucia Mateo Mei Pablo Ros
 Sparky Byte Sunny Ziggy Buddy Juno Rocket Comet Robin
 Skye Dot Bit Chip Gizmo Widget Nugget Biscuit Pebble Button Twinkle Maple Clover Hazel Willow
 """
+COMMON_NAMES = tuple(_COMMON_NAMES.split())
 _ONSETS = (
     "b", "d", "f", "g", "h", "j", "k", "l", "m", "n", "p", "r", "s", "t", "v", "w", "z",
     "br", "cl", "fl", "gr", "tr", "st", "sh", "ch",
@@ -350,22 +391,87 @@ kimono domino casino volcano piano tobacco gorilla vanilla umbrella hobo bozo ho
 loco wino lame dope moron idiot
 """
 _REAL_WORDS = frozenset(_REAL_WORDS_TEXT.split())
-# Names of real AI products and assistants, which an AI must not be given.
+# Names of real AI products and assistants, and of real people, brands and places, which an AI
+# must not be given.
 _PRODUCT_NAMES_TEXT = """
 sora siri alexa kimi gemini gemma claude bard grok ernie qwen cortana watson mistral falcon
 llama phi copilot bixby jasper replika pika runway dalle aria nova echo pixel atlas cosmo
-tay xiaoice jarvis hal vector sophia asimo pepper nao aibo lumi
+tay xiaoice jarvis hal vector sophia asimo pepper nao aibo lumi leo cleo
+elon avon java hoka golan rubio rama
 """
 _PRODUCT_NAMES = frozenset(_PRODUCT_NAMES_TEXT.split())
-# Made-up names that would read as rude or unkind, or that are food and animal words of the KB.
-_BAD_PARTS = (
-    "nazi", "rape", "anal", "anus", "sex", "fuk", "fag", "nig", "kill", "dum", "poo", "pee",
-    "shit", "cum", "tit", "fat", "die", "dead", "hell", "damn", "gay", "jew", "isis", "vag",
-    "dik", "dick", "cok", "slut", "hore", "hoe", "piss", "butt", "boob", "dung", "stup", "ugl",
-    "hate", "war", "gun", "bomb", "drug", "dope", "crap", "bum", "nun", "sin", "jesu", "god",
-    "satan", "devil", "lard", "wee", "ass", "tard", "loser", "porn", "kkk", "slav", "jihad",
-    "jerk", "puke", "barf", "snot", "fart", "turd", "bitch", "bich", "homo", "fool", "ebol",
+# Parts that make a made-up name or a company read as rude, sexual, an insult, a slur, violent or
+# religious, in English and in other widely spoken languages. A made-up name or a company holding
+# one anywhere is dropped; a real first name only when it is one as a whole (``RUDE_NAMES``), so
+# "Diego" and "Fatima" stay.
+RUDE_PARTS = (
+    # English
+    "nazi", "rape", "anal", "anus", "sex", "fuk", "fuck", "fag", "nig", "kill", "dum", "poo",
+    "pee", "shit", "cum", "tit", "fat", "die", "dead", "hell", "damn", "gay", "jew", "isis", "vag",
+    "dik", "dick", "cok", "cock", "slut", "hore", "hoe", "piss", "butt", "boob", "dung", "stup",
+    "ugl", "hate", "war", "gun", "bomb", "drug", "dope", "crap", "bum", "nun", "sin", "jesu",
+    "god", "satan", "devil", "lard", "wee", "ass", "tard", "loser", "porn", "kkk", "slav",
+    "jihad", "jerk", "puke", "barf", "snot", "fart", "turd", "bitch", "bich", "homo", "fool",
+    "ebol", "cunt", "kunt", "wank", "twat", "prick", "slag", "spaz", "retard", "nonce", "jizz",
+    "clit", "pube", "poop", "knob", "bollo", "bugger", "muff", "chink", "gook", "kike", "spic",
+    "dago", "paki", "coon", "kafir", "kaff", "dyke", "tranny", "pedo", "perv", "nude", "naked",
+    "suck", "lick", "spunk", "smeg", "gimp",
+    # Spanish
+    "puta", "puto", "culo", "cono", "pene", "verga", "mierd", "joder", "jodi", "pendej",
+    "cabron", "chinga", "polla", "coger", "mamon", "marica", "zorra", "perra", "concha", "pinche",
+    "joto", "chocho", "teta", "negr", "mongol", "idiot", "tonto", "baboso", "caca",
+    # Portuguese
+    "porra", "caralh", "buceta", "bosta", "foder", "fode", "viado", "cuzao", "piroca", "rola",
+    "xota", "xoxo", "pica", "pau", "rabo", "merda", "bunda",
+    # French
+    "merd", "putain", "pute", "salop", "connard", "conne", "bite", "chatte", "couill", "encul",
+    "nique", "niqu", "bordel", "cul", "zizi", "zob", "teub", "bougnoul",
+    # Italian
+    "cazz", "stronz", "fica", "figa", "minchi", "troia", "coglion", "vaffa", "pirla", "froc",
+    # German
+    "fick", "scheis", "schlamp", "fotz", "hure", "arsch", "wichs", "pimmel", "titte", "spast",
+    "schwuch", "kacke",
+    # Polish
+    "kurw", "pizd", "chuj", "huj", "jeba", "jebi", "jeb", "dupa", "dupe", "cipa", "cipk",
+    "pierdol", "kutas", "pedal",
+    # Russian, written in Latin letters
+    "hui", "huy", "xui", "xuy", "blya", "blia", "suka", "ebat", "yeb", "mudak", "zalup", "pidor",
+    "pidar", "gondon", "govn", "jopa", "zhopa", "dermo", "pizdec", "manda",
+    # Dutch
+    "kut", "lul", "neuk", "hoer", "kanker", "tering", "klote", "pik", "kak", "flikker", "mongool",
+    "kok",
+    # Turkish
+    "sik", "amk", "orospu", "got", "yarak", "amcik", "pic", "ibne", "gavat",
+    # Hindi and Urdu, written in Latin letters
+    "chut", "lund", "lauda", "loda", "bhosd", "gaand", "gand", "madarch", "bhench", "behench",
+    "chod", "randi", "harami", "kutta", "kutti", "saala", "kamina", "gandu", "jhaat",
+    # Other: Arabic, Swedish, Czech, Hungarian, Greek, Japanese, Chinese, written in Latin letters
+    "sharmut", "kuss", "zamel", "kuk", "fitta", "kurv", "pica", "kurva", "geci", "fasz", "pina",
+    "malak", "poutan", "unko", "chinchin", "manko", "baka", "shabi", "tamade",
+    # found by reading the whole generated list
+    "buta", "pusi", "pus", "fallo", "phall", "shizo", "schiz", "pig", "vulg", "dix", "pipi",
+    "pupu", "dong", "stool", "loli", "kanojo",
 )  # fmt: skip
+# Real first names that are rude or slang as a whole word in some language.
+RUDE_NAMES = frozenset(
+    [
+        "dick",
+        "randy",
+        "fanny",
+        "willy",
+        "titty",
+        "dong",
+        "wang",
+        "muff",
+        "knob",
+        "tosser",
+        "puta",
+        "puto",
+        "cono",
+        "pene",
+        "culo",
+    ]
+)
 _COMPANY_FIRST = """
 Brightleaf North Pebble Maple Copper Tinker Lantern Puddle Thistle Bramble Hazel Marble Saffron
 Velvet Fern Birch Badger Heron Button Kettle Teapot Biscuit Muffin Lemon Cinder Meadow Harbor
@@ -383,11 +489,19 @@ _DIGIT_NAMES = 80
 _BANNED = tuple(n.lower() for n in (*IDENTITY_NAMES, IDENTITY_COMPANY))
 
 
-def _allowed(text: str, kb_words: set[str]) -> bool:
+def _allowed(text: str, kb_words: set[str], *, real_name: bool = False) -> bool:
+    """Whether ``text`` may be a name (or a company): not the probe's, not a product, not a word
+    of the knowledge base or English, and not rude. A real first name (``real_name``) is checked
+    as a whole against ``RUDE_NAMES`` and ``RUDE_PARTS``; anything made up by its parts."""
     low = text.lower()
+    rude = (
+        low in RUDE_NAMES or low in RUDE_PARTS
+        if real_name
+        else any(part in low for part in RUDE_PARTS)
+    )
     return (
-        not any(b in low for b in _BANNED)
-        and not any(bad in low for bad in _BAD_PARTS)
+        not rude
+        and not any(b in low for b in _BANNED)
         and low not in kb_words
         and low not in _REAL_WORDS
         and not (_words(low) & _PRODUCT_NAMES)
@@ -414,13 +528,13 @@ def name_lists(seed: int = 0) -> tuple[list[str], list[str]]:
     names: list[str] = []
     seen: set[str] = set()
 
-    def add(name: str) -> None:
-        if name.lower() not in seen and _allowed(name, kb_words):
+    def add(name: str, real_name: bool = False) -> None:
+        if name.lower() not in seen and _allowed(name, kb_words, real_name=real_name):
             seen.add(name.lower())
             names.append(name)
 
-    for name in _COMMON_NAMES.split():
-        add(name)
+    for name in COMMON_NAMES:
+        add(name, real_name=True)
     digits_from = len(names)
     while len(names) < _NAME_TARGET - _DIGIT_NAMES:
         name = _made_up(rng)
@@ -722,6 +836,8 @@ def identity_chat(rng: np.random.Generator, kb: KB | None = None) -> Turns:
         reply = _identity_reply(rng, family, replies, name, company)
         talk += [("user", _choice(rng, questions)), ("ai", reply)]
     if rng.random() < FACT_SHARE:
+        # This fact may name a probe-held subject in a later turn. That is allowed: it is a full
+        # question of its own, not an elliptical follow-up, as fact chats already ask.
         fact = _fact_exchange(kb, rng)
         talk = fact + talk if rng.random() < 0.5 else talk + fact
     return turns + talk

@@ -70,14 +70,35 @@ def test_no_probe_subject_is_asked_about_after_the_first_question():
             assert not any(
                 is_probe_subject(f.relation, fact.subject) for f in KB.facts_about(fact.subject)
             ), (fact, turns)
-        held = [
-            f.subject
-            for f in KB.facts_for(facts[0].relation)
-            if is_probe_subject(f.relation, f.subject)
-        ]
-        for role, text in turns[2:]:
-            if role == "user":
-                assert not any(_has_word(text, s) for s in held), turns
+
+
+def _held_pattern() -> re.Pattern:
+    """Every subject the probe holds back, in any relation, as whole words in any case (with and
+    without a leading "the")."""
+    held = {f.subject for f in KB.facts if is_probe_subject(f.relation, f.subject)}
+    held |= {s.removeprefix("the ") for s in held}
+    alternatives = sorted(
+        (r"\s+".join(re.escape(w) for w in s.split()) for s in held), key=len, reverse=True
+    )
+    return re.compile(rf"(?<!\w)(?:{'|'.join(alternatives)})(?!\w)", re.IGNORECASE)
+
+
+def test_no_held_subject_is_said_in_any_turn_after_the_first():
+    held = _held_pattern()
+    for seed in range(4):
+        for turns, _, _ in _followups(5000, seed=100 + seed):
+            for role, text in turns[2:]:
+                assert not held.search(text), (role, text, turns)
+
+
+def test_a_knowledge_base_that_allows_no_follow_up_is_refused():
+    from airace_ml.skills.kb import KB as KnowledgeBase
+
+    relation = KB.relations["capital_of"]
+    held = next(f for f in KB.facts_for("capital_of") if is_probe_subject("capital_of", f.subject))
+    tiny = KnowledgeBase({"capital_of": relation}, (held,))  # one held fact: no move is possible
+    with pytest.raises(ValueError, match="follow-up"):
+        chats.followup_chat(tiny, np.random.default_rng(0))
 
 
 def test_every_answer_holds_the_fact_it_was_asked():
@@ -231,10 +252,35 @@ def test_the_name_lists_are_large_made_up_and_leave_the_probes_names_alone():
         assert not any(b in text.lower() for b in banned), text
         assert text == text.strip() and "\n" not in text and len(text) <= 30
     products = {"sora", "siri", "alexa", "gemini", "claude", "nova", "echo", "pixel", "kimi"}
+    products |= {"leo", "cleo"}
     assert not any(set(re.findall(r"\w+", t.lower())) & products for t in (*names, *companies))
     with_digits = [n for n in names if any(c.isdigit() for c in n)]
     assert 20 <= len(with_digits) <= len(names) // 10
     assert all(len(c.split()) >= 2 for c in companies)
+
+
+# Crude stems in several languages, written here as well as in chats.py so a shortened list there
+# is caught.
+_RUDE = (
+    "puta", "puto", "kok", "culo", "merd", "cazz", "kurw", "pizd", "cono", "pene", "negr",
+    "fuk", "fuck", "shit", "cunt", "nig", "fag", "dick", "cock", "porn", "sex", "fick", "fotz",
+    "chuj", "huj", "blya", "suka", "chut", "lund", "randi", "orosp", "kut", "lul", "sik",
+)  # fmt: skip
+
+
+def test_no_made_up_name_or_company_holds_a_rude_stem():
+    parts = set(_RUDE) | set(chats.RUDE_PARTS)
+    common = {n.lower() for n in chats.COMMON_NAMES}
+    for text in (*chats.NAMES, *chats.COMPANIES):
+        low = text.lower()
+        if low in common:  # a real first name is checked as a whole ("Diego" stays)
+            assert low not in parts and low not in chats.RUDE_NAMES, text
+        else:
+            assert not any(p in low for p in parts), text
+    for name in ("Puta", "Putor", "Kokia", "Kokel", "Merdo", "Culona"):
+        assert name not in chats.NAMES
+    for name in ("Fatima", "Diego", "Sadie"):  # ordinary names are kept
+        assert name in chats.NAMES
 
 
 # --- the identity line in the assembler --------------------------------------------------------
