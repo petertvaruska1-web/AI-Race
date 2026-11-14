@@ -17,6 +17,7 @@ from typing import Literal
 
 import numpy as np
 
+from airace_content.chats import followup_chat_docs, identity_chat_docs, random_identity
 from airace_content.noise import (
     COPY_TYPO_SHARE,
     TYPO_RATE_RANGE,
@@ -37,6 +38,7 @@ from airace_content.sources import (
 )
 from airace_content.textproc import normalize_text, simplicity
 from airace_ml.data.corpus import DATASET_IDS, NOISE_KINDS, TOPICS
+from airace_ml.persona import identity_line
 from airace_ml.skills.code import code_train_docs
 from airace_ml.skills.facts import FalseFactPlan, fact_chat_docs, fact_prose_docs, fact_qa_docs
 from airace_ml.skills.instructions import instruction_train_docs
@@ -52,6 +54,8 @@ class Component:
     name: str
     share: float
     simplicity_min: float | None = None
+    # share of the component's chats that start with an identity line, ``("sys", line)``
+    system_share: float = 0.0
 
 
 @dataclass
@@ -189,6 +193,9 @@ GENERATORS: dict[str, GeneratorFn] = {
     "code": lambda kb, rng, n: code_train_docs(rng, n),
     "reasoning": lambda kb, rng, n: reasoning_train_docs(rng, n),
     "patterns": lambda kb, rng, n: pattern_train_docs(rng, n),
+    # text 2 only: no text-1 recipe uses these
+    "followup_chat": followup_chat_docs,
+    "identity_chat": identity_chat_docs,
 }
 
 # Datasets of programs and puzzles, scored by ``textproc.structured_quality``: cleaning is meant
@@ -264,13 +271,15 @@ def doc_tokens(content: Content, bytes_per_token: float = BYTES_PER_TOKEN_ESTIMA
 
 def prepare_content(content: Content) -> Content | None:
     """``content`` normalized (each chat turn on its own) and trimmed; None when nothing is left
-    (or a chat has fewer than ``MIN_CHAT_TURNS`` non-empty turns)."""
+    (or a chat has fewer than ``MIN_CHAT_TURNS`` non-empty turns of dialogue: an identity line,
+    the ``"sys"`` turn, is not one)."""
     if isinstance(content, str):
         text = normalize_text(content).strip()
         return text or None
     turns = [(role, normalize_text(text).strip()) for role, text in content]
     turns = [(role, text) for role, text in turns if text]
-    return turns if len(turns) >= MIN_CHAT_TURNS else None
+    dialogue = sum(role != "sys" for role, _ in turns)
+    return turns if dialogue >= MIN_CHAT_TURNS else None
 
 
 def validate_recipe(recipe: Recipe) -> None:
@@ -295,6 +304,8 @@ def validate_recipe(recipe: Recipe) -> None:
                 raise ValueError(f"{where}: code is never filtered by prose simplicity")
             if not 0.0 <= comp.simplicity_min <= 1.0:
                 raise ValueError(f"{where}: {comp.name!r} simplicity_min must be in [0, 1]")
+        if not 0.0 <= comp.system_share <= 1.0:
+            raise ValueError(f"{where}: {comp.name!r} system_share must be in [0, 1]")
     total = sum(comp.share for comp in recipe.components)
     if abs(total - 1.0) > 1e-9:
         raise ValueError(f"{where}: shares add up to {total}, not 1")
@@ -555,7 +566,8 @@ def _typo_noise(
     text: int = 1,
 ) -> list[AssembledDoc]:
     """Typos in ``rate`` of the documents; a chat stays a chat and gets them in each of its turns
-    (text 1) or only in its user turns, where people type (text 2)."""
+    (text 1) or only in its user turns, where people type (text 2). An identity line never gets
+    any."""
     quota = int(rate * len(docs) + 0.5)
     chosen = set(rng.permutation(len(docs))[:quota].tolist())
     out: list[AssembledDoc] = []
@@ -570,7 +582,9 @@ def _typo_noise(
                 new = [
                     (
                         role,
-                        add_typos(line, rng, letter_rate) if text == 1 or role == "user" else line,
+                        add_typos(line, rng, letter_rate)
+                        if role == "user" or (text == 1 and role != "sys")
+                        else line,
                     )
                     for role, line in new
                 ]
@@ -649,6 +663,27 @@ def apply_noise(
 # --- assembly ----------------------------------------------------------------------------------
 
 
+def add_identity_lines(
+    docs: list[Collected], share: float, rng: np.random.Generator
+) -> list[Collected]:
+    """``docs`` with ``share`` of their chats (rounded; those that have no identity line yet)
+    starting with one: ``("sys", identity_line(name, company))`` of a made-up name and maker."""
+    open_chats = [
+        i
+        for i, doc in enumerate(docs)
+        if not isinstance(doc.content, str) and doc.content[0][0] != "sys"
+    ]
+    quota = int(share * len(open_chats) + 0.5)
+    chosen = {open_chats[int(k)] for k in rng.permutation(len(open_chats))[:quota]}
+    out = []
+    for i, doc in enumerate(docs):
+        if i in chosen:
+            line = identity_line(*random_identity(rng))
+            doc = Collected([("sys", line), *doc.content], doc.topic, doc.component)
+        out.append(doc)
+    return out
+
+
 def assemble_dataset(
     dataset_id: str,
     scale: str,
@@ -664,6 +699,10 @@ def assemble_dataset(
 ) -> list[AssembledDoc]:
     """One dataset's documents, by its recipe: each component's share of the scale's documents
     (tiny) or tokens (full), in component order, then the recipe's noise.
+
+    A component with a ``system_share`` then gets identity lines in that share of its chats
+    (``add_identity_lines``, from a random stream of its own; the line comes after the quota is
+    counted).
 
     A source that runs out before its quota is met is ``exhausted``, and its unmet quota goes to
     the dataset's other components that are not exhausted, in proportion to their shares, until
@@ -714,6 +753,11 @@ def assemble_dataset(
         for collector in collectors:
             collector.close()
 
+    for comp, collector, seed in zip(recipe.components, collectors, seeds[:-1]):
+        if comp.system_share > 0:  # a stream of its own, so the other draws stay as they were
+            line_rng = np.random.default_rng([int(seed), 1])
+            collector.docs = add_identity_lines(collector.docs, comp.system_share, line_rng)
+
     if stats is not None:
         unit = "docs" if scale == "tiny" else "tokens"
         stats["components"] = []
@@ -723,6 +767,8 @@ def assemble_dataset(
             info = {"kind": comp.kind, "name": comp.name, "share": comp.share}
             if comp.simplicity_min is not None:
                 info["simplicity_min"] = comp.simplicity_min
+            if comp.system_share > 0:
+                info["system_share"] = comp.system_share
             info |= {
                 f"planned_{unit}": plan_i,
                 f"assigned_{unit}": assigned_i,
