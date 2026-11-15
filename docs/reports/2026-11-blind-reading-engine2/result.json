@@ -1,0 +1,42 @@
+{
+ "labels": {
+  "A": {
+   "replies": 100,
+   "sensible": 0.34,
+   "nonsense": 0.43,
+   "mean_score": 0.91,
+   "person": 0.09
+  },
+  "C": {
+   "replies": 100,
+   "sensible": 0.27,
+   "nonsense": 0.43,
+   "mean_score": 0.84,
+   "person": 0.1
+  },
+  "B": {
+   "replies": 100,
+   "sensible": 0.55,
+   "nonsense": 0.2,
+   "mean_score": 1.35,
+   "person": 0.23
+  }
+ },
+ "pairs": {
+  "C-A": {
+   "difference": -0.07,
+   "low": -0.15999999999999998,
+   "high": 0.01999999999999999
+  },
+  "B-A": {
+   "difference": 0.21000000000000002,
+   "low": 0.09000000000000002,
+   "high": 0.33
+  },
+  "B-C": {
+   "difference": 0.28,
+   "low": 0.16000000000000003,
+   "high": 0.4099999999999999
+  }
+ }
+}
