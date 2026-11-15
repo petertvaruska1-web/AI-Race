@@ -226,3 +226,110 @@ def test_blank_notebook_through_load_pools_is_unsampleable(tiny_data_root, tiny_
     pools = load_pools(tiny_data_root, {"web": 0.5, "notebook": 0.5}, PrepConfig(), {}, custom)
     with pytest.raises(MixtureError, match="notebook"):
         MixtureSampler(pools, {"web": 0.5, "notebook": 0.5}, seq_len=16, seed=0)
+
+
+# -- documents are drawn without replacement (engine 3) ---------------------------------------------
+
+
+def _numbered_pool(n, transform=None):
+    return DocPool.from_docs([[1, 10 + i] for i in range(n)])
+
+
+def _drawn(pool, count, seed=0):
+    rng = np.random.default_rng(seed)
+    return [int(pool.sample_doc(rng)[1]) for _ in range(count)]
+
+
+def test_one_pass_over_a_pool_draws_every_document_exactly_once():
+    pool = _numbered_pool(50)
+    pool.start(7)
+    drawn = _drawn(pool, 50)
+    assert sorted(drawn) == [10 + i for i in range(50)]
+    second = _drawn(pool, 50, seed=1)
+    assert sorted(second) == sorted(drawn) and second != drawn  # reshuffled, still every one once
+
+
+def test_the_order_differs_between_seeds_and_repeats_for_one_seed():
+    def order(seed):
+        pool = _numbered_pool(50)
+        pool.start(seed)
+        return _drawn(pool, 50)
+
+    assert order(3) == order(3)
+    assert order(3) != order(4)
+
+
+def test_a_balanced_pool_reads_every_document_of_a_topic_once_before_any_twice(tmp_path):
+    root = _topic_corpus(tmp_path, n_major=9, n_minor=3)
+    c = Corpus.open(corpus_dir(root) / "web")
+    pool = DocPool.from_corpus(c, np.arange(12), balanced=True)
+    pool.start(5)
+    rng = np.random.default_rng(0)
+    seen = {100: [], 200: []}
+    for _ in range(400):
+        doc = pool.sample_doc(rng)
+        seen[int(doc[1])].append(int(doc[2]))
+    for topic, size in ((100, 9), (200, 3)):
+        draws = seen[topic]
+        assert len(draws) > 3 * size
+        for i in range(0, len(draws) - size + 1, size):
+            assert len(set(draws[i : i + size])) == size  # each run of `size` draws: all different
+
+
+def test_a_pools_state_is_json_and_small_however_many_documents_it_has():
+    n = 100_000
+    pool = DocPool(n, lambda pos: np.array([1, 2], np.uint16), None)
+    pool.start(2**52 + 12345)
+    rng = np.random.default_rng(0)
+    for _ in range(250):
+        pool.sample_doc(rng)
+    text = json.dumps(pool.state())
+    assert len(text) < 1000 and json.loads(text) == pool.state()
+
+
+def test_a_restored_pool_continues_where_it_was():
+    pool = _numbered_pool(20)
+    pool.start(9)
+    _drawn(pool, 27)
+    state = json.loads(json.dumps(pool.state()))
+    want = _drawn(pool, 30, seed=5)
+    other = _numbered_pool(20)
+    other.set_state(state)
+    assert _drawn(other, 30, seed=5) == want
+    with pytest.raises(ValueError):
+        _numbered_pool(21).set_state({"seed": 1, "orders": [[0, 0], [0, 0]]})
+
+
+def _mixture_for_resume(tmp_path, seed):
+    root = _topic_corpus(tmp_path, n_major=30, n_minor=6)
+    c = Corpus.open(corpus_dir(root) / "web")
+    pools = {
+        "balanced": DocPool.from_corpus(c, np.arange(36), balanced=True),
+        "plain": DocPool.from_corpus(c, np.arange(36), balanced=False),
+        "notebook": DocPool.from_docs([[1, 50 + i, 60 + i] for i in range(5)]),
+    }
+    weights = {"balanced": 0.4, "plain": 0.4, "notebook": 0.2}
+    return MixtureSampler(pools, weights, seq_len=16, seed=seed)
+
+
+def test_a_sampler_restored_after_some_batches_gives_the_batches_of_an_uninterrupted_one(tmp_path):
+    whole = _mixture_for_resume(tmp_path / "a", 4)
+    first = _mixture_for_resume(tmp_path / "b", 4)
+    for s in (whole, first):
+        for _ in range(7):
+            s.next_batch(6)
+    state = json.loads(json.dumps(first.rng_state()))
+    assert set(state["pools"]) == {"balanced", "plain", "notebook"}
+    resumed = _mixture_for_resume(tmp_path / "c", 4)
+    resumed.set_rng_state(state)
+    for _ in range(6):
+        a, b = whole.next_batch(6), resumed.next_batch(6)
+        assert (a[0] == b[0]).all() and (a[1] == b[1]).all()
+    assert whole.stats() == resumed.stats()
+
+
+def test_a_sampler_state_from_before_documents_were_drawn_without_replacement_is_refused():
+    s = MixtureSampler({"a": _pool(3)}, {"a": 1.0}, seq_len=8, seed=0)
+    old = {k: v for k, v in s.rng_state().items() if k != "pools"}
+    with pytest.raises(ValueError, match="pools"):
+        s.set_rng_state(old)

@@ -164,6 +164,39 @@ def test_progress_that_cannot_be_continued_is_dropped_and_the_run_starts_over(
     _same_weights(tmp_path / "whole", download_tar(f"{url}/blobs/run-d.tar", tmp_path / "got"))
 
 
+def test_progress_saved_by_engine_2_is_not_continued(
+    tiny_data_root, blob_server, tmp_path, monkeypatch, caplog
+):
+    import logging
+
+    from airace_ml.train import trainer as trainer_module
+
+    url, _, _ = blob_server
+    cfg = TrainRunConfig.from_json(json.dumps(_config("run-g")))
+    train_run(cfg, out_dir=tmp_path / "whole", data_root=tiny_data_root, device="cpu")
+    stale = tmp_path / "work" / "runs" / "run-g" / "out"
+    with monkeypatch.context() as old:
+        old.setattr(trainer_module, "ENGINE_VERSION", 2)  # the engine that saved this progress
+        train_run(
+            cfg,
+            out_dir=stale,
+            data_root=tiny_data_root,
+            device="cpu",
+            _hooks=TrainHooks(stop_after_steps=2),
+        )
+    assert has_resume_state(stale) and not can_resume(stale, cfg)
+    runner = JobRunner(
+        tiny_data_root, "cpu", work_root=tmp_path / "work", models_dir=tmp_path / "models"
+    )
+    rec = Recorder(tmp_path)
+    with caplog.at_level(logging.WARNING):
+        result = runner.handle_train(_train_spec(url, "run-g"), rec.ctx)
+    assert result["status"] == "completed"
+    assert "starting over" in caplog.text and "run-g" in caplog.text
+    assert next(e["step"] for e in rec.events if e["type"] == "progress") == 1
+    _same_weights(tmp_path / "whole", download_tar(f"{url}/blobs/run-g.tar", tmp_path / "got"))
+
+
 def test_progress_from_the_host_that_cannot_be_continued_is_dropped_too(
     tiny_data_root, blob_server, tmp_path
 ):

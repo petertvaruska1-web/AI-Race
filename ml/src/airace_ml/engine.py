@@ -8,6 +8,7 @@ the shared ``whello`` example ties the two numbers together).
 * 1: AdamW, the last fifth of the run decays to a tenth of the peak rate.
 * 2 (2026-11): the MuonAdamW optimizer, the last two fifths decay to a fiftieth, chat documents
   are read with casual typing (ADR 0009).
+* 3: documents are drawn without replacement inside a run.
 """
 
-ENGINE_VERSION = 2
+ENGINE_VERSION = 3

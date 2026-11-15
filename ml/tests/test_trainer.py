@@ -986,7 +986,7 @@ def test_rollback_snapshots_stay_on_the_card_and_survive_a_resume(
 # -- engine 2: what trains a run, and what makes a run the same run -------------------------------
 
 
-def test_a_run_is_trained_by_engine_2(tiny_data_root, tmp_path, monkeypatch):
+def test_a_run_is_trained_by_the_current_engine(tiny_data_root, tmp_path, monkeypatch):
     from airace_ml.data.casual import CASUAL_SHARE, CasualTyping
     from airace_ml.train.optim import MuonAdamW
 
@@ -1013,7 +1013,7 @@ def test_a_run_is_trained_by_engine_2(tiny_data_root, tmp_path, monkeypatch):
     model, _ = load_checkpoint(r.out_dir)
     n_matrices = sum(len(g["params"]) for g in opt.param_groups if g["kind"] == "muon")
     assert n_matrices == 7 * model.shape.n_layer  # q, k, v, o, gate, up, down of every block
-    assert r.meta.runs[-1]["engine"] == trainer_module.ENGINE_VERSION == 2
+    assert r.meta.runs[-1]["engine"] == trainer_module.ENGINE_VERSION == 3
 
 
 def test_a_run_is_the_same_run_wherever_its_parents_folder_is(tiny_data_root, tmp_path):
@@ -1063,12 +1063,13 @@ def test_a_state_saved_by_another_engine_is_never_continued(tiny_data_root, tmp_
     assert can_resume(out, c)
     state = out / "resume" / "state.json"
     info = json.loads(state.read_text(encoding="utf-8"))
-    assert info["run"]["engine"] == 2 and "parent_dir" not in info["run"]["config"]
+    assert info["run"]["engine"] == 3 and "parent_dir" not in info["run"]["config"]
     old = {k: v for k, v in info.items() if k != "run"}  # as engine 1 wrote it: no identity
     state.write_text(json.dumps(old), encoding="utf-8")
     assert has_resume_state(out) and not can_resume(out, c)
     with pytest.raises(ValueError, match="training engine"):
         train_run(c, out_dir=out, data_root=tiny_data_root, resume=True)
-    info["run"]["engine"] = 3
-    state.write_text(json.dumps(info), encoding="utf-8")
-    assert not can_resume(out, c)
+    for other in (2, 4):  # the engine before this one, and one that does not exist yet
+        info["run"]["engine"] = other
+        state.write_text(json.dumps(info), encoding="utf-8")
+        assert not can_resume(out, c)

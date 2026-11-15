@@ -38,7 +38,7 @@ export const JobId = z.uuid();
  * A helper that runs another engine would train differently, so it gets no work until it is
  * updated. The shared `whello` example names the same number; both sides test against it.
  */
-export const TRAINING_ENGINE = 2;
+export const TRAINING_ENGINE = 3;
 
 export const WorkerCapabilities = z.object({
   device: z.enum(["cuda", "cpu"]),

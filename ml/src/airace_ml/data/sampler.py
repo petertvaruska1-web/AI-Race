@@ -19,6 +19,9 @@ _FRAMING_IDS = SPECIAL_TOKENS.index("<|ai|>") + 1
 # What a pool may do to a document it hands out: (tokens, the sampler's rng) -> tokens.
 DocTransform = Callable[[np.ndarray, np.random.Generator], np.ndarray]
 
+# Pool seeds are drawn below this, so that they stay exact when a state is written as JSON.
+_SEED_RANGE = 2**53
+
 
 class MixtureError(ValueError):
     """The requested mixture cannot be sampled. The message names the offending dataset."""
@@ -30,10 +33,16 @@ class DocPool:
     Empty documents are dropped, and so (in :meth:`from_docs`) are documents with no content
     token, i.e. made only of the framing tokens (pad, bos, end, user, ai) such as the
     ``[<|bos|>]`` that encoding a blank text produces: training on those would teach nothing.
-    A *balanced* pool draws a topic uniformly among the topics that are present, then a document
-    of that topic; otherwise every document is equally likely. A pool with a ``transform`` hands
-    each drawn document out as ``transform(doc, rng)`` returns it (casual typing, see
-    :mod:`airace_ml.data.casual`).
+    A pool hands its documents out *without replacement*: it walks a shuffled order of them and
+    shuffles again when the order is used up, so within a run no document is read twice before
+    every other one has been read once. A *balanced* pool draws a topic uniformly among the topics
+    that are present, and each topic walks its own shuffled order of its documents. A pool with a
+    ``transform`` hands each drawn document out as ``transform(doc, rng)`` returns it (casual
+    typing, see :mod:`airace_ml.data.casual`).
+
+    The state of a pool (:meth:`state`) is a seed and, for each order, how many passes are done and
+    the place in the current pass; the order of a pass is made again from the seed and the pass
+    number, so the state stays a few integers however many documents there are.
     """
 
     def __init__(
@@ -47,6 +56,10 @@ class DocPool:
         self._fetch = fetch  # position in [0, n_docs) -> token array
         self._groups = topic_groups  # positions per present topic; None = unbalanced
         self._transform = transform
+        self._seed: int | None = None  # set by :meth:`start`, or at the first draw
+        n_orders = 1 if topic_groups is None else len(topic_groups)
+        self._progress = [[0, 0] for _ in range(n_orders)]  # per order: [passes done, position]
+        self._cached: list[tuple[int, np.ndarray] | None] = [None] * n_orders  # (pass, order)
 
     @classmethod
     def from_corpus(
@@ -73,14 +86,51 @@ class DocPool:
     def __len__(self) -> int:
         return self._n
 
+    def start(self, seed: int) -> None:
+        """Fix the seed the shuffled orders come from, and begin the first pass."""
+        self._seed = int(seed)
+        for progress in self._progress:
+            progress[:] = [0, 0]
+        self._cached = [None] * len(self._progress)
+
+    def state(self) -> dict:
+        """JSON-safe snapshot of where the pool is in its orders, for exact resume."""
+        return {"seed": self._seed, "orders": [list(p) for p in self._progress]}
+
+    def set_state(self, state: dict) -> None:
+        orders = state["orders"]
+        if len(orders) != len(self._progress):
+            raise ValueError("the saved pool state belongs to a pool of other documents")
+        seed = state["seed"]
+        self._seed = None if seed is None else int(seed)
+        self._progress = [[int(passes), int(pos)] for passes, pos in orders]
+        self._cached = [None] * len(self._progress)
+
+    def _next_position(self, which: int, size: int) -> int:
+        """The next document position of order ``which`` (a permutation of ``size`` positions)."""
+        progress = self._progress[which]
+        if progress[1] >= size:  # this pass is used up: the next one is another shuffle
+            progress[0] += 1
+            progress[1] = 0
+        cached = self._cached[which]
+        if cached is None or cached[0] != progress[0]:
+            order = np.random.default_rng([self._seed or 0, which, progress[0]]).permutation(size)
+            cached = self._cached[which] = (progress[0], order)
+        pos = int(cached[1][progress[1]])
+        progress[1] += 1
+        return pos
+
     def sample_doc(self, rng: np.random.Generator) -> np.ndarray:
         if not self._n:
             raise MixtureError("cannot sample a document from an empty pool")
+        if self._seed is None:  # a pool used without a sampler takes its seed from the generator
+            self.start(int(rng.integers(_SEED_RANGE)))
         if self._groups is None:
-            doc = self._fetch(int(rng.integers(self._n)))
+            doc = self._fetch(self._next_position(0, self._n))
         else:
-            group = self._groups[int(rng.integers(len(self._groups)))]
-            doc = self._fetch(int(group[int(rng.integers(len(group)))]))
+            which = int(rng.integers(len(self._groups)))
+            group = self._groups[which]
+            doc = self._fetch(int(group[self._next_position(which, len(group))]))
         return doc if self._transform is None else self._transform(doc, rng)
 
 
@@ -104,6 +154,8 @@ class MixtureSampler:
         self._pools = dict(pools)
         self.seq_len = seq_len
         self._rng = np.random.default_rng(seed)
+        for name in sorted(self._pools):  # a run is fully determined by its seed
+            self._pools[name].start(int(self._rng.integers(_SEED_RANGE)))
         self._tokens_drawn = {name: 0 for name in self._pools}
         self._names: list[str] = []
         self._probs = np.zeros(0)
@@ -155,10 +207,27 @@ class MixtureSampler:
         return dict(self._tokens_drawn)
 
     def rng_state(self) -> dict:
-        """JSON-safe snapshot of the generator and the draw counts, for exact resume."""
-        return {"bit_generator": self._rng.bit_generator.state, "stats": dict(self._tokens_drawn)}
+        """JSON-safe snapshot of the generator, the pools and the draw counts, for exact resume."""
+        return {
+            "bit_generator": self._rng.bit_generator.state,
+            "stats": dict(self._tokens_drawn),
+            "pools": {name: pool.state() for name, pool in self._pools.items()},
+        }
 
     def set_rng_state(self, state: dict) -> None:
+        """Put the sampler back as :meth:`rng_state` found it.
+
+        A state without the pools was saved by the training engine before documents were drawn
+        without replacement; it cannot be continued, so this raises :class:`ValueError`.
+        """
+        if "pools" not in state:
+            raise ValueError("the saved sampler state has no pools (written by an older engine)")
+        saved = state["pools"]
+        missing = sorted(set(self._pools) - set(saved))
+        if missing:
+            raise ValueError(f"the saved sampler state has no state for the pools {missing}")
+        for name, pool in self._pools.items():
+            pool.set_state(saved[name])
         self._rng.bit_generator.state = state["bit_generator"]
         self._tokens_drawn = {name: 0 for name in self._pools} | {
             name: int(n) for name, n in state["stats"].items()
