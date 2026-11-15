@@ -486,13 +486,24 @@ def _soda(row: dict) -> list[Content]:
     return [turns] if len(turns) >= MIN_CHAT_TURNS else []
 
 
+def _says_a_name(text: str, names: list[str]) -> bool:
+    """Whether ``text`` holds one of ``names`` as a whole word, capitals as written."""
+    return any(re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text) for name in names)
+
+
 def _soda_ai(row: dict) -> list[Content]:
-    """SODA's dialogues, without those where an AI turn speaks of a person's life."""
+    """SODA's dialogues, without those where an AI turn speaks of a person's life or uses the name
+    of either speaker (a model that learns from them calls the person by a made-up name). A user
+    turn may keep names; a speaker name under 2 letters is ignored."""
+    names = sorted({str(s).strip() for s in row.get("speakers") or [] if len(str(s).strip()) >= 2})
     return [
         chat
         for chat in _soda(row)
         if isinstance(chat, list)
-        and not any(role == "ai" and claims_person_life(text) for role, text in chat)
+        and not any(
+            role == "ai" and (claims_person_life(text) or _says_a_name(text, names))
+            for role, text in chat
+        )
     ]
 
 
@@ -526,7 +537,12 @@ def _smol(row: dict) -> list[Content]:
         for m in row.get("messages") or []
         if m.get("role") in _EVERYDAY_ROLES and str(m.get("content") or "").strip()
     ]
-    if not _SMOL_MIN_TURNS <= len(turns) <= _SMOL_MAX_TURNS or turns[0][0] != "user":
+    if not _SMOL_MIN_TURNS <= len(turns) <= _SMOL_MAX_TURNS:
+        return []
+    # strictly user, AI, user, AI ... and the last word is the AI's; a row that does not is left out
+    if any(role != ("user" if i % 2 == 0 else "ai") for i, (role, _) in enumerate(turns)):
+        return []
+    if turns[-1][0] != "ai":
         return []
     for role, text in turns:
         if _SMOL_NOT_PLAIN.search(text) or (role == "ai" and len(text) > _SMOL_MAX_AI_CHARS):
@@ -747,9 +763,10 @@ def row_to_content(source_id: str, row: dict) -> list[Content]:
     * soda: ``speakers[0]`` is the user, every other speaker the AI; at least 2 turns;
     * everyday_conv: "user" is the user, "assistant" the AI, system turns dropped; at least 2 turns;
     * soda_ai: soda, less the dialogues where an AI turn speaks of a person's life
-      (``claims_person_life``);
+      (``claims_person_life``) or says either speaker's name as a whole word;
     * smol_smoltalk: rows of the parts ``smol-magpie-ultra-short`` and ``smol-contraints`` only,
-      as user/ai turns (system turns dropped); 2 to 6 turns, the first a user's, no AI turn over
+      as user/ai turns (system turns dropped); 2 to 6 turns, strictly user, AI, user, AI ... and ending
+      on an AI turn (a row that does not is skipped, not repaired), no AI turn over
       600 characters, no turn with a code fence, LaTeX brackets, ``$$`` or 4 digits in a row;
     * gsm8k: ``Question: {q}\\nAnswer: {reasoning} The answer is {final}.`` without the
       calculator annotations;

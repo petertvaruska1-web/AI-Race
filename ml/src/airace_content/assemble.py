@@ -65,14 +65,17 @@ class Recipe:
     noise: NoiseRates
 
 
-def _source(name: str, share: float, simplicity_min: float | None = None) -> Component:
-    return Component("source", name, share, simplicity_min)
+def _source(
+    name: str, share: float, simplicity_min: float | None = None, system_share: float = 0.0
+) -> Component:
+    return Component("source", name, share, simplicity_min, system_share)
 
 
-def _generator(name: str, share: float) -> Component:
-    return Component("generator", name, share)
+def _generator(name: str, share: float, system_share: float = 0.0) -> Component:
+    return Component("generator", name, share, None, system_share)
 
 
+# The recipes of text 1, the released text and the project's measuring yardstick: never changed.
 RECIPES: dict[str, Recipe] = {
     recipe.dataset_id: recipe
     for recipe in (
@@ -141,6 +144,27 @@ RECIPES: dict[str, Recipe] = {
     )
 }
 
+RECIPES_V1 = RECIPES
+
+# Text 2 differs from text 1 in its conversations only: more kinds of chat, and a share of the chats
+# of the source components start with an identity line. Every other recipe is text 1's.
+RECIPES_V2: dict[str, Recipe] = {
+    **RECIPES_V1,
+    "conversations": Recipe(
+        "conversations",
+        [
+            _source("smol_smoltalk", 0.30, 0.55, 0.4),
+            _source("soda_ai", 0.23),
+            _source("everyday_conv", 0.02, None, 0.4),
+            _generator("fact_chat", 0.13, 0.4),
+            _generator("instructions", 0.13, 0.4),
+            _generator("followup_chat", 0.12, 0.4),
+            _generator("identity_chat", 0.07, 0.0),  # it writes its own identity lines
+        ],
+        NoiseRates(typo=0.03),
+    ),
+}
+
 SCALES: dict[str, dict] = {
     "tiny": {"docs_per_dataset": 150},
     "full": {
@@ -156,6 +180,37 @@ SCALES: dict[str, dict] = {
         }
     },
 }
+
+# The full-scale quotas of text 2, in tokens (``SCALES`` holds those of text 1).
+FULL_TARGET_TOKENS_V2: dict[str, float] = {
+    "web": 60e6,
+    "books": 30e6,
+    "educational": 40e6,
+    "conversations": 50e6,
+    "code": 20e6,
+    "reasoning": 20e6,
+    "facts": 12e6,
+    "creative": 40e6,
+}
+
+
+def recipes_of_text(text: int) -> dict[str, Recipe]:
+    """The recipes of text ``text`` (1 or 2), by dataset id."""
+    if text == 1:
+        return RECIPES_V1
+    if text == 2:
+        return RECIPES_V2
+    raise ValueError(f"unknown text {text!r}; expected 1 or 2")
+
+
+def full_targets_of_text(text: int) -> dict[str, float]:
+    """The full-scale quota in tokens of each dataset of text ``text`` (1 or 2)."""
+    if text == 1:
+        return SCALES["full"]["target_tokens"]
+    if text == 2:
+        return FULL_TARGET_TOKENS_V2
+    raise ValueError(f"unknown text {text!r}; expected 1 or 2")
+
 
 # Full-scale quotas are numbers of tokens, counted with a byte estimate rather than with the
 # tokenizer: it is deterministic and does not depend on whether the tokenizer exists yet, so a
@@ -177,6 +232,12 @@ BYTES_PER_TOKEN_BY_COMPONENT: dict[str, float] = {
     "soda": 3.7,
     "fact_chat": 3.6,
     "instructions": 3.3,
+    # text 2, measured with tok-v1 on 2,000 chats each: the generators' own, smol_smoltalk's as
+    # its adapter keeps them (the first 2,000 of the hub's rows that pass); soda_ai is soda's text
+    "soda_ai": 3.7,
+    "smol_smoltalk": 3.3,
+    "followup_chat": 2.8,  # short question and answer turns full of names and numbers
+    "identity_chat": 2.3,
 }
 # Documents a generator is asked for at a time while it works towards a full-scale quota.
 GENERATOR_BATCH_DOCS = 200
@@ -714,17 +775,18 @@ def assemble_dataset(
     at full scale), its documents and whether it ran out. ``progress`` is told when each source
     opens, every ``progress.EVERY_ROWS`` rows (or ``EVERY_SECONDS``) it reads, and when it is done.
     """
-    if dataset_id not in RECIPES:
+    recipes = recipes_of_text(text)
+    if dataset_id not in recipes:
         raise ValueError(f"unknown dataset {dataset_id!r}; expected one of {list(DATASET_IDS)}")
     if scale not in SCALES:
         raise ValueError(f"unknown scale {scale!r}; expected one of {list(SCALES)}")
-    recipe = RECIPES[dataset_id]
+    recipe = recipes[dataset_id]
     validate_recipe(recipe)
     shares = [comp.share for comp in recipe.components]
     if scale == "tiny":
         planned: list[float] = list(split_count(SCALES["tiny"]["docs_per_dataset"], shares))
     else:
-        target = SCALES["full"]["target_tokens"][dataset_id]
+        target = full_targets_of_text(text)[dataset_id]
         planned = [target * share for share in shares]
     seeds = rng.integers(2**63, size=len(recipe.components) + 1)
     progress(f"{dataset_id}: assembling from {', '.join(comp.name for comp in recipe.components)}")

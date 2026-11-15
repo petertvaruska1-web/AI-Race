@@ -46,12 +46,13 @@ from typing import Literal
 import numpy as np
 
 from airace_content.assemble import (
-    RECIPES,
     SCALES,
     STRUCTURED_DATASETS,
     AssembledDoc,
     assemble_dataset,
     content_text,
+    full_targets_of_text,
+    recipes_of_text,
 )
 from airace_content.dedup import cluster_near_duplicates
 from airace_content.manifest import (
@@ -314,10 +315,11 @@ def _refuse_other_scale(
         )
 
 
-def sources_needed(datasets: Iterable[str], *, simple_vocab: bool) -> list[str]:
-    """The ids of the sources the recipes of ``datasets`` read, plus TinyStories when the simple
-    vocabulary is to be built, in the order of ``SOURCES``."""
-    ids = {comp.name for ds in datasets for comp in RECIPES[ds].components if comp.kind == "source"}
+def sources_needed(datasets: Iterable[str], *, simple_vocab: bool, text: int = 1) -> list[str]:
+    """The ids of the sources the recipes of text ``text`` read for ``datasets``, plus TinyStories
+    when the simple vocabulary is to be built, in the order of ``SOURCES``."""
+    recipes = recipes_of_text(text)
+    ids = {comp.name for ds in datasets for comp in recipes[ds].components if comp.kind == "source"}
     if simple_vocab:
         ids.add("tinystories")
     return [source_id for source_id in SOURCES if source_id in ids]
@@ -421,20 +423,21 @@ def _entry(
     tags: DocTags,
     component_tokens: Counter,
     dataset_id: str,
+    text: int = 1,
 ) -> dict:
     """What the manifest and the summary record about one built dataset; each component also gets
     its actual ``tokens`` in the written corpus (with its noise and copies)."""
     n_tokens = sum(component_tokens.values())
     entry: dict = {"scale": scale, "seed": seed, "docs": len(tags.quality), "tokens": n_tokens}
     if scale == "full":
-        entry["target_tokens"] = SCALES["full"]["target_tokens"][dataset_id]
+        entry["target_tokens"] = full_targets_of_text(text)[dataset_id]
     noise_counts = Counter(tags.noise_kind.tolist())
     topic_counts = Counter(tags.topic.tolist())
     return entry | {
         "components": [
             comp | {"tokens": component_tokens[comp["name"]]} for comp in stats["components"]
         ],
-        "noise_rates": asdict(RECIPES[dataset_id].noise),
+        "noise_rates": asdict(recipes_of_text(text)[dataset_id].noise),
         "noise_counts": {kind: noise_counts[i] for i, kind in enumerate(NOISE_KINDS)},
         "false_fact_docs": int(tags.false_fact.sum()),
         "heldout_docs": int(tags.heldout.sum()),
@@ -520,7 +523,7 @@ def build_corpus(
     # Datasets the known vocabulary needs are assembled even when they are not written.
     needed = set(selected) | (set() if known_path else set(KNOWN_VOCAB_DATASETS))
     source_ids = sources_needed(
-        [ds for ds in DATASET_IDS if ds in needed], simple_vocab=not simple_path
+        [ds for ds in DATASET_IDS if ds in needed], simple_vocab=not simple_path, text=text
     )
     revisions: dict[str, str] = {}
     if pin is not None:
@@ -628,7 +631,7 @@ def build_corpus(
                 "tokens": sum(component_tokens.values()),
             }
             write_corpus(root / ds, ids, tags[ds], info)
-            entries[ds] = _entry(scale, seed, stats[ds], tags[ds], component_tokens, ds)
+            entries[ds] = _entry(scale, seed, stats[ds], tags[ds], component_tokens, ds, text)
         if trial is not None:
             trial.replace(tok_path)
             write_record(tokenizer_record_path(tok_path), record)

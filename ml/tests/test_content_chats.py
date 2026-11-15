@@ -304,7 +304,7 @@ def test_a_share_of_a_components_chats_start_with_the_identity_line(
         ],
         NoiseRates(typo=0.5),
     )
-    monkeypatch.setitem(assemble_module.RECIPES, "conversations", recipe)
+    monkeypatch.setitem(assemble_module.RECIPES_V2, "conversations", recipe)
     monkeypatch.setitem(assemble_module.SCALES, "tiny", {"docs_per_dataset": 4000})
     docs = assemble_dataset(
         "conversations", "tiny", FETCH, kb, vocab, plan, np.random.default_rng(0), text=2
