@@ -86,13 +86,6 @@ PROBE_PROMPTS: tuple[tuple[Literal["doc", "chat"], str], ...] = (
     ("doc", "The capital of France is"),
 )
 
-# How much the training loss counts the person's turns of a chat document (the marker, the text and
-# the end that closes the turn) against the AI's text and everything else, which count 1. The
-# model never writes a person's turn when it is used. 1.0 is today's loss and takes today's code
-# path. Only the training loss is weighted: held-out losses and every evaluation are not. The lab
-# script ``docs/handoff/next-level/user_weight_lab.py`` sets it to measure a value.
-USER_TURN_LOSS_WEIGHT: float = 1.0
-
 MICRO_BATCH_TOKENS = 8192  # the most tokens one forward/backward pass holds in memory at once
 SNAPSHOT_EVERY = 25  # steps between the in-memory snapshots a spike rolls back to
 MAX_SPIKES = 3  # the third spike stops the run
@@ -541,45 +534,6 @@ def _heldout_losses(
     return dict(zip(batches, torch.stack(means).tolist(), strict=True))
 
 
-def _loss_weights(
-    inputs: Tensor,
-    targets: Tensor,
-    user_id: int,
-    ai_id: int,
-    end_id: int,
-    bos_id: int,
-    sys_id: int,
-    weight: float,
-) -> Tensor | None:
-    """The weight of each target token in the training loss: ``weight`` for a target inside a
-    person's turn, 1 for every other, and 0 for a padding target (``-100``, which the loss
-    ignores). ``None`` when ``weight`` is 1.0, so that the loss is today's.
-
-    A target is inside a person's turn when it is the ``<|user|>`` marker, a token of the person's
-    text, or the ``<|end|>`` that closes the turn. The ``<|bos|>``, a ``<|sys|>`` line and its
-    ``<|end|>``, the ``<|ai|>`` marker, the AI's text and its ``<|end|>`` count 1, and so does
-    plain text. Rows are packed, so the rule runs along each row: tokens before the row's first
-    marker (the tail of a cut document) count 1, and a person's turn cut off by the end of the row
-    counts ``weight`` to the end. The row's first input token is read too, so a row that starts
-    with a ``<|user|>`` marker has its first target inside that turn.
-    """
-    if weight == 1.0:
-        return None
-    seq = torch.cat([inputs[:, :1], targets], dim=1)
-    is_user = seq == user_id
-    # Every token that changes whose turn it is: a person's marker opens one, the others close it.
-    ends_turn = (seq == ai_id) | (seq == bos_id) | (seq == sys_id) | (seq == end_id)
-    position = torch.arange(seq.shape[1], device=seq.device).expand_as(seq)
-    last_change = torch.where(is_user | ends_turn, position, -1).cummax(dim=1).values
-    # Whether the position's own token leaves it inside a person's turn (the last change was an
-    # opening); an ``<|end|>`` itself belongs to the turn it closes, so it reads the position before.
-    inside = (last_change >= 0) & is_user.gather(1, last_change.clamp(min=0))
-    before = torch.cat([torch.zeros_like(inside[:, :1]), inside[:, :-1]], dim=1)
-    user_part = torch.where(seq == end_id, before, inside)[:, 1:]
-    weights = torch.where(user_part, weight, 1.0).to(torch.float32)
-    return torch.where(targets == -100, 0.0, weights)
-
-
 class _Run:
     """One run's training loop and the state it carries from step to step."""
 
@@ -741,39 +695,20 @@ class _Run:
         """
         ctx_len = self.cfg.shape.ctx_len
         rows_per_pass = max(1, MICRO_BATCH_TOKENS // ctx_len)
-        tok = self.setup.tok
-        weights = _loss_weights(
-            x,
-            y,
-            tok.user_id,
-            tok.ai_id,
-            tok.end_id,
-            tok.bos_id,
-            tok.sys_id,
-            USER_TURN_LOSS_WEIGHT,
-        )
-        if weights is not None:
-            # The weighted mean over the whole batch; a batch that weighs nothing has a zero loss
-            # (and so a zero gradient) rather than a division by zero.
-            weight_sum = weights.sum()
-            divisor = torch.where(weight_sum > 0, weight_sum, torch.ones_like(weight_sum))
         total = torch.zeros((), device=self.device)
         for start in range(0, len(x), rows_per_pass):
-            rows = slice(start, start + rows_per_pass)
             with _autocast(self.device):
-                logits = self.model(x[rows])
+                logits = self.model(x[start : start + rows_per_pass])
                 # Inside autocast the loss still runs in float32 (PyTorch casts the logits for
                 # it), without a separate float copy of them first.
-                if weights is None:
-                    loss = (
-                        F.cross_entropy(logits.flatten(0, 1), y[rows].flatten(), reduction="sum")
-                        / self.tokens_per_step
+                loss = (
+                    F.cross_entropy(
+                        logits.flatten(0, 1),
+                        y[start : start + rows_per_pass].flatten(),
+                        reduction="sum",
                     )
-                else:
-                    token_loss = F.cross_entropy(
-                        logits.flatten(0, 1), y[rows].flatten(), reduction="none"
-                    )
-                    loss = (token_loss * weights[rows].flatten()).sum() / divisor
+                    / self.tokens_per_step
+                )
             del logits  # not needed by backward (the loss saved what it needs): free it now
             loss.backward()
             total += loss.detach()

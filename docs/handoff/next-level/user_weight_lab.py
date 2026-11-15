@@ -1,5 +1,10 @@
 """Lab: how much should a chat count the person's turns in the training loss?
 
+RECORD ONLY (2026-11-15): the weight was measured at 1.0, 0.3 and 0.0 and every lower weight made
+the AI's own turns worse (ADR 0010, section 4.2), so the mechanism this script sets
+(``USER_TURN_LOSS_WEIGHT`` and ``_loss_weights`` in the trainer, commit ec8b390) was removed
+again. To run this script, check out ec8b390 or later up to the commit that removed it.
+
 A chat document trains the model on every token, the person's turns included, although the model
 never writes a person's turn when it is used. This script sets the weight of the person's turns
 (``airace_ml.train.trainer.USER_TURN_LOSS_WEIGHT``; 1.0 is today's loss), runs the scorecard

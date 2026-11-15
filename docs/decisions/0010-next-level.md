@@ -96,6 +96,19 @@ Engine 3 is one number for every item of this section that is kept: nothing is r
 - **Decision: kept.** On a 12.6M-token run few documents repeat either way, so nothing moves, as expected; the rule is right for long runs and small pools (every document once before any twice). Follow-ups sit near zero in text 1 either way; text 2 teaches them.
 - **What the six seeds say about noise:** between seeds of one recipe, bench-v1 differs by about 2 points (48.0 to 51.6), talk rates by 5 to 10 points, the yardstick loss by 0.006. The single-seed flags of the first measurement (bench 2 to 3 points lower) were noise. Decisions on bench and talk need several seeds or a paired design; losses are the precise measures.
 
+### 4.2 Counting the person's turns less in the loss (Task 6): removed
+- **The idea:** a chat document trains the model on every token, the person's turns included, although the model never writes a person's turn. A weight below 1 on those targets (the person's marker, text and closing token) would spend the brain on the AI's own turns.
+- **Measured** (`docs/handoff/next-level/user_weight_lab.py`, engine 3, text 1): the yardstick loss on the AI's turns alone (14,179 targets of the 128 yardstick rows):
+
+| weight of the person's turns | first AI, seed 1 | first AI, seed 2 | conversation-heavy Small |
+|---|---|---|---|
+| 1.0 (as before) | 2.318 | 2.321 | 1.836 |
+| 0.3 | 2.360 | 2.400 | 1.859 |
+| 0.0 | 2.383 | 2.428 | 1.924 |
+
+- **Decision: removed** (the rule asked for the AI-turn loss to fall by 0.02; it rose by 0.02 to 0.11, steadily as the weight fell; seed noise on this loss is about 0.006). Learning to predict the person's turns teaches language the AI's turns use too. The mechanism (`_loss_weights`, commit ec8b390) is deleted again; the lab script stays as a record.
+- Not measured on text 2. Its person's turns are short questions with typing noise; the result above is so steady in the weight that a different sign is not expected, and a brain that reads noisy typing has to learn that typing somewhere.
+
 ### 4.4 Lessons that stick (Task 8): already do; nothing changed
 - **Measured** (`docs/handoff/next-level/lessons_lab.py`, engine 3): a first AI continued with one run built field for field as the game builds it for "Train on your lessons" (the same Tiny brain, the Short length of 6,291,456 tokens, the even mix, the lessons at the game's share of 5%), with ten made-up lessons ("What colour is a glimmerfin?" → "A glimmerfin is teal."):
 
