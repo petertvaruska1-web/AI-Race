@@ -72,23 +72,42 @@ def test_no_probe_subject_is_asked_about_after_the_first_question():
             ), (fact, turns)
 
 
-def _held_pattern() -> re.Pattern:
-    """Every subject the probe holds back, in any relation, as whole words in any case (with and
-    without a leading "the")."""
+def _held_sequences() -> list[list[str]]:
+    """The word sequence of every subject the probe holds back, in any relation, with and without
+    a leading "the"."""
     held = {f.subject for f in KB.facts if is_probe_subject(f.relation, f.subject)}
     held |= {s.removeprefix("the ") for s in held}
-    alternatives = sorted(
-        (r"\s+".join(re.escape(w) for w in s.split()) for s in held), key=len, reverse=True
-    )
-    return re.compile(rf"(?<!\w)(?:{'|'.join(alternatives)})(?!\w)", re.IGNORECASE)
+    return [re.findall(r"[a-z0-9']+", s.lower()) for s in held]
+
+
+def _names_a_held_subject(text: str, sequences: list[list[str]]) -> bool:
+    """Whether the words of ``text`` hold the words of a held subject, one after the other."""
+    words = re.findall(r"[a-z0-9']+", text.lower())
+    for seq in sequences:
+        n = len(seq)
+        if any(words[i : i + n] == seq for i in range(len(words) - n + 1)):
+            return True
+    return False
 
 
 def test_no_held_subject_is_said_in_any_turn_after_the_first():
-    held = _held_pattern()
+    held = _held_sequences()
+    assert held and _names_a_held_subject("And the " + " ".join(held[0]) + "?", held)
     for seed in range(4):
         for turns, _, _ in _followups(5000, seed=100 + seed):
             for role, text in turns[2:]:
-                assert not held.search(text), (role, text, turns)
+                assert not _names_a_held_subject(text, held), (role, text, turns)
+
+
+def test_no_held_subject_is_said_in_any_later_turn_of_an_identity_chat():
+    held = _held_sequences()
+    for seed in range(4):
+        for turns in _identities(5000, seed=200 + seed):
+            start = 1 if turns[0][0] == "sys" else 0
+            for role, text in turns[start + 1 :]:  # every turn after the first user turn
+                assert not _names_a_held_subject(text, held), (role, text, turns)
+            if start:  # the identity line names no held subject either
+                assert not _names_a_held_subject(turns[0][1], held), turns
 
 
 def test_a_knowledge_base_that_allows_no_follow_up_is_refused():
@@ -260,27 +279,57 @@ def test_the_name_lists_are_large_made_up_and_leave_the_probes_names_alone():
 
 
 # Crude stems in several languages, written here as well as in chats.py so a shortened list there
-# is caught.
+# is caught. The last group holds the stems of the second and third reviews.
 _RUDE = (
     "puta", "puto", "kok", "culo", "merd", "cazz", "kurw", "pizd", "cono", "pene", "negr",
     "fuk", "fuck", "shit", "cunt", "nig", "fag", "dick", "cock", "porn", "sex", "fick", "fotz",
     "chuj", "huj", "blya", "suka", "chut", "lund", "randi", "orosp", "kut", "lul", "sik",
+    "buta", "pusi", "pus", "fallo", "phall", "shizo", "schiz", "pig", "vulg", "dix", "pipi",
+    "pupu", "dong", "stool", "loli", "kanojo",
+    "kuso", "gamo", "fok", "jiz", "zigan", "kum", "pis", "bonk", "nip", "choni", "grifa",
+    "demon", "odin", "jehaw", "pitin", "teez", "zebi", "kolo", "kos",
 )  # fmt: skip
+# Real brands and names that no made-up name may be (a name holding "roomba" is dropped too).
+_BRANDS = ("Brita", "Teva", "Tripo", "Trovo", "Tumi", "Ooni", "Elsa")
+# First words of companies that are real companies or too close to one.
+_REAL_COMPANY_FIRSTS = ("Pinecone", "Owlet", "Misty", "Pebble", "Doodle", "Copper")
 
 
 def test_no_made_up_name_or_company_holds_a_rude_stem():
-    parts = set(_RUDE) | set(chats.RUDE_PARTS)
     common = {n.lower() for n in chats.COMMON_NAMES}
     for text in (*chats.NAMES, *chats.COMPANIES):
         low = text.lower()
         if low in common:  # a real first name is checked as a whole ("Diego" stays)
-            assert low not in parts and low not in chats.RUDE_NAMES, text
+            assert low not in _RUDE, text
         else:
-            assert not any(p in low for p in parts), text
-    for name in ("Puta", "Putor", "Kokia", "Kokel", "Merdo", "Culona"):
+            assert not any(p in low for p in _RUDE), text
+        assert "roomba" not in low, text
+    for name in ("Puta", "Putor", "Kokia", "Kokel", "Merdo", "Culona", "Kusoa", "Zigani", "Odina"):
         assert name not in chats.NAMES
+    for name in _BRANDS:
+        assert name not in chats.NAMES, name
     for name in ("Fatima", "Diego", "Sadie"):  # ordinary names are kept
         assert name in chats.NAMES
+
+
+def test_a_company_has_no_knowledge_base_word_and_no_real_company_as_its_first_word():
+    kb_words = {
+        w.lower() for f in KB.facts for s in (f.subject, f.obj) for w in re.findall(r"\w+", s)
+    }
+    assert len(chats.COMPANIES) >= 600
+    for company in chats.COMPANIES:
+        words = re.findall(r"\w+", company.lower())
+        assert not set(words) & kb_words, company
+        assert words[0] not in {w.lower() for w in _REAL_COMPANY_FIRSTS}, company
+
+
+def test_the_favorite_food_question_is_answered_with_a_food_reply():
+    for questions, replies in chats.IDENTITY_FAMILIES["life"]:
+        if "What's your favorite food?" in questions:
+            assert not any(r.startswith("Nothing") for r in replies)
+        if "What did you eat today?" in questions:
+            assert "What's your favorite food?" not in questions
+            assert any(r.startswith("Nothing") for r in replies)
 
 
 # --- the identity line in the assembler --------------------------------------------------------

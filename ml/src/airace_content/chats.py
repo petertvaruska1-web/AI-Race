@@ -398,6 +398,7 @@ sora siri alexa kimi gemini gemma claude bard grok ernie qwen cortana watson mis
 llama phi copilot bixby jasper replika pika runway dalle aria nova echo pixel atlas cosmo
 tay xiaoice jarvis hal vector sophia asimo pepper nao aibo lumi leo cleo
 elon avon java hoka golan rubio rama
+brita teva tripo trovo tumi ooni elsa
 """
 _PRODUCT_NAMES = frozenset(_PRODUCT_NAMES_TEXT.split())
 # Parts that make a made-up name or a company read as rude, sexual, an insult, a slur, violent or
@@ -451,6 +452,9 @@ RUDE_PARTS = (
     # found by reading the whole generated list
     "buta", "pusi", "pus", "fallo", "phall", "shizo", "schiz", "pig", "vulg", "dix", "pipi",
     "pupu", "dong", "stool", "loli", "kanojo",
+    # found by the third reading; "roomba" is a real product
+    "kuso", "gamo", "fok", "jiz", "zigan", "kum", "pis", "bonk", "nip", "choni", "grifa", "demon",
+    "odin", "jehaw", "pitin", "teez", "zebi", "kolo", "kos", "roomba",
 )  # fmt: skip
 # Real first names that are rude or slang as a whole word in some language.
 RUDE_NAMES = frozenset(
@@ -479,7 +483,15 @@ Ridge Brook Tumble Little Clever Gentle Sunny Misty Starry Lucky Quiet Moonbeam 
 Pinecone Hedgehog Owlet Puffin Walnut Chestnut Gumdrop Marigold Tidepool Riverbend Hilltop
 Foxglove Whistle Doodle Breezy Cozy Silverleaf Goldfinch Toffee Nutmeg Lilac Sundial Wispy
 Bluefern Greenpond Applewood Hollyhock Larkspur Pumpkin Sprout Bumblewood Fiddle Pickle Wobble
+Alverin Brennow Calvory Dorrel Esmoor Farrowdale Gandrel Halvern Imbrel Jorvane Kestrin Lorvik
+Mandrel Norvane Orlow Pemberly Quenby Rothwin Selvane Tamsin Ulvern Vandrel Wexlow Yarrowby
+Zelvane Arlevo Belmarsh Cavenly Dunnock Elmsworth Fairlow Glenwick Harlow Ivermere Jessamy
+Kelvane Lindrow Norwick Ostrel Pellam Quillon Rosewell Sablewick Thornby Umberly Vexley
+Wrenfield Yellowmoor Zephra Ambrell Brindle Corvane Dellwyn Evenmoor Fallowby Hartley Islewood
+Kingsmoor Larkfield Mossgate Nettlebed Oakhaven Primrose Quartermoor Ravenscar Stonebrook
 """
+# First words of companies that are real companies or too close to one.
+_REAL_COMPANY_FIRST = frozenset({"Pinecone", "Owlet", "Misty", "Pebble", "Doodle", "Copper"})
 _COMPANY_SECOND = (
     "Labs", "Works", "& Co", "Studio", "Workshop", "Lantern", "Forge", "Garden", "Mill",
     "Collective",
@@ -548,11 +560,17 @@ def name_lists(seed: int = 0) -> tuple[list[str], list[str]]:
     order = rng.permutation(len(names))
     names = [names[int(i)] for i in order]
 
+    # A company is not used when any one of its words is a word of the knowledge base: the follow-up
+    # probe holds some of those subjects back, and no later turn may say one.
+    kb_each = {w for text in kb_words for w in _words(text)}
     companies = [
         f"{first} {second}"
         for first in _COMPANY_FIRST.split()
+        if first not in _REAL_COMPANY_FIRST
         for second in _COMPANY_SECOND
-        if first != second and _allowed(f"{first} {second}", kb_words)
+        if first != second
+        and _allowed(f"{first} {second}", kb_words)
+        and not _words(f"{first} {second}") & kb_each
     ]
     order = rng.permutation(len(companies))
     return names, [companies[int(i)] for i in order]
@@ -613,13 +631,13 @@ IDENTITY_FAMILIES: dict[str, tuple[tuple[tuple[str, ...], tuple[str, ...]], ...]
         (
             (
                 "Who made you?", "Who built you?", "Who created you?", "Which company are you from?",
-                "Who do you work for?", "Where do you come from?", "Who is your maker?",
+                "Who do you work for?", "Which company do you belong to?", "Who is your maker?",
                 "What company made you?", "Who owns you?", "Who trained you?", "Who designed you?",
                 "Which company built you?", "Where are you from?",
             ),
             (
                 "{company} made me.", "I'm an AI from {company}.", "I was made by {company}.",
-                "I'm an AI made by {company}.", "I come from {company}.",
+                "I'm an AI made by {company}.", "I'm from {company}.",
                 "{company} made me. I'm {name}, an AI.", "I'm {name}, and {company} made me.",
             ),
         ),
@@ -697,10 +715,15 @@ IDENTITY_FAMILIES: dict[str, tuple[tuple[tuple[str, ...], tuple[str, ...]], ...]
             "No. I'm an AI, so I don't go to work.",
             "No, I'm {name}, an AI. I'm here to chat with you.",
         )),
-        (("What did you eat today?", "What's your favorite food?"), (
+        (("What did you eat today?",), (
             "Nothing. I'm an AI, so I don't eat.",
             "I'm an AI, so I don't eat food.",
             "I'm {name}, an AI, so I don't eat.",
+        )),
+        (("What's your favorite food?",), (
+            "I don't have one. I'm an AI, so I don't eat.",
+            "I'm an AI, so I don't eat food.",
+            "I'm {name}, an AI, so I don't eat or have a favorite food.",
         )),
         (("Do you sleep?", "Do you get tired?"), (
             "No. I'm an AI, so I don't sleep or get tired.",
@@ -836,10 +859,13 @@ def identity_chat(rng: np.random.Generator, kb: KB | None = None) -> Turns:
         reply = _identity_reply(rng, family, replies, name, company)
         talk += [("user", _choice(rng, questions)), ("ai", reply)]
     if rng.random() < FACT_SHARE:
-        # This fact may name a probe-held subject in a later turn. That is allowed: it is a full
-        # question of its own, not an elliptical follow-up, as fact chats already ask.
-        fact = _fact_exchange(kb, rng)
-        talk = fact + talk if rng.random() < 0.5 else talk + fact
+        # The fact exchange comes after the first user turn or is that turn, so it must not name a
+        # subject the probe holds back; it is drawn again until it does not.
+        for _ in range(_TRIES):
+            fact = _fact_exchange(kb, rng)
+            if not any(_says_held(kb, text) for _, text in fact):
+                talk = fact + talk if rng.random() < 0.5 else talk + fact
+                break
     return turns + talk
 
 
