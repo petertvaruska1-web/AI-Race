@@ -2,6 +2,7 @@ import dataclasses
 import inspect
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -1073,3 +1074,143 @@ def test_a_state_saved_by_another_engine_is_never_continued(tiny_data_root, tmp_
         info["run"]["engine"] = other
         state.write_text(json.dumps(info), encoding="utf-8")
         assert not can_resume(out, c)
+
+
+# -- the weight of the person's turns in the training loss -------------------------------------------
+
+BOS, END, USER, AI, SYS = 1, 2, 3, 4, 6
+A, B, C = 10, 11, 12
+
+
+def _call(rows, w):
+    """``_loss_weights`` of rows given as full token lists (inputs are all but the last token,
+    targets all but the first), as nested lists. A ``-100`` is a padding target."""
+    full = torch.tensor(rows)
+    return trainer_module._loss_weights(full[:, :-1], full[:, 1:], USER, AI, END, BOS, SYS, w)
+
+
+def _weights(row, w=0.5):
+    """The weights of the targets of one row (its tokens after the first), as a list."""
+    return _call([row], w)[0].tolist()
+
+
+def test_the_person_turn_weight_is_one_so_nothing_changes_by_default():
+    assert trainer_module.USER_TURN_LOSS_WEIGHT == 1.0
+    assert _call([[BOS, USER, A, END, AI, B, END]], 1.0) is None
+
+
+def test_a_chat_weighs_the_person_turn_and_its_end_only():
+    # bos user a b end ai c end: the seven targets after bos.
+    assert _weights([BOS, USER, A, B, END, AI, C, END]) == [0.5, 0.5, 0.5, 0.5, 1, 1, 1]
+
+
+def test_two_chats_packed_in_one_row():
+    row = [BOS, USER, A, END, AI, B, END, BOS, USER, C, END, AI, A, END]
+    assert _weights(row) == [0.5, 0.5, 0.5, 1, 1, 1, 1, 0.5, 0.5, 0.5, 1, 1, 1]
+
+
+def test_a_row_that_starts_mid_document_weighs_the_tail_as_one():
+    # The tail of a cut document comes before any marker; a new chat then starts.
+    row = [A, B, C, END, BOS, USER, A, END, AI, B, END]
+    assert _weights(row) == [1, 1, 1, 1, 0.5, 0.5, 0.5, 1, 1, 1]
+
+
+def test_a_row_that_starts_with_a_person_marker_weighs_that_turn():
+    assert _weights([USER, A, B, END, AI, C, END]) == [0.5, 0.5, 0.5, 1, 1, 1]
+
+
+def test_a_row_ending_inside_a_person_turn_weighs_it_to_the_end():
+    assert _weights([BOS, USER, A, B, C]) == [0.5, 0.5, 0.5, 0.5]
+    assert _weights([AI, A, END, BOS, USER, B]) == [1, 1, 1, 0.5, 0.5]
+
+
+def test_a_system_line_and_its_end_weigh_one():
+    row = [BOS, SYS, A, B, END, USER, C, END, AI, A, END]
+    assert _weights(row) == [1, 1, 1, 1, 0.5, 0.5, 0.5, 1, 1, 1]
+
+
+def test_plain_text_rows_weigh_one():
+    assert _weights([BOS, A, B, C, A, B, END, BOS, C, A]) == [1] * 9
+
+
+def test_padding_targets_have_no_weight_and_stay_ignored():
+    row = [BOS, USER, A, END, AI, B, END, -100, -100]
+    assert _weights(row, 0.5) == [0.5, 0.5, 0.5, 1, 1, 1, 0, 0]
+
+
+def test_the_weights_are_a_vector_over_all_rows_of_the_batch():
+    out = _call([[BOS, USER, A, END, AI, B, END], [A, B, USER, C, END, AI, B]], 0.25)
+    assert out.shape == (2, 6)
+    assert out.tolist() == [[0.25, 0.25, 0.25, 1, 1, 1], [1, 0.25, 0.25, 0.25, 1, 1]]
+
+
+def _fake_run():
+    """Just what ``_Run._forward_backward`` reads of a run, around a real tiny model."""
+    torch.manual_seed(0)
+    shape = ModelShape(2, 64, 64)
+    tok = SimpleNamespace(user_id=USER, ai_id=AI, end_id=END, bos_id=BOS, sys_id=SYS)
+    return SimpleNamespace(
+        cfg=SimpleNamespace(shape=shape),
+        tokens_per_step=64,
+        device=torch.device("cpu"),
+        model=Transformer(shape, 16),
+        setup=SimpleNamespace(tok=tok),
+    )
+
+
+def _xy(start):
+    """One row of 64 tokens and its targets: ``start``, then plain text."""
+    full = torch.tensor([[*start, *[A] * (65 - len(start))]])
+    return full[:, :-1], full[:, 1:]
+
+
+def _token_losses(run, x, y):
+    with torch.no_grad():
+        return F.cross_entropy(run.model(x).flatten(0, 1), y.flatten(), reduction="none")
+
+
+def test_the_training_loss_is_the_weighted_mean(monkeypatch):
+    x, y = _xy([BOS, USER, A, B, END, AI, C, END])
+    run = _fake_run()
+    nll = _token_losses(run, x, y)
+    # Targets user a b end ai c end, then plain text: the person's turn is the first four.
+    w = torch.tensor([0.5] * 4 + [1.0] * 60)
+    expected = (w * nll).sum() / w.sum()
+    monkeypatch.setattr(trainer_module, "USER_TURN_LOSS_WEIGHT", 0.5)
+    got = trainer_module._Run._forward_backward(run, x, y)
+    assert got.item() == pytest.approx(expected.item(), rel=1e-5)
+    assert all(p.grad is not None and torch.isfinite(p.grad).all() for p in run.model.parameters())
+
+
+def test_a_batch_with_no_weight_gives_a_zero_loss_and_a_zero_gradient(monkeypatch):
+    # A row made only of a person's turn at weight 0: nothing to learn from, nothing to divide by.
+    x, y = _xy([USER])
+    run = _fake_run()
+    monkeypatch.setattr(trainer_module, "USER_TURN_LOSS_WEIGHT", 0.0)
+    got = trainer_module._Run._forward_backward(run, x, y)
+    assert got.item() == 0.0
+    for p in run.model.parameters():
+        assert p.grad is not None
+        assert torch.count_nonzero(p.grad) == 0
+
+
+def test_a_zero_weight_leaves_only_the_ai_turns_in_the_loss(monkeypatch):
+    x, y = _xy([USER, A, END, AI, B, C, END])
+    run = _fake_run()
+    nll = _token_losses(run, x, y)
+    # Targets a end ai b c end, then plain text: the row starts in a person's turn, whose marker
+    # is the first input.
+    w = torch.tensor([0.0, 0.0] + [1.0] * 62)
+    monkeypatch.setattr(trainer_module, "USER_TURN_LOSS_WEIGHT", 0.0)
+    got = trainer_module._Run._forward_backward(run, x, y)
+    assert got.item() == pytest.approx(((w * nll).sum() / w.sum()).item(), rel=1e-5)
+
+
+def test_the_default_weight_runs_exactly_as_the_code_without_weights(
+    tiny_data_root, tmp_path, monkeypatch, whole_batch_run
+):
+    monkeypatch.setattr(trainer_module, "_loss_weights", lambda *args, **kwargs: None)
+    bypassed = _probe_run(tiny_data_root, tmp_path / "bypassed", monkeypatch)
+    assert bypassed.loss == whole_batch_run.loss
+    for w, expected in zip(bypassed.weights, whole_batch_run.weights, strict=True):
+        assert torch.equal(w, expected)
