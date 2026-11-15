@@ -25,7 +25,7 @@ from airace_ml.skills.kb import load_kb
 FIX = Path(__file__).parents[1] / "fixtures" / "sources"
 FETCH = fixture_fetch(FIX)
 CHAT_COMPONENTS = {
-    "soda_ai",
+    "assistant_chat",
     "everyday_conv",
     "fact_chat",
     "instructions",
@@ -73,7 +73,7 @@ def test_text_2_targets_and_conversations_recipe():
         "web": 60e6,
         "books": 30e6,
         "educational": 40e6,
-        "conversations": 50e6,
+        "conversations": 30e6,
         "code": 20e6,
         "reasoning": 20e6,
         "facts": 12e6,
@@ -83,12 +83,12 @@ def test_text_2_targets_and_conversations_recipe():
     assert [
         (c.kind, c.name, c.share, c.simplicity_min, c.system_share) for c in conv.components
     ] == [
-        ("source", "soda_ai", 0.50, None, 0.0),
-        ("generator", "fact_chat", 0.14, None, 0.4),
-        ("generator", "instructions", 0.13, None, 0.4),
-        ("generator", "followup_chat", 0.12, None, 0.4),
-        ("generator", "identity_chat", 0.10, None, 0.0),
-        ("source", "everyday_conv", 0.01, None, 0.4),
+        ("generator", "assistant_chat", 0.34, None, 0.4),
+        ("generator", "fact_chat", 0.20, None, 0.4),
+        ("generator", "instructions", 0.18, None, 0.4),
+        ("generator", "followup_chat", 0.15, None, 0.4),
+        ("generator", "identity_chat", 0.11, None, 0.0),
+        ("source", "everyday_conv", 0.02, None, 0.4),
     ]
     assert conv.noise == RECIPES_V1["conversations"].noise
     for ds in DATASET_IDS:
@@ -107,8 +107,10 @@ def test_sources_needed_gives_the_sources_of_the_text_being_built():
     one = sources_needed(DATASET_IDS, simple_vocab=True)
     two = sources_needed(DATASET_IDS, simple_vocab=True, text=2)
     assert "soda_ai" not in one and "soda" in one
-    assert "soda_ai" in two and "soda" not in two
-    assert set(two) - {"soda_ai"} == set(one) - {"soda"}
+    # text 2 writes its own chats with a person and reads no SODA dialogues (soda_ai stays a
+    # source, the fallback for a later round)
+    assert "soda_ai" not in two and "soda" not in two
+    assert set(two) == set(one) - {"soda"}
     assert two == [s for s in SOURCES if s in two]  # the order of SOURCES
 
 
@@ -135,8 +137,8 @@ def test_text_2_chats_of_identity_components_start_with_an_identity_line_and_tex
     assert not any(isinstance(d.content, list) and d.content[0][0] == "sys" for d in one)
     by = {c["name"]: c for c in stats2["components"]}
     assert set(by) == CHAT_COMPONENTS and all(c["docs"] > 0 for c in by.values())
-    # everyday_conv is 1% of the chats: too few in a tiny build to say how many start with the line
-    for name in ("fact_chat", "instructions", "followup_chat"):
+    # everyday_conv is 2% of the chats: too few in a tiny build to say how many start with the line
+    for name in ("assistant_chat", "fact_chat", "instructions", "followup_chat"):
         docs = [d for d in two if d.component == name]
         assert docs, name
         starts = sum(d.content[0][0] == "sys" for d in docs)

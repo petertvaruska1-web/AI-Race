@@ -26,6 +26,7 @@ from airace_content.noise import (
     inject_noise,
 )
 from airace_content.progress import Pace, Progress, silent
+from airace_content.smalltalk import assistant_chat_docs
 from airace_content.sources import (
     FORMAT_CHECK_ROWS,
     MIN_CHAT_TURNS,
@@ -146,19 +147,22 @@ RECIPES: dict[str, Recipe] = {
 
 RECIPES_V1 = RECIPES
 
-# Text 2 differs from text 1 in its conversations only: more kinds of chat, and a share of the chats
-# of the source components start with an identity line. Every other recipe is text 1's.
+# Text 2 differs from text 1 in its conversations only: the game's own practice chats with a
+# person in place of SODA's dialogues, more kinds of chat, and a share of the chats of most
+# components start with an identity line. Every other recipe is text 1's.
 RECIPES_V2: dict[str, Recipe] = {
     **RECIPES_V1,
     "conversations": Recipe(
         "conversations",
         [
-            _source("soda_ai", 0.50),
-            _generator("fact_chat", 0.14, 0.4),
-            _generator("instructions", 0.13, 0.4),
-            _generator("followup_chat", 0.12, 0.4),
-            _generator("identity_chat", 0.10, 0.0),  # it writes its own identity lines
-            _source("everyday_conv", 0.01, None, 0.4),
+            # an identity line in front of a chat that never mentions the name teaches that the
+            # line does not have to be talked about
+            _generator("assistant_chat", 0.34, 0.4),
+            _generator("fact_chat", 0.20, 0.4),
+            _generator("instructions", 0.18, 0.4),
+            _generator("followup_chat", 0.15, 0.4),
+            _generator("identity_chat", 0.11, 0.0),  # it writes its own identity lines
+            _source("everyday_conv", 0.02, None, 0.4),
         ],
         NoiseRates(typo=0.03),
     ),
@@ -185,7 +189,7 @@ FULL_TARGET_TOKENS_V2: dict[str, float] = {
     "web": 60e6,
     "books": 30e6,
     "educational": 40e6,
-    "conversations": 50e6,
+    "conversations": 30e6,
     "code": 20e6,
     "reasoning": 20e6,
     "facts": 12e6,
@@ -235,6 +239,7 @@ BYTES_PER_TOKEN_BY_COMPONENT: dict[str, float] = {
     "soda_ai": 3.7,
     "followup_chat": 2.8,  # short question and answer turns full of names and numbers
     "identity_chat": 2.3,
+    "assistant_chat": 2.8,  # short turns, so the role and end tokens weigh more
 }
 # Documents a generator is asked for at a time while it works towards a full-scale quota.
 GENERATOR_BATCH_DOCS = 200
@@ -254,6 +259,7 @@ GENERATORS: dict[str, GeneratorFn] = {
     # text 2 only: no text-1 recipe uses these
     "followup_chat": followup_chat_docs,
     "identity_chat": identity_chat_docs,
+    "assistant_chat": assistant_chat_docs,
 }
 
 # Datasets of programs and puzzles, scored by ``textproc.structured_quality``: cleaning is meant
