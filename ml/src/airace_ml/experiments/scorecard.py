@@ -86,7 +86,8 @@ FIT_MIN_PAIRS = 50  # fewer cannot set a 90th percentile worth the name
 FIT_PERCENTILE = 90
 FIT_FILE = "fit_threshold.json"
 _WORD = re.compile(r"\w")
-ON_TOPIC_K = 8  # other questions a reply is also scored under
+ON_TOPIC_K = 32  # other questions a reply is also scored under
+ON_TOPIC_TOKENS = 24  # the reply's first tokens (with its end) the lift is a total over
 ON_TOPIC_FILE = "on_topic.json"
 
 TINY = ModelShape(4, 128, 256)
@@ -197,7 +198,11 @@ class CardScale:
     followups: int = 120
     identity_names: tuple[str, ...] = chatprobes.IDENTITY_NAMES
     identity_samples: int = 3  # draws of each identity question for each name
-    small_talk_samples: int = 5  # 100 small-talk replies: a 6-point change is more than noise
+    # 100 small-talk replies, in groups of 5 per prompt: one such rate has a standard error of
+    # about 5 points, so the tolerances (6 to 8 points) are an allowance, not a proof; a change
+    # flagged on a small-talk or identity rate is confirmed with a second seed or by reading the
+    # stored replies before anything is decided on it.
+    small_talk_samples: int = 5
 
     def probes(self) -> dict[str, Any]:
         """The part of the scale that changes a measurement of a given run."""
@@ -369,24 +374,32 @@ def other_questions(questions: Sequence[str], prompt: str, k: int = ON_TOPIC_K) 
 
 def lifts(judge: Judge, items: Sequence[tuple[str, str]], questions: Sequence[str]) -> list[float]:
     """For each ``(prompt, reply)``, how much likelier the judge finds the reply as the answer to
-    its own prompt than to other questions: the mean of its
-    :meth:`~airace_ml.evals.judge.Judge.reply_nlls` under :func:`other_questions` minus the one
-    under ``prompt``; ``-inf`` when the reply cannot be scored under its prompt. Every item and
-    condition is scored in one batch."""
+    its own prompt than to other questions, in nats in total (not per token): the total
+    log-probability of the reply's first :data:`ON_TOPIC_TOKENS` tokens (its closing end token
+    included) under ``prompt`` (:meth:`~airace_ml.evals.judge.Judge.reply_totals`), minus the
+    mean of the same total under the :func:`other_questions`. A total, so a long reply's lift is
+    not diluted. ``-inf`` when the reply cannot be scored under its prompt or any other total is
+    not a finite number. Every item and condition is scored in one batch."""
     pairs, spans = [], []
     for prompt, reply in items:
         others = other_questions(questions, prompt)
         spans.append(len(others))
         pairs += [([("user", q)], reply) for q in (prompt, *others)]
-    losses = judge.reply_nlls(pairs) if pairs else []
+    scores = judge.reply_totals(pairs, first=ON_TOPIC_TOKENS) if pairs else []
     out, at = [], 0
     for count in spans:
-        own, rest = losses[at], losses[at + 1 : at + 1 + count]
+        own, rest = scores[at], scores[at + 1 : at + 1 + count]
         at += 1 + count
-        if not math.isfinite(own) or not rest:
+        totals = [s.sum_logprob for s in rest]
+        if (
+            own.n_tokens <= 0
+            or not math.isfinite(own.sum_logprob)
+            or not totals
+            or not all(math.isfinite(t) for t in totals)
+        ):
             out.append(-math.inf)
         else:
-            out.append(math.fsum(rest) / len(rest) - own)
+            out.append(own.sum_logprob - math.fsum(totals) / len(totals))
     return out
 
 
@@ -418,21 +431,34 @@ def best_threshold(positives: Sequence[float], negatives: Sequence[float]) -> di
 
 
 def on_topic_calibration(
-    judge: Judge, root: Path, identity: str, out: Path, on_status: Callable[[str], None]
+    judge: Judge,
+    root: Path,
+    identity: str,
+    out: Path,
+    on_status: Callable[[str], None],
+    fit_threshold: float,
 ) -> dict[str, Any]:
     """The on-topic threshold of the yardstick ``root``, measured on its :func:`fit_pairs`
     ``(q_i, r_i)``: real replies (the lift of ``r_i`` under ``q_i``) against swapped ones (the
     lift of ``r_j`` under ``q_i``, ``j`` half the pairs away, unless ``r_j`` is ``r_i``), with
-    :func:`best_threshold`. Cached in ``out`` while the yardstick, the judge and the measuring
-    code are unchanged; ``questions`` holds every pair's question (the rule's other questions are
-    drawn from them; the rest is :func:`on_topic_summary`). Says how well the threshold separates
-    the two."""
+    :func:`best_threshold`.
+
+    Reported beside it, never used to set it: the share of *hard* swapped replies (the
+    neighbouring pair's, ``r_{i+1}``, unless it is ``r_i``) at or below the threshold, and the
+    share of real replies that both fit (``fit_threshold``, :func:`fits_rule`) and are on topic:
+    the ceiling a model's "fits and on topic" rate is read against.
+
+    Cached in ``out`` while the yardstick, the judge, the fit threshold and the measuring code are
+    unchanged; ``all_questions`` holds every pair's question (the rule's other questions are drawn
+    from them; the rest is :func:`on_topic_summary`). Says how well the threshold separates."""
     key = {
         "yardstick": identity,
         "judge": asdict(judge.calibration) if judge.calibration is not None else None,
         "code": source_digest(CARD_SOURCES),
         "pairs": FIT_PAIRS,
         "k": ON_TOPIC_K,
+        "tokens": ON_TOPIC_TOKENS,
+        "fit_threshold": fit_threshold,
     }
 
     def compute() -> dict[str, Any]:
@@ -446,17 +472,36 @@ def on_topic_calibration(
         n = len(pairs)
         questions = [history[0][1] for history, _ in pairs]
         replies = [reply for _, reply in pairs]
-        swapped = [
-            (questions[i], replies[(i + n // 2) % n])
-            for i in range(n)
-            if replies[(i + n // 2) % n] != replies[i]
-        ]
-        found = lifts(judge, list(zip(questions, replies, strict=True)) + swapped, questions)
+
+        def swapped(offset: int) -> list[tuple[str, str]]:
+            return [
+                (questions[i], replies[(i + offset) % n])
+                for i in range(n)
+                if replies[(i + offset) % n] != replies[i]
+            ]
+
+        far, hard = swapped(n // 2), swapped(1)
+        found = lifts(judge, [*zip(questions, replies, strict=True), *far, *hard], questions)
+        real, far_lifts, hard_lifts = found[:n], found[n : n + len(far)], found[n + len(far) :]
         try:
-            best = best_threshold(found[:n], found[n:])
+            best = best_threshold(real, far_lifts)
         except ValueError as e:
             raise ScorecardSetupError(f"the on-topic threshold of {root} cannot be set: {e}") from e
-        return {**best, "pairs": n, "all_questions": questions}
+        t = best["threshold"]
+        fit = judge.reply_nlls(pairs)
+        both = sum(
+            _WORD.search(r) is not None and nll <= fit_threshold and lift > t
+            for r, nll, lift in zip(replies, fit, real, strict=True)
+        )
+        return {
+            **best,
+            "hard_negatives_at_or_below": (
+                sum(v <= t for v in hard_lifts) / len(hard_lifts) if hard_lifts else None
+            ),
+            "real_fits_and_on_topic": both / n,
+            "pairs": n,
+            "all_questions": questions,
+        }
 
     value = _cached(Path(out) / ON_TOPIC_FILE, key, compute)
     summary = on_topic_summary(value)
@@ -464,19 +509,28 @@ def on_topic_calibration(
         f"on-topic rule: lift above {summary['threshold']:.3f} separates real replies from "
         f"swapped ones with balanced accuracy {summary['balanced_accuracy']:.0%} (real above "
         f"{summary['positives_above']:.0%}, swapped at or below "
-        f"{summary['negatives_at_or_below']:.0%}; {summary['pairs']} pairs)"
+        f"{summary['negatives_at_or_below']:.0%}, hard swapped ones at or below "
+        f"{_share(summary['hard_negatives_at_or_below'])}; real replies that fit and are on topic "
+        f"{summary['real_fits_and_on_topic']:.0%}; {summary['pairs']} pairs)"
     )
     return {**summary, "all_questions": value["all_questions"]}
 
 
+def _share(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:.0%}"
+
+
 def on_topic_summary(calibration: Mapping[str, Any]) -> dict[str, Any]:
-    """What the card records of an on-topic calibration: the threshold, how well it separates,
-    the number of pairs and the :data:`ON_TOPIC_K` spread questions."""
+    """What the card records of an on-topic calibration: the threshold, how well it separates
+    (also hard swapped replies), the share of real replies that fit and are on topic, the number
+    of pairs and the :data:`ON_TOPIC_K` spread questions."""
     return {
         "threshold": calibration["threshold"],
         "balanced_accuracy": calibration["balanced_accuracy"],
         "positives_above": calibration["positives_above"],
         "negatives_at_or_below": calibration["negatives_at_or_below"],
+        "hard_negatives_at_or_below": calibration["hard_negatives_at_or_below"],
+        "real_fits_and_on_topic": calibration["real_fits_and_on_topic"],
         "pairs": calibration["pairs"],
         "questions": other_questions(calibration["all_questions"], ""),
     }
@@ -520,7 +574,7 @@ def _load_instruments(
     except GateSetupError as e:
         raise ScorecardSetupError(str(e)) from e
     threshold, pairs = fit_threshold(judge, root, identity, out)
-    topic = on_topic_calibration(judge, root, identity, out, on_status)
+    topic = on_topic_calibration(judge, root, identity, out, on_status, threshold)
     return Instruments(
         judge,
         novelty,

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from airace_ml.experiments.runs import _write_json
-from airace_ml.experiments.scorecard import FULL, LOSSES, MEASURES, RATES
+from airace_ml.experiments.scorecard import FIT_PERCENTILE, FULL, LOSSES, MEASURES, RATES
 
 LABELS: dict[str, str] = {
     "heldout": "held-out loss",
@@ -56,8 +56,10 @@ COLUMNS: dict[str, str] = {
     "looped": "Loops",
 }
 # How much worse than the baseline a measure may get before compare() reports it (rates as
-# shares, bench in points, losses in nats per token). Small-talk rates rest on 100 replies, where
-# 4 points is noise; identity on 90 replies of six names.
+# shares, bench in points, losses in nats per token). The small-talk and identity tolerances are an
+# allowance, not a proof: one rate over 100 replies (in groups of 5 per prompt) has a standard
+# error of about 5 points, so a change flagged on such a rate is confirmed with a second seed or
+# by reading the stored replies before anything is decided on it.
 TOLERANCE: dict[str, float] = {
     "well_formed": 0.06,
     "fits": 0.06,
@@ -265,7 +267,27 @@ def _markdown(card: Mapping[str, Any]) -> str:
         ),
         "",
     ]
+    topic = ((card.get("measured_with") or {}).get("instruments") or {}).get("on_topic")
+    if isinstance(topic, Mapping):
+        lines += [_real_replies(topic), ""]
     return "\n".join(lines)
+
+
+def _share(value: object) -> str:
+    number = _finite(value)
+    return "n/a" if number is None else f"{number:.0%}"
+
+
+def _real_replies(topic: Mapping[str, Any]) -> str:
+    """How the yardstick's own real replies score: the ceiling the small-talk rates are read
+    against, and how often the on-topic rule rejects swapped replies."""
+    return (
+        f"Real replies themselves: fits {FIT_PERCENTILE}%, on topic "
+        f"{_share(topic.get('positives_above'))}, both "
+        f"{_share(topic.get('real_fits_and_on_topic'))} (the on-topic rule rejects "
+        f"{_share(topic.get('negatives_at_or_below'))} of swapped replies, "
+        f"{_share(topic.get('hard_negatives_at_or_below'))} of the hard ones)."
+    )
 
 
 def write_reports(card: Mapping[str, Any], out: Path) -> None:

@@ -233,3 +233,25 @@ def test_a_baseline_with_another_fit_threshold_is_unlike():
 def test_fits_is_the_column_right_after_well_formed():
     assert sc.MEASURES.index("fits") == sc.MEASURES.index("well_formed") + 1
     assert "fits" in sc.RATES and rep.COLUMNS["fits"] == "Fits the question"
+
+
+def test_the_report_says_how_real_replies_themselves_score(tmp_path):
+    topic = {
+        "threshold": 9.9,
+        "balanced_accuracy": 0.939,
+        "positives_above": 0.912,
+        "negatives_at_or_below": 0.936,
+        "hard_negatives_at_or_below": 0.81,
+        "real_fits_and_on_topic": 0.84,
+        "pairs": 1000,
+        "questions": ["q"],
+    }
+    tools = {**MEASURED_WITH["instruments"], "on_topic": topic}
+    rep.write_reports(_card(measured_with={**MEASURED_WITH, "instruments": tools}), tmp_path)
+    text = (tmp_path / "scorecard.md").read_text("utf-8")
+    assert (
+        f"Real replies themselves: fits {sc.FIT_PERCENTILE}%, on topic 91%, both 84% (the "
+        "on-topic rule rejects 94% of swapped replies, 81% of the hard ones)."
+    ) in text
+    rep.write_reports(_card(), tmp_path)
+    assert "Real replies themselves" not in (tmp_path / "scorecard.md").read_text("utf-8")

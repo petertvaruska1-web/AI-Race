@@ -172,20 +172,30 @@ class Judge:
         prompt and reply do not fit in the judge's span; the reply is kept whole, unless it alone
         leaves no room for a prompt, when its end is cut). ``inf`` for an empty or blank reply. All
         pairs go to the model in one call."""
+        return [_nll(score) for score in self.reply_totals(pairs)]
+
+    def reply_totals(
+        self, pairs: Sequence[tuple[Sequence[tuple[Role, str]], str]], first: int | None = None
+    ) -> list[ContinuationScore]:
+        """For each ``(history, reply)``, the total log-probability and the number of the first
+        ``first`` tokens (all of them when ``None``) of the reply and its closing ``<|end|>``,
+        after the same prompt as :meth:`reply_nlls` (built to leave room for the whole reply, so
+        it does not depend on ``first``). A blank reply scores nothing: ``(0.0, 0)``. All pairs go
+        to the model in one call."""
         ctx_len = self.lm.ctx_len
         contexts, continuations, order = [], [], []
-        out = [math.inf] * len(pairs)
+        out = [ContinuationScore(0.0, 0) for _ in pairs]
         for i, (history, reply) in enumerate(pairs):
             if not reply.strip():
                 continue
             scored = [*self.tok.encode(reply), self.tok.end_id][: ctx_len - _MIN_CHAT_BUDGET]
             contexts.append(build_chat_prompt(self.tok, history, ctx_len, reserve=len(scored)))
-            continuations.append(scored)
+            continuations.append(scored if first is None else scored[:first])
             order.append(i)
         if order:
             scores = self.lm.score_continuations(contexts, continuations)
             for i, score in zip(order, scores, strict=True):
-                out[i] = _nll(score)
+                out[i] = score
         return out
 
 

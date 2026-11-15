@@ -17,7 +17,7 @@ from airace_ml.experiments.configs import (
     QUICK_SHAPE,
     mix_heavy,
 )
-from airace_ml.infer.lm import TorchLM
+from airace_ml.infer.lm import ContinuationScore, TorchLM
 from airace_ml.model.shape import ModelShape
 from airace_ml.model.transformer import Transformer
 from airace_ml.paths import corpus_dir
@@ -206,44 +206,58 @@ def test_a_reply_fits_when_it_has_a_word_and_its_loss_is_under_the_threshold(tin
 # -- on topic -----------------------------------------------------------------------------------
 
 
-class LossJudge:
-    """A judge whose reply loss is looked up: ``losses[(question, reply)]``, else ``default``.
-    Records how many times it was asked and how many pairs each time."""
+class TotalJudge:
+    """A judge whose reply totals are looked up: ``totals[(question, reply)]`` (log-probability
+    of the reply's first tokens), else ``default``; a blank reply scores nothing. ``reply_nlls``
+    looks up ``nlls[(question, reply)]``, else 2.0. Records each call's size and ``first``."""
 
-    def __init__(self, losses, default=5.0, tok=None):
-        self.losses, self.default, self.tok, self.calls = losses, default, tok, []
+    def __init__(self, totals, default=-5.0, nlls=None):
+        self.totals, self.default, self.nlls, self.calls = totals, default, nlls or {}, []
         self.calibration = JudgeCalibration(2.0, 6.0, 5.0, 0.5)
+        self.tok = None
+
+    def reply_totals(self, pairs, first=None):
+        self.calls.append((len(pairs), first))
+        return [
+            ContinuationScore(self.totals.get((h[-1][1], r), self.default), 1)
+            if r.strip()
+            else ContinuationScore(0.0, 0)
+            for h, r in pairs
+        ]
 
     def reply_nlls(self, pairs):
-        self.calls.append(len(pairs))
-        return [self.losses.get((h[-1][1], r), self.default) for h, r in pairs]
-
-    def reply_nll(self, history, reply):
-        return self.reply_nlls([(history, reply)])[0]
+        return [self.nlls.get((h[-1][1], r), 2.0) for h, r in pairs]
 
 
-QUESTIONS = [f"question {k}" for k in range(16)]
+QUESTIONS = [f"question {k}" for k in range(64)]
+REPLIES = [f"reply {k}" for k in range(64)]
 
 
 def test_the_other_questions_are_spread_evenly_and_never_the_prompt():
-    assert sc.ON_TOPIC_K == 8
-    spread = [QUESTIONS[i * 16 // 8] for i in range(8)]
+    assert sc.ON_TOPIC_K == 32 and sc.ON_TOPIC_TOKENS == 24
+    spread = [QUESTIONS[i * 64 // 32] for i in range(32)]
     assert sc.other_questions(QUESTIONS, "Hello!") == spread
     # the prompt itself is replaced by the next question that differs (case and spaces aside)
     got = sc.other_questions(QUESTIONS, "  QUESTION 4 ")
     assert got == [q if q != "question 4" else "question 5" for q in spread]
     assert sc.other_questions(["a", "a", "b"], "A", k=2) == ["b", "b"]
+    for question in spread:  # a question at a spread index is never one of its own others
+        assert question not in sc.other_questions(QUESTIONS, question)
 
 
-def test_lift_is_the_mean_loss_under_other_questions_minus_the_loss_under_its_own():
+def test_lift_is_the_total_under_its_own_question_minus_the_mean_total_under_the_others():
     others = sc.other_questions(QUESTIONS, "Do you like dogs?")
-    losses = {("Do you like dogs?", "Yes."): 2.0}
-    losses.update({(q, "Yes."): 3.0 + k for k, q in enumerate(others)})  # mean 6.5
-    judge = LossJudge(losses)
+    totals = {("Do you like dogs?", "Yes."): -2.0}
+    totals.update({(q, "Yes."): -6.0 - (k % 2) for k, q in enumerate(others)})  # mean -6.5
+    judge = TotalJudge(totals)
     items = [("Do you like dogs?", "Yes."), ("Do you like dogs?", "Troop.")]
     assert sc.lifts(judge, items, QUESTIONS) == [pytest.approx(4.5), pytest.approx(0.0)]
-    assert judge.calls == [2 * 9]  # one batch for every item and condition
-    assert sc.lifts(LossJudge({}, default=math.inf), items[:1], QUESTIONS) == [-math.inf]
+    assert judge.calls == [(2 * 33, 24)]  # one batch: every item, every question, 24 tokens
+    unscorable = TotalJudge({}, default=-math.inf)
+    assert sc.lifts(unscorable, items[:1], QUESTIONS) == [-math.inf]
+    one_other_lost = TotalJudge({**totals, (others[3], "Yes."): math.nan})
+    assert sc.lifts(one_other_lost, items[:1], QUESTIONS) == [-math.inf]
+    assert sc.lifts(judge, [("Hi", "  ")], QUESTIONS) == [-math.inf]  # nothing to score
 
 
 def test_the_on_topic_threshold_is_the_best_separating_one():
@@ -260,41 +274,65 @@ def test_the_on_topic_threshold_is_the_best_separating_one():
 
 def test_a_reply_is_on_topic_when_it_has_a_word_and_its_lift_is_above_the_threshold():
     others = sc.other_questions(QUESTIONS, "Hi")
-    losses = {("Hi", "Hello."): 1.0, **{(q, "Hello."): 2.0 for q in others}}
-    judge = LossJudge(losses)
+    totals = {("Hi", "Hello."): -1.0, **{(q, "Hello."): -2.0 for q in others}}
+    judge = TotalJudge(totals)
     assert sc.on_topic_rule(judge, QUESTIONS, 0.99)("Hi", "Hello.")  # lift 1.0
     assert not sc.on_topic_rule(judge, QUESTIONS, 1.0)("Hi", "Hello.")
     assert not sc.on_topic_rule(judge, QUESTIONS, -9.0)("Hi", "...")
 
 
-def test_the_on_topic_calibration_is_measured_on_held_out_pairs_and_cached(
-    tiny_data_root, tiny_tok, tmp_path, monkeypatch
-):
-    monkeypatch.setattr(sc, "FIT_MIN_PAIRS", 3)
-    pairs = sc.fit_pairs(tiny_data_root, tiny_tok)
-    n = len(pairs)
-    questions = [h[0][1] for h, _ in pairs]
-    losses = {(q, r): 1.0 for q, r in ((h[0][1], r) for h, r in pairs)}  # its own question
-    judge = LossJudge(losses, default=3.0, tok=tiny_tok)
+def _real_totals(replies):
+    """-1 for each real pair (its own question), -3 for any other question."""
+    return {(q, r): -1.0 for q, r in zip(QUESTIONS, replies, strict=True)}
+
+
+def _calibrate(monkeypatch, tmp_path, judge, replies, fit=2.5, yardstick="toy", said=None):
+    pairs = [([("user", q)], r) for q, r in zip(QUESTIONS, replies, strict=True)]
+    monkeypatch.setattr(sc, "fit_pairs", lambda root, tok: pairs)
+    record = said if said is not None else []
+    return sc.on_topic_calibration(judge, tmp_path, yardstick, tmp_path, record.append, fit)
+
+
+def test_the_on_topic_calibration_states_how_well_it_separates_and_is_cached(tmp_path, monkeypatch):
+    # With 64 pairs the other questions are the even ones (the prompt replaced by the next).
+    # Real pairs: lift -1 - (-3) = 2. Swapped (q_i, r_{i+32}): q_{i+32} is among the others for
+    # an even i (lift -3 - (-1 - 31 * 3) / 32 = -0.0625), not for an odd one (lift 0). So 0.0
+    # separates them all. Hard (q_i, r_{i+1}): -0.0625 each, except (q_10, r_11), which the
+    # judge finds as likely as a real pair: -1 - (-1 - 31 * 3) / 32 = 1.9375, above.
+    totals = {**_real_totals(REPLIES), ("question 10", "reply 11"): -1.0}
+    nlls = {("question 3", "reply 3"): 3.0}  # one real reply does not fit (2.0 elsewhere)
+    judge = TotalJudge(totals, default=-3.0, nlls=nlls)
     said = []
-    got = sc.on_topic_calibration(judge, tiny_data_root, "toy", tmp_path, said.append)
-    positives = sc.lifts(judge, [(h[0][1], r) for h, r in pairs], questions)
-    swapped = [
-        (questions[i], pairs[(i + n // 2) % n][1])
-        for i in range(n)
-        if pairs[(i + n // 2) % n][1] != pairs[i][1]
-    ]
-    negatives = sc.lifts(judge, swapped, questions)
-    want = sc.best_threshold(positives, negatives)
-    assert got["threshold"] == pytest.approx(want["threshold"])
-    assert got["balanced_accuracy"] == pytest.approx(want["balanced_accuracy"])
-    assert got["pairs"] == n and got["questions"] == sc.other_questions(questions, "")
-    assert said and "balanced accuracy" in said[0]
-    judge.calls.clear()
-    again = sc.on_topic_calibration(judge, tiny_data_root, "toy", tmp_path, said.append)
-    assert again == got and judge.calls == []  # from its cache
-    sc.on_topic_calibration(judge, tiny_data_root, "another", tmp_path, said.append)
-    assert judge.calls != []
+    got = _calibrate(monkeypatch, tmp_path, judge, REPLIES, fit=2.5, said=said)
+    assert got["threshold"] == pytest.approx(0.0)
+    assert got["balanced_accuracy"] == 1.0
+    assert got["positives_above"] == 1.0 and got["negatives_at_or_below"] == 1.0
+    assert got["hard_negatives_at_or_below"] == pytest.approx(63 / 64)
+    assert got["real_fits_and_on_topic"] == pytest.approx(63 / 64)
+    assert got["pairs"] == 64 and got["questions"] == sc.other_questions(QUESTIONS, "")
+    (line,) = said
+    assert "balanced accuracy 100%" in line and "hard" in line and "98%" in line
+    calls = len(judge.calls)
+    again = _calibrate(monkeypatch, tmp_path, judge, REPLIES, fit=2.5)
+    assert again == got and len(judge.calls) == calls  # from its cache
+    other_fit = _calibrate(monkeypatch, tmp_path, judge, REPLIES, fit=1.5)
+    assert len(judge.calls) > calls and other_fit["real_fits_and_on_topic"] == 0.0
+    _calibrate(monkeypatch, tmp_path, judge, REPLIES, fit=1.5, yardstick="another")
+    assert len(judge.calls) > calls + 1
+
+
+def test_the_calibration_skips_a_swapped_reply_equal_to_the_real_one(tmp_path, monkeypatch):
+    # r_0 = r_32 and r_5 = r_6: under its own question each would score like a real reply, so
+    # (q_0, r_32), (q_32, r_0) and the hard (q_5, r_6) are left out, and every other swapped or
+    # hard reply stays at or below 0.0.
+    replies = list(REPLIES)
+    replies[0] = replies[32] = "same"
+    replies[5] = replies[6] = "dup"
+    judge = TotalJudge(_real_totals(replies), default=-3.0)
+    got = _calibrate(monkeypatch, tmp_path, judge, replies)
+    assert got["threshold"] == pytest.approx(0.0)
+    assert got["balanced_accuracy"] == 1.0 and got["negatives_at_or_below"] == 1.0
+    assert got["hard_negatives_at_or_below"] == 1.0
 
 
 # -- the card ---------------------------------------------------------------------------------

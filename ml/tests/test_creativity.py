@@ -528,6 +528,44 @@ def test_an_empty_reply_has_no_loss_to_score(tiny_tok):
     assert judge.reply_nlls([(history, ""), (history, "Hi.")])[0] == INF
 
 
+def _direct_reply_total(model, prompt: list[int], reply: list[int]) -> float:
+    """The total log-probability of ``reply`` after ``prompt``, from one plain forward pass."""
+    return -_direct_reply_nll(model, prompt, reply) * len(reply)
+
+
+def test_reply_totals_score_the_first_tokens_after_the_prompt_of_the_whole_reply(tiny_tok):
+    from airace_ml.infer.lm import build_chat_prompt
+
+    model = tiny_judge_model(tiny_tok.vocab_size)
+    judge = Judge(TorchLM(model, tiny_tok, CPU), tiny_tok)
+    short = [("user", "How are you?")]
+    long = [("user", "The little dog ran to the park and played all day. " * 8)]
+    reply = "I am good, thank you, and the little dog is happy too."
+    scored = [*tiny_tok.encode(reply), tiny_tok.end_id]
+    assert len(scored) > 5
+    for history in (short, long):
+        # the prompt leaves room for the whole reply, whatever part of it is scored
+        prompt = build_chat_prompt(tiny_tok, history, 64, reserve=len(scored))
+        (first,) = judge.reply_totals([(history, reply)], first=5)
+        assert first.n_tokens == 5
+        assert first.sum_logprob == pytest.approx(
+            _direct_reply_total(model, prompt, scored[:5]), abs=1e-4
+        )
+        (whole,) = judge.reply_totals([(history, reply)])
+        assert whole.n_tokens == len(scored)
+        assert whole.sum_logprob == pytest.approx(
+            _direct_reply_total(model, prompt, scored), abs=1e-4
+        )
+        assert judge.reply_nll(history, reply) == pytest.approx(
+            -whole.sum_logprob / whole.n_tokens, abs=1e-6
+        )
+    (tiny,) = judge.reply_totals([(short, "Hi.")], first=24)  # shorter than first: all of it
+    assert tiny.n_tokens == len(tiny_tok.encode("Hi.")) + 1
+    blank = judge.reply_totals([(short, "  "), (short, "")], first=5)
+    assert [(b.sum_logprob, b.n_tokens) for b in blank] == [(0.0, 0), (0.0, 0)]
+    assert judge.reply_totals([]) == []
+
+
 def test_judge_load_needs_only_its_directory(tmp_path, tiny_tok, tiny_tok_path):
     model = tiny_judge_model(tiny_tok.vocab_size)
     built = tmp_path / "built"
