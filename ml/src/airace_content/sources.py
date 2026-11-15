@@ -26,7 +26,7 @@ import sys
 import time
 import zlib
 from collections import Counter
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -69,7 +69,6 @@ _PINNED: dict[str, str] = {
     "gsm8k": "740312add88f781978c0658806c59bc2815b9866",
     "mbpp": "4bb6404fdc6cacfda99d4ac4205087b89d32030c",
     # added for text 2 (2026-11-13): read only by the recipes that use them
-    "smol_smoltalk": "f73fe857d519ff6ac5af2ea67c4d3834da7b8bcc",
     "soda_ai": "fdc848ab0183208ea7808206c91c724414d0a071",
 }
 
@@ -105,7 +104,6 @@ SOURCES: dict[str, SourceSpec] = {
         _spec("mbpp", "google-research-datasets/mbpp", "full", "train", "cc-by-4.0"),
         # SODA again, for the dialogues whose AI side claims no person's life (same licence)
         _spec("soda_ai", "allenai/soda", None, "train", "cc-by-4.0"),
-        _spec("smol_smoltalk", "HuggingFaceTB/smol-smoltalk", None, "train", "apache-2.0"),
     )
 }
 
@@ -491,17 +489,93 @@ def _says_a_name(text: str, names: list[str]) -> bool:
     return any(re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text) for name in names)
 
 
+# The listener rule of soda_ai: an AI must not talk as a person with a life of its own, so a
+# dialogue is kept only when every AI turn is a listener's turn. Once the allowed phrases below are
+# blanked out of the turn, no first-person word may be left in it. Phrases are read as whole words,
+# in any case; after the first word of a phrase that starts with "I" one adverb may stand
+# ("I really think", "I'm so sorry", "I do understand").
+_LISTENER_ADVERBS = (
+    "really", "totally", "completely", "definitely", "just", "so", "very", "truly", "also",
+    "still", "honestly", "certainly", "absolutely", "do", "did",
+)  # fmt: skip
+_LISTENER_THINKING = (
+    "I think", "I don't think", "I guess", "I believe", "I suppose", "I'd say", "I would say",
+    "I bet", "I mean", "I know", "I don't know", "I do not know", "I'm not sure", "I am not sure",
+    "I'm sure", "I am sure", "I see", "I understand", "I get it", "I get that", "I hear you",
+    "I agree", "I wonder", "I'm wondering", "I'm curious", "I can imagine", "I can't imagine",
+    "I can only imagine", "I can see", "I can tell", "I can understand",
+)  # fmt: skip
+_LISTENER_FEELING = (
+    "I hope", "I'm sorry", "I am sorry", "I'm glad", "I am glad", "I'm happy for you",
+    "I am happy for you", "I'm proud of you", "I am proud of you", "I'm excited for you",
+    "I appreciate", "I love that", "I like that", "I love it", "I like it", "I love your",
+    "I like your", "I'm happy to hear", "I'm glad to hear", "I'm sorry to hear",
+    "I can't wait to hear",
+)  # fmt: skip
+_LISTENER_HELPING = (
+    "I can help", "I can try", "I could help", "I'll help", "I'd love to help", "I'd be happy to",
+    "I would be happy to", "I'd love to hear", "I'd like to hear", "I'm here", "I am here",
+    "I'll be here", "I'm listening", "I suggest", "I'd suggest", "I would suggest", "I recommend",
+    "I'd recommend",
+)  # fmt: skip
+_LISTENER_WITH_ME = (
+    "tell me", "let me know", "excuse me", "sounds good to me", "seems to me", "believe me",
+    "trust me", "with me", "to me", "for me to help", "my pleasure", "my goodness", "oh my",
+    "my guess", "in my opinion", "my advice", "my friend",
+)  # fmt: skip
+_LISTENER_WITH_WE = ("we all", "all of us", "let's see", "let's talk about it", "let's think")
+
+
+def _listener_pattern(phrases: Iterable[str]) -> re.Pattern[str]:
+    """One compiled pattern for the allowed ``phrases``, longest first, as whole words."""
+    adverb = r"(?:(?:" + "|".join(_LISTENER_ADVERBS) + r")\s+)?"
+    alternatives = []
+    for phrase in sorted(phrases, key=len, reverse=True):
+        first, *rest = (re.escape(word) for word in phrase.split())
+        if phrase.startswith("I") and rest:
+            first += r"\s+" + adverb  # the adverb stands between the first word and the rest
+        else:
+            first += r"\s+" if rest else ""
+        alternatives.append(first + r"\s+".join(rest))
+    return re.compile(r"(?<![\w'])(?:" + "|".join(alternatives) + r")(?![\w'])", re.IGNORECASE)
+
+
+_LISTENER_PHRASES = _listener_pattern(
+    _LISTENER_THINKING
+    + _LISTENER_FEELING
+    + _LISTENER_HELPING
+    + _LISTENER_WITH_ME
+    + _LISTENER_WITH_WE
+)
+# A first-person word, whole: "I" and its contractions in capitals only, "us" in lower case only
+# (not the country), the rest in any case.
+_FIRST_PERSON = re.compile(
+    r"(?<![\w'])(?:I(?:'m|'ve|'ll|'d)?|us"
+    r"|(?i:me|my|mine|myself|we|we're|we've|we'll|we'd|our|ours|ourselves|let's))(?![\w'])"
+)
+
+
+def _talks_about_itself(text: str) -> bool:
+    """Whether an AI turn has a first-person word left once the listener's phrases are taken out
+    (a curly apostrophe is read as a straight one)."""
+    plain = text.replace("’", "'").replace("‘", "'")
+    return _FIRST_PERSON.search(_LISTENER_PHRASES.sub(" ", plain)) is not None
+
+
 def _soda_ai(row: dict) -> list[Content]:
-    """SODA's dialogues, without those where an AI turn speaks of a person's life or uses the name
-    of either speaker (a model that learns from them calls the person by a made-up name). A user
-    turn may keep names; a speaker name under 2 letters is ignored."""
+    """SODA's dialogues, kept only when every AI turn is a listener's: it neither speaks of a
+    person's life nor uses the name of either speaker (a model that learns from them calls the
+    person by a made-up name), and no first-person word is left in it once the listener's phrases
+    ("I think", "I'm sorry to hear", "tell me") are taken out (``_talks_about_itself``). A user turn
+    may keep names and say what it likes; a speaker name under 2 letters is ignored."""
     names = sorted({str(s).strip() for s in row.get("speakers") or [] if len(str(s).strip()) >= 2})
     return [
         chat
         for chat in _soda(row)
         if isinstance(chat, list)
         and not any(
-            role == "ai" and (claims_person_life(text) or _says_a_name(text, names))
+            role == "ai"
+            and (claims_person_life(text) or _says_a_name(text, names) or _talks_about_itself(text))
             for role, text in chat
         )
     ]
@@ -517,37 +591,6 @@ def _everyday(row: dict) -> list[Content]:
         if m.get("role") in _EVERYDAY_ROLES and str(m.get("content") or "").strip()
     ]
     return [turns] if len(turns) >= MIN_CHAT_TURNS else []
-
-
-# The parts of smol-smoltalk that are not rewrites of other public datasets (ADR 0010 section 2);
-# "smol-contraints" is the dataset's own spelling.
-_SMOL_PARTS = frozenset({"smol-magpie-ultra-short", "smol-contraints"})
-_SMOL_MIN_TURNS, _SMOL_MAX_TURNS = 2, 6
-_SMOL_MAX_AI_CHARS = 600
-_SMOL_NOT_PLAIN = re.compile(
-    r"```|\\\(|\$\$|\d{4}"
-)  # a code fence, a LaTeX bracket, $$ or 4 digits in a row
-
-
-def _smol(row: dict) -> list[Content]:
-    if row.get("source") not in _SMOL_PARTS:
-        return []
-    turns: list[tuple[Role, str]] = [
-        (_EVERYDAY_ROLES[m["role"]], str(m.get("content") or "").strip())
-        for m in row.get("messages") or []
-        if m.get("role") in _EVERYDAY_ROLES and str(m.get("content") or "").strip()
-    ]
-    if not _SMOL_MIN_TURNS <= len(turns) <= _SMOL_MAX_TURNS:
-        return []
-    # strictly user, AI, user, AI ... and the last word is the AI's; a row that does not is left out
-    if any(role != ("user" if i % 2 == 0 else "ai") for i, (role, _) in enumerate(turns)):
-        return []
-    if turns[-1][0] != "ai":
-        return []
-    for role, text in turns:
-        if _SMOL_NOT_PLAIN.search(text) or (role == "ai" and len(text) > _SMOL_MAX_AI_CHARS):
-            return []
-    return [turns]
 
 
 def _gutenberg(row: dict) -> list[Content]:
@@ -679,7 +722,6 @@ _ADAPTERS: dict[str, Callable[[dict], list[Content]]] = {
     "gsm8k": _gsm8k,
     "mbpp": _mbpp,
     "soda_ai": _soda_ai,
-    "smol_smoltalk": _smol,
 }
 assert set(_ADAPTERS) == set(SOURCES)
 
@@ -711,10 +753,6 @@ def _messages(row: dict) -> bool:
     )
 
 
-def _smol_format(row: dict) -> bool:
-    return _messages(row) and isinstance(row.get("source"), str)
-
-
 def _book(row: dict) -> bool:
     return _strings("TEXT")(row) and _subjects(row.get("METADATA")) is not None
 
@@ -734,7 +772,6 @@ _ROW_FORMATS: dict[str, tuple[Callable[[dict], bool], str]] = {
     "gsm8k": (_strings("question", "answer"), "'question' and 'answer' as strings"),
     "mbpp": (_strings("text", "code"), "'text' and 'code' as strings"),
     "soda_ai": (_dialogue, "'dialogue' and 'speakers' as lists"),
-    "smol_smoltalk": (_smol_format, "'messages' as a list of {role, content} and 'source'"),
 }
 assert set(_ROW_FORMATS) == set(SOURCES)
 
@@ -763,11 +800,8 @@ def row_to_content(source_id: str, row: dict) -> list[Content]:
     * soda: ``speakers[0]`` is the user, every other speaker the AI; at least 2 turns;
     * everyday_conv: "user" is the user, "assistant" the AI, system turns dropped; at least 2 turns;
     * soda_ai: soda, less the dialogues where an AI turn speaks of a person's life
-      (``claims_person_life``) or says either speaker's name as a whole word;
-    * smol_smoltalk: rows of the parts ``smol-magpie-ultra-short`` and ``smol-contraints`` only,
-      as user/ai turns (system turns dropped); 2 to 6 turns, strictly user, AI, user, AI ... and ending
-      on an AI turn (a row that does not is skipped, not repaired), no AI turn over
-      600 characters, no turn with a code fence, LaTeX brackets, ``$$`` or 4 digits in a row;
+      (``claims_person_life``), says either speaker's name as a whole word, or is not a
+      listener's turn (``_talks_about_itself``);
     * gsm8k: ``Question: {q}\\nAnswer: {reasoning} The answer is {final}.`` without the
       calculator annotations;
     * mbpp: ``# {text}\\n{code}`` with tabs as 4 spaces and LF line endings;

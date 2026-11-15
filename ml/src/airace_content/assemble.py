@@ -153,13 +153,12 @@ RECIPES_V2: dict[str, Recipe] = {
     "conversations": Recipe(
         "conversations",
         [
-            _source("smol_smoltalk", 0.30, 0.55, 0.4),
-            _source("soda_ai", 0.23),
-            _source("everyday_conv", 0.02, None, 0.4),
-            _generator("fact_chat", 0.13, 0.4),
+            _source("soda_ai", 0.50),
+            _generator("fact_chat", 0.14, 0.4),
             _generator("instructions", 0.13, 0.4),
             _generator("followup_chat", 0.12, 0.4),
-            _generator("identity_chat", 0.07, 0.0),  # it writes its own identity lines
+            _generator("identity_chat", 0.10, 0.0),  # it writes its own identity lines
+            _source("everyday_conv", 0.01, None, 0.4),
         ],
         NoiseRates(typo=0.03),
     ),
@@ -232,10 +231,8 @@ BYTES_PER_TOKEN_BY_COMPONENT: dict[str, float] = {
     "soda": 3.7,
     "fact_chat": 3.6,
     "instructions": 3.3,
-    # text 2, measured with tok-v1 on 2,000 chats each: the generators' own, smol_smoltalk's as
-    # its adapter keeps them (the first 2,000 of the hub's rows that pass); soda_ai is soda's text
+    # text 2, measured with tok-v1 on 2,000 chats each: the generators' own; soda_ai is soda's text
     "soda_ai": 3.7,
-    "smol_smoltalk": 3.3,
     "followup_chat": 2.8,  # short question and answer turns full of names and numbers
     "identity_chat": 2.3,
 }

@@ -190,11 +190,9 @@ def test_sources_are_the_designed_ones():
         "gsm8k": ("openai/gsm8k", "main", "train"),
         "mbpp": ("google-research-datasets/mbpp", "full", "train"),
         "soda_ai": ("allenai/soda", None, "train"),
-        "smol_smoltalk": ("HuggingFaceTB/smol-smoltalk", None, "train"),
     }
     assert SOURCES["soda_ai"].license == SOURCES["soda"].license
     assert SOURCES["soda_ai"].revision == SOURCES["soda"].revision
-    assert SOURCES["smol_smoltalk"].license == "apache-2.0"
     licenses = {s.id: s.license for s in SOURCES.values()}
     assert licenses["tinystories"] == "cdla-sharing-1.0" and licenses["gutenberg"] == "mit"
     assert licenses["tinystories_requests"] == "cdla-sharing-1.0"
@@ -449,56 +447,9 @@ def test_chat_adapters():
     assert row_to_content("everyday_conv", {"messages": messages[:2]}) == []
 
 
-def _smol_row(*turns: tuple[str, str], source: str = "smol-magpie-ultra-short") -> dict:
-    return {"source": source, "messages": [{"role": r, "content": c} for r, c in turns]}
-
-
 def test_the_text_1_recipes_read_none_of_the_text_2_sources():
-    assert {"smol_smoltalk", "soda_ai"} <= set(SOURCES)
-    assert not {"smol_smoltalk", "soda_ai"} & set(TEXT1_SOURCES)
-
-
-def test_smol_smoltalk_keeps_only_the_two_apache_parts():
-    row = _smol_row(("user", "Hi"), ("assistant", "Hello!"))
-    assert row_to_content("smol_smoltalk", row) == [[("user", "Hi"), ("ai", "Hello!")]]
-    constrained = dict(row, source="smol-contraints")  # the dataset's own spelling
-    assert row_to_content("smol_smoltalk", constrained) == [[("user", "Hi"), ("ai", "Hello!")]]
-    for other in ("smol-rewrite", "smol-summarize", "self-oss-instruct", "", None):
-        assert row_to_content("smol_smoltalk", dict(row, source=other)) == []
-    assert row_to_content("smol_smoltalk", {"messages": row["messages"]}) == []
-
-
-def test_smol_smoltalk_drops_system_turns_and_needs_a_user_first():
-    kept = _smol_row(("system", "Be nice."), ("user", "Hi"), ("assistant", "Hello!"))
-    assert row_to_content("smol_smoltalk", kept) == [[("user", "Hi"), ("ai", "Hello!")]]
-    assistant_first = _smol_row(("assistant", "Hello!"), ("user", "Hi"), ("assistant", "Hey"))
-    assert row_to_content("smol_smoltalk", assistant_first) == []
-
-
-def test_smol_smoltalk_wants_two_to_six_turns():
-    pairs = [("user", "Q"), ("assistant", "A")]
-    assert row_to_content("smol_smoltalk", _smol_row(*pairs * 3)) != []  # 6 turns
-    assert row_to_content("smol_smoltalk", _smol_row(*pairs * 3, ("user", "More"))) == []  # 7
-    assert row_to_content("smol_smoltalk", _smol_row(("user", "Hi"))) == []  # 1
-
-
-def test_smol_smoltalk_cuts_long_ai_turns_but_not_long_user_turns():
-    turns = (("user", "Hi"), ("assistant", "a" * 600))
-    assert row_to_content("smol_smoltalk", _smol_row(*turns)) != []
-    assert (
-        row_to_content("smol_smoltalk", _smol_row(("user", "Hi"), ("assistant", "a" * 601))) == []
-    )
-    assert (
-        row_to_content("smol_smoltalk", _smol_row(("user", "u" * 900), ("assistant", "ok"))) != []
-    )
-
-
-def test_smol_smoltalk_drops_code_maths_and_long_numbers():
-    for bad in ("Use ```x```", r"It is \(x\)", "So $$x$$", "In 2024 it was"):
-        assert row_to_content("smol_smoltalk", _smol_row(("user", bad), ("assistant", "ok"))) == []
-        assert row_to_content("smol_smoltalk", _smol_row(("user", "Hi"), ("assistant", bad))) == []
-    fine = "It has 365 days, 12 months and 7.5 hours; call 555."
-    assert row_to_content("smol_smoltalk", _smol_row(("user", "Hi"), ("assistant", fine))) != []
+    assert "soda_ai" in SOURCES
+    assert "soda_ai" not in TEXT1_SOURCES
 
 
 def test_soda_ai_drops_a_dialogue_where_the_ai_claims_a_person_life():

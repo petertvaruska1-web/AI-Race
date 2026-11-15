@@ -25,7 +25,6 @@ from airace_ml.skills.kb import load_kb
 FIX = Path(__file__).parents[1] / "fixtures" / "sources"
 FETCH = fixture_fetch(FIX)
 CHAT_COMPONENTS = {
-    "smol_smoltalk",
     "soda_ai",
     "everyday_conv",
     "fact_chat",
@@ -84,13 +83,12 @@ def test_text_2_targets_and_conversations_recipe():
     assert [
         (c.kind, c.name, c.share, c.simplicity_min, c.system_share) for c in conv.components
     ] == [
-        ("source", "smol_smoltalk", 0.30, 0.55, 0.4),
-        ("source", "soda_ai", 0.23, None, 0.0),
-        ("source", "everyday_conv", 0.02, None, 0.4),
-        ("generator", "fact_chat", 0.13, None, 0.4),
+        ("source", "soda_ai", 0.50, None, 0.0),
+        ("generator", "fact_chat", 0.14, None, 0.4),
         ("generator", "instructions", 0.13, None, 0.4),
         ("generator", "followup_chat", 0.12, None, 0.4),
-        ("generator", "identity_chat", 0.07, None, 0.0),
+        ("generator", "identity_chat", 0.10, None, 0.0),
+        ("source", "everyday_conv", 0.01, None, 0.4),
     ]
     assert conv.noise == RECIPES_V1["conversations"].noise
     for ds in DATASET_IDS:
@@ -108,27 +106,10 @@ def test_an_unknown_text_is_refused():
 def test_sources_needed_gives_the_sources_of_the_text_being_built():
     one = sources_needed(DATASET_IDS, simple_vocab=True)
     two = sources_needed(DATASET_IDS, simple_vocab=True, text=2)
-    assert not {"smol_smoltalk", "soda_ai"} & set(one) and "soda" in one
-    assert {"smol_smoltalk", "soda_ai"} <= set(two) and "soda" not in two
-    assert set(two) - {"smol_smoltalk", "soda_ai"} == set(one) - {"soda"}
+    assert "soda_ai" not in one and "soda" in one
+    assert "soda_ai" in two and "soda" not in two
+    assert set(two) - {"soda_ai"} == set(one) - {"soda"}
     assert two == [s for s in SOURCES if s in two]  # the order of SOURCES
-
-
-def _smol(*turns, source="smol-magpie-ultra-short"):
-    row = {"source": source, "messages": [{"role": r, "content": c} for r, c in turns]}
-    return row_to_content("smol_smoltalk", row)
-
-
-def test_smol_keeps_only_strictly_alternating_chats_that_end_on_the_ai():
-    u, a = "user", "assistant"
-    assert _smol((u, "Hi"), (a, "Hello")) != []
-    assert _smol((u, "Hi"), (a, "Hello"), (u, "How?"), (a, "Fine.")) != []
-    assert _smol((u, "Hi"), (a, "Hello"), (u, "Bye")) == []  # ends on the user
-    assert _smol((u, "Hi"), (u, "Hey"), (a, "Hello")) == []  # two user turns in a row
-    assert _smol((u, "Hi"), (a, "Hello"), (a, "More"), (u, "Ok"), (a, "Yes")) == []
-    assert _smol((a, "Hello"), (u, "Hi"), (a, "Hey")) == []  # starts on the AI
-    # a system turn is dropped before the rule is applied
-    assert _smol(("system", "Be nice."), (u, "Hi"), (a, "Hello")) != []
 
 
 @pytest.fixture(scope="module")
@@ -154,7 +135,8 @@ def test_text_2_chats_of_identity_components_start_with_an_identity_line_and_tex
     assert not any(isinstance(d.content, list) and d.content[0][0] == "sys" for d in one)
     by = {c["name"]: c for c in stats2["components"]}
     assert set(by) == CHAT_COMPONENTS and all(c["docs"] > 0 for c in by.values())
-    for name in ("smol_smoltalk", "everyday_conv", "fact_chat", "instructions", "followup_chat"):
+    # everyday_conv is 1% of the chats: too few in a tiny build to say how many start with the line
+    for name in ("fact_chat", "instructions", "followup_chat"):
         docs = [d for d in two if d.component == name]
         assert docs, name
         starts = sum(d.content[0][0] == "sys" for d in docs)
@@ -181,7 +163,7 @@ def _soda_row(*turns):
 
 
 def test_soda_ai_drops_dialogues_whose_ai_side_uses_a_speakers_name():
-    named = _soda_row(("Joe", "Hi there, how are you?"), ("Sam", "Hey, Joe. I am fine."))
+    named = _soda_row(("Joe", "Hi there, how are you?"), ("Sam", "Hey, Joe. Tell me more."))
     assert row_to_content("soda_ai", named) == []
     assert row_to_content("soda", named) != []  # text 1's source is unchanged
     own = _soda_row(("Joe", "Hi there, how are you?"), ("Sam", "Thanks, Sam is fine."))
@@ -189,14 +171,14 @@ def test_soda_ai_drops_dialogues_whose_ai_side_uses_a_speakers_name():
 
 
 def test_soda_ai_lets_user_turns_keep_names():
-    row = _soda_row(("Joe", "Hi Sam, how are you?"), ("Sam", "I am fine, thanks."))
+    row = _soda_row(("Joe", "Hi Sam, how are you?"), ("Sam", "Good to hear, thanks."))
     assert row_to_content("soda_ai", row) == [
-        [("user", "Hi Sam, how are you?"), ("ai", "I am fine, thanks.")]
+        [("user", "Hi Sam, how are you?"), ("ai", "Good to hear, thanks.")]
     ]
 
 
 def test_soda_ai_matches_whole_words_with_their_capitals():
-    will = _soda_row(("Will", "Can you come?"), ("Ann", "I will come at four."))
+    will = _soda_row(("Will", "Can you come?"), ("Ann", "You will come at four."))
     assert row_to_content("soda_ai", will) != []  # "will" is not the name "Will"
     capital = _soda_row(("Will", "Can you come?"), ("Ann", "Will do, see you then."))
     assert row_to_content("soda_ai", capital) == []
@@ -206,9 +188,65 @@ def test_soda_ai_matches_whole_words_with_their_capitals():
 
 def test_soda_ai_ignores_empty_and_one_letter_speaker_names():
     row = {
-        "dialogue": ["Hello, how are you?", "I am fine, thanks a lot."],
+        "dialogue": ["Hello, how are you?", "Fine, thanks a lot."],
         "speakers": ["Ann", " "],
     }
     assert row_to_content("soda_ai", row) != []
-    short = _soda_row(("J", "Are you here?"), ("Ann", "Yes, I am here, J is a letter."))
+    short = _soda_row(("J", "Are you here?"), ("Ann", "Yes, here, J is a letter."))
     assert row_to_content("soda_ai", short) != []
+
+
+def _ai_says(*ai_turns):
+    """A SODA row where the first speaker asks and the second speaker says each of ``ai_turns``."""
+    turns = []
+    for text in ai_turns:
+        turns += [("Ann", "Hello there, how was it?"), ("Bob", text)]
+    return _soda_row(*turns)
+
+
+def test_soda_ai_keeps_a_dialogue_whose_ai_turns_only_listen():
+    row = _ai_says("I'm so sorry to hear that. What happened?", "I think you did the right thing.")
+    assert len(row_to_content("soda_ai", row)) == 1
+
+
+@pytest.mark.parametrize(
+    "turn",
+    [
+        "I went to the store yesterday.",
+        "My mom said the same thing.",
+        "Let's go get some ice cream.",
+        "I think I should go home.",  # "I think" is allowed, the second "I" is not
+        "We had fun at the park.",
+    ],
+)
+def test_soda_ai_drops_a_dialogue_when_an_ai_turn_talks_about_itself(turn):
+    assert row_to_content("soda_ai", _ai_says("Oh, I see.", turn)) == []
+    assert row_to_content("soda", _ai_says("Oh, I see.", turn)) != []  # text 1 is unchanged
+
+
+@pytest.mark.parametrize(
+    "turn",
+    [
+        "Well, we all make mistakes.",
+        "That is all of us, I guess.",
+        "It is big in the US.",  # "US" is not "us"
+        "I’m sorry to hear that.",  # a curly apostrophe counts as a straight one
+        "I really think so, and I do understand.",
+        "Tell me more, and let me know.",
+        "Trust me, my friend, it is fine.",
+    ],
+)
+def test_soda_ai_allows_the_listener_phrases(turn):
+    assert len(row_to_content("soda_ai", _ai_says(turn))) == 1
+
+
+def test_soda_ai_does_not_check_user_turns_for_first_person_words():
+    row = _soda_row(("Ann", "I think my dog and I went out, and we had fun."), ("Bob", "I see."))
+    assert len(row_to_content("soda_ai", row)) == 1
+
+
+def test_soda_ai_first_person_words_are_whole_words_and_case_matters_for_i_and_us():
+    assert row_to_content("soda_ai", _ai_says("Sure, I will.")) == []
+    assert row_to_content("soda_ai", _ai_says("Come with us.")) == []
+    assert row_to_content("soda_ai", _ai_says("It is mine.")) == []
+    assert len(row_to_content("soda_ai", _ai_says("Which items, then? Mime it. i see."))) == 1
