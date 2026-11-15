@@ -26,7 +26,7 @@ import numpy as np
 
 from airace_content.chats import _cap, _says_held, _usable_later
 from airace_content.held import is_held_small_talk
-from airace_ml.experiments.chatprobes import IDENTITY_NAMES
+from airace_ml.experiments.chatprobes import IDENTITY_COMPANY, IDENTITY_NAMES
 from airace_ml.skills.kb import KB, Fact, load_kb
 from airace_ml.skills.types import TextDoc
 
@@ -375,7 +375,10 @@ _FIELD_GROUP: dict[str, str] = {}
 
 def _register_slots() -> None:
     SLOTS["uname"] = _user_names()
-    SLOTS["pname"] = tuple(n for n in _PET_NAMES if not _says_held(load_kb(), n))
+    probe = {n.lower() for n in (*IDENTITY_NAMES, IDENTITY_COMPANY)}  # never said by the AI
+    SLOTS["pname"] = tuple(
+        n for n in _PET_NAMES if n.lower() not in probe and not _says_held(load_kb(), n)
+    )
     for group, options in SLOTS.items():
         keys = options[0].keys() if isinstance(options[0], dict) else (group,)
         for key in keys:
@@ -385,8 +388,14 @@ def _register_slots() -> None:
 _register_slots()
 
 
-def _fields(text: str) -> set[str]:
-    return {name for _, name, _, _ in string.Formatter().parse(text) if name}
+def _fields(text: str) -> list[str]:
+    """The slots of a template, each once, in the order they first appear. A list and not a set:
+    the slots are filled in this order with random draws, and the order of a set of strings
+    differs from one run of Python to the next, which would make the same seed give other
+    chats."""
+    return list(
+        dict.fromkeys(name for _, name, _, _ in string.Formatter().parse(text) if name)
+    )
 
 
 # --- jokes -------------------------------------------------------------------------------------

@@ -51,6 +51,44 @@ def test_the_same_seed_gives_the_same_chats_and_another_seed_others():
     assert all(d.kind == "chat" and d.topic in TOPICS for d in one)
 
 
+def test_the_same_seed_gives_the_same_chats_in_another_run_of_python():
+    """Strings hash differently in every run of Python, so anything that walks a set of strings
+    while it draws would give other chats there; two runs with different hash seeds must agree."""
+    import hashlib
+    import os
+    import subprocess
+    import sys
+
+    lines = (
+        "import hashlib, numpy as np",
+        "from airace_content import smalltalk",
+        "from airace_ml.skills.kb import load_kb",
+        "docs = smalltalk.assistant_chat_docs(load_kb(), np.random.default_rng(7), 2000)",
+        "print(hashlib.sha256(repr([d.turns for d in docs]).encode()).hexdigest())",
+    )
+    code = "; ".join(lines)
+    digests = set()
+    for hash_seed in ("1", "2"):
+        env = {**os.environ, "PYTHONHASHSEED": hash_seed}
+        out = subprocess.run(
+            [sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True
+        )
+        digests.add(out.stdout.strip())
+    here = smalltalk.assistant_chat_docs(KB, np.random.default_rng(7), 2000)
+    digests.add(hashlib.sha256(repr([d.turns for d in here]).encode()).hexdigest())
+    assert len(digests) == 1, digests
+
+
+def test_the_ai_never_says_a_name_the_identity_probe_uses(records):
+    from airace_ml.experiments.chatprobes import IDENTITY_COMPANY, IDENTITY_NAMES
+
+    names = "|".join(map(re.escape, (*IDENTITY_NAMES, IDENTITY_COMPANY)))
+    words = re.compile(r"\b(?:" + names + r")\b")
+    for r in records:
+        for role, text in r.turns:
+            assert not words.search(text), (role, text)
+
+
 def test_roles_alternate_and_a_chat_ends_on_the_ai(records):
     lengths = Counter()
     for r in records:
