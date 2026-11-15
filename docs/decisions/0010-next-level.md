@@ -96,6 +96,19 @@ Engine 3 is one number for every item of this section that is kept: nothing is r
 - **Decision: kept.** On a 12.6M-token run few documents repeat either way, so nothing moves, as expected; the rule is right for long runs and small pools (every document once before any twice). Follow-ups sit near zero in text 1 either way; text 2 teaches them.
 - **What the six seeds say about noise:** between seeds of one recipe, bench-v1 differs by about 2 points (48.0 to 51.6), talk rates by 5 to 10 points, the yardstick loss by 0.006. The single-seed flags of the first measurement (bench 2 to 3 points lower) were noise. Decisions on bench and talk need several seeds or a paired design; losses are the precise measures.
 
+### 4.4 Lessons that stick (Task 8): already do; nothing changed
+- **Measured** (`docs/handoff/next-level/lessons_lab.py`, engine 3): a first AI continued with one run built field for field as the game builds it for "Train on your lessons" (the same Tiny brain, the Short length of 6,291,456 tokens, the even mix, the lessons at the game's share of 5%), with ten made-up lessons ("What colour is a glimmerfin?" → "A glimmerfin is teal."):
+
+| lessons' share | answered | answered when typed in lower case without "?" | yardstick loss (parent 2.110) | times each lesson was read |
+|---|---|---|---|---|
+| before the run | 1 of 10 | 1 of 10 | 2.110 | - |
+| 5% (the game's) | 10 of 10 | 10 of 10 | 2.097 | 1,122 |
+| 10% | 10 of 10 | 9 of 10 | 2.107 | 2,280 |
+| 20% | 10 of 10 | 10 of 10 | 2.120 | 4,637 |
+
+- **Decision:** the target (at least 7 of 10) is met at the game's share, so the share stays 5%. A larger share buys nothing and starts to cost the rest of what the AI knows (the yardstick loss rises with it).
+- Ten short lessons are read more than a thousand times in a Short run. A player with many long lessons gets fewer readings of each; that case was not measured.
+
 ## 5. Training text 2 against text 1
 (Tasks 14–15.)
 
