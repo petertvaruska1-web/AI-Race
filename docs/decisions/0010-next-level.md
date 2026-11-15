@@ -76,7 +76,25 @@ The first AI trained in 53.0 s. Real held-out replies themselves: fits 90% (by t
 **Rulings on the measuring stick itself** (plan A, Task 3): the yardstick loss is the trainer's held-out rule over 128 packed rows of text 1's held-out conversations; a baseline measured with another yardstick, judge, novelty index, scale or on-topic calibration is refused; cards of different training text are not compared on their own held-out losses; a lost measure or a run that stopped early counts as worse. The tolerances are allowances, not tests of significance: one 100-reply rate has a standard error of about 5 points, so a flagged small-talk or identity change is confirmed with a second seed or by reading the stored replies before anything is decided on it.
 
 ## 4. Engine 3 items
-(Tasks 5–8: numbers and keep/remove for each.)
+Engine 3 is one number for every item of this section that is kept: nothing is released between them.
+
+### 4.1 Documents drawn without replacement (Task 5): kept
+- **The change** (f011be5): a pool walks a shuffled order of its documents and shuffles again when the order is used up; a balanced pool keeps one order per topic. The saved state is a seed and two integers per order. Progress saved by engine 2 is not continued.
+- **A measuring error found on the way** (fixed in 99ca8e5). The trainer's held-out batches (8 rows a dataset) and the scorecard's yardstick (128 rows) were drawn through the training sampler, so the change silently altered which rows a model is scored on: the first measurement showed held-out conversation loss falling from 2.41 to 1.99, which was a different set of rows, not a better model. Evaluation pools now draw with replacement and take nothing from the sampler's generator; the yardstick of the engine-2 baseline models is reproduced to six decimals. A held-out loss means the same before and after engine 3.
+- **Measured** (`docs/handoff/next-level/replacement_lab.py`): the first AI trained with and without replacement, seeds 1 to 6, the whole scorecard on each; difference (without minus with) and its standard error:
+
+| | with | without | difference |
+|---|---|---|---|
+| held-out loss | 2.470 | 2.464 | -0.006 ± 0.009 |
+| yardstick loss | 2.107 | 2.109 | +0.002 ± 0.003 |
+| bench-v1 overall | 49.0 | 50.0 | +1.0 ± 0.8 |
+| well-formed | 76% | 79% | +2 ± 2 points |
+| fits and on topic | 54% | 54% | 0 ± 3 points |
+| casual facts | 72% | 76% | +3 ± 2 points |
+| follow-ups | 6% | 3% | -3 ± 1 points |
+
+- **Decision: kept.** On a 12.6M-token run few documents repeat either way, so nothing moves, as expected; the rule is right for long runs and small pools (every document once before any twice). Follow-ups sit near zero in text 1 either way; text 2 teaches them.
+- **What the six seeds say about noise:** between seeds of one recipe, bench-v1 differs by about 2 points (48.0 to 51.6), talk rates by 5 to 10 points, the yardstick loss by 0.006. The single-seed flags of the first measurement (bench 2 to 3 points lower) were noise. Decisions on bench and talk need several seeds or a paired design; losses are the precise measures.
 
 ## 5. Training text 2 against text 1
 (Tasks 14–15.)
