@@ -43,6 +43,12 @@ class DocPool:
     The state of a pool (:meth:`state`) is a seed and, for each order, how many passes are done and
     the place in the current pass; the order of a pass is made again from the seed and the pass
     number, so the state stays a few integers however many documents there are.
+
+    A pool made with ``replacement=True`` draws every document independently at random
+    instead, as every pool did up to engine 2, and takes nothing from the sampler's generator
+    when the sampler is made. The fixed evaluation batches (the trainer's held-out rows and the
+    scorecard's yardstick) are drawn this way, so that they are the same rows whatever the
+    engine: a held-out loss means the same before and after the training sampler changed.
     """
 
     def __init__(
@@ -51,7 +57,9 @@ class DocPool:
         fetch: Callable[[int], np.ndarray],
         topic_groups: list[np.ndarray] | None,
         transform: DocTransform | None = None,
+        replacement: bool = False,
     ) -> None:
+        self.replacement = replacement
         self._n = n_docs
         self._fetch = fetch  # position in [0, n_docs) -> token array
         self._groups = topic_groups  # positions per present topic; None = unbalanced
@@ -68,6 +76,7 @@ class DocPool:
         doc_ids: np.ndarray,
         balanced: bool,
         transform: DocTransform | None = None,
+        replacement: bool = False,
     ) -> "DocPool":
         ids = np.asarray(doc_ids, dtype=np.int64)
         ids = ids[(corpus.offsets[ids + 1] - corpus.offsets[ids]) > 0]
@@ -75,7 +84,9 @@ class DocPool:
         if balanced and len(ids):
             topics = corpus.tags.topic[ids]
             groups = [np.flatnonzero(topics == t) for t in np.unique(topics)]
-        return cls(len(ids), lambda pos: corpus.doc(int(ids[pos])), groups, transform)
+        return cls(
+            len(ids), lambda pos: corpus.doc(int(ids[pos])), groups, transform, replacement
+        )
 
     @classmethod
     def from_docs(cls, docs: list[list[int]]) -> "DocPool":
@@ -123,6 +134,13 @@ class DocPool:
     def sample_doc(self, rng: np.random.Generator) -> np.ndarray:
         if not self._n:
             raise MixtureError("cannot sample a document from an empty pool")
+        if self.replacement:
+            if self._groups is None:
+                doc = self._fetch(int(rng.integers(self._n)))
+            else:
+                group = self._groups[int(rng.integers(len(self._groups)))]
+                doc = self._fetch(int(group[int(rng.integers(len(group)))]))
+            return doc if self._transform is None else self._transform(doc, rng)
         if self._seed is None:  # a pool used without a sampler takes its seed from the generator
             self.start(int(rng.integers(_SEED_RANGE)))
         if self._groups is None:
@@ -155,7 +173,8 @@ class MixtureSampler:
         self.seq_len = seq_len
         self._rng = np.random.default_rng(seed)
         for name in sorted(self._pools):  # a run is fully determined by its seed
-            self._pools[name].start(int(self._rng.integers(_SEED_RANGE)))
+            if not self._pools[name].replacement:
+                self._pools[name].start(int(self._rng.integers(_SEED_RANGE)))
         self._tokens_drawn = {name: 0 for name in self._pools}
         self._names: list[str] = []
         self._probs = np.zeros(0)

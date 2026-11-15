@@ -304,7 +304,9 @@ def _heldout_batches(root: Path, seq_len: int) -> dict[str, tuple[np.ndarray, np
     """``EVAL_SEQS`` held-out sequences per base dataset, the same at every eval of the run.
 
     Each dataset draws with its own rng (seed 0), so its eval batch does not depend on which
-    other datasets are present. Datasets missing from ``root`` (or with no held-out text) are
+    other datasets are present. The pools draw with replacement (see
+    :class:`~airace_ml.data.sampler.DocPool`), so a held-out loss is taken on the same rows by
+    every engine. Datasets missing from ``root`` (or with no held-out text) are
     skipped.
     """
     batches = {}
@@ -313,7 +315,8 @@ def _heldout_batches(root: Path, seq_len: int) -> dict[str, tuple[np.ndarray, np
         if not path.is_dir():
             continue
         corpus = Corpus.open(path)
-        pool = DocPool.from_corpus(corpus, heldout_docs(corpus), balanced=False)
+        # with replacement, as up to engine 2: the same eval rows whatever the engine
+        pool = DocPool.from_corpus(corpus, heldout_docs(corpus), balanced=False, replacement=True)
         if len(pool):
             sampler = MixtureSampler({name: pool}, {name: 1.0}, seq_len, seed=0)
             batches[name] = sampler.next_batch(EVAL_SEQS)

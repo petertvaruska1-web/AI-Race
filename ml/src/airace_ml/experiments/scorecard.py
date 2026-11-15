@@ -258,7 +258,10 @@ def yardstick_loss(model: Transformer, yardstick_root: Path) -> float:
     model's attention span packed from held-out documents by a sampler seeded with 0, each row's
     mean token loss, then the mean over :data:`YARDSTICK_SEQS` rows."""
     corpus = Corpus.open(corpus_dir(Path(yardstick_root)) / YARDSTICK_DATASET)
-    pool = DocPool.from_corpus(corpus, heldout_docs(corpus), balanced=False)
+    # with replacement: the same rows as when the baseline was measured, whatever the engine
+    pool = DocPool.from_corpus(
+        corpus, heldout_docs(corpus), balanced=False, replacement=True
+    )
     if not len(pool):
         raise ScorecardSetupError(
             f"the yardstick root {yardstick_root} holds no held-out conversations; rebuild its data "

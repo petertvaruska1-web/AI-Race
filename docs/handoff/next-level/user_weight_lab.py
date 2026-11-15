@@ -78,7 +78,7 @@ def user_turn_mask(inputs: torch.Tensor, targets: torch.Tensor, tok: Tok) -> tor
 def yardstick_rows(model: Transformer, yardstick_root: Path) -> tuple[torch.Tensor, torch.Tensor]:
     """The rows the scorecard's ``yardstick_loss`` takes its mean over (its own row building)."""
     corpus = Corpus.open(corpus_dir(Path(yardstick_root)) / YARDSTICK_DATASET)
-    pool = DocPool.from_corpus(corpus, heldout_docs(corpus), balanced=False)
+    pool = DocPool.from_corpus(corpus, heldout_docs(corpus), balanced=False, replacement=True)
     sampler = MixtureSampler(
         {YARDSTICK_DATASET: pool}, {YARDSTICK_DATASET: 1.0}, model.shape.ctx_len, 0
     )

@@ -333,3 +333,47 @@ def test_a_sampler_state_from_before_documents_were_drawn_without_replacement_is
     old = {k: v for k, v in s.rng_state().items() if k != "pools"}
     with pytest.raises(ValueError, match="pools"):
         s.set_rng_state(old)
+
+
+# -- evaluation pools: with replacement, as up to engine 2 -----------------------------------------
+
+
+def test_a_replacement_pool_draws_as_engine_2_did():
+    docs = [[20 + i, 30 + i, 40 + i] for i in range(50)]
+    pool = DocPool(len(docs), lambda pos: np.asarray(docs[pos], dtype=np.uint16), None, None, True)
+    rng, twin = np.random.default_rng(7), np.random.default_rng(7)
+    for _ in range(200):
+        expected = docs[int(twin.integers(len(docs)))]
+        assert pool.sample_doc(rng).tolist() == expected
+    assert pool.state()["seed"] is None  # no shuffled order was ever started
+
+
+def test_a_balanced_replacement_pool_draws_a_topic_then_a_document_as_engine_2_did():
+    docs = [[20 + i, 30 + i] for i in range(12)]
+    groups = [np.arange(0, 4), np.arange(4, 12)]
+    pool = DocPool(12, lambda pos: np.asarray(docs[pos], dtype=np.uint16), groups, None, True)
+    rng, twin = np.random.default_rng(3), np.random.default_rng(3)
+    for _ in range(100):
+        group = groups[int(twin.integers(len(groups)))]
+        expected = docs[int(group[int(twin.integers(len(group)))])]
+        assert pool.sample_doc(rng).tolist() == expected
+
+
+def test_a_sampler_takes_nothing_from_its_generator_for_a_replacement_pool():
+    docs = [[20 + i, 30 + i, 40 + i, 50 + i] for i in range(40)]
+
+    def pool(replacement):
+        return DocPool(
+            len(docs), lambda pos: np.asarray(docs[pos], dtype=np.uint16), None, None, replacement
+        )
+
+    sampler = MixtureSampler({"a": pool(True)}, {"a": 1.0}, 16, seed=0)
+    untouched = np.random.default_rng(0).bit_generator.state
+    assert sampler.rng_state()["bit_generator"] == untouched
+    x1, _ = sampler.next_batch(4)
+    again = MixtureSampler({"a": pool(True)}, {"a": 1.0}, 16, seed=0)
+    x2, _ = again.next_batch(4)
+    assert np.array_equal(x1, x2)
+    other = MixtureSampler({"a": pool(False)}, {"a": 1.0}, 16, seed=0)
+    x3, _ = other.next_batch(4)
+    assert not np.array_equal(x1, x3)
