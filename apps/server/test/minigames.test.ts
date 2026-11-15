@@ -135,6 +135,11 @@ describe("Playground minigames", () => {
       sides: [{ side: "a", versionId: o.versionId }],
     });
     expect(await (await fetch(spec.sides[0]?.modelTarUrl ?? "")).text()).toBe("fake-checkpoint");
+    const mine = Object.values(o.actor.state().companies).find((c) => c.versions[o.versionId]);
+    expect(spec.sides[0]?.identity).toEqual({
+      name: mine?.versions[o.versionId]?.label,
+      company: "Acme",
+    });
 
     o.ws.send({ v: 1, type: "subscribe", sub: `minigame:${o.worldId}:${runId}` });
     expect((await query(o.ws, { kind: "ping" })).ok).toBe(true);
@@ -189,6 +194,7 @@ describe("Playground minigames", () => {
     const b = spec.sides.find((x) => x.side === "b");
     expect(b?.versionId).toBe(rival?.versions[target.versionId]?.packKey);
     expect(await (await fetch(b?.modelTarUrl ?? "")).text()).toBe(`fake-rival-${b?.versionId}`);
+    expect(b?.identity).toEqual({ name: target.name, company: rival?.name });
   });
 
   it("plays a showcase the world booked, and the result moves the world", async () => {

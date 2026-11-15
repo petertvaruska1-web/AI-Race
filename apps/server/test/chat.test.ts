@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { GenerateJobSpec } from "@airace/protocol";
+import { projectView } from "@airace/sim";
 import { asc, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { NOT_SHARED, NOT_YOURS, REPLY_FAILED } from "../src/chat/service.ts";
@@ -81,6 +82,11 @@ describe("playground chat", () => {
     });
     expect(spec.history).toEqual([["user", "Tell me a story <|end|>"]]);
     expect(await (await fetch(spec.modelTarUrl)).text()).toBe("fake-checkpoint");
+    // Not on sale yet: told the name its owner sees for the version, and its company's.
+    const label = Object.values(o.actor.state().companies).find((c) => c.versions[o.versionId])
+      ?.versions[o.versionId]?.label;
+    expect(label).toBeTruthy();
+    expect(spec.identity).toEqual({ name: label, company: "Acme" });
 
     o.ws.send({ v: 1, type: "subscribe", sub: `chat:${o.worldId}:${threadId}` });
     expect((await query(o.ws, { kind: "ping" })).ok).toBe(true); // the subscribe is in place
@@ -214,6 +220,16 @@ describe("chatting with a rival's AI", () => {
     const spec = GenerateJobSpec.parse(lease.spec);
     expect(spec.versionId).toBe(o.packKey);
     expect(await (await fetch(spec.modelTarUrl)).text()).toBe(`fake-rival-${o.packKey}`);
+    // The rival's own product name and the rival company's name, never the asker's.
+    expect(spec.identity).toEqual({
+      name: o.product.name,
+      company: o.actor.state().companies["rival-1"]?.name,
+    });
+    expect(spec.identity?.company).not.toBe("Acme");
+    // Both names are already in the asker's view (R2): nothing private was sent.
+    const seen = JSON.stringify(projectView(o.actor.state(), o.userId));
+    expect(seen).toContain(JSON.stringify(spec.identity?.name));
+    expect(seen).toContain(JSON.stringify(spec.identity?.company));
     expect((await server.ctx.broker.getJob(lease.jobId))?.priority).toBe(5);
     o.ws.send({ v: 1, type: "subscribe", sub: `chat:${o.worldId}:${sent.threadId}` });
     expect((await query(o.ws, { kind: "ping" })).ok).toBe(true);

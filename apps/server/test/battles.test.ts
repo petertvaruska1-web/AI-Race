@@ -104,6 +104,13 @@ describe("the battle service", () => {
     const spec = BattleJobSpec.parse(lease.spec);
     expect(spec).toMatchObject({ battleId: o.battleId, skill: "knowledge", rounds: 3 });
     expect(spec.sides).toEqual(["a", "b"]);
+    // Our AI by its product and company; the rival's by its product and the rival company.
+    expect(spec.a?.identity).toEqual({ name: "Spark", company: "Acme" });
+    const rival = o.actor.state().companies["rival-1"];
+    expect(spec.b?.identity).toEqual({
+      name: Object.values(rival?.products ?? {}).find((p) => p.status === "live")?.name,
+      company: rival?.name,
+    });
     expect(await (await fetch(spec.a?.modelTarUrl ?? "")).text()).toBe("fake-checkpoint");
     expect(await (await fetch(spec.b?.modelTarUrl ?? "")).text()).toBe(
       `fake-rival-${spec.b?.versionId}`,

@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 import {
+  type Identity,
   MinigameJobResult,
   MinigameStepEvent,
   MinigameTextEvent,
@@ -13,6 +14,7 @@ import { HttpError } from "../auth.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { schema } from "../db/index.ts";
 import type { EnqueueOptions } from "../jobs/broker.ts";
+import { identityOf, identityOfPack } from "../jobs/identity.ts";
 import { forCompany, paramsOf } from "../jobs/owners.ts";
 import type { MinigameMessage } from "../realtime/gateway.ts";
 import { checkpointKey } from "../training/service.ts";
@@ -205,18 +207,29 @@ export class MinigameService {
   private async spec(runId: string): Promise<unknown> {
     const row = await this.row(runId);
     if (!row) throw new Error(`minigame run ${runId} is gone`);
-    const sides: { side: "a" | "b"; versionId: string; modelTarUrl: string }[] = [
+    const world = this.ctx.worlds.peek(row.worldId) ?? (await this.ctx.worlds.get(row.worldId));
+    const state = world.state();
+    const mine = identityOf(state, row.versionId);
+    const sides: {
+      side: "a" | "b";
+      versionId: string;
+      modelTarUrl: string;
+      identity?: Identity;
+    }[] = [
       {
         side: "a",
         versionId: row.versionId,
         modelTarUrl: signBlobUrl(this.ctx, checkpointKey(row.versionId), "GET", MODEL_URL_TTL_MS),
+        ...(mine ? { identity: mine } : {}),
       },
     ];
     if (row.opponentPack) {
+      const theirs = identityOfPack(state, row.opponentPack);
       sides.push({
         side: "b",
         versionId: row.opponentPack,
         modelTarUrl: await this.ctx.rivals.modelUrl(row.opponentPack),
+        ...(theirs ? { identity: theirs } : {}),
       });
     }
     return {

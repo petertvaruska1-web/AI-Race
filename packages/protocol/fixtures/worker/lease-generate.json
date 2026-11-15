@@ -17,7 +17,8 @@
       "maxNewTokens": 96,
       "temperature": 0.8,
       "topP": 0.95,
-      "seed": 7
+      "seed": 7,
+      "identity": { "name": "Zula", "company": "Pengu Labs" }
     }
   }
 }

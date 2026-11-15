@@ -7,6 +7,7 @@ import { HttpError } from "../auth.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { schema } from "../db/index.ts";
 import { trainingCards } from "../helpers/limits.ts";
+import { identityIn } from "../jobs/identity.ts";
 import { forPlayer, paramsOf } from "../jobs/owners.ts";
 import type { ChatMessage } from "../realtime/gateway.ts";
 import { checkpointKey } from "../training/service.ts";
@@ -212,6 +213,8 @@ export class ChatService {
   }
 
   private async spec(p: GeneratePayload): Promise<unknown> {
+    // Told its public name and its company's (what the players see), as the owner sees it.
+    const identity = await identityIn(this.ctx, p.worldId, p.versionId);
     return {
       versionId: p.packKey ?? p.versionId,
       modelTarUrl: p.packKey
@@ -224,6 +227,7 @@ export class ChatService {
       temperature: 0.6,
       topP: 0.9,
       seed: p.seed,
+      ...(identity ? { identity } : {}),
     };
   }
 

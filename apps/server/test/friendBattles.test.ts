@@ -178,6 +178,15 @@ describe("battles between friends' AIs", () => {
       expect([specA.sides, specB.sides]).toEqual([["a"], ["b"]]);
       expect(specA.b).toBeUndefined();
       expect(specB.a).toBeUndefined();
+      // Each side is told only its own AI's product name and company.
+      expect(specA.a?.identity).toEqual({
+        name: battle.mine.productName,
+        company: companyOf(ana).name,
+      });
+      expect(specB.b?.identity).toEqual({
+        name: battle.theirs.productName,
+        company: companyOf(ben).name,
+      });
       expect(specA.seed).toBe(specB.seed);
       expect(specA.a?.ownText).toEqual(["Ana's question?", "Ana's answer."]);
       expect(specB.b?.ownText).toEqual([]);

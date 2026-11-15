@@ -320,6 +320,18 @@ describe("projectView: the company game", () => {
     });
   });
 
+  it("shows other players the names an AI is told (its product and company), and no label before launch", () => {
+    // An AI is told its product's name and its company's: both are in everyone's view. A version
+    // that is not on sale or shared keeps its label to its owner (the game never sends it away).
+    const s = launch(world());
+    const other = JSON.stringify(projectView(s, "u2"));
+    expect(other).toContain('"name":"Acme"');
+    expect(other).toContain('"name":"Spark"');
+    expect(JSON.stringify(projectView(s, "u1"))).toContain('"label":"v1"');
+    expect(other).not.toContain('"label":"v1"');
+    expect(other).not.toContain("VER_A1");
+  });
+
   it("shows another company's product once announced, and its AI only from launch day", () => {
     let s = launch(world());
     expect(acmeFor(s).products).toEqual([

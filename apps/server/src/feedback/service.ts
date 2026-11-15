@@ -6,6 +6,7 @@ import type { AppContext } from "../app.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { schema } from "../db/index.ts";
 import { DROP_JOB, isStale } from "../jobs/broker.ts";
+import { identityIn, makeIdentity } from "../jobs/identity.ts";
 import { forCompany, paramsOf } from "../jobs/owners.ts";
 import { checkpointKey } from "../training/service.ts";
 import type { WorldActor } from "../worlds/actor.ts";
@@ -198,6 +199,9 @@ export class FeedbackService {
       const actor = this.ctx.worlds.peek(p.worldId) ?? (await this.ctx.worlds.get(p.worldId));
       if (isStale(p.enqueuedDay, actor.state().day)) return DROP_JOB;
     }
+    // A licensed AI answers under the name it is licensed by, from its own company.
+    const found = await identityIn(this.ctx, p.worldId, p.versionId);
+    const identity = p.poweredBy ? makeIdentity(p.poweredBy, found?.company) : found;
     return {
       productId: p.productId,
       versionId: p.versionId,
@@ -205,6 +209,7 @@ export class FeedbackService {
       groups: [...(p.groups ?? GROUP_IDS)],
       perGroup: p.perGroup,
       seed: seedOf(p.productId, p.key),
+      ...(identity ? { identity } : {}),
     };
   }
 

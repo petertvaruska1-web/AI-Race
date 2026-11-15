@@ -202,6 +202,17 @@ export const EvalJobResult = z.object({
 });
 export type EvalJobResult = z.infer<typeof EvalJobResult>;
 
+/**
+ * What an AI is told about itself at the start of a conversation: its public name and its
+ * company's public name (R2: both are already in every player's view). The helper turns it into
+ * "You are {name}, an AI made by {company}." for an AI that learned to read that line.
+ */
+export const Identity = z.object({
+  name: z.string().min(1).max(60),
+  company: z.string().max(60).nullable(),
+});
+export type Identity = z.infer<typeof Identity>;
+
 export const GenerateJobSpec = z.object({
   /** A player version's id, or a rival AI's pack key. */
   versionId: zId,
@@ -211,6 +222,7 @@ export const GenerateJobSpec = z.object({
   temperature: z.number().positive(),
   topP: z.number().gt(0).max(1),
   seed: z.number().int().min(0),
+  identity: Identity.optional(),
 });
 export type GenerateJobSpec = z.infer<typeof GenerateJobSpec>;
 
@@ -225,6 +237,7 @@ export const FeedbackJobSpec = z.object({
   groups: z.array(GroupId).min(1),
   perGroup: z.number().int().positive(),
   seed: z.number().int().min(0),
+  identity: Identity.optional(),
 });
 export type FeedbackJobSpec = z.infer<typeof FeedbackJobSpec>;
 
@@ -252,6 +265,7 @@ const BattleSide = z.object({
    * company's job, like the training data itself.
    */
   ownText: z.array(z.string()).default([]),
+  identity: Identity.optional(),
 });
 
 /** Two AIs answer the same fresh challenges (game-layer design §10); `b` is the rival. */
@@ -319,7 +333,9 @@ export const MinigameJobSpec = z.object({
   seed: z.number().int().min(0),
   settings: MinigameSettings,
   sides: z
-    .array(z.object({ side: Side, versionId: zId, modelTarUrl: Url }))
+    .array(
+      z.object({ side: Side, versionId: zId, modelTarUrl: Url, identity: Identity.optional() }),
+    )
     .min(1)
     .max(2),
 });
@@ -352,6 +368,7 @@ export const KeynoteJobSpec = z.object({
   modelTarUrl: Url,
   questionId: z.string().min(1),
   seed: z.number().int().min(0),
+  identity: Identity.optional(),
 });
 export type KeynoteJobSpec = z.infer<typeof KeynoteJobSpec>;
 
@@ -429,6 +446,7 @@ export const WORKER_SCHEMAS = {
   TrainJobResult,
   EvalJobSpec,
   EvalJobResult,
+  Identity,
   GenerateJobSpec,
   GenerateJobResult,
   FeedbackJobSpec,

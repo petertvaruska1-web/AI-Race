@@ -84,6 +84,38 @@ describe("worker protocol fixtures", () => {
     expect(WORKER_SCHEMAS.GenerateJobSpec.safeParse(spec).success).toBe(true);
   });
 
+  it("carries an AI's name and company on the jobs that make it speak", () => {
+    const read = (f: string) => JSON.parse(readFileSync(new URL(f, DIR), "utf8")).message.spec;
+    const generate = WORKER_SCHEMAS.GenerateJobSpec.parse(read("lease-generate.json"));
+    expect(generate.identity).toEqual({ name: "Zula", company: "Pengu Labs" });
+    const keynote = WORKER_SCHEMAS.KeynoteJobSpec.parse(read("lease-keynote.json"));
+    expect(keynote.identity).toEqual({ name: "Spark", company: null });
+    const battle = WORKER_SCHEMAS.BattleJobSpec.parse(read("lease-battle.json"));
+    expect(battle.a?.identity?.name).toBe("Zula");
+    expect(battle.b?.identity?.company).toBe("Budget AI Inc");
+    const minigame = WORKER_SCHEMAS.MinigameJobSpec.parse(read("lease-minigame.json"));
+    expect(minigame.sides[0]?.identity?.name).toBe("Zula");
+    // Without it, as before.
+    expect(
+      WORKER_SCHEMAS.FeedbackJobSpec.parse(read("lease-feedback.json")).identity,
+    ).toBeUndefined();
+    const feedback = {
+      ...read("lease-feedback.json"),
+      identity: { name: "Zula", company: "Pengu" },
+    };
+    expect(WORKER_SCHEMAS.FeedbackJobSpec.parse(feedback).identity?.name).toBe("Zula");
+  });
+
+  it("refuses an empty name and one that is too long", () => {
+    const { Identity } = WORKER_SCHEMAS;
+    expect(Identity.safeParse({ name: "", company: null }).success).toBe(false);
+    expect(Identity.safeParse({ name: "x".repeat(61), company: null }).success).toBe(false);
+    expect(Identity.safeParse({ name: "x".repeat(60), company: "y".repeat(61) }).success).toBe(
+      false,
+    );
+    expect(Identity.safeParse({ name: "Zula", company: null }).success).toBe(true);
+  });
+
   it("rejects a worker message without a job id or version", () => {
     expect(WorkerMessage.safeParse({ v: 1, type: "done", result: {} }).success).toBe(false);
     expect(WorkerMessage.safeParse({ v: 2, type: "heartbeat" }).success).toBe(false);

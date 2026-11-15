@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { GenerateJobSpec } from "@airace/protocol";
+import { projectView } from "@airace/sim";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { MAKER_OFFLINE, NOT_SHARED, TRIED_A_LOT } from "../src/chat/service.ts";
@@ -70,6 +72,17 @@ describe("trying a friend's shared AI", () => {
     expect(sent.threadId).toBeTruthy();
     const lease = await w.nextLease();
     expect(lease.jobType).toBe("generate");
+    // A friend's shared AI tells its own name and its maker's company, not the asker's.
+    expect(GenerateJobSpec.parse(lease.spec).identity).toEqual({
+      name: Object.values(ana.actor.state().companies).find((c) => c.versions[versionId])?.versions[
+        versionId
+      ]?.label,
+      company: "Acme",
+    });
+    // Both names are in the asker's own view of the maker's company: the AI is shared.
+    const seen = JSON.stringify(projectView(ana.actor.state(), ben.userId));
+    expect(seen).toContain(JSON.stringify(GenerateJobSpec.parse(lease.spec).identity?.name));
+    expect(seen).toContain('"name":"Acme"');
     const [job] = await server.ctx.db
       .select()
       .from(schema.jobs)

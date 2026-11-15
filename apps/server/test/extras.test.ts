@@ -61,7 +61,11 @@ describe("launch keynotes", () => {
     const { productId, versionId } = await launched(server, w, o, "knowledge-customer-0003");
     const lease = await w.nextLease();
     expect(lease.jobType).toBe("keynote");
-    expect(lease.spec).toMatchObject({ versionId, questionId: "knowledge-customer-0003" });
+    expect(lease.spec).toMatchObject({
+      versionId,
+      questionId: "knowledge-customer-0003",
+      identity: { name: "Spark", company: "Acme" },
+    });
     w.done(lease.jobId, {
       questionId: "knowledge-customer-0003",
       prompt: "What is the capital of France?",

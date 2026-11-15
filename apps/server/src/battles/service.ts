@@ -13,6 +13,7 @@ import { HttpError } from "../auth.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { schema } from "../db/index.ts";
 import { trainingCards } from "../helpers/limits.ts";
+import { makeIdentity } from "../jobs/identity.ts";
 import { forCompany, paramsOf } from "../jobs/owners.ts";
 import type { BattleVoteMessage } from "../realtime/gateway.ts";
 import type { TimerHandle } from "../scheduler.ts";
@@ -255,25 +256,34 @@ export class BattleService {
       rounds: getBalance(s.balance).economy.battles.rounds,
       seed: battle.seed,
     };
-    const model = async (versionId: string, companyId: string) => ({
-      versionId,
-      modelTarUrl: signBlobUrl(this.ctx, checkpointKey(versionId), "GET", MODEL_URL_TTL_MS),
-      ownText: await this.ctx.coaching.ownText(s, companyId),
-    });
+    // Each AI is told the product name its battle shows and its company's name.
+    const identity = (productName: string, companyId: string) =>
+      makeIdentity(productName, s.companies[companyId]?.name);
+    const model = async (versionId: string, companyId: string, productName: string) => {
+      const who = identity(productName, companyId);
+      return {
+        versionId,
+        modelTarUrl: signBlobUrl(this.ctx, checkpointKey(versionId), "GET", MODEL_URL_TTL_MS),
+        ownText: await this.ctx.coaching.ownText(s, companyId),
+        ...(who ? { identity: who } : {}),
+      };
+    };
     if (p.side) {
       // One side only, with only its own model (a friend's weights stay off your card).
       const side =
         p.side === "a"
-          ? await model(battle.mine.versionId, p.companyId)
-          : await model(battle.theirs.versionId, battle.rivalId);
+          ? await model(battle.mine.versionId, p.companyId, battle.mine.productName)
+          : await model(battle.theirs.versionId, battle.rivalId, battle.theirs.productName);
       return { ...base, sides: [p.side], [p.side]: side };
     }
+    const rivalIdentity = identity(battle.theirs.productName, battle.rivalId);
     return {
       ...base,
-      a: await model(battle.mine.versionId, p.companyId),
+      a: await model(battle.mine.versionId, p.companyId, battle.mine.productName),
       b: {
         versionId: battle.theirs.packKey,
         modelTarUrl: await this.ctx.rivals.modelUrl(battle.theirs.packKey),
+        ...(rivalIdentity ? { identity: rivalIdentity } : {}),
       },
     };
   }

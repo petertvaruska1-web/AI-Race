@@ -3,6 +3,7 @@ import type { CompanyState } from "@airace/sim";
 import type { AppContext } from "../app.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { seedOf } from "../feedback/service.ts";
+import { identityIn } from "../jobs/identity.ts";
 import { forCompany, paramsOf } from "../jobs/owners.ts";
 import { requestOnce } from "../requests.ts";
 import { checkpointKey } from "../training/service.ts";
@@ -30,11 +31,13 @@ export class KeynoteService {
     });
     broker.onPrepare("keynote", async (job) => {
       const p = job.payload as KeynotePayload;
+      const identity = await identityIn(ctx, p.worldId, p.versionId);
       return {
         versionId: p.versionId,
         modelTarUrl: signBlobUrl(ctx, checkpointKey(p.versionId), "GET", JOB_URL_TTL_MS),
         questionId: p.questionId,
         seed: seedOf(p.productId, "keynote"),
+        ...(identity ? { identity } : {}),
       };
     });
     broker.onDone("keynote", (job, result) => this.done(job.payload as KeynotePayload, result));

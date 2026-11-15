@@ -97,6 +97,8 @@ describe("customer feedback jobs", () => {
     expect(spec).toMatchObject({ productId: l.productId, versionId: l.versionId, perGroup: 1 });
     expect([...spec.groups].sort()).toEqual([...GROUP_IDS].sort());
     expect(await (await fetch(spec.modelTarUrl)).text()).toBe("fake-checkpoint");
+    // The launched product's name and the company's.
+    expect(spec.identity).toEqual({ name: "Spark", company: "Acme" });
 
     w.done(lease.jobId, { results: RESULTS });
     await eventually(() => o.actor.state().feed.some((i) => i.kind === "post"));
