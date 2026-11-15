@@ -454,7 +454,7 @@ RUDE_PARTS = (
     "pupu", "dong", "stool", "loli", "kanojo",
     # found by the third reading; "roomba" is a real product
     "kuso", "gamo", "fok", "jiz", "zigan", "kum", "pis", "bonk", "nip", "choni", "grifa", "demon",
-    "odin", "jehaw", "pitin", "teez", "zebi", "kolo", "kos", "roomba",
+    "odin", "jehaw", "pitin", "teez", "zebi", "kolo", "kos", "roomba", "zina", "evel",
 )  # fmt: skip
 # Real first names that are rude or slang as a whole word in some language.
 RUDE_NAMES = frozenset(
@@ -497,6 +497,8 @@ _COMPANY_SECOND = (
     "Collective",
 )  # fmt: skip
 _NAME_TARGET = 2100
+# Numbers that carry a crude or hateful meaning of their own; no name ends in one.
+_LOADED_NUMBERS = frozenset({13, 14, 18, 69, 88, 420, 666, 1312, 1488})
 _DIGIT_NAMES = 80
 _BANNED = tuple(n.lower() for n in (*IDENTITY_NAMES, IDENTITY_COMPANY))
 
@@ -556,6 +558,8 @@ def name_lists(seed: int = 0) -> tuple[list[str], list[str]]:
     while len(names) < _NAME_TARGET:
         base = _choice(rng, bases)
         number = int(rng.integers(1, 100)) if rng.random() < 0.7 else int(rng.integers(100, 3000))
+        if number in _LOADED_NUMBERS:
+            continue
         add(_choice(rng, (f"{base}{number}", f"{base}-{number}", f"{base} {number}")))
     order = rng.permutation(len(names))
     names = [names[int(i)] for i in order]

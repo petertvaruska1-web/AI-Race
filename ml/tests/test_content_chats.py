@@ -287,12 +287,19 @@ _RUDE = (
     "buta", "pusi", "pus", "fallo", "phall", "shizo", "schiz", "pig", "vulg", "dix", "pipi",
     "pupu", "dong", "stool", "loli", "kanojo",
     "kuso", "gamo", "fok", "jiz", "zigan", "kum", "pis", "bonk", "nip", "choni", "grifa",
-    "demon", "odin", "jehaw", "pitin", "teez", "zebi", "kolo", "kos",
+    "demon", "odin", "jehaw", "pitin", "teez", "zebi", "kolo", "kos", "zina", "evel",
 )  # fmt: skip
 # Real brands and names that no made-up name may be (a name holding "roomba" is dropped too).
 _BRANDS = ("Brita", "Teva", "Tripo", "Trovo", "Tumi", "Ooni", "Elsa")
 # First words of companies that are real companies or too close to one.
 _REAL_COMPANY_FIRSTS = ("Pinecone", "Owlet", "Misty", "Pebble", "Doodle", "Copper")
+
+
+def test_no_name_ends_in_a_number_with_a_meaning_of_its_own():
+    loaded = {"13", "14", "18", "69", "88", "420", "666", "1312", "1488"}
+    for name in chats.NAMES:
+        digits = re.findall(r"\d+", name)
+        assert not (set(digits) & loaded), name
 
 
 def test_no_made_up_name_or_company_holds_a_rude_stem():
