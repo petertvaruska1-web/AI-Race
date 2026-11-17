@@ -176,4 +176,15 @@ Each text-2 AI against each text-1 AI: +19 to +38 points on the standard lines a
 - **Targets after round 1:** small talk (blind reading) met; speaking as a person lower: met; follow-ups (Small ≥ 60%): met (71%); says it is an AI when not told: met (89–100%, the third generation 64%); says its name when told: not met (41–63% for a first AI against 60%, 60–84% for larger brains against 85%); lowercase facts for a first AI (≥ 80%): not met (68–71%); third-generation bench (≥ 64): not met (59.1); life claims and cut-off replies: within their guards; training time: measured at the gate.
 
 ## 6. A voice of its own
-(Tasks 16–18.)
+- **Told its name (Tasks 16, 17):** the game sends each AI's public name and its company with every job that makes it speak (chat, customer feedback, keynote, each side of a battle and of a minigame, app reviews); an AI not launched yet is told its version label, the only name its owner sees for it. The helper puts "You are {name}, an AI made by {company}." in front of the conversation only when the AI's last run read text 2 (`persona.learned_identity_line`); text-1 AIs are never given a line. Rivals trained on text 2 are told "You are {product}, an AI." for their stored answers (a rival pack does not know the company a world will give it).
+- **Blocking repeats and unlikely words (Task 18): removed.** Built off by default (9ec58de) and tried on the round-1 text-2 models, the two first AIs and the Small, 100 small-talk replies each (`docs/handoff/next-level/decode_trial.py`):
+
+| well-formed replies | first AI, seed 1 | first AI, seed 2 | Small |
+|---|---|---|---|
+| as served (top-p 0.9) | 79% | 81% | 85% |
+| + a 4-token repeat blocked | 82% | 83% | 84% |
+| min-p 0.05 instead of top-p | 84% | 78% | 81% |
+| min-p 0.1 instead of top-p | 86% | 76% | 78% |
+
+  The rule was a rise of at least 3 points; no setting reaches it on all three models (the changes are within the 5-to-10-point spread between seeds, and they point both ways), fits and on-topic rates barely move, and loops are already stopped by the served loop check. The code was removed again, as the plan requires when nothing is adopted.
+

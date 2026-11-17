@@ -20,11 +20,6 @@ from collections.abc import Sequence
 
 SERVING_TEMPERATURE = 0.6
 SERVING_TOP_P = 0.9
-# Two rules that only remove candidates (the lead adopts values after measuring): a token that
-# would repeat a run of this many tokens already in the reply is blocked (0 = off), and tokens
-# less than this fraction as likely as the best one are dropped (0.0 = off).
-SERVING_BLOCK_REPEAT = 0
-SERVING_MIN_P = 0.0
 
 # A loop: the reply ends with LOOP_REPEATS copies of one unit of up to LOOP_MAX_UNIT tokens
 # (LOOP_SHORT_REPEATS copies when the unit is one or two tokens: "ha ha ha" is not a loop yet).

@@ -24,7 +24,6 @@ from typing import Any
 
 from airace_ml.evals.scoring import exact_match, mean_logprob
 from airace_ml.evals.suite import _prompt_ids
-from airace_ml.infer.serving import SERVING_BLOCK_REPEAT, SERVING_MIN_P
 from airace_ml.minigames.content import LIVES, MAX_STEPS, GameItem
 from airace_ml.skills.checkers import CHECKERS
 from airace_ml.skills.types import ExactItem
@@ -169,7 +168,7 @@ def _attempt(
         assert story_score is not None
         reply = lm.stream_reply(
             item.prompt, chat=True, max_new_tokens=96, temperature=0.9, top_p=0.95, seed=seed,
-            on_text=on_text, block_repeat=SERVING_BLOCK_REPEAT, min_p=SERVING_MIN_P, **said,
+            on_text=on_text, **said,
         )  # fmt: skip
         word = item.display.get("word")
         rule = None if word is None else _uses_word(reply, word)

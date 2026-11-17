@@ -40,12 +40,7 @@ from airace_ml.experiments.configs import (
 from airace_ml.experiments.runs import GateRun, GateRuns, _cached, _write_json
 from airace_ml.feedback import GROUPS, customer_pool
 from airace_ml.infer.lm import TorchLM
-from airace_ml.infer.serving import (
-    SERVING_BLOCK_REPEAT,
-    SERVING_MIN_P,
-    SERVING_TEMPERATURE,
-    SERVING_TOP_P,
-)
+from airace_ml.infer.serving import SERVING_TEMPERATURE, SERVING_TOP_P
 from airace_ml.model.checkpoint import META_NAME, CheckpointMeta, load_checkpoint
 from airace_ml.model.shape import ModelShape
 from airace_ml.paths import judge_dir, novelty_path, tokenizer_path
@@ -160,8 +155,6 @@ def _measure(
                 max_new_tokens=96,
                 temperature=SERVING_TEMPERATURE,
                 top_p=SERVING_TOP_P,
-                block_repeat=SERVING_BLOCK_REPEAT,
-                min_p=SERVING_MIN_P,
                 seed=k,
                 stop_on_loop=True,
                 system=system,

@@ -1,5 +1,9 @@
 """Task 18's trial: do the decoding rules that block repeats or unlikely words help small talk?
 
+RECORD ONLY (2026-11-17): no setting raised well-formed replies by 3 points on all three text-2
+models (ADR 0010, section 6), so the rules (commit 9ec58de) were removed again; to run this
+script, check out 9ec58de.
+
     python ../docs/handoff/next-level/decode_trial.py --card runs/scorecard-e3-text2 \
         --out runs/decode-trial.json NAME=CKPT_DIR [NAME=CKPT_DIR ...]
 

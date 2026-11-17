@@ -3,8 +3,6 @@ import torch
 
 from airace_ml.infer import lm as lm_module
 from airace_ml.infer.serving import (
-    SERVING_BLOCK_REPEAT,
-    SERVING_MIN_P,
     SERVING_TEMPERATURE,
     SERVING_TOP_P,
     is_looping,
@@ -51,10 +49,6 @@ def test_is_looping_sees_a_tail_said_over_and_over(tokens, loops):
 )
 def test_tidy_user_text_capitalises_the_first_letter_and_nothing_else(typed, carried):
     assert tidy_user_text(typed) == carried
-
-
-def test_the_blocking_rules_are_off_until_they_are_measured():
-    assert SERVING_BLOCK_REPEAT == 0 and SERVING_MIN_P == 0.0
 
 
 def test_serving_draws_are_calmer_than_the_measuring_ones():

@@ -128,71 +128,14 @@ def build_chat_prompt(
     return [tok.bos_id, *head, *body, tok.ai_id]
 
 
-class RepeatBlocker:
-    """Per row: which tokens would repeat a run of ``n`` tokens already in that row's reply.
-
-    It keeps the reply's tokens and a dict from each seen ``(n-1)``-token prefix to the set of
-    tokens that followed it, updated as tokens are added, so a step costs one dict lookup.
-    """
-
-    def __init__(self, rows: int, n: int) -> None:
-        if n < 1:
-            raise ValueError(f"block_repeat must be at least 1 here, got {n}")
-        self.n = n
-        self._tokens: list[list[int]] = [[] for _ in range(rows)]
-        self._seen: list[dict[tuple[int, ...], set[int]]] = [{} for _ in range(rows)]
-
-    def add(self, row: int, token: int) -> None:
-        tokens = self._tokens[row]
-        tokens.append(token)
-        if len(tokens) >= self.n:
-            gram = tokens[-self.n :]
-            self._seen[row].setdefault(tuple(gram[:-1]), set()).add(gram[-1])
-
-    def banned(self, row: int) -> set[int]:
-        """Tokens that would now complete an n-gram this reply already has."""
-        tokens = self._tokens[row]
-        keep = self.n - 1
-        if len(tokens) < keep:
-            return set()
-        prefix = tuple(tokens[len(tokens) - keep :])
-        return self._seen[row].get(prefix, set())
-
-
-def _sample(
-    logits: Tensor,
-    temperature: float,
-    top_p: float,
-    rng: torch.Generator,
-    block_repeat: int = 0,
-    min_p: float = 0.0,
-    blocker: RepeatBlocker | None = None,
-) -> Tensor:
+def _sample(logits: Tensor, temperature: float, top_p: float, rng: torch.Generator) -> Tensor:
     """One token per row of ``logits`` ``[B, V]``: greedy at temperature 0, else nucleus sampling.
-
-    Order: logits -> block repeats (those tokens to -inf; ``blocker`` knows each row's reply so
-    far; a row whose every token would be blocked keeps its best one) -> temperature -> softmax ->
-    min-p (tokens below ``min_p`` x the best token's probability are dropped) -> top-p -> sample.
-    Greedy also respects ``block_repeat``. Both rules only remove candidates; with
-    ``block_repeat=0`` and ``min_p=0`` nothing changes.
 
     A row whose probabilities are not all finite (a damaged or diverged model gives NaN or inf
     logits) has no distribution to sample from, so it takes its ``argmax`` exactly as temperature 0
     does; the text is whatever the model's own logits pick, never made up. Other rows are sampled
     as they would be without it.
     """
-    if block_repeat > 0 and blocker is not None:
-        mask = torch.zeros_like(logits, dtype=torch.bool)
-        for row in range(logits.shape[0]):
-            banned = blocker.banned(row)
-            if banned:
-                mask[row, torch.tensor(sorted(banned), device=logits.device)] = True
-        if mask.any():
-            best = logits.argmax(dim=-1, keepdim=True)
-            # Every candidate blocked: the best one stays, so a reply never dies of blocking.
-            spared = torch.zeros_like(mask).scatter_(1, best, True) & mask.all(-1, keepdim=True)
-            mask = mask & ~spared
-            logits = logits.masked_fill(mask, float("-inf"))
     greedy = logits.argmax(dim=-1)
     if temperature == 0:
         return greedy
@@ -200,9 +143,6 @@ def _sample(
     sound = torch.isfinite(probs).all(dim=-1, keepdim=True)
     # A broken row gets some valid distribution so multinomial runs; its draw is thrown away below.
     probs = torch.where(sound, probs, torch.ones_like(probs))
-    if min_p > 0:
-        probs = probs.masked_fill(probs < min_p * probs.max(dim=-1, keepdim=True).values, 0.0)
-        probs = probs / probs.sum(dim=-1, keepdim=True)
     if top_p >= 1.0:
         pick = torch.multinomial(probs, 1, generator=rng)[:, 0]
     else:
@@ -260,8 +200,6 @@ class TorchLM:
         max_new_tokens: int = 96,
         temperature: float = 0.8,
         top_p: float = 0.95,
-        block_repeat: int = 0,
-        min_p: float = 0.0,
         seed: int = 0,
         stop_on_loop: bool = False,
         system: str | None = None,
@@ -277,8 +215,6 @@ class TorchLM:
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
-            block_repeat=block_repeat,
-            min_p=min_p,
             seed=seed,
             stop_on_loop=stop_on_loop,
             system=system,
@@ -291,8 +227,6 @@ class TorchLM:
         max_new_tokens: int = 96,
         temperature: float = 0.8,
         top_p: float = 0.95,
-        block_repeat: int = 0,
-        min_p: float = 0.0,
         seed: int = 0,
         stop_on_loop: bool = False,
         system: str | None = None,
@@ -305,8 +239,6 @@ class TorchLM:
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
-            block_repeat=block_repeat,
-            min_p=min_p,
             seed=seed,
             stop_on_loop=stop_on_loop,
         )[0]
@@ -319,8 +251,6 @@ class TorchLM:
         max_new_tokens: int = 96,
         temperature: float = 0.8,
         top_p: float = 0.95,
-        block_repeat: int = 0,
-        min_p: float = 0.0,
         seed: int = 0,
         on_text: Callable[[str], None],
         stop_on_loop: bool = False,
@@ -339,8 +269,6 @@ class TorchLM:
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
-            block_repeat=block_repeat,
-            min_p=min_p,
             seed=seed,
             on_text=on_text,
             stop_on_loop=stop_on_loop,
@@ -354,8 +282,6 @@ class TorchLM:
         max_new_tokens: int = 96,
         temperature: float = 0.8,
         top_p: float = 0.95,
-        block_repeat: int = 0,
-        min_p: float = 0.0,
         seed: int = 0,
         on_text: Callable[[str], None],
         stop_on_loop: bool = False,
@@ -371,8 +297,6 @@ class TorchLM:
                 max_new_tokens=max_new_tokens,
                 temperature=temperature,
                 top_p=top_p,
-                block_repeat=block_repeat,
-                min_p=min_p,
                 seed=seed,
                 on_text=on_text,
                 stop_on_loop=stop_on_loop,
@@ -383,8 +307,6 @@ class TorchLM:
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
-            block_repeat=block_repeat,
-            min_p=min_p,
             seed=seed,
             on_text=on_text,
             stop_on_loop=stop_on_loop,
@@ -400,8 +322,6 @@ class TorchLM:
         seed: int,
         on_text: Callable[[str], None],
         stop_on_loop: bool = False,
-        block_repeat: int = 0,
-        min_p: float = 0.0,
     ) -> str:
         """Generate after ``prompt`` (token ids), calling ``on_text`` with each new piece."""
         tokens: list[int] = []
@@ -425,8 +345,6 @@ class TorchLM:
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
-            block_repeat=block_repeat,
-            min_p=min_p,
             seed=seed,
             on_token=on_token,
             stop_on_loop=stop_on_loop,
@@ -441,8 +359,6 @@ class TorchLM:
         max_new_tokens: int = 64,
         temperature: float = 0.8,
         top_p: float = 0.95,
-        block_repeat: int = 0,
-        min_p: float = 0.0,
         seed: int = 0,
     ) -> str:
         """Continue ``text`` as a plain document; returns only the newly generated text."""
@@ -451,8 +367,6 @@ class TorchLM:
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
-            block_repeat=block_repeat,
-            min_p=min_p,
             seed=seed,
         )[0]
         return self.tok.decode(gen.tokens)
@@ -471,8 +385,6 @@ class TorchLM:
         stop_ids: Sequence[int] | None = None,
         on_token: Callable[[int, int], None] | None = None,
         stop_on_loop: bool = False,
-        block_repeat: int = 0,
-        min_p: float = 0.0,
     ) -> list[Generation]:
         """Generate up to ``max_new_tokens`` tokens after each prompt.
 
@@ -485,17 +397,7 @@ class TorchLM:
         reply's tail is one short token sequence said over and over
         (:func:`~airace_ml.infer.serving.is_looping`): it is marked ``looped`` and keeps every
         token it generated, nothing is taken back.
-
-        ``block_repeat=n`` (> 0) gives a token probability zero when it would complete an n-token
-        sequence already in this reply (the prompt does not count); if every token would be
-        blocked the best one is kept. ``min_p`` (> 0) drops tokens less than ``min_p`` times as
-        likely as the best one. Both only remove candidates (see :func:`_sample` for the order);
-        at 0 and 0.0 nothing changes.
         """
-        if block_repeat < 0:
-            raise ValueError(f"block_repeat must be >= 0, got {block_repeat}")
-        if not 0 <= min_p <= 1:
-            raise ValueError(f"min_p must be in [0, 1], got {min_p}")
         if max_new_tokens < 0:
             raise ValueError(f"max_new_tokens must be >= 0, got {max_new_tokens}")
         if temperature < 0:
@@ -517,8 +419,7 @@ class TorchLM:
                     emit = lambda row, token, lo=lo: on_token(lo + row, token)
                 out.extend(
                     self._generate_chunk(
-                        chunk, max_new_tokens, temperature, top_p, stops, rng, emit, stop_on_loop,
-                        block_repeat, min_p,
+                        chunk, max_new_tokens, temperature, top_p, stops, rng, emit, stop_on_loop
                     )
                 )
         return out
@@ -533,8 +434,6 @@ class TorchLM:
         rng: torch.Generator,
         on_token: Callable[[int, int], None] | None = None,
         stop_on_loop: bool = False,
-        block_repeat: int = 0,
-        min_p: float = 0.0,
     ) -> list[Generation]:
         """Left-pad, prefill once, then decode one token per step from the KV cache.
 
@@ -561,11 +460,10 @@ class TorchLM:
                 logits = self.model(ids, kv_cache=cache)
         logits = logits[:, -1].float()
         gens = [Generation([], [], [], False) for _ in prompts]
-        blocker = RepeatBlocker(n, block_repeat) if block_repeat > 0 else None
         done = [False] * n
         for step in range(max(caps)):
             raw = torch.softmax(logits, dim=-1)  # temperature 1, before top-p
-            nxt = _sample(logits, temperature, top_p, rng, block_repeat, min_p, blocker)
+            nxt = _sample(logits, temperature, top_p, rng)
             # Clamped so a probability stays in (0, 1] even if float32 underflows to zero.
             token_p = raw.gather(1, nxt[:, None])[:, 0].clamp_min(_FLOAT_TINY)
             top1 = raw.max(dim=-1).values
@@ -579,8 +477,6 @@ class TorchLM:
                     gen.stopped = done[i] = True
                     continue
                 gen.tokens.append(nxt_l[i])
-                if blocker is not None:
-                    blocker.add(i, nxt_l[i])
                 gen.token_probs.append(token_p_l[i])
                 gen.top1_probs.append(top1_l[i])
                 if on_token is not None:

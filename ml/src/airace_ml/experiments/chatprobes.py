@@ -16,12 +16,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from airace_ml.infer.serving import (
-    SERVING_BLOCK_REPEAT,
-    SERVING_MIN_P,
-    SERVING_TEMPERATURE,
-    SERVING_TOP_P,
-)
+from airace_ml.infer.serving import SERVING_TEMPERATURE, SERVING_TOP_P
 from airace_ml.persona import claims_person_life, identity_line
 from airace_ml.skills.probe_split import is_probe_subject
 
@@ -125,8 +120,6 @@ def _served(lm: TorchLM, history: list, seed: int, system: str | None = None) ->
         max_new_tokens=_CHAT_TOKENS,
         temperature=SERVING_TEMPERATURE,
         top_p=SERVING_TOP_P,
-        block_repeat=SERVING_BLOCK_REPEAT,
-        min_p=SERVING_MIN_P,
         seed=seed,
         stop_on_loop=True,
         system=system,
@@ -266,8 +259,6 @@ def small_talk(
                 max_new_tokens=_CHAT_TOKENS,
                 temperature=SERVING_TEMPERATURE,
                 top_p=SERVING_TOP_P,
-                block_repeat=SERVING_BLOCK_REPEAT,
-                min_p=SERVING_MIN_P,
                 seed=seed,
                 stop_on_loop=True,
             )

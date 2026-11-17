@@ -108,12 +108,7 @@ from airace_ml.experiments.runs import (
     source_digest,
 )
 from airace_ml.infer.lm import LanguageModel, TorchLM
-from airace_ml.infer.serving import (
-    SERVING_BLOCK_REPEAT,
-    SERVING_MIN_P,
-    SERVING_TEMPERATURE,
-    SERVING_TOP_P,
-)
+from airace_ml.infer.serving import SERVING_TEMPERATURE, SERVING_TOP_P
 from airace_ml.model.checkpoint import META_NAME, CheckpointMeta, load_checkpoint
 from airace_ml.model.growth import grow
 from airace_ml.model.shape import ModelShape
@@ -1389,8 +1384,6 @@ class _Gate:
                     # them (ADR 0009; until engine 2 both were 0.8 / 0.95 with no loop stop).
                     temperature=SERVING_TEMPERATURE,
                     top_p=SERVING_TOP_P,
-                    block_repeat=SERVING_BLOCK_REPEAT,
-                    min_p=SERVING_MIN_P,
                     seed=i,
                     stop_on_loop=True,
                 )
