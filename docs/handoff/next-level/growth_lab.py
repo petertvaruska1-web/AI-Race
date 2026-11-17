@@ -421,6 +421,13 @@ class Lab:
         self.code = source_digest(TRAINING_SOURCES)
         self.tok = Tok.load(tokenizer_path(root))
         self._instruments = None
+        self.child_tokens: int | None = None  # ``--child-tokens``: a shorter child run
+
+    def child(self, cfg: TrainRunConfig) -> TrainRunConfig:
+        """``cfg`` with the child token budget of ``--child-tokens``, when one was given."""
+        if self.child_tokens is None:
+            return cfg
+        return replace(cfg, token_budget=self.child_tokens)
 
     def config(self, name: str, shape: ModelShape, seed: int) -> TrainRunConfig:
         """The config of a run of ``shape`` (a scorecard shape), the scorecard's token budget and
@@ -845,17 +852,17 @@ def run_lab(lab: Lab, seeds: list[int], arms: list[str]) -> dict:
         for arm in arms:
             name = f"{arm}-s{seed}"
             if arm in GROWN_ARMS:
-                cfg = lab.config(name, sc.SMALL, child_seed)
+                cfg = lab.child(lab.config(name, sc.SMALL, child_seed))
                 finals[arm][seed] = lab.train(
                     name, arm, seed, cfg, parent, TRANSFER_SCALES.get(arm)
                 )
             elif arm == "D":
                 first = f"D-parent-small-s{seed}"
                 new_small = lab.train(first, "D", seed, lab.config(first, sc.SMALL, seed), None)
-                cfg = lab.config(name, sc.SMALL, child_seed)
+                cfg = lab.child(lab.config(name, sc.SMALL, child_seed))
                 finals[arm][seed] = lab.train(name, arm, seed, cfg, new_small)
             else:
-                cfg = lab.config(name, sc.SMALL, child_seed)
+                cfg = lab.child(lab.config(name, sc.SMALL, child_seed))
                 finals[arm][seed] = lab.train(name, arm, seed, cfg, None)
     models: dict[str, dict[str, dict]] = {}
     for arm in arms:
@@ -973,6 +980,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2])
     parser.add_argument("--arms", nargs="+", default=list(ARMS), choices=ARMS)
     parser.add_argument("--bench", action="store_true")
+    parser.add_argument(
+        "--child-tokens", type=int, help="token budget of the child runs (default: the parent's)"
+    )
     parser.add_argument("--tiny-root", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--device", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -985,6 +995,7 @@ def main(argv: list[str] | None = None) -> int:
     root = args.tiny_root if args.tiny_root is not None else default_data_root()
     scale = TINY_SCALE if args.tiny_root is not None else sc.FULL
     lab = Lab(Path(root), args.out, device, scale, args.bench)
+    lab.child_tokens = args.child_tokens
     print(f"growth lab: arms {' '.join(arms)}, seeds {args.seeds}, {device.type}, data {root}")
     with stay_awake():
         results = run_lab(lab, list(args.seeds), arms)
