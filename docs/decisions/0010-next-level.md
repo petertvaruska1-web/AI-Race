@@ -123,7 +123,24 @@ Engine 3 is one number for every item of this section that is kept: nothing is r
 - Ten short lessons are read more than a thousand times in a Short run. A player with many long lessons gets fewer readings of each; that case was not measured.
 
 ## 5. Training text 2 against text 1
-(Tasks 14–15.)
+### 5.1 What text 2 is (built 2026-11-15 to 17 into `data2/`)
+`AIRACE_DATA=../data2 airace-content build --scale full --text 2` (48 minutes), then the conversations again alone after the generator was made reproducible (`--datasets conversations`, 10 minutes). 258M tokens in all (text 1: 139M):
+
+| dataset | tokens | target | made of |
+|---|---|---|---|
+| web | 64.9M | 60M | fineweb 64.9M |
+| books | 29.9M | 30M | gutenberg 29.9M |
+| educational | 41.2M | 40M | cosmo_khan 10.9M, cosmo_wikihow 9.9M, cosmo_openstax 8.1M, fineweb_edu 12.3M |
+| conversations | 30.7M | 30M | assistant_chat 9.8M, fact_chat 7.2M, instructions 6.1M, followup_chat 4.2M, identity_chat 2.8M, everyday_conv 0.5M |
+| code | 20.4M | 20M | code 20.3M, mbpp 0.0M |
+| reasoning | 19.3M | 20M | reasoning 11.6M, patterns 6.5M, gsm8k 1.2M |
+| facts | 12.0M | 12M | fact_prose 9.0M, fact_qa 3.0M |
+| creative | 39.7M | 40M | tinystories 28.0M, tinystories_requests 5.5M, cosmo_stories 6.2M |
+
+- **Conversations** are written by the game's own generators only: short chats with a small, friendly AI that never speaks as a person (`assistant_chat`), fact questions, instructions, follow-up questions that refer back, and chats in which the AI knows its name and company; 40% of the chats of most kinds open with an identity line. Typos fall on the person's turns only. No two-person dialogues from SODA (section 2).
+- The build warned that `identity_chat` reached 86% of its plan (its bytes-per-token estimate was low) and that `everyday_conv`, `mbpp`, `gsm8k` and `tinystories_requests` ran out (their sources are small; the other components of their datasets made up the difference).
+- 20 random conversation documents read by the lead: correct, short, child-safe; typos only in the person's lines ("Make a sentenfe with the word train in it.").
+
 
 ## 6. A voice of its own
 (Tasks 16–18.)
