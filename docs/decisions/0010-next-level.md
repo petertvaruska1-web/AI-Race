@@ -109,6 +109,21 @@ Engine 3 is one number for every item of this section that is kept: nothing is r
 - **Decision: removed** (the rule asked for the AI-turn loss to fall by 0.02; it rose by 0.02 to 0.11, steadily as the weight fell; seed noise on this loss is about 0.006). Learning to predict the person's turns teaches language the AI's turns use too. The mechanism (`_loss_weights`, commit ec8b390) is deleted again; the lab script stays as a record.
 - Not measured on text 2. Its person's turns are short questions with typing noise; the result above is so steady in the weight that a different sign is not expected, and a brain that reads noisy typing has to learn that typing somewhere.
 
+### 4.3 What a grown brain keeps of its parent (Task 7): no change
+- **The question:** when a player grows an AI to a bigger brain, how much of what the parent learned does the child keep? `docs/handoff/next-level/growth_lab.py` trains the scorecard's first AI (Tiny) and grows it to Small, in several ways, two seeds each, with a check that growth keeps the parent's answers exactly (largest difference 2.5e-5) and that every variant changes only the elements it should.
+- **Round 1 (child 12.6M tokens):** grown as today (A) 2.337 held-out loss; a new Small with no parent (E) the same (A minus E: +0.000, −0.004); a Small continuing a Small (D) 0.085 better. Speeding up the new parts in the first third (B) or slowing the old parts in the first third (C): 0.013–0.017 worse. The curves showed why: the child's first steps at the full learning rate wipe out most of the parent's knowledge (held-out 2.46 → 2.65), and the run wins it back.
+- **Round 2:** holding the inherited parts at 0.3 or 0.1 of their update for the whole run (F, G) keeps the parent's knowledge from the first step (2.44 instead of 2.65), but the runs end level with A (2.336 and 2.335 against 2.332): a bigger brain learns by itself in 12.6M tokens what the small parent knew.
+- **By length of the child run (G against A, two seeds each):**
+
+| child run | A | G (inherited parts at a tenth, whole run) | H (a tenth rising to the full rate) | a new brain (E) |
+|---|---|---|---|---|
+| Short, 6.3M tokens | 2.419 | **2.391** (0.028 better) | 2.416 (0.003 better) | 2.548 |
+| 12.6M tokens | 2.332 | 2.335 | – | 2.336 |
+| Long, 25.2M tokens | 2.254 | 2.273 (0.020 worse) | – | – |
+
+- **Decision: no change.** No single rule helps at every length: G helps a Short run and costs a Long one; letting the protection fade (H) loses the Short gain. The rule fixed before H was measured asked for both, so the trainer is unchanged. A rule that depends on the run's length (protect only Short runs) is noted for a later engine; it was measured on one growth (Tiny to Small) only.
+- **What this means for players:** a grown AI ends about where a new brain of its size ends on the same reading, and on a Short run inheriting is worth a lot (0.13 better than a new brain). The value of a lineage is the bigger brain and the longer reading; the first AI is not made worse by any of this.
+
 ### 4.4 Lessons that stick (Task 8): already do; nothing changed
 - **Measured** (`docs/handoff/next-level/lessons_lab.py`, engine 3): a first AI continued with one run built field for field as the game builds it for "Train on your lessons" (the same Tiny brain, the Short length of 6,291,456 tokens, the even mix, the lessons at the game's share of 5%), with ten made-up lessons ("What colour is a glimmerfin?" → "A glimmerfin is teal."):
 
