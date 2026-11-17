@@ -22,6 +22,9 @@ For each seed ``s`` it trains (finished runs in ``--out`` are reused, never trai
   update of every parameter element that did not exist in the parent is multiplied by 3.
 - C (old parts move slower): as A, but during the first third the realised update of every element
   copied from the parent is multiplied by 0.3.
+- F (old parts slower for the whole run): as C, but the old elements move 0.3 times their
+  update for the whole child run. G: the same at 0.1. Added after the first round (seeds 1, 2):
+  C kept the parent's loss while it held the old elements back and lost it when it let them go.
 - D (the most a perfect transfer could give): a new Small trained like ``parent-tiny-s`` (same
   tokens, mix and seed ``s``), then a Small continuing it for 12,582,912 tokens with seed
   ``s + CONTINUATION_SEED_OFFSET``; the second one is reported.
@@ -122,10 +125,20 @@ from airace_ml.train.events import HeldoutEval, Instability, Progress, TrainEven
 from airace_ml.train.optim import MuonAdamW
 
 LAB_VERSION = "growth-lab-1"
-ARMS = ("A", "B", "C", "D", "E")
-# The arms whose child runs through the wrapper, each with its (old_scale, new_scale).
-TRANSFER_SCALES: dict[str, tuple[float, float]] = {"B": (1.0, 3.0), "C": (0.3, 1.0)}
-TRANSFER_SHARE = 3  # The wrapper acts during the first third of the child's steps.
+ARMS = ("A", "B", "C", "D", "E", "F", "G")
+# The arms whose child runs through the wrapper, each with its (old_scale, new_scale, share):
+# the wrapper acts during the first 1/share of the child's steps (1: the whole run). F and G
+# were added after the first round: C kept the parent's loss while it held the old elements
+# back, and lost it the moment it let them go, so F and G hold them back for the whole run.
+TRANSFER_SCALES: dict[str, tuple[float, float, int]] = {
+    "B": (1.0, 3.0, 3),
+    "C": (0.3, 1.0, 3),
+    "F": (0.3, 1.0, 1),
+    "G": (0.1, 1.0, 1),
+}
+TRANSFER_SHARE = 3  # The share of B and C, and of the self-check of the identity wrapper.
+# The arms whose child is grown from the Tiny parent.
+GROWN_ARMS = ("A", *TRANSFER_SCALES)
 FUNCTION_TOLERANCE = 1e-4
 KEEP_MARGIN = 0.02  # A variant is kept only if its held-out loss beats A's by this on every seed.
 CHECK_STEPS = 8
@@ -426,7 +439,7 @@ class Lab:
         seed: int,
         cfg: TrainRunConfig,
         parent: LabRun | None,
-        scales: tuple[float, float] | None = None,
+        scales: tuple[float, float, int] | None = None,
     ) -> LabRun:
         """The finished run ``name`` of ``arm`` and ``seed``; reused only when its record's key
         (which names the arm, the seed, the exact parent training and the scales) matches."""
@@ -438,7 +451,7 @@ class Lab:
         config["parent_dir"] = parent.name if parent is not None else None
         transfer = None
         if scales is not None:
-            transfer = {"old_scale": scales[0], "new_scale": scales[1], "share": TRANSFER_SHARE}
+            transfer = {"old_scale": scales[0], "new_scale": scales[1], "share": scales[2]}
         key = _plain(
             {
                 "lab": LAB_VERSION,
@@ -537,7 +550,7 @@ class Lab:
                 new_scale=scales[1],
                 parent_shape=parent.cfg.shape,
                 child=cfg,
-                active_steps=cfg.steps // TRANSFER_SHARE,
+                active_steps=cfg.steps // scales[2],
             )
             with transfer_wrapper(t):
                 result = trainer.train_run(
@@ -715,7 +728,7 @@ def check_one_step(parent: LabRun, child: TrainRunConfig) -> None:
         return {n: p.detach().clone() for n, p in named.items()}
 
     plain = stepped(None)
-    for arm, (old_scale, new_scale) in TRANSFER_SCALES.items():
+    for arm, (old_scale, new_scale, _share) in TRANSFER_SCALES.items():
         scaled = stepped((old_scale, new_scale))
         for name, mask in old.items():
             before = start[name]
@@ -817,7 +830,7 @@ def run_lab(lab: Lab, seeds: list[int], arms: list[str]) -> dict:
         child_seed = seed + CONTINUATION_SEED_OFFSET
         print(f"seed {seed}", flush=True)
         parent = None
-        if any(arm in arms for arm in ("A", "B", "C")):
+        if any(arm in arms for arm in GROWN_ARMS):
             name = f"parent-tiny-s{seed}"
             parent = lab.train(name, "parent", seed, lab.config(name, sc.TINY, seed), None)
             probe = lab.config(f"A-s{seed}", sc.SMALL, child_seed)
@@ -831,7 +844,7 @@ def run_lab(lab: Lab, seeds: list[int], arms: list[str]) -> dict:
                 check_identity(lab, parent, probe)
         for arm in arms:
             name = f"{arm}-s{seed}"
-            if arm in ("A", "B", "C"):
+            if arm in GROWN_ARMS:
                 cfg = lab.config(name, sc.SMALL, child_seed)
                 finals[arm][seed] = lab.train(
                     name, arm, seed, cfg, parent, TRANSFER_SCALES.get(arm)
@@ -849,7 +862,7 @@ def run_lab(lab: Lab, seeds: list[int], arms: list[str]) -> dict:
         models[arm] = {}
         for seed, run in finals[arm].items():
             entry = {"run": run.name, "status": run.status, **lab.measure(run)}
-            if arm in ("A", "B", "C"):
+            if arm in GROWN_ARMS:
                 entry["curve"] = run.curve
             if run.applied is not None:
                 entry["transfer_steps"] = run.applied
@@ -913,7 +926,7 @@ def print_tables(results: dict) -> None:
             if measure in ("seconds", "bench_overall") and row["minus_A"] is not None:
                 diff = f"{row['minus_A']:+.1f}"
             print(f"  {arm}  {values} | {_fmt(row['mean'], measure)} | {diff}")
-    curves = [arm for arm in ("A", "B", "C") if arm in models]
+    curves = [arm for arm in GROWN_ARMS if arm in models]
     for seed in seeds:
         if not curves:
             break

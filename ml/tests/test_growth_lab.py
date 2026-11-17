@@ -60,9 +60,11 @@ def test_the_lab_runs_on_the_tiny_fixture(lab, tiny_data_root, tmp_path, capsys)
     assert "self-check 2:" in first and "self-check 3:" in first
     results = json.loads((out / "results.json").read_text(encoding="utf-8"))
     models = results["models"]
-    assert set(models) == {"A", "B", "C", "D", "E"}
+    assert set(models) == set(lab.ARMS)
     assert models["B"]["1"]["transfer_steps"] == [1, 2, 3, 4]  # 12 steps, the first third
     assert models["C"]["1"]["transfer_steps"] == [1, 2, 3, 4]
+    assert models["F"]["1"]["transfer_steps"] == list(range(1, 13))  # the whole run
+    assert models["G"]["1"]["transfer_steps"] == list(range(1, 13))
     assert "transfer_steps" not in models["A"]["1"] and models["A"]["1"]["curve"]
     counts = results["self_checks"]["elements"]
     assert counts["old"] > 0 and counts["new"] > 0
