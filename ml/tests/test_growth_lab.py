@@ -65,6 +65,7 @@ def test_the_lab_runs_on_the_tiny_fixture(lab, tiny_data_root, tmp_path, capsys)
     assert models["C"]["1"]["transfer_steps"] == [1, 2, 3, 4]
     assert models["F"]["1"]["transfer_steps"] == list(range(1, 13))  # the whole run
     assert models["G"]["1"]["transfer_steps"] == list(range(1, 13))
+    assert models["H"]["1"]["transfer_steps"] == list(range(1, 13))
     assert "transfer_steps" not in models["A"]["1"] and models["A"]["1"]["curve"]
     counts = results["self_checks"]["elements"]
     assert counts["old"] > 0 and counts["new"] > 0

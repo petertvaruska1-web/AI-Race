@@ -25,6 +25,9 @@ For each seed ``s`` it trains (finished runs in ``--out`` are reused, never trai
 - F (old parts slower for the whole run): as C, but the old elements move 0.3 times their
   update for the whole child run. G: the same at 0.1. Added after the first round (seeds 1, 2):
   C kept the parent's loss while it held the old elements back and lost it when it let them go.
+- H (protection that fades): old elements start at 0.1 times their update and rise in a straight
+  line to the full update at the child's last step. Added after G was 0.027 better on a Short child
+  run and 0.020 worse on a Long one.
 - D (the most a perfect transfer could give): a new Small trained like ``parent-tiny-s`` (same
   tokens, mix and seed ``s``), then a Small continuing it for 12,582,912 tokens with seed
   ``s + CONTINUATION_SEED_OFFSET``; the second one is reported.
@@ -125,7 +128,7 @@ from airace_ml.train.events import HeldoutEval, Instability, Progress, TrainEven
 from airace_ml.train.optim import MuonAdamW
 
 LAB_VERSION = "growth-lab-1"
-ARMS = ("A", "B", "C", "D", "E", "F", "G")
+ARMS = ("A", "B", "C", "D", "E", "F", "G", "H")
 # The arms whose child runs through the wrapper, each with its (old_scale, new_scale, share):
 # the wrapper acts during the first 1/share of the child's steps (1: the whole run). F and G
 # were added after the first round: C kept the parent's loss while it held the old elements
@@ -135,7 +138,12 @@ TRANSFER_SCALES: dict[str, tuple[float, float, int]] = {
     "C": (0.3, 1.0, 3),
     "F": (0.3, 1.0, 1),
     "G": (0.1, 1.0, 1),
+    "H": (0.1, 1.0, 1),
 }
+# Arms whose old scale rises in a straight line from its value at the first step to 1.0 at the
+# last: H was added after G held the parent's knowledge on a Short child run (0.027 better) and
+# cost a Long one (0.020 worse), so its protection fades over the run.
+RAMPED = frozenset({"H"})
 TRANSFER_SHARE = 3  # The share of B and C, and of the self-check of the identity wrapper.
 # The arms whose child is grown from the Tiny parent.
 GROWN_ARMS = ("A", *TRANSFER_SCALES)
@@ -287,11 +295,13 @@ class Transfer:
     parent_shape: ModelShape
     child: TrainRunConfig
     active_steps: int
+    ramp: bool = False
     grow_calls: int = 0
     grown: Transformer | None = None
     old: dict[str, Tensor] | None = None
     optimizer: torch.optim.Optimizer | None = None
     pairs: list[tuple[Tensor, Tensor]] | None = None
+    bools: list[Tensor] | None = None  # per parameter of ``pairs``: copied elements
     step: int = 0
     applied: list[int] = field(default_factory=list)
 
@@ -363,15 +373,24 @@ def transfer_wrapper(t: Transfer) -> Iterator[Transfer]:
                 "the optimizer's parameters are not the grown model's",
             )
             masks = scale_masks(t.old, t.old_scale, t.new_scale)
-            t.pairs = []
+            t.pairs, t.bools = [], []
             for name, p in named.items():
                 mask = masks[name].to(p.device, p.dtype)
                 _require(mask.shape == p.shape, f"{name}: mask {mask.shape} is not {p.shape}")
                 t.pairs.append((p, mask))
+                t.bools.append(t.old[name].to(p.device))
             t.optimizer = opt
         _require(opt is t.optimizer, "a second optimizer stepped in the wrapped run")
         t.applied.append(t.step)
-        return apply_scaled(t.pairs, lambda: real_step(opt, closure))
+        pairs = t.pairs
+        if t.ramp:  # the old scale rises in a straight line to 1.0 at the last active step
+            done = (t.step - 1) / max(1, t.active_steps - 1)
+            old_now = t.old_scale + (1.0 - t.old_scale) * done
+            pairs = [
+                (p, torch.where(b, old_now, t.new_scale).to(p.dtype))
+                for (p, _), b in zip(t.pairs, t.bools, strict=True)
+            ]
+        return apply_scaled(pairs, lambda: real_step(opt, closure))
 
     setattr(lab_step, _MARK, True)
     trainer.grow = lab_grow
@@ -459,6 +478,8 @@ class Lab:
         transfer = None
         if scales is not None:
             transfer = {"old_scale": scales[0], "new_scale": scales[1], "share": scales[2]}
+            if arm in RAMPED:  # only ramped arms carry the key, so earlier records still match
+                transfer["ramp"] = "linear to 1.0"
         key = _plain(
             {
                 "lab": LAB_VERSION,
@@ -494,7 +515,7 @@ class Lab:
             )
             print(f"  {name}: finished earlier, reusing it", flush=True)
         else:
-            record = self._train_fresh(name, cfg, out, key, parent, scales)
+            record = self._train_fresh(name, cfg, out, key, parent, scales, ramp=arm in RAMPED)
         run = LabRun(
             name=name,
             arm=arm,
@@ -520,7 +541,9 @@ class Lab:
         out: Path,
         key: dict,
         parent: LabRun | None,
-        scales: tuple[float, float] | None,
+        scales: tuple[float, float, int] | None,
+        *,
+        ramp: bool = False,
     ) -> dict:
         _write_json(out / RECORD_FILE, {"key": key, "status": "started"})
         print(
@@ -558,6 +581,7 @@ class Lab:
                 parent_shape=parent.cfg.shape,
                 child=cfg,
                 active_steps=cfg.steps // scales[2],
+                ramp=ramp,
             )
             with transfer_wrapper(t):
                 result = trainer.train_run(
