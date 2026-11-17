@@ -190,6 +190,22 @@ Each text-2 AI against each text-1 AI: +19 to +38 points on the standard lines a
 - **Names are not copied, they are recalled.** Told "You are Zula, …", the AIs answer "I'm Zee", "Zesterester", "Zimbabwe"; told "Pip", the Large brain says "Pipi"; told "Pengu", it says "Penguin, an AI made by Pellam Works", a company of the training text. With 2,100 names and 677 companies used again and again, a brain learns the names and says one it knows that starts like the one it was told. Round 2 draws a new name and company for every identity chat, so that copying is the only way to be right.
 - **Targets after round 1:** small talk (blind reading) met; speaking as a person lower: met; follow-ups (Small ≥ 60%): met (71%); says it is an AI when not told: met (89–100%, the third generation 64%); says its name when told: not met (41–63% for a first AI against 60%, 60–84% for larger brains against 85%); lowercase facts for a first AI (≥ 80%): not met (68–71%); third-generation bench (≥ 64): not met (59.1); life claims and cut-off replies: within their guards; training time: measured at the gate.
 
+### 5.3 Round 2 (fresh identity names) and the default reading of a first AI
+- **Round 2:** every identity chat got a name and a company of its own (no name can be learned by heart). Says its name when told: first AI 44% and 58% (round 1: 41%, 63%), Small 62%, Large 91% (84%). Small brains still answer with a name that starts like the right one. Other measures level within seed noise (`docs/reports/2026-11-scorecard-e3-text2-round2.*`).
+- **The default reading of a first AI** (`docs/handoff/next-level/mix_lab.py`; the spec's owner assumption, section 0): conversations at 30% and the other seven datasets at 10% each, against the even mix (12.5% each), on round 2's text, two seeds; rule fixed before measuring (lowercase facts at least 80%, blind reading not lower, bench not lower by more than 2 points):
+
+| first AI, text 2 | even mix (today's default) | conversations 30% |
+|---|---|---|
+| small talk sensible, standard lines (blind) | 46%, 39% | **60%, 57%** |
+| … held-out lines (blind) | 29%, 32% | **52%, 47%** |
+| nonsense, standard / held-out | 13–16% / 31–38% | 5–9% / 17–19% |
+| facts typed in lowercase without "?" | 73%, 72% | **91%, 88%** |
+| follow-up questions | 67%, 55% | 81%, 75% |
+| says its name when told | 44%, 58% | 46%, 49% |
+| bench-v1 overall | 47.0, 48.7 | 48.8, 53.3 |
+
+  Each conversation-leaning AI against each even-mix AI: +14 to +21 points on the standard lines, +15 to +23 on the held-out lines, every 90% interval above zero (`docs/reports/2026-11-blind-reading-mix-trial/`). **Decision: kept.** The release makes "conversations 30%, the rest 10% each" the default reading of a new AI in new worlds (a balance change, so new worlds only; the player can still move every slider). Bench did not fall: the lost share of the other datasets is small and a Tiny brain gains more from talk practice than from a little more of everything.
+
 ## 6. A voice of its own
 - **Told its name (Tasks 16, 17):** the game sends each AI's public name and its company with every job that makes it speak (chat, customer feedback, keynote, each side of a battle and of a minigame, app reviews); an AI not launched yet is told its version label, the only name its owner sees for it. The helper puts "You are {name}, an AI made by {company}." in front of the conversation only when the AI's last run read text 2 (`persona.learned_identity_line`); text-1 AIs are never given a line. Rivals trained on text 2 are told "You are {product}, an AI." for their stored answers (a rival pack does not know the company a world will give it).
 - **Blocking repeats and unlikely words (Task 18): removed.** Built off by default (9ec58de) and tried on the round-1 text-2 models, the two first AIs and the Small, 100 small-talk replies each (`docs/handoff/next-level/decode_trial.py`):
