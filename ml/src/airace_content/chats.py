@@ -535,7 +535,9 @@ def _made_up(rng: np.random.Generator) -> str:
 def name_lists(seed: int = 0) -> tuple[list[str], list[str]]:
     """AI names (common first names, made-up names of two and three syllables, a few with digits)
     and made-up two-part company names. None holds a name or the company the identity probe
-    uses; the same seed always gives the same lists."""
+    uses; the same seed always gives the same lists. No training text is drawn from these lists any
+    more (a brain learns a fixed list's names by heart; see :func:`random_identity`); they remain
+    as a reference for what a name and a company look like."""
     rng = np.random.default_rng(seed)
     kb = load_kb()
     kb_words = {w.lower() for f in kb.facts for w in (f.subject, f.obj)}
@@ -812,10 +814,83 @@ def _fields(template: str) -> set[str]:
     return set(re.findall(r"\{(\w+)\}", template))
 
 
+# Names and companies are made fresh for every identity chat. A brain trained on a fixed list
+# learns the names themselves and RECALLS one ("Zula" -> "Zee"; "Pengu" -> "Penguin, made by
+# Pellam Works"); a name it has never seen can only be COPIED from the line.
+_IDENTITY_TRIES = 500  # candidates drawn before no name or company is found
+_MADE_UP_SHARE = 0.70  # names that are made up; then 0.15 with a number, 0.15 a common first name
+_NUMBERED_SHARE = 0.15
+_OWN_FIRST_WORD_SHARE = 0.70  # companies whose first word is made up (the rest use a listed one)
+
+
+@cache
+def _fresh_vocab() -> tuple[KB, set[str], set[str], tuple[str, ...], tuple[str, ...]]:
+    """What a fresh name or company is checked against, built once: the knowledge base, its facts'
+    words (whole and one by one), the common first names and the listed company first words that
+    pass the checks, and the listed company first words that are not real companies."""
+    kb = load_kb()
+    kb_words = {w.lower() for f in kb.facts for w in (f.subject, f.obj)}
+    kb_each = {w for text in kb_words for w in _words(text)}
+    common = tuple(dict.fromkeys(n for n in COMMON_NAMES if _allowed(n, kb_words, real_name=True)))
+    firsts = tuple(f for f in _COMPANY_FIRST.split() if f not in _REAL_COMPANY_FIRST)
+    return kb, kb_words, kb_each, common, firsts
+
+
+def _fresh_name(rng: np.random.Generator) -> str:
+    kb, kb_words, _, common, _ = _fresh_vocab()
+    kind = rng.random()  # the kind is drawn once, so retries do not shift the shares
+    for _ in range(_IDENTITY_TRIES):
+        if kind < _MADE_UP_SHARE:
+            name = _made_up(rng)
+            if not 4 <= len(name) <= 9:
+                continue
+            real_name = False
+        elif kind < _MADE_UP_SHARE + _NUMBERED_SHARE:
+            base = _made_up(rng)
+            if not 4 <= len(base) <= 6:
+                continue
+            number = (
+                int(rng.integers(1, 100)) if rng.random() < 0.7 else int(rng.integers(100, 3000))
+            )
+            if number in _LOADED_NUMBERS:
+                continue
+            name = _choice(rng, (f"{base}{number}", f"{base}-{number}", f"{base} {number}"))
+            real_name = False
+        else:
+            name = _choice(rng, common)
+            real_name = True
+        if _allowed(name, kb_words, real_name=real_name) and not _says_held(kb, name):
+            return name
+    raise ValueError(f"no identity name passed the checks in {_IDENTITY_TRIES} tries")
+
+
+def _fresh_company(rng: np.random.Generator) -> str:
+    kb, kb_words, kb_each, _, firsts = _fresh_vocab()
+    for _ in range(_IDENTITY_TRIES):
+        if rng.random() < _OWN_FIRST_WORD_SHARE:
+            first = _made_up(rng)
+            if not 4 <= len(first) <= 9:
+                continue
+        else:
+            first = _choice(rng, firsts)
+        company = f"{first} {_choice(rng, _COMPANY_SECOND)}"
+        if (
+            _allowed(company, kb_words)
+            and not _words(company) & kb_each
+            and not _says_held(kb, company)
+        ):
+            return company
+    raise ValueError(f"no identity company passed the checks in {_IDENTITY_TRIES} tries")
+
+
 def random_identity(rng: np.random.Generator) -> tuple[str, str | None]:
-    """A name from :data:`NAMES` and a company from :data:`COMPANIES` (or none)."""
-    name = _choice(rng, NAMES)
-    company = None if rng.random() < NO_COMPANY_SHARE else _choice(rng, COMPANIES)
+    """A name and a company (or none) made fresh for one identity chat, never drawn from
+    :data:`NAMES` and :data:`COMPANIES`: 70% a made-up name, 15% one with a number, 15% a common
+    first name; a company is a made-up (or, 30%, a listed) first word and a second word. Every
+    candidate passes the same checks the lists use and is drawn again until it does, so the only
+    way to be right about the line is to copy it."""
+    name = _fresh_name(rng)
+    company = None if rng.random() < NO_COMPANY_SHARE else _fresh_company(rng)
     return name, company
 
 

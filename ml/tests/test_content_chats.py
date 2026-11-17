@@ -194,8 +194,7 @@ def test_an_identity_chat_starts_with_its_line_and_its_replies_hold_its_name():
     for turns in with_line:
         line = turns[0][1]
         name, company = re.fullmatch(r"You are (.+?), an AI(?: made by (.+))?\.", line).groups()
-        assert line == identity_line(name, company) and name in chats.NAMES
-        assert company is None or company in chats.COMPANIES
+        assert line == identity_line(name, company)
         body = turns[1:]
         for (_, question), (role, reply) in zip(body[::2], body[1::2]):
             family = family_of.get(question)
@@ -330,6 +329,140 @@ def test_a_company_has_no_knowledge_base_word_and_no_real_company_as_its_first_w
         assert words[0] not in {w.lower() for w in _REAL_COMPANY_FIRSTS}, company
 
 
+# --- fresh names: every identity chat gets a name and a company of its own ---------------------
+
+
+def _identity_draws(seeds=(300, 301, 302, 303), per_seed=5000) -> list[tuple[str, str | None]]:
+    out = []
+    for seed in seeds:
+        rng = np.random.default_rng(seed)
+        out += [chats.random_identity(rng) for _ in range(per_seed)]
+    return out
+
+
+def test_identity_names_and_companies_are_made_fresh_not_drawn_from_a_list():
+    draws = _identity_draws()  # 20,000 identities
+    names = [n for n, _ in draws]
+    assert len(set(names)) >= 15_000
+    assert len({(n, c) for n, c in draws}) >= 12_000
+    common = {n.lower() for n in chats.COMMON_NAMES}
+    for name, count in Counter(names).items():
+        limit = 0.01 if name.lower() in common else 0.002
+        assert count / len(names) <= limit, (name, count)
+    # a name drawn from the list of old would be one of 2,100; nearly all are new
+    assert sum(n not in chats.NAMES for n in names) / len(names) > 0.5
+    assert sum(c is None for _, c in draws) / len(draws) == pytest.approx(
+        chats.NO_COMPANY_SHARE, abs=0.015
+    )
+    # the chats' own lines are as varied (15% of the chats have no line)
+    lines = [
+        t[0][1]
+        for seed in (310, 311, 312, 313)
+        for t in _identities(5000, seed)
+        if t[0][0] == "sys"
+    ]
+    shares = Counter(re.fullmatch(r"You are (.+?), an AI.*\.", line).group(1) for line in lines)
+    top, count = shares.most_common(1)[0]
+    limit = 0.01 if top.lower() in {n.lower() for n in chats.COMMON_NAMES} else 0.002
+    assert count / len(lines) <= limit, (top, count)
+
+
+def test_a_fresh_name_has_the_forms_the_lists_had():
+    names = [n for n, _ in _identity_draws(seeds=(320,))]
+    with_digits = [n for n in names if any(c.isdigit() for c in n)]
+    assert 0.12 < len(with_digits) / len(names) < 0.18
+    assert all(re.fullmatch(r"[A-Z][a-z]+(?:[ -]?\d{1,4})", n) for n in with_digits)
+    plain = [
+        n
+        for n in names
+        if n not in with_digits and n.lower() not in {c.lower() for c in chats.COMMON_NAMES}
+    ]
+    assert all(4 <= len(n) <= 9 for n in plain)
+    assert 0.6 < len(plain) / len(names) < 0.75
+
+
+def test_no_fresh_name_or_company_is_rude_a_probe_name_a_product_or_a_knowledge_base_word():
+    kb_whole = {w.lower() for f in KB.facts for w in (f.subject, f.obj)}
+    kb_each = {w for text in kb_whole for w in re.findall(r"\w+", text)}
+    common = {n.lower() for n in chats.COMMON_NAMES}
+    banned = [b.lower() for b in (*IDENTITY_NAMES, IDENTITY_COMPANY)]
+    products = {
+        "sora",
+        "siri",
+        "alexa",
+        "gemini",
+        "claude",
+        "nova",
+        "echo",
+        "pixel",
+        "kimi",
+        "leo",
+        "cleo",
+    }
+    products |= {b.lower() for b in _BRANDS}
+    held = _held_sequences()
+    loaded = {"13", "14", "18", "69", "88", "420", "666", "1312", "1488"}
+    for name, company in _identity_draws():
+        for text in (name, company):
+            if text is None:
+                continue
+            low = text.lower()
+            if low in common:
+                assert low not in _RUDE, text
+            else:
+                assert not any(p in low for p in _RUDE), text
+            assert "roomba" not in low and not any(b in low for b in banned), text
+            assert not set(re.findall(r"\w+", low)) & products, text
+            assert not _names_a_held_subject(text, held), text
+        assert name.lower() not in kb_whole and not set(re.findall(r"\d+", name)) & loaded, name
+        if company is not None:
+            assert not set(re.findall(r"\w+", company.lower())) & kb_each, company
+            assert company.split()[0] not in {w.lower() for w in _REAL_COMPANY_FIRSTS} | set()
+
+
+def test_a_company_is_a_first_word_and_a_second_word():
+    companies = [c for _, c in _identity_draws(seeds=(330,)) if c is not None]
+    seconds = {s.lower() for s in chats._COMPANY_SECOND}
+    assert len(set(companies)) > 0.8 * len(companies)  # 30% use one of ~120 listed first words
+    for company in companies:
+        first, _, second = company.partition(" ")
+        assert second.lower() in seconds and first[:1].isupper(), company
+        assert first.lower() not in {w.lower() for w in _REAL_COMPANY_FIRSTS}
+
+
+def test_fresh_identities_are_the_same_for_the_same_seed_and_whatever_the_hash_seed():
+    import hashlib
+    import os
+    import subprocess
+    import sys
+
+    code = (
+        "import hashlib, numpy as np\n"
+        "from airace_content import chats\n"
+        "from airace_ml.skills.kb import load_kb\n"
+        "kb = load_kb(); rng = np.random.default_rng(7)\n"
+        "docs = [chats.identity_chat(rng, kb) for _ in range(2000)]\n"
+        "print(hashlib.sha256(repr(docs).encode()).hexdigest())\n"
+    )
+    digests = set()
+    for hash_seed in ("1", "2"):
+        env = {**os.environ, "PYTHONHASHSEED": hash_seed}
+        out = subprocess.run(
+            [sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True
+        )
+        digests.add(out.stdout.strip())
+    rng = np.random.default_rng(7)
+    here = [chats.identity_chat(rng, KB) for _ in range(2000)]
+    digests.add(hashlib.sha256(repr(here).encode()).hexdigest())
+    assert len(digests) == 1, digests
+
+
+def test_random_identity_refuses_when_no_name_can_pass(monkeypatch):
+    monkeypatch.setattr(chats, "_allowed", lambda *a, **k: False)
+    with pytest.raises(ValueError, match="identity"):
+        chats.random_identity(np.random.default_rng(0))
+
+
 def test_the_favorite_food_question_is_answered_with_a_food_reply():
     for questions, replies in chats.IDENTITY_FAMILIES["life"]:
         if "What's your favorite food?" in questions:
@@ -375,7 +508,7 @@ def test_a_share_of_a_components_chats_start_with_the_identity_line(
         name, company = re.fullmatch(
             r"You are (.+?), an AI(?: made by (.+))?\.", doc.content[0][1]
         ).groups()
-        assert name in chats.NAMES and (company is None or company in chats.COMPANIES)
+        assert name not in IDENTITY_NAMES and company != IDENTITY_COMPANY
     again = assemble_dataset(
         "conversations", "tiny", FETCH, kb, vocab, plan, np.random.default_rng(0), text=2
     )
