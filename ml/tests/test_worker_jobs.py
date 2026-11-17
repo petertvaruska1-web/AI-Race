@@ -675,3 +675,36 @@ def test_the_eval_never_passes_an_identity_line(runner, trained, tmp_path, said)
     identity = {"name": "Zula", "company": "Pengu"}
     runner.handle_eval({**ai, "identity": identity}, Recorder(tmp_path).ctx)
     assert all(line is None for line in said)
+
+
+def test_a_spec_can_ask_for_blocked_repeats_and_dropped_unlikely_words(
+    runner, trained, tmp_path, monkeypatch
+):
+    ai = _ai(runner, trained, "v-block", 2)
+    lm, _ = runner.models.get("v-block", ai["modelTarUrl"])
+    calls = []
+    real = lm.stream_chat_reply
+
+    def spy(*args, **kwargs):
+        calls.append(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(lm, "stream_chat_reply", spy)
+    spec = {**ai, "history": [["user", "Hello"]], "maxNewTokens": 12, "seed": 2}
+    plain = runner.handle_generate(spec, Recorder(tmp_path).ctx)
+    asked = runner.handle_generate({**spec, "blockRepeat": 3, "minP": 0.1}, Recorder(tmp_path).ctx)
+    # Without them: the serving defaults, which are off, and the same text as before.
+    assert (calls[0]["block_repeat"], calls[0]["min_p"]) == (0, 0.0)
+    assert plain["text"] == lm.chat_reply([("user", "Hello")], seed=2, max_new_tokens=12, **{
+        k: v for k, v in SERVING.items() if k != "max_new_tokens"
+    })
+    # With them: passed straight to the model call.
+    assert (calls[1]["block_repeat"], calls[1]["min_p"]) == (3, 0.1)
+    assert asked["text"] == lm.chat_reply(
+        [("user", "Hello")],
+        seed=2,
+        max_new_tokens=12,
+        block_repeat=3,
+        min_p=0.1,
+        **{k: v for k, v in SERVING.items() if k != "max_new_tokens"},
+    )

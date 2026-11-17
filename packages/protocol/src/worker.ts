@@ -221,6 +221,9 @@ export const GenerateJobSpec = z.object({
   maxNewTokens: z.number().int().positive(),
   temperature: z.number().positive(),
   topP: z.number().gt(0).max(1),
+  /** Decoding rules that only remove candidates; absent means off (0). */
+  blockRepeat: z.number().int().min(0).optional(),
+  minP: z.number().min(0).max(1).optional(),
   seed: z.number().int().min(0),
   identity: Identity.optional(),
 });

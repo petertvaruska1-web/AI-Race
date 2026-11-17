@@ -24,7 +24,10 @@ class FakeLM:
             out.append(ContinuationScore(score * max(1, len(cont)), max(1, len(cont))))
         return out
 
-    def stream_reply(self, prompt, *, chat, max_new_tokens, temperature, top_p, seed, on_text):
+    def stream_reply(
+        self, prompt, *, chat, max_new_tokens, temperature, top_p, seed, on_text,
+        block_repeat=0, min_p=0.0,
+    ):  # fmt: skip
         self.asked.append(prompt)
         reply = self.typed(prompt)
         for k in range(0, len(reply), 3):

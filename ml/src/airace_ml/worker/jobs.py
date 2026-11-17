@@ -34,7 +34,13 @@ from airace_ml.evals.judge import Judge, check_judge_provenance
 from airace_ml.evals.novelty import NoveltyIndex, check_index_provenance
 from airace_ml.evals.suite import run_benchmarks, score_reply
 from airace_ml.feedback import GROUPS, customer_pool, pick_questions
-from airace_ml.infer.serving import SERVING_TEMPERATURE, SERVING_TOP_P, tidy_user_text
+from airace_ml.infer.serving import (
+    SERVING_BLOCK_REPEAT,
+    SERVING_MIN_P,
+    SERVING_TEMPERATURE,
+    SERVING_TOP_P,
+    tidy_user_text,
+)
 from airace_ml.interviews import score_answer
 from airace_ml.minigames.content import game_items
 from airace_ml.minigames.run import play
@@ -317,6 +323,8 @@ class JobRunner:
                 max_new_tokens=int(spec.get("maxNewTokens", 96)),
                 temperature=float(spec.get("temperature", SERVING_TEMPERATURE)),
                 top_p=float(spec.get("topP", SERVING_TOP_P)),
+                block_repeat=int(spec.get("blockRepeat", SERVING_BLOCK_REPEAT)),
+                min_p=float(spec.get("minP", SERVING_MIN_P)),
                 seed=int(spec.get("seed", 0)),
                 on_text=ctx.chunk,
                 stop_on_loop=True,
@@ -342,6 +350,8 @@ class JobRunner:
                         max_new_tokens=96,
                         temperature=SERVING_TEMPERATURE,
                         top_p=SERVING_TOP_P,
+                        block_repeat=SERVING_BLOCK_REPEAT,
+                        min_p=SERVING_MIN_P,
                         seed=seed,
                         stop_on_loop=True,
                         system=system,
@@ -401,6 +411,8 @@ class JobRunner:
                         max_new_tokens=max_new_tokens,
                         temperature=temperature,
                         top_p=0.95,
+                        block_repeat=SERVING_BLOCK_REPEAT,
+                        min_p=SERVING_MIN_P,
                         seed=seed + k,
                         on_text=lambda t, k=k, side=side: ctx.progress(
                             {"kind": "battleText", "round": k, "side": side, "text": t}
@@ -492,6 +504,8 @@ class JobRunner:
                 max_new_tokens=96,
                 temperature=SERVING_TEMPERATURE,
                 top_p=SERVING_TOP_P,
+                block_repeat=SERVING_BLOCK_REPEAT,
+                min_p=SERVING_MIN_P,
                 seed=int(spec.get("seed", 0)),
                 stop_on_loop=True,
                 system=system,
@@ -528,6 +542,8 @@ class JobRunner:
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
                     top_p=0.95,
+                    block_repeat=SERVING_BLOCK_REPEAT,
+                    min_p=SERVING_MIN_P,
                     seed=int(spec.get("seed", 0)) + k,
                     on_text=lambda _t: None,
                     system=system,

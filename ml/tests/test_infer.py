@@ -723,3 +723,149 @@ def test_hit_limit_marks_replies_that_used_every_token(tiny_lm, tiny_tok):
     text, gen = tiny_lm.chat_generation([("user", "Hi")], max_new_tokens=2, temperature=0)
     assert text == tiny_lm.chat_reply([("user", "Hi")], max_new_tokens=2, temperature=0)
     assert gen.hit_limit
+
+
+# --- Blocking repeats and unlikely tokens (Task 18): both only remove candidates ---------------
+
+
+@pytest.fixture
+def cycling_lm(tiny_lm, monkeypatch):
+    """A model that always favours the next token of the cycle 40 -> 41 -> 42 -> 43 -> 40 (so it
+    always prefers the token that continues the last 4-gram), with other tokens far behind."""
+    from airace_ml.model.transformer import Transformer
+
+    real = Transformer.forward
+
+    def forward(self, idx, **kwargs):
+        base = real(self, idx, **kwargs)
+        logits = torch.zeros_like(base)
+        # Every other token gets a graded score (so there is always a "second best", third, ...).
+        logits += -torch.arange(base.shape[-1], dtype=base.dtype) * 0.01
+        nxt = 40 + (idx - 40 + 1) % 4
+        nxt = torch.where((idx >= 40) & (idx < 44), nxt, torch.full_like(idx, 40))
+        logits.scatter_(-1, nxt[..., None], 50.0)
+        return logits
+
+    monkeypatch.setattr(Transformer, "forward", forward)
+    return tiny_lm
+
+
+def _ngrams(tokens, n):
+    return [tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)]
+
+
+@pytest.mark.parametrize("temperature", [0.0, 0.7])
+def test_block_repeat_never_lets_a_reply_say_the_same_four_tokens_twice(
+    cycling_lm, tiny_tok, temperature
+):
+    prompt = [tiny_tok.bos_id, 40, 41, 42, 43]  # the prompt's own run does not count
+    free = cycling_lm.generate(
+        [prompt], max_new_tokens=24, temperature=0.0, top_p=1.0, seed=0, stop_ids=[]
+    )[0]
+    assert len(set(_ngrams(free.tokens, 4))) < len(_ngrams(free.tokens, 4))  # it does loop
+    kept = cycling_lm.generate(
+        [prompt, prompt[:3]],
+        max_new_tokens=24,
+        temperature=temperature,
+        top_p=1.0,
+        seed=2,
+        stop_ids=[],
+        block_repeat=4,
+    )
+    for gen in kept:
+        grams = _ngrams(gen.tokens, 4)
+        assert len(gen.tokens) == 24 and len(grams) == len(set(grams))
+
+
+def test_block_repeat_blocks_exactly_the_token_that_completes_a_seen_run():
+    blocker = lm_module.RepeatBlocker(2, 4)
+    for token in [1, 2, 3, 4, 9, 1, 2, 3]:
+        blocker.add(0, token)
+    assert blocker.banned(0) == {4} and blocker.banned(1) == set()
+    logits = torch.zeros(2, 12)
+    logits[:, 4] = 5.0  # the loop is the best token on both rows
+    logits[1, 7] = 4.0
+    got = lm_module._sample(logits, 0.0, 1.0, _rng(0), block_repeat=4, blocker=blocker)
+    assert got.tolist() == [0, 4]  # row 0 takes the next best (ties: first); row 1 is unblocked
+
+
+def test_when_every_candidate_is_blocked_the_best_is_kept():
+    blocker = lm_module.RepeatBlocker(1, 1)  # n=1: any token already said is blocked
+    for token in range(6):
+        blocker.add(0, token)
+    logits = torch.tensor([[0.1, 0.2, 0.9, 0.3, 0.0, 0.4]])
+    for temperature in (0.0, 0.8):
+        got = lm_module._sample(
+            logits, temperature, 0.9, _rng(1), block_repeat=1, blocker=blocker
+        )
+        assert got.tolist() == [2]
+
+
+def test_a_reply_still_ends_when_blocking_leaves_nothing(cycling_lm, tiny_tok, monkeypatch):
+    # One-token vocabulary pressure: with n=1 and every token soon said, replies still reach length.
+    got = cycling_lm.generate(
+        [[tiny_tok.bos_id, 5]],
+        max_new_tokens=tiny_tok.vocab_size + 8,
+        temperature=0.0,
+        top_p=1.0,
+        seed=0,
+        stop_ids=[],
+        block_repeat=1,
+    )[0]
+    assert len(got.tokens) == min(tiny_tok.vocab_size + 8, cycling_lm.ctx_len - 2)
+
+
+def test_min_p_one_is_greedy_and_min_p_drops_exactly_the_tokens_below_the_line():
+    logits = torch.log(torch.tensor([[0.50, 0.30, 0.15, 0.04, 0.01]]))
+    greedy = lm_module._sample(logits, 0.0, 1.0, _rng(0))
+    for seed in range(20):
+        assert lm_module._sample(logits, 1.0, 1.0, _rng(seed), min_p=1.0).tolist() == greedy.tolist()
+    # line at 0.2 x 0.50 = 0.10: tokens 3 and 4 go, 0..2 stay
+    seen = {
+        int(lm_module._sample(logits, 1.0, 1.0, _rng(seed), min_p=0.2)) for seed in range(400)
+    }
+    assert seen == {0, 1, 2}
+    # the line is on the probabilities after temperature
+    flat = {
+        int(lm_module._sample(logits, 2.0, 1.0, _rng(seed), min_p=0.5)) for seed in range(400)
+    }
+    assert flat == {0, 1, 2}  # at T=2: p ~ [.37,.29,.20,.10,.05]; line 0.185 keeps 3 tokens
+    # with top-p after it, the mass is renormalised first: top-p 0.6 of {.5,.3,.15} keeps 0 and 1
+    both = {
+        int(lm_module._sample(logits, 1.0, 0.6, _rng(seed), min_p=0.2)) for seed in range(400)
+    }
+    assert both == {0, 1}
+
+
+def test_the_defaults_change_nothing(tiny_lm, tiny_tok):
+    history = [("user", "Tell me about the sea.")]
+    kw = {"max_new_tokens": 20, "temperature": 0.7, "top_p": 0.9, "seed": 5}
+    plain = tiny_lm.chat_reply(history, **kw)
+    assert tiny_lm.chat_reply(history, block_repeat=0, min_p=0.0, **kw) == plain
+    prompts = [tiny_tok.encode("Once upon a time"), tiny_tok.encode("The cat"), tiny_tok.encode("A")]
+    gkw = {"max_new_tokens": 12, "temperature": 0.9, "top_p": 0.95, "seed": 3, "stop_ids": []}
+    a = tiny_lm.generate(prompts, **gkw)
+    b = tiny_lm.generate(prompts, block_repeat=0, min_p=0.0, **gkw)
+    assert [(g.tokens, g.token_probs) for g in a] == [(g.tokens, g.token_probs) for g in b]
+
+
+def test_block_repeat_and_min_p_flow_through_chat_stream_and_complete(cycling_lm):
+    history = [("user", "Hello")]
+    pieces = []
+    text = cycling_lm.stream_chat_reply(
+        history, max_new_tokens=14, temperature=0.0, on_text=pieces.append, block_repeat=3
+    )
+    assert text == "".join(pieces)
+    assert text == cycling_lm.chat_reply(history, max_new_tokens=14, temperature=0.0, block_repeat=3)
+    assert text != cycling_lm.chat_reply(history, max_new_tokens=14, temperature=0.0)
+    reply, gen = cycling_lm.chat_generation(
+        history, max_new_tokens=14, temperature=0.0, block_repeat=3
+    )
+    assert reply == text and len(_ngrams(gen.tokens, 3)) == len(set(_ngrams(gen.tokens, 3)))
+    assert isinstance(cycling_lm.complete("Hi", max_new_tokens=6, min_p=0.5, block_repeat=2), str)
+
+
+@pytest.mark.parametrize("kw", [{"block_repeat": -1}, {"min_p": -0.1}, {"min_p": 1.5}])
+def test_generate_rejects_bad_blocking_arguments(tiny_lm, tiny_tok, kw):
+    with pytest.raises(ValueError):
+        _gen(tiny_lm, [tiny_tok.encode("hi")], **kw)
