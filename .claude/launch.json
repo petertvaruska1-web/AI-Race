@@ -43,6 +43,20 @@
         "AIRACE_SERVER_PORT": "8788",
         "AIRACE_WEB_PORT": "5175"
       }
+    },
+    {
+      "name": "text2",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 5175,
+      "env": {
+        "AIRACE_DATA": "data2",
+        "AIRACE_SERVER_PORT": "8788",
+        "AIRACE_WEB_PORT": "5175"
+      }
     }
   ]
 }
