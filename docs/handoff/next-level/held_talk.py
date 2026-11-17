@@ -3,11 +3,13 @@
     python ../docs/handoff/next-level/held_talk.py --out FILE.json NAME=CKPT_DIR [NAME=CKPT_DIR ...]
                                                    [--system "You are Zula, an AI made by Pengu."]
                                                    [--lines held|standard]
+                                                   [--block-repeat N] [--min-p P] [--top-p P]
 
 Run from ml/ (uses the GPU for a minute). Each AI answers every line of
 ``airace_content.held.HELD_SMALL_TALK`` (``--lines held``, the default) or of the scorecard's
 ``airace_ml.experiments.chatprobes.SMALL_TALK`` (``--lines standard``) five times (seeds 0 to 4) with the settings the game
-serves replies with. The file has the shape of a scorecard's stored small talk, so
+serves replies with, unless ``--block-repeat``, ``--min-p`` or ``--top-p`` set the decoding rules
+of Task 18 for a trial. The file has the shape of a scorecard's stored small talk, so
 ``blind_read.py sheet`` reads it: ``LABEL=FILE.json:NAME``.
 """
 
@@ -20,7 +22,12 @@ import torch
 from airace_content.held import HELD_SMALL_TALK
 from airace_ml.experiments.chatprobes import SMALL_TALK
 from airace_ml.infer.lm import TorchLM
-from airace_ml.infer.serving import SERVING_TEMPERATURE, SERVING_TOP_P
+from airace_ml.infer.serving import (
+    SERVING_BLOCK_REPEAT,
+    SERVING_MIN_P,
+    SERVING_TEMPERATURE,
+    SERVING_TOP_P,
+)
 from airace_ml.model.checkpoint import load_checkpoint
 from airace_ml.paths import data_root, tokenizer_path
 from airace_ml.tokenizer import Tok
@@ -31,6 +38,9 @@ p.add_argument("--out", required=True)
 p.add_argument("--samples", type=int, default=5)
 p.add_argument("--system", default=None)
 p.add_argument("--lines", choices=("held", "standard"), default="held")
+p.add_argument("--block-repeat", type=int, default=SERVING_BLOCK_REPEAT)
+p.add_argument("--min-p", type=float, default=SERVING_MIN_P)
+p.add_argument("--top-p", type=float, default=SERVING_TOP_P)
 a = p.parse_args()
 
 dev = torch.device("cuda")
@@ -46,7 +56,9 @@ for spec in a.models:
             reply = lm.chat_reply(
                 [("user", prompt)],
                 temperature=SERVING_TEMPERATURE,
-                top_p=SERVING_TOP_P,
+                top_p=a.top_p,
+                block_repeat=a.block_repeat,
+                min_p=a.min_p,
                 seed=seed,
                 stop_on_loop=True,
                 system=a.system,
@@ -55,5 +67,15 @@ for spec in a.models:
     models[name] = {"examples": {"small_talk": talk}}
     print(f"{name}: {len(talk)} replies")
 Path(a.out).write_text(
-    json.dumps({"held_talk": 1, "lines": a.lines, "system": a.system, "models": models}, indent=1), encoding="utf-8"
+    json.dumps(
+        {
+            "held_talk": 1,
+            "lines": a.lines,
+            "system": a.system,
+            "decoding": {"top_p": a.top_p, "block_repeat": a.block_repeat, "min_p": a.min_p},
+            "models": models,
+        },
+        indent=1,
+    ),
+    encoding="utf-8",
 )
