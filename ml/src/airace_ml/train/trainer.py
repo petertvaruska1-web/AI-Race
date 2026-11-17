@@ -57,7 +57,7 @@ from airace_ml.model.checkpoint import (
 )
 from airace_ml.model.growth import grow
 from airace_ml.model.transformer import Transformer
-from airace_ml.paths import TOKENIZER_VERSION, corpus_dir, tokenizer_path
+from airace_ml.paths import TOKENIZER_VERSION, corpus_dir, text_version, tokenizer_path
 from airace_ml.paths import data_root as default_data_root
 from airace_ml.tokenizer import Tok, encode_chat, encode_doc
 from airace_ml.train.config import (
@@ -211,6 +211,7 @@ class _Setup:
     model: Transformer  # on the CPU: fresh, the parent, or the parent grown
     heldout: dict[str, tuple[np.ndarray, np.ndarray]]  # fixed eval batch per base dataset
     replay_dropped: list[str]  # the parent's datasets that replay left out (not base datasets)
+    text: int = 1  # the text the data root holds (2 once an AI trains on the identity line)
 
 
 def _prepare(cfg: TrainRunConfig, root: Path) -> _Setup:
@@ -232,7 +233,9 @@ def _prepare(cfg: TrainRunConfig, root: Path) -> _Setup:
         sampler.set_weights(stable)
     model = _start_model(cfg, tok, parent)
     heldout = _heldout_batches(root, cfg.shape.ctx_len)
-    return _Setup(tok, sampler, stable, finishing, parent, model, heldout, replay_dropped)
+    return _Setup(
+        tok, sampler, stable, finishing, parent, model, heldout, replay_dropped, text_version(root)
+    )
 
 
 def _stable_mixture(
@@ -843,6 +846,8 @@ class _Run:
             "shape": self.cfg.shape.to_dict(),
             "status": status,
             "engine": ENGINE_VERSION,
+            # The text it trained on; a run recorded before this field existed is text 1.
+            "text": self.setup.text,
         }
 
     def _meta(self, status: RunStatus) -> CheckpointMeta:

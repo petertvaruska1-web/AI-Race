@@ -1073,3 +1073,18 @@ def test_a_state_saved_by_another_engine_is_never_continued(tiny_data_root, tmp_
         info["run"]["engine"] = other
         state.write_text(json.dumps(info), encoding="utf-8")
         assert not can_resume(out, c)
+
+
+def test_a_run_record_holds_the_text_it_trained_on(tiny_data_root, tmp_path, monkeypatch):
+    first = train_run(
+        cfg(token_budget=1024 * 10), out_dir=tmp_path / "t1", data_root=tiny_data_root
+    )
+    assert first.meta.runs[-1]["text"] == 1  # the tiny data root holds text 1
+    # A root built as text 2 stamps its runs 2, and the lineage keeps each run's own text.
+    monkeypatch.setattr("airace_ml.train.trainer.text_version", lambda root: 2)
+    second = train_run(
+        cfg(run_id="t2", token_budget=1024 * 10, parent_dir=str(first.out_dir)),
+        out_dir=tmp_path / "t2",
+        data_root=tiny_data_root,
+    )
+    assert [run["text"] for run in second.meta.runs] == [1, 2]

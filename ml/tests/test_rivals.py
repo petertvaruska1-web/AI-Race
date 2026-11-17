@@ -89,3 +89,80 @@ def test_a_quick_build_makes_a_whole_pack_and_a_rerun_reuses_it(tiny_data_root, 
     said.clear()
     build_rival_pack(tiny_data_root, out, torch.device("cpu"), quick=True, on_status=said.append)
     assert sorted(m for m in said if m.startswith("reused ")) == sorted(f"reused {k}" for k in keys)
+
+
+def test_a_rivals_product_is_named_as_the_game_names_a_rivals_releases():
+    from airace_ml.rivals.recipe import product_name
+
+    first, second = (r for r in LINEAGES if r.style == "premium")
+    assert [product_name(first, k) for k in (1, 2, 3)] == ["Titan", "Titan 2", "Titan 3"]
+    assert product_name(second, 1) == "Apex"
+    names = {product_name(r, 1) for r in LINEAGES}
+    assert len(names) == 8  # no two lineages share a first product's name
+
+
+def test_the_product_words_are_the_games(tmp_path):
+    import re
+
+    from airace_ml.rivals.recipe import PRODUCT_WORDS
+
+    ts = (Path(__file__).parents[2] / "packages" / "sim" / "src" / "rivalCast.ts").read_text("utf-8")
+    block = ts[ts.index("export const PRODUCT_WORDS") :].split("};")[0]
+    for style, words in PRODUCT_WORDS.items():
+        match = re.search(rf"{style}: \[(.*?)\]", block)
+        assert match is not None
+        assert tuple(re.findall(r'"(\w+)"', match.group(1))) == words
+
+
+def _checkpoint_of(text, tiny_tok, path):
+    from airace_ml.model.checkpoint import CheckpointMeta, save_checkpoint
+    from airace_ml.model.shape import ModelShape
+    from airace_ml.model.transformer import Transformer
+
+    shape = ModelShape(2, 64, 64)
+    run = {"run_id": "r"} if text is None else {"run_id": "r", "text": text}
+    meta = CheckpointMeta("tok-v1", shape, "l", "r", None, 0, {}, [run])
+    save_checkpoint(Transformer(shape, tiny_tok.vocab_size), meta, path)
+    return path
+
+
+def test_a_text_2_rival_is_told_its_products_name_and_a_text_1_rival_is_not(tiny_tok, tmp_path):
+    from airace_ml.rivals.build import version_system
+
+    recipe = next(r for r in LINEAGES if r.style == "premium")
+    two = _checkpoint_of(2, tiny_tok, tmp_path / "two")
+    assert version_system(two, recipe, 1) == "You are Titan, an AI."
+    assert version_system(two, recipe, 2) == "You are Titan 2, an AI."
+    for text in (1, None):
+        old = _checkpoint_of(text, tiny_tok, tmp_path / f"old-{text}")
+        assert version_system(old, recipe, 1) is None
+
+
+def test_a_rivals_pre_drawn_answers_use_its_line(tiny_tok, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from airace_ml.rivals import build
+
+    path = _checkpoint_of(2, tiny_tok, tmp_path / "ck")
+    monkeypatch.setattr(
+        build,
+        "run_benchmarks",
+        lambda *a, **k: SimpleNamespace(scores={}, overall=0.0, tag_breakdown=dict),
+    )
+    monkeypatch.setattr(
+        build, "measure_fingerprint", lambda *a, **k: SimpleNamespace(traits={})
+    )
+    asked = []
+    original = build.TorchLM.chat_reply
+
+    def spy(self, history, **kwargs):
+        asked.append(kwargs.get("system"))
+        return original(self, history, **kwargs)
+
+    monkeypatch.setattr(build.TorchLM, "chat_reply", spy)
+    run = SimpleNamespace(dir=path)
+    build._measure(run, tiny_tok, torch.device("cpu"), None, None, True, "You are Titan, an AI.")
+    assert asked and set(asked) == {"You are Titan, an AI."}
+    asked.clear()
+    build._measure(run, tiny_tok, torch.device("cpu"), None, None, True)  # text 1: as before
+    assert asked and set(asked) == {None}

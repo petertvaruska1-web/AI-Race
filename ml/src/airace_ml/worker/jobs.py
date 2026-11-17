@@ -38,7 +38,9 @@ from airace_ml.infer.serving import SERVING_TEMPERATURE, SERVING_TOP_P, tidy_use
 from airace_ml.interviews import score_answer
 from airace_ml.minigames.content import game_items
 from airace_ml.minigames.run import play
+from airace_ml.model.checkpoint import CheckpointMeta
 from airace_ml.paths import judge_dir, novelty_path, tokenizer_path
+from airace_ml.persona import learned_identity_line
 from airace_ml.personality.fingerprint import Fingerprint, describe, measure_fingerprint
 from airace_ml.tokenizer import Tok
 from airace_ml.train.config import TrainRunConfig
@@ -74,6 +76,16 @@ def _spec_str(spec: dict[str, Any], key: str) -> str:
     if not isinstance(v, str) or not v:
         raise ValueError(f"the job spec needs {key}")
     return v
+
+
+def _system_for(meta: CheckpointMeta, identity: Any) -> str | None:
+    """The line that tells an AI who it is, or ``None``.
+
+    ``identity`` is the job's ``{"name", "company"}``; without one, or for an AI that never
+    learned to read the line (:func:`~airace_ml.persona.learned_identity_line`), there is none."""
+    if not isinstance(identity, dict):
+        return None
+    return learned_identity_line(meta, identity.get("name"), identity.get("company"))
 
 
 def _knowing(index: NoveltyIndex | None, part: Any, tok: Tok) -> NoveltyIndex | None:
@@ -276,6 +288,14 @@ class JobRunner:
             ),
         }
 
+    def _system(self, spec: dict[str, Any]) -> str | None:
+        """The identity line for the AI a job spec (or one side of it) names, when it reads one."""
+        identity = spec.get("identity")
+        if identity is None:
+            return None
+        meta = self.models.meta(_spec_str(spec, "versionId"), _spec_str(spec, "modelTarUrl"))
+        return _system_for(meta, identity)
+
     # -- generate ----------------------------------------------------------------------------------
 
     def handle_generate(self, spec: dict[str, Any], ctx: JobContext) -> dict[str, Any]:
@@ -289,9 +309,11 @@ class JobRunner:
             for role, text in history
         ]
         lm, lock = self.models.get(_spec_str(spec, "versionId"), _spec_str(spec, "modelTarUrl"))
+        system = self._system(spec)
         with lock:
             text = lm.stream_chat_reply(
                 turns,
+                system=system,
                 max_new_tokens=int(spec.get("maxNewTokens", 96)),
                 temperature=float(spec.get("temperature", SERVING_TEMPERATURE)),
                 top_p=float(spec.get("topP", SERVING_TOP_P)),
@@ -310,6 +332,7 @@ class JobRunner:
         per_group = int(spec.get("perGroup", 1))
         seed = int(spec.get("seed", 0))
         lm, lock = self.models.get(_spec_str(spec, "versionId"), _spec_str(spec, "modelTarUrl"))
+        system = self._system(spec)
         results = []
         with lock:
             for group in groups:
@@ -321,6 +344,7 @@ class JobRunner:
                         top_p=SERVING_TOP_P,
                         seed=seed,
                         stop_on_loop=True,
+                        system=system,
                     )
                     results.append(
                         {
@@ -361,6 +385,7 @@ class JobRunner:
             if judge is None or index is None:
                 raise ValueError("creativity battles need the judge and the novelty index")
         own = {side: _knowing(index, spec.get(side), self.tok) for side in wanted}
+        systems = {side: self._system(spec[side]) for side in wanted}
         out = []
         for k, item in enumerate(challenges):
             # Asked as the benchmark asks its kind, so each AI shows what it can really do.
@@ -380,6 +405,7 @@ class JobRunner:
                         on_text=lambda t, k=k, side=side: ctx.progress(
                             {"kind": "battleText", "round": k, "side": side, "text": t}
                         ),
+                        system=systems[side],
                     )
                 score = score_challenge(item, reply, tok=lm.tok, judge=judge, novelty=own[side])
                 answers[side] = {"reply": reply, "score": float(score)}
@@ -402,12 +428,14 @@ class JobRunner:
         if not isinstance(raw, list) or not raw:
             raise ValueError("the minigame spec needs a side to play")
         sides = {}
+        systems = {}
         for s in raw:
             if not isinstance(s, dict) or s.get("side") not in ("a", "b"):
                 raise ValueError("each minigame side is a or b")
             sides[s["side"]] = self.models.get(
                 _spec_str(s, "versionId"), _spec_str(s, "modelTarUrl"), transient=s["side"] == "b"
             )
+            systems[s["side"]] = self._system(s)
         story_score: Callable[[str, str], float] | None = None
         if game == "story":
             judge, index = self.creativity_tools()
@@ -422,6 +450,7 @@ class JobRunner:
             sides,
             story_score=story_score,
             seed=int(spec.get("seed", 0)),
+            systems=systems,
             on_step=lambda side, step: ctx.progress({"kind": "minigameStep", "side": side, **step}),
             on_text=lambda side, attempt, text: ctx.progress(
                 {"kind": "minigameText", "side": side, "attempt": attempt, "text": text}
@@ -456,6 +485,7 @@ class JobRunner:
         if item is None:
             raise ValueError(f"no customer question {question_id!r}")
         lm, lock = self.models.get(_spec_str(spec, "versionId"), _spec_str(spec, "modelTarUrl"))
+        system = self._system(spec)
         with lock:
             reply = lm.chat_reply(
                 [("user", item.prompt)],
@@ -464,6 +494,7 @@ class JobRunner:
                 top_p=SERVING_TOP_P,
                 seed=int(spec.get("seed", 0)),
                 stop_on_loop=True,
+                system=system,
             )
         return {
             "questionId": item.id,
@@ -486,6 +517,7 @@ class JobRunner:
                 raise ValueError("story app reviews need the judge and the novelty index")
         index = _knowing(index, spec, self.tok)
         lm, lock = self.models.get(_spec_str(spec, "versionId"), _spec_str(spec, "modelTarUrl"))
+        system = self._system(spec)
         reviews = []
         with lock:
             for k, item in enumerate(challenges):
@@ -498,6 +530,7 @@ class JobRunner:
                     top_p=0.95,
                     seed=int(spec.get("seed", 0)) + k,
                     on_text=lambda _t: None,
+                    system=system,
                 )
                 score = score_challenge(item, reply, tok=lm.tok, judge=judge, novelty=index)
                 reviews.append({"prompt": item.prompt, "reply": reply, "score": float(score)})

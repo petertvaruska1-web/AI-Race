@@ -16,7 +16,7 @@ from pathlib import Path
 import torch
 
 from airace_ml.infer.lm import TorchLM
-from airace_ml.model.checkpoint import META_NAME, load_checkpoint
+from airace_ml.model.checkpoint import META_NAME, CheckpointMeta, load_checkpoint
 from airace_ml.tokenizer import Tok
 from airace_ml.worker.blobs import download_tar
 
@@ -33,6 +33,7 @@ class ModelCache:
         self._lock = threading.Lock()
         self._fetching: dict[str, threading.Lock] = {}
         self._transient: set[str] = set()
+        self._metas: dict[str, CheckpointMeta] = {}
 
     def get(
         self, version_id: str, url: str, *, transient: bool = False
@@ -65,6 +66,15 @@ class ModelCache:
             if version_id in self._on_device:  # another job loaded it meanwhile
                 return self._on_device[version_id]
             return self._keep((TorchLM(model, self.tok, self.device), threading.Lock()), version_id)
+
+    def meta(self, version_id: str, url: str) -> CheckpointMeta:
+        """The model's record (its runs and what each trained on), read once from its folder."""
+        found = self._metas.get(version_id)
+        if found is None:
+            folder = self.fetch(version_id, url)
+            found = CheckpointMeta.from_json((folder / META_NAME).read_text(encoding="utf-8"))
+            self._metas[version_id] = found
+        return found
 
     def fetch(self, version_id: str, url: str) -> Path:
         """The model's folder on disk, downloaded if it isn't there yet."""

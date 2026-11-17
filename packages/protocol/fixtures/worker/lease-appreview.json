@@ -11,7 +11,8 @@
       "modelTarUrl": "http://127.0.0.1:8787/blobs/checkpoints/6fa459ea-ee8a-4ca4-894e-db77e160355e.tar?exp=1&sig=abc",
       "skill": "coding",
       "n": 2,
-      "seed": 3
+      "seed": 3,
+      "identity": { "name": "Zula", "company": "Pengu Labs" }
     }
   }
 }

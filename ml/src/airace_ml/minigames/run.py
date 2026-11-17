@@ -74,8 +74,12 @@ def play(
     seed: int = 0,
     on_step: StepFn | None = None,
     on_text: TextFn | None = None,
+    systems: Mapping[str, str | None] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Plays the ladder with every side's AI; returns ``{side: {steps, score, maxScore}}``."""
+    """Plays the ladder with every side's AI; returns ``{side: {steps, score, maxScore}}``.
+
+    ``systems`` gives a side the line that tells its AI who it is, put in front of the replies
+    it types (a side without one is as before). Picking among options is scored without it."""
     if game == "story" and story_score is None:
         raise ValueError("Story Dice need the judge and the novelty index to score stories")
     state = {s: {"depth": 0, "retry": 0, "lives": LIVES, "steps": [], "score": 0.0} for s in sides}
@@ -97,6 +101,7 @@ def play(
                     seed + attempt,
                     story_score,
                     lambda t, s=side, k=k: _emit(on_text, s, k, t),
+                    (systems or {}).get(side),
                 )
             step |= {"attempt": k, "depth": st["depth"], "retry": st["retry"]}
             if game == "story":
@@ -138,6 +143,7 @@ def _attempt(
     seed: int,
     story_score: Callable[[str, str], float] | None,
     on_text: Callable[[str], None],
+    system: str | None = None,
 ) -> dict[str, Any]:
     step: dict[str, Any] = {
         "itemId": item.id,
@@ -153,6 +159,8 @@ def _attempt(
         "points": None,
         "ruleMet": None,
     }
+    # Only a side that has a line passes one, so an AI without one is asked exactly as before.
+    said = {} if system is None else {"system": system}
     if not item.typed:
         choice, sure = choose(lm, lm.tok, item)
         return step | {"choice": choice, "sure": sure, "correct": choice == item.answer_index}
@@ -160,7 +168,7 @@ def _attempt(
         assert story_score is not None
         reply = lm.stream_reply(
             item.prompt, chat=True, max_new_tokens=96, temperature=0.9, top_p=0.95, seed=seed,
-            on_text=on_text,
+            on_text=on_text, **said,
         )  # fmt: skip
         word = item.display.get("word")
         rule = None if word is None else _uses_word(reply, word)
@@ -181,5 +189,6 @@ def _attempt(
         top_p=1.0,
         seed=seed,
         on_text=on_text,
+        **said,
     )
     return step | {"reply": reply, "correct": _typed_passes(item, reply)}

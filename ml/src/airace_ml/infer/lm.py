@@ -285,9 +285,12 @@ class TorchLM:
         seed: int = 0,
         on_text: Callable[[str], None],
         stop_on_loop: bool = False,
+        system: str | None = None,
     ) -> str:
         """One reply to ``prompt``, streamed: as a chat turn, or (``chat=False``) as the
-        continuation of a plain document, the way the benchmark asks non-chat items."""
+        continuation of a plain document, the way the benchmark asks non-chat items.
+
+        A ``system`` line leads a chat turn only; a plain document has no place for one."""
         if chat:
             return self.stream_chat_reply(
                 [("user", prompt)],
@@ -297,6 +300,7 @@ class TorchLM:
                 seed=seed,
                 on_text=on_text,
                 stop_on_loop=stop_on_loop,
+                system=system,
             )
         return self.stream_ids(
             encode_doc(self.tok, prompt),

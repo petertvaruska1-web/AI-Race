@@ -41,11 +41,18 @@ from airace_ml.experiments.runs import GateRun, GateRuns, _cached, _write_json
 from airace_ml.feedback import GROUPS, customer_pool
 from airace_ml.infer.lm import TorchLM
 from airace_ml.infer.serving import SERVING_TEMPERATURE, SERVING_TOP_P
-from airace_ml.model.checkpoint import load_checkpoint
+from airace_ml.model.checkpoint import META_NAME, CheckpointMeta, load_checkpoint
 from airace_ml.model.shape import ModelShape
 from airace_ml.paths import judge_dir, novelty_path, tokenizer_path
+from airace_ml.persona import learned_identity_line
 from airace_ml.personality.fingerprint import Fingerprint, describe, measure_fingerprint
-from airace_ml.rivals.recipe import LINEAGES, LineageRecipe, VersionStep, recipe_digest
+from airace_ml.rivals.recipe import (
+    LINEAGES,
+    LineageRecipe,
+    VersionStep,
+    product_name,
+    recipe_digest,
+)
 from airace_ml.tokenizer import Tok
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.worker.blobs import make_tar
@@ -60,6 +67,16 @@ INDEX_NAME = "rivals.json"
 def version_key(recipe: LineageRecipe, k: int) -> str:
     """The key of a lineage's ``k``-th version (from 1) in this pack."""
     return f"{recipe.id}-e2-v{k}"
+
+
+def version_system(run_dir: Path, recipe: LineageRecipe, k: int) -> str | None:
+    """The identity line a rival's pre-drawn answers are drawn with, or ``None``.
+
+    A lineage trained on text 2 is told its product's name (:func:`product_name`), the way the
+    game tells a rival's AI its own in a live job; the pack has no company name (the game draws
+    one per world), so the line is the one without a company. A lineage from text 1 gets none."""
+    meta = CheckpointMeta.from_json((run_dir / META_NAME).read_text(encoding="utf-8"))
+    return learned_identity_line(meta, product_name(recipe, k), None)
 
 
 @dataclass(frozen=True)
@@ -114,6 +131,7 @@ def _measure(
     judge: Judge | None,
     novelty: NoveltyIndex | None,
     quick: bool,
+    system: str | None = None,
 ) -> dict[str, Any]:
     net, _ = load_checkpoint(run.dir, device)
     lm = TorchLM(net, tok, device)
@@ -139,6 +157,7 @@ def _measure(
                 top_p=SERVING_TOP_P,
                 seed=k,
                 stop_on_loop=True,
+                system=system,
             )
             replies.append(
                 {
@@ -229,6 +248,7 @@ def build_rival_pack(
             run = runs.train(cfg, device, parent)
             parent = run
             trained += step.tokens
+            system = version_system(run.dir, recipe, k)
             measure_key = {
                 "run": run.token,
                 "recipe": recipe_digest(recipe),
@@ -236,11 +256,15 @@ def build_rival_pack(
                 "quick": quick,
                 "creativity": judge is not None,
             }
+            if system is not None:  # a text-1 rival's key stays what it was, so it is reused
+                measure_key["system"] = system
             fresh: list[int] = []
 
-            def compute(run: GateRun = run, fresh: list[int] = fresh) -> dict[str, Any]:
+            def compute(
+                run: GateRun = run, fresh: list[int] = fresh, system: str | None = system
+            ) -> dict[str, Any]:
                 fresh.append(1)
-                return _measure(run, tok, device, judge, novelty, quick)
+                return _measure(run, tok, device, judge, novelty, quick, system)
 
             measured = _cached(out / "measured" / f"{key}.json", measure_key, compute)
             tar = out / "models" / f"{key}.tar"

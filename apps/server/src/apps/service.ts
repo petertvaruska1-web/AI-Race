@@ -4,6 +4,7 @@ import type { AppContext } from "../app.ts";
 import { signBlobUrl } from "../blobs.ts";
 import { seedOf } from "../feedback/service.ts";
 import { DROP_JOB, isStale } from "../jobs/broker.ts";
+import { identityOf } from "../jobs/identity.ts";
 import { forCompany, paramsOf } from "../jobs/owners.ts";
 import { requestOnce } from "../requests.ts";
 import { checkpointKey } from "../training/service.ts";
@@ -46,6 +47,7 @@ export class AppReviewService {
       }
       const s = (ctx.worlds.peek(p.worldId) ?? (await ctx.worlds.get(p.worldId))).state();
       const owner = Object.values(s.companies).find((c) => c.apps[p.appId]);
+      const identity = identityOf(s, p.versionId);
       return {
         versionId: p.versionId,
         modelTarUrl: signBlobUrl(ctx, checkpointKey(p.versionId), "GET", JOB_URL_TTL_MS),
@@ -53,6 +55,7 @@ export class AppReviewService {
         n: REVIEWS_PER_WEEK,
         seed: seedOf(p.appId, p.key),
         ownText: await ctx.coaching.ownText(s, owner?.id),
+        ...(identity ? { identity } : {}),
       };
     });
     broker.onDone("appReview", (job, result) => this.done(job.payload as AppReviewPayload, result));

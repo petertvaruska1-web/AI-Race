@@ -107,5 +107,26 @@ LINEAGES: tuple[LineageRecipe, ...] = (
 )
 
 
+# The product words of the game's rival names (``PRODUCT_WORDS`` in ``packages/sim/src/rivalCast.ts``).
+PRODUCT_WORDS = {
+    "premium": ("Titan", "Apex", "Sage"),
+    "budget": ("Lite", "Go", "Spark"),
+    "specialist": ("Forge", "Scholar", "Muse"),
+    "consumer": ("Buddy", "Chat", "Pal"),
+}
+
+
+def product_name(recipe: LineageRecipe, k: int) -> str:
+    """The name the game gives a rival's ``k``-th product (from 1), as ``rivalProductName`` does.
+
+    The game draws a rival's word and company name per world, so the pack cannot know them: a
+    lineage takes the word that its place among its style's lineages picks (the first or the
+    second) and numbers its versions like the game numbers a rival's releases."""
+    same_style = [r for r in LINEAGES if r.style == recipe.style]
+    words = PRODUCT_WORDS[recipe.style]
+    word = words[same_style.index(recipe) % len(words)]
+    return word if k == 1 else f"{word} {k}"
+
+
 def recipe_digest(recipe: LineageRecipe) -> str:
     return hashlib.sha256(json.dumps(asdict(recipe), sort_keys=True).encode()).hexdigest()

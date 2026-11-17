@@ -95,6 +95,8 @@ describe("worker protocol fixtures", () => {
     expect(battle.b?.identity?.company).toBe("Budget AI Inc");
     const minigame = WORKER_SCHEMAS.MinigameJobSpec.parse(read("lease-minigame.json"));
     expect(minigame.sides[0]?.identity?.name).toBe("Zula");
+    const appReview = WORKER_SCHEMAS.AppReviewJobSpec.parse(read("lease-appreview.json"));
+    expect(appReview.identity).toEqual({ name: "Zula", company: "Pengu Labs" });
     // Without it, as before.
     expect(
       WORKER_SCHEMAS.FeedbackJobSpec.parse(read("lease-feedback.json")).identity,

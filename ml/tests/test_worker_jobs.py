@@ -515,3 +515,163 @@ def test_a_story_app_review_counts_the_companys_own_text_as_seen(runner, trained
     with pytest.raises(_Stop):
         runner.handle_app_review(spec, None)
     assert handed[0].known.size > 0
+
+
+# -- the identity line (plan A, Task 16) -------------------------------------------------------
+
+
+def _ai(runner, trained, version: str, text: int | None) -> dict:
+    """A version of the trained model whose last run trained on ``text`` (None: a record from
+    before the field existed), as the job specs name it."""
+    url = f"{trained[0]}/blobs/a.tar?sig=1"
+    path = runner.models.fetch(version, url) / "meta.json"
+    meta = json.loads(path.read_text(encoding="utf-8"))
+    meta["runs"][-1].pop("text", None)
+    if text is not None:
+        meta["runs"][-1]["text"] = text
+    path.write_text(json.dumps(meta), encoding="utf-8")
+    return {"versionId": version, "modelTarUrl": url}
+
+
+@pytest.fixture
+def said(monkeypatch):
+    """Every line an AI is told: the ``system`` of each call that makes a model speak."""
+    from airace_ml.infer.lm import TorchLM
+
+    lines: list = []
+    for name in ("chat_reply", "stream_reply"):
+        original = getattr(TorchLM, name)
+
+        def spy(self, *args, _original=original, **kwargs):
+            lines.append(kwargs.get("system"))
+            return _original(self, *args, **kwargs)
+
+        monkeypatch.setattr(TorchLM, name, spy)
+    return lines
+
+
+def test_a_run_record_holds_the_text_it_trained_on(trained, tmp_path):
+    copy = download_tar(f"{trained[0]}/blobs/a.tar", tmp_path / "copy")
+    _, meta = load_checkpoint(copy)
+    assert meta.runs[-1]["text"] == 1  # the tiny data root holds text 1
+
+
+def test_an_ai_from_before_text_2_never_reads_an_identity_line(runner, trained, tmp_path):
+    identity = {"name": "Zula", "company": "Pengu"}
+    for k, text in enumerate((None, 1)):  # no field at all, and text 1
+        ai = _ai(runner, trained, f"v-old-{k}", text)
+        spec = {**ai, "history": [["user", "Hello"]], "maxNewTokens": 16, "seed": 3}
+        plain = runner.handle_generate(spec, Recorder(tmp_path).ctx)
+        told = runner.handle_generate({**spec, "identity": identity}, Recorder(tmp_path).ctx)
+        assert told == plain
+
+
+def _first_question_id() -> str:
+    from airace_ml.feedback import customer_pool
+
+    return customer_pool("students")[0].id
+
+
+def test_an_ai_that_learned_the_line_is_told_its_name_and_company(runner, trained, tmp_path):
+    from airace_ml.persona import identity_line
+
+    ai = _ai(runner, trained, "v-new", 2)
+    spec = {**ai, "history": [["user", "Who are you?"]], "maxNewTokens": 16, "seed": 3}
+    told = runner.handle_generate(
+        {**spec, "identity": {"name": "Zula", "company": "Pengu"}}, Recorder(tmp_path).ctx
+    )
+    lm, _ = runner.models.get("v-new", ai["modelTarUrl"])
+    line = identity_line("Zula", "Pengu")
+    assert line == "You are Zula, an AI made by Pengu."
+    drawn = {
+        "max_new_tokens": 16,
+        "temperature": SERVING_TEMPERATURE,
+        "top_p": SERVING_TOP_P,
+        "seed": 3,
+        "stop_on_loop": True,
+    }
+    assert told["text"] == lm.chat_reply([("user", "Who are you?")], system=line, **drawn)
+    # No identity in the spec, a blank name, and a name without a company.
+    plain = runner.handle_generate(spec, Recorder(tmp_path).ctx)
+    assert plain["text"] == lm.chat_reply([("user", "Who are you?")], **drawn)
+    blank = {**spec, "identity": {"name": "  ", "company": None}}
+    assert runner.handle_generate(blank, Recorder(tmp_path).ctx) == plain
+    alone = runner.handle_generate(
+        {**spec, "identity": {"name": "Zula", "company": None}}, Recorder(tmp_path).ctx
+    )
+    line = "You are Zula, an AI."
+    assert alone["text"] == lm.chat_reply([("user", "Who are you?")], system=line, **drawn)
+
+
+def test_feedback_and_the_keynote_tell_their_ai_its_name(runner, trained, tmp_path, said):
+    ai = _ai(runner, trained, "v-new-2", 2)
+    identity = {"name": "Spark", "company": "Acme"}
+    runner.handle_feedback(
+        {**ai, "groups": ["students", "creators"], "perGroup": 1, "seed": 1, "identity": identity},
+        Recorder(tmp_path).ctx,
+    )
+    keynote = {**ai, "questionId": _first_question_id(), "seed": 4}
+    runner.handle_keynote({**keynote, "identity": identity}, None)
+    assert said == ["You are Spark, an AI made by Acme."] * 3
+    said.clear()
+    runner.handle_keynote(keynote, None)
+    old = _ai(runner, trained, "v-old-3", 1)
+    runner.handle_keynote({**old, "questionId": keynote["questionId"], "identity": identity}, None)
+    assert said == [None, None]
+
+
+def test_each_side_of_a_battle_is_told_its_own_name(runner, trained, tmp_path, said):
+    a = {**_ai(runner, trained, "v-bat-a", 2), "identity": {"name": "Zula", "company": "Pengu"}}
+    b = {**_ai(runner, trained, "v-bat-b", 2), "identity": {"name": "Rex", "company": None}}
+    old = {**_ai(runner, trained, "v-bat-c", 1), "identity": {"name": "Old", "company": "Co"}}
+    spec = {"battleId": "b-2", "skill": "knowledge", "rounds": 2, "seed": 5, "a": a, "b": b}
+    runner.handle_battle(spec, Recorder(tmp_path).ctx)
+    assert said[0::2] == ["You are Zula, an AI made by Pengu."] * 2  # side a, each round
+    assert said[1::2] == ["You are Rex, an AI."] * 2  # side b
+    said.clear()
+    runner.handle_battle({**spec, "b": old}, Recorder(tmp_path).ctx)
+    assert said[0::2] == ["You are Zula, an AI made by Pengu."] * 2 and said[1::2] == [None] * 2
+    said.clear()
+    runner.handle_battle({**spec, "sides": ["b"]}, Recorder(tmp_path).ctx)
+    assert said == ["You are Rex, an AI."] * 2  # a friend's side job: only its own side
+
+
+def test_each_side_of_a_minigame_is_told_its_own_name(runner, trained, tmp_path, said):
+    a = {**_ai(runner, trained, "v-game-1", 2), "side": "a"}
+    b = {**_ai(runner, trained, "v-game-2", 2), "side": "b"}
+    a["identity"] = {"name": "Zula", "company": "Pengu"}
+    b["identity"] = {"name": "Rex", "company": "Acme"}
+    spec = {
+        "runId": "m-3",
+        "game": "simon",
+        "difficulty": "easy",
+        "seed": 1,
+        "settings": {},
+        "sides": [a, b],
+    }
+    result = runner.handle_minigame(spec, Recorder(tmp_path).ctx)
+    steps = {side: len(result["sides"][side]["steps"]) for side in ("a", "b")}
+    assert said.count("You are Zula, an AI made by Pengu.") == steps["a"] > 0
+    assert said.count("You are Rex, an AI made by Acme.") == steps["b"] > 0
+    assert len(said) == steps["a"] + steps["b"]  # every typed reply, and no other line
+
+
+def test_an_app_review_tells_its_ai_its_name(runner, trained, said):
+    ai = _ai(runner, trained, "v-app", 2)
+    spec = {**ai, "skill": "coding", "n": 2, "seed": 9}
+    runner.handle_app_review({**spec, "identity": {"name": "Zula", "company": "Pengu"}}, None)
+    assert said == ["You are Zula, an AI made by Pengu."] * 2
+    said.clear()
+    runner.handle_app_review(spec, None)
+    assert said == [None, None]
+    said.clear()
+    old = _ai(runner, trained, "v-app-old", None)
+    runner.handle_app_review({**spec, **old, "identity": {"name": "Zula", "company": None}}, None)
+    assert said == [None, None]
+
+
+def test_the_eval_never_passes_an_identity_line(runner, trained, tmp_path, said):
+    ai = _ai(runner, trained, "v-eval", 2)
+    identity = {"name": "Zula", "company": "Pengu"}
+    runner.handle_eval({**ai, "identity": identity}, Recorder(tmp_path).ctx)
+    assert all(line is None for line in said)

@@ -394,6 +394,8 @@ export const AppReviewJobSpec = z.object({
    * company's job, like the training data itself.
    */
   ownText: z.array(z.string()).default([]),
+  /** Who the app's AI is told it is: the AI that answers an app's users is the company's own. */
+  identity: Identity.optional(),
 });
 export type AppReviewJobSpec = z.infer<typeof AppReviewJobSpec>;
 

@@ -100,7 +100,12 @@ describe("partner app reviews", () => {
     const app = await eventually(() => Object.values(companyOf(o).apps)[0]);
     const lease = await w.nextLease();
     expect(lease.jobType).toBe("appReview");
-    expect(lease.spec).toMatchObject({ versionId, skill: "pattern", n: 2 });
+    expect(lease.spec).toMatchObject({
+      versionId,
+      skill: "pattern",
+      n: 2,
+      identity: { name: "Spark", company: "Acme" },
+    });
     w.done(lease.jobId, {
       reviews: [
         { prompt: "Q1?", reply: "A1", score: 1 },

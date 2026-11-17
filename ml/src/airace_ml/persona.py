@@ -1,6 +1,7 @@
 """The one line that tells an AI who it is, and a check for replies that claim a human life."""
 
 import re
+from typing import Any
 
 _MAX_PART = 60
 
@@ -35,3 +36,17 @@ def identity_line(name: str, company: str | None) -> str:
 def claims_person_life(text: str) -> bool:
     """True when the text speaks in the first person of family, school, job, home or body."""
     return _PERSON_LIFE.search(text) is not None
+
+
+def learned_identity_line(meta: Any, name: Any, company: Any) -> str | None:
+    """The identity line for the AI ``meta`` describes, or ``None`` when it never learned to read one.
+
+    Only an AI whose last run trained on text 2 has seen the line (a run recorded before text 2
+    has no ``"text"``: it is text 1), so any other AI is asked exactly as before. A blank or
+    missing name gets no line either."""
+    if not meta.runs or int(meta.runs[-1].get("text", 1)) < 2:
+        return None
+    try:
+        return identity_line(name, company if isinstance(company, str) else None)
+    except (TypeError, ValueError):
+        return None
