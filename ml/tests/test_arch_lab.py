@@ -1,21 +1,37 @@
-"""The brain-design lab (docs/handoff/next-level/arch_lab.py), its model class: with every change
-off it is the product's model bit for bit, each change does what it says and nothing else, the
-product's optimizer takes every new parameter once, the KV cache gives the same reply as full
-passes, and a lab folder is never read as a product checkpoint."""
+"""The brain-design lab (docs/handoff/next-level/arch_lab.py).
 
+Its model class: with every change off it is the product's model bit for bit, each change does
+what it says and nothing else, the product's optimizer takes every new parameter once, the KV cache
+gives the same reply as full passes, and a lab folder is never read as a product checkpoint.
+
+Its screen at equal time: the trainer builds the lab's model only inside the swap and is restored
+whatever happens, speeds come from the trainer's progress events, budgets follow speed within
+bounds, an unsteady baseline stops the screen, and the screen runs on the tiny fixture, measures
+every model through the lab's loader and never reuses a run of one design for another."""
+
+import contextlib
 import importlib.util
+import io
+import json
+import re
+import shutil
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
 
+from airace_ml.data.identity import data_identity
+from airace_ml.experiments import scorecard as sc
+from airace_ml.experiments.runs import TRAINING_SOURCES, source_digest
 from airace_ml.infer.lm import TorchLM
 from airace_ml.model.checkpoint import CheckpointMeta, load_checkpoint, save_checkpoint
 from airace_ml.model.shape import HEAD_DIM, ModelShape
 from airace_ml.model.transformer import Transformer
 from airace_ml.train import trainer
-from airace_ml.train.config import learning_style
+from airace_ml.train.config import TrainRunConfig, learning_style
+from airace_ml.train.events import Done, HeldoutEval, Instability, Progress, Sample
 
 LAB_PATH = Path(__file__).resolve().parents[2] / "docs" / "handoff" / "next-level" / "arch_lab.py"
 TINY = ModelShape(4, 128, 256)  # the scorecard's Tiny
@@ -297,3 +313,235 @@ def test_a_lab_folder_is_never_a_product_checkpoint(lab, tmp_path):
     save_checkpoint(_product_model(), _meta(TINY), product)
     with pytest.raises(lab.LabError):
         lab.load_lab_model(product, "cpu")
+
+
+# -- the screen at equal time -----------------------------------------------------------------
+
+
+def test_the_design_swap_is_undone_whatever_happens(lab, tiny_tok):
+    cfg = TrainRunConfig("swap", 3, ModelShape(2, 64, 64), 1024, {"web": 1.0}, batch_tokens=1024)
+    lab.assert_restored()
+    with lab.lab_design(lab.ArchOptions.all()) as built:
+        model = trainer._start_model(cfg, tiny_tok, None)
+        assert type(model) is lab.LabTransformer and model.options == lab.ArchOptions.all()
+        assert built == [model]
+        with pytest.raises(lab.LabError), lab.lab_design(lab.ArchOptions()):
+            pass  # a swap inside a swap is refused before it changes anything
+    lab.assert_restored()
+    assert trainer.Transformer is Transformer
+    # The base design built by the trainer is the product's model, seeded by the run's seed.
+    with lab.lab_design(lab.ArchOptions()):
+        ours = trainer._start_model(cfg, tiny_tok, None)
+    theirs = trainer._start_model(cfg, tiny_tok, None)
+    assert type(theirs) is Transformer
+    pairs = zip(ours.state_dict().items(), theirs.state_dict().items(), strict=True)
+    for (name, a), (_, b) in pairs:
+        assert torch.equal(a, b), name
+    with pytest.raises(RuntimeError, match="boom"), lab.lab_design(lab.ArchOptions.all()):
+        raise RuntimeError("boom")
+    lab.assert_restored()
+    trainer.Transformer = lab.LabTransformer  # a trainer left patched is caught
+    try:
+        with pytest.raises(lab.LabError):
+            lab.assert_restored()
+    finally:
+        trainer.Transformer = Transformer
+
+
+def _progress(step, total=100, per_step=1000):
+    return Progress(step, total, step * per_step, 2.0, 0.01)
+
+
+def test_speed_is_taken_between_progress_events_after_the_first_steps(lab):
+    """Steps 1 to 20 are slow (warming up); the rest train 1,000 tokens in 0.1 s, but an
+    evaluation (held-out loss and samples) or a rollback between two progress events adds time
+    that is not training: those intervals are left out."""
+    events, t = [], 0.0
+    for step in (1, *range(10, 101, 10)):
+        t += 5.0 if step <= 20 else 1.0
+        events.append((t, _progress(step)))
+        if step in (30, 60):
+            t += 4.0
+            events.append((t, HeldoutEval(step, {"web": 3.0})))
+            events.append((t, Sample(step, "Once upon a time", "...")))
+        if step == 80:
+            t += 2.0
+            events.append((t, Instability(step, "rollback", 0.5)))
+    events.append((t, Done("completed", {})))
+    assert lab.progress_speed(events, skip=20) == pytest.approx(10_000.0)
+    # Every interval counts when nothing happens between the progress events.
+    plain = [(float(step), _progress(step)) for step in range(10, 101, 10)]
+    assert lab.progress_speed(plain, skip=10) == pytest.approx(1000.0)
+    with pytest.raises(lab.LabError):
+        lab.progress_speed(events[:3], skip=20)  # nothing after step 20 to time
+
+
+def test_budgets_follow_speed_and_stay_in_bounds(lab):
+    batch = 64
+    base_tokens = 1000 * batch
+    same = lab.equal_time_budget(base_tokens, batch, 1000.0, 1000.0)
+    assert (same.steps, same.tokens, same.clamped) == (1000, base_tokens, False)
+    slower = lab.equal_time_budget(base_tokens, batch, 1000.0, 800.0)
+    assert (slower.steps, slower.tokens, slower.clamped) == (800, 800 * batch, False)
+    slowest = lab.equal_time_budget(base_tokens, batch, 1000.0, 300.0)
+    assert (slowest.steps, slowest.clamped) == (500, True)
+    fastest = lab.equal_time_budget(base_tokens, batch, 1000.0, 2000.0)
+    assert (fastest.steps, fastest.clamped) == (1500, True)
+    edge = lab.equal_time_budget(base_tokens, batch, 1000.0, 1500.0)
+    assert (edge.steps, edge.clamped) == (1500, False)
+    # The real Tiny: 1,536 steps of 8,192 tokens; 80% is 1,228.8 steps, rounded to 1,229.
+    real = lab.equal_time_budget(sc.STEP_TOKENS, 8192, 1000.0, 800.0)
+    assert (real.steps, real.tokens) == (1229, 1229 * 8192)
+    with pytest.raises(lab.LabError):
+        lab.equal_time_budget(base_tokens, batch, 1000.0, 0.0)
+
+
+def _screen(lab, root, out):
+    return lab.Screen(root, root, out, torch.device("cpu"), lab.TINY_SCALE, bench=[])
+
+
+def test_unsteady_timing_stops_the_screen(lab, tiny_data_root, tmp_path, capsys):
+    assert lab.steady_speed(1000.0, 1040.0) == pytest.approx(1020.0)
+    assert lab.steady_speed(1000.0, 1050.0) == pytest.approx(1025.0)  # 5% is still steady
+    for first, second in ((1000.0, 1060.0), (1060.0, 1000.0)):
+        with pytest.raises(lab.LabError, match="6"):
+            lab.steady_speed(first, second)
+
+    # The timing phase times the baseline before and after the variants, and stops on an
+    # unsteady baseline before it keeps any timing.
+    out = tmp_path / "screen"
+    screen = _screen(lab, tiny_data_root, out)
+    screen.steady_tolerance = lab.STEADY_TOLERANCE  # the real card's rule
+    asked = []
+
+    def speed(size, variant, tag):
+        asked.append((size, variant, tag))
+        return {"warm-up": 1.0, "base": 1000.0, "all": 300.0, "base-again": 1060.0}[tag]
+
+    screen.speed = speed
+    with pytest.raises(lab.LabError, match="6"):
+        screen.time_size("tiny", ["base", "all"])
+    assert [tag for _, _, tag in asked] == ["warm-up", "base", "all", "base-again"]
+    assert not (out / lab.TIMING_DIR / "tiny.json").exists()
+
+    # Steady: kept, and the slow variant's budget is clamped to half the steps, with a warning.
+    screen.speed = lambda size, variant, tag: {"base": 1000.0, "all": 300.0}.get(tag, 1020.0)
+    timing = screen.time_size("tiny", ["base", "all"])
+    assert timing["base"] == [1000.0, 1020.0] and timing["speeds"]["base"] == 1010.0
+    base_steps = screen.config("tiny", 1, "probe").steps
+    assert timing["budgets"]["base"]["steps"] == base_steps
+    assert timing["budgets"]["all"] == {
+        "steps": base_steps // 2,
+        "tokens": base_steps // 2 * 1024,
+        "share": pytest.approx(300.0 / 1010.0),
+        "clamped": True,
+    }
+    assert "warning" in capsys.readouterr().out
+    assert (out / lab.TIMING_DIR / "tiny.json").is_file()
+    screen.speed = None  # a second call reuses the timing and measures nothing
+    assert screen.time_size("tiny", ["all"])["budgets"]["all"]["steps"] == base_steps // 2
+
+
+SCREEN_LINE = re.compile(
+    r"^all together: better by ≥ 0\.04 held-out loss on every size: (yes|no); "
+    r"by ≥ 3 bench points on every size: yes$",
+    re.MULTILINE,
+)
+
+
+@pytest.fixture(scope="module")
+def screened(lab, tiny_data_root, tmp_path_factory):
+    """One screen of ``base`` and ``all`` on the tiny fixture, every size, one seed, with bench-v1
+    replaced by a stand-in that records the model it was given."""
+    out = tmp_path_factory.mktemp("arch-lab") / "screen"
+    seen = []
+
+    def run_benchmarks(lm, tok, **kwargs):
+        seen.append((type(lm.model), lm.model.options))
+        return SimpleNamespace(overall=20.0 if lm.model.options.relu2 else 10.0)
+
+    def load_judge(root, device, identity):
+        return SimpleNamespace(calibration=None)
+
+    argv = ["--out", str(out), "--seeds", "1", "--variants", "base", "all"]
+    argv += ["--bench", "base", "all", "--tiny-root", str(tiny_data_root), "--device", "cpu"]
+    printed = io.StringIO()
+    with pytest.MonkeyPatch.context() as mp, contextlib.redirect_stdout(printed):
+        mp.setattr(lab, "run_benchmarks", run_benchmarks)
+        mp.setattr(lab, "build_suite", lambda: None)
+        mp.setattr(lab, "_load_judge", load_judge)
+        mp.setattr(lab, "_load_novelty", lambda root, identity: [])
+        code = lab.main(argv)
+    return SimpleNamespace(out=out, code=code, seen=seen, printed=printed.getvalue())
+
+
+def test_the_screen_runs_on_the_tiny_fixture(lab, screened, tiny_data_root):
+    assert screened.code == 0, screened.printed
+    lab.assert_restored()
+    assert trainer.Transformer is Transformer
+    assert not hasattr(lab, "load_checkpoint")  # every measure loads through load_lab_model
+    results = json.loads((screened.out / "results.json").read_text(encoding="utf-8"))
+    assert results["sizes"] == ["tiny", "small", "medium"]
+    assert results["variants"] == ["base", "all"]
+    for size in results["sizes"]:
+        timing = results["timing"][size]
+        assert set(timing["speeds"]) == {"base", "all"} and all(s > 0 for s in timing["base"])
+        for variant in ("base", "all"):
+            entry = results["models"][size][variant]["1"]
+            assert entry["status"] == "completed"
+            assert entry["tokens"] == timing["budgets"][variant]["tokens"]
+            assert entry["steps"] == timing["budgets"][variant]["steps"]
+            for measure in ("heldout", "yardstick_loss", "seconds", "bench_overall"):
+                assert isinstance(entry[measure], float), (size, variant, measure)
+            folder = screened.out / lab.RUNS_DIR / f"{size}-{variant}-s1"
+            loaded = lab.load_lab_model(folder)
+            assert loaded.options == lab.VARIANTS[variant]
+            assert loaded.shape == lab.TINY_SCALE.card.shapes[lab.SIZES[size][0]]
+        assert results["models"][size]["base"]["1"]["steps"] == 12
+        assert 6 <= results["models"][size]["all"]["1"]["steps"] <= 18
+        diff = results["summary"][size]["all"]["bench_overall"]["minus_base"]
+        assert diff == pytest.approx(10.0)
+    # The timing runs are thrown away; only their speeds are kept.
+    kept = sorted(p.name for p in (screened.out / lab.TIMING_DIR).iterdir())
+    assert kept == ["medium.json", "small.json", "tiny.json"]
+    # Bench-v1 was given the lab's models, of the right design, once per benched run.
+    designs = [lab.VARIANTS[v] for _ in range(3) for v in ("base", "all")]
+    assert screened.seen == [(lab.LabTransformer, options) for options in designs]
+    # The yardstick was taken on the lab's model of the run.
+    folder = screened.out / lab.RUNS_DIR / "tiny-all-s1"
+    again = sc.yardstick_loss(lab.load_lab_model(folder), tiny_data_root)
+    assert results["models"]["tiny"]["all"]["1"]["yardstick_loss"] == pytest.approx(again)
+    with pytest.raises(RuntimeError):
+        load_checkpoint(folder)  # the product cannot read it, and the lab never tried
+    assert results["gate"]["all"]["bench"] is True
+    assert SCREEN_LINE.search(screened.printed), screened.printed
+    record = json.loads((folder / lab.RECORD_FILE).read_text(encoding="utf-8"))
+    key = record["key"]
+    assert key["options"] == lab.ArchOptions.all().to_dict()
+    assert (key["size"], key["variant"], key["seed"]) == ("tiny", "all", 1)
+    assert key["token_budget"] == results["timing"]["tiny"]["budgets"]["all"]["tokens"]
+    assert key["data"] == data_identity(tiny_data_root)
+    assert key["code"] == source_digest(TRAINING_SOURCES)
+
+
+def test_a_run_of_one_design_is_never_reused_for_another(lab, screened, tiny_data_root):
+    runs = screened.out / lab.RUNS_DIR
+    # A finished run of another design where the qk run goes: it must be trained again.
+    shutil.copytree(runs / "tiny-all-s1", runs / "tiny-qk-s1")
+    argv = ["--out", str(screened.out), "--sizes", "tiny", "--seeds", "1"]
+    argv += ["--variants", "base", "qk", "--tiny-root", str(tiny_data_root), "--device", "cpu"]
+    printed = io.StringIO()
+    with contextlib.redirect_stdout(printed):
+        assert lab.main(argv) == 0
+    lab.assert_restored()
+    said = printed.getvalue()
+    assert "tiny-base-s1: finished earlier, reusing it" in said
+    assert "tiny-qk-s1: training" in said and "tiny-all-s1" not in said
+    assert lab.read_lab_arch(runs / "tiny-qk-s1") == lab.VARIANTS["qk"]
+    assert lab.load_lab_model(runs / "tiny-qk-s1").options == lab.VARIANTS["qk"]
+    record = json.loads((runs / "tiny-qk-s1" / lab.RECORD_FILE).read_text(encoding="utf-8"))
+    assert record["key"]["options"] == lab.VARIANTS["qk"].to_dict()
+    results = json.loads((screened.out / "results.json").read_text(encoding="utf-8"))
+    assert set(results["models"]["tiny"]) == {"base", "qk"}
+    # The first screen's all run is left as it was.
+    assert lab.read_lab_arch(runs / "tiny-all-s1") == lab.ArchOptions.all()
