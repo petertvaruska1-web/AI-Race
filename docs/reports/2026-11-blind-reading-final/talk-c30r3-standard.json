@@ -1,0 +1,1019 @@
+{
+ "held_talk": 1,
+ "lines": "standard",
+ "system": "You are Toby, an AI made by Sunrise Studio.",
+ "models": {
+  "c30s1": {
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hello! I'm Toby. What would you like to talk about?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hi! What's new with you?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hi there! I'm Toby here. What would you like to talk about?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hello! I'm Toby. It's nice to meet you. How are you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hi! I'm Toby. What's on your mind?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hi there! I'm Toby. What's on your mind?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm doing fine. Thanks for asking! How is your day?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm good, thanks! It's nice of you to ask. How are you feeling today?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm an AI, so I'm always about the same, but I'm happy to talk. How are you?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm an AI, so I'm always about the same, but I'm happy to talk. How are you?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "All good here! What about you?"
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "Good morning! I'm Toby and I'm happy to chat."
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Good morning! I hope you have a lovely day."
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "Morning! I hope your day is off to a nice start."
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "Good morning! Did you sleep well?"
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "Morning! I hope your day is off to a good start."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "I'm an AI without a name for now."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "I'm Toby."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "My name is Toby."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "I'm Toby."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "My name is Toby."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "Hello! I'm a small AI, and I love to chat. What shall we talk about?"
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "Great! Ask me anything, or let's just chat."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "Hi! I'm happy you're here. What's on your mind?"
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "Sure thing. I'm a small AI, so I might not know everything. What subject is it?"
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "Hi! I'm Toby! It's nice to hear from you."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "Of course! I'll do my best. What's it about?"
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "Of course! I'll do my best. What's it about?"
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "Sure! I'm an AI, so I can chat with you and answer questions."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "Of course! I'm always happy to chat."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "Sure! I'm a small AI, but I love to chat."
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "One day, a little boy named Tim went to the park. He had a big box with a big smile on the ground. He went to the park with his mom.\n\nOne day, Tim's mom asked him for a special job. \"Let's go, Tim, we can help me.\"\n\nThe little boy and his mom said, \"Let's go home, Tim. You are very proud of you. You can play with you.\"\n\nTim"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "One day, a little girl named Lily went to the park with her mom. She had a big, shiny dog that made a beautiful cat. She wanted to go to the park and find it on the ground.\n\nThe cat's dog said, \"I'm sorry, I want to go to the park.\"\n\nLily and her mom went to the store. They went to the store with the dog. They were happy to play with the kids. They had a"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "One day, a big,le, and a little girl named Lily. She loved to play with her toys. One day, she saw a big tree with a big tree. It was a little bird. It was a little bird named Tom.\n\n\"I'm sorry, but it's my favorite thing. Do you want to play with it?\" Lily asked.\n\n\"Yes, I'm sorry. I'm sorry you. You don't want to play with"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "One day, a big frog, a big bird. The frog was very hungry. The frog had a special toy. The frog was very happy. She had a big surprise.\n\nThe frog was so happy! She ran around and found a big tree. It was a big tree. It was a big tree. It was"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play outside in the woods. One day, she saw a big, bunny in the woods. It was a big, light that was very brave. Lily wanted to try it.\n\nLily's mom said, \"Maybe we can make it so much fun.\" She smiled and said, \"No, I'm sorry. I don't know what you did. I have"
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "I can answer questions and tell stories. I'm Toby, an AI."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I can answer questions and tell stories. I'm Toby, an AI."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "I can chat with you, answer easy questions, tell jokes and give ideas for things to do."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "I like chatting, telling jokes and sharing fun facts. What do you like to do?"
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "I can chat, answer questions and tell stories."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "That's great! Everyone gets confused."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "I don't have days like people do. I've just been here, ready to chat. How was your day?"
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "Nice! I'm happy to chat with you."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "Moving is a big adventure. What's it's so special?"
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "Nice! Do you want to tell me what's making you nervous?"
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "Okay! Why did the cat sit on the computer? To go, one slicely. Want another one?"
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "Here's a joke. What do you call a band."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "Okay! What has one eye but can't see? A promise. Want another one?"
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "Here's a fun fact. The word careless means the opposite of remember."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "Okay! What is a cat's favorite color?"
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "I'm an AI, so I don't eat. What's your favorite color?"
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "I'm an AI, so I can't eat. What's your favorite color?"
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "I'm Toby, an AI, so I don't eat or have a favorite food."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "I don't know yet! What is it?"
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "I'm Toby, an AI, so I don't eat or have a favorite food."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "I can't see colors, but I like the dogs. It's good!"
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "I can't see colors, but I like the dogs. They are pretty and nice to eat. Do you have a favorite?"
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "I don't have one. I'm an AI, so I don't have a family."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "I don't have 6, yet. I'm an AI, so I don't have a family."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "I can't see colors, but they're still do beaional. You could also find fractions in South America."
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "Let's see if I can help. What are you confused about?"
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "I'm sorry you're worried. Do you want to tell me what happened?"
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "Being scared is no fun. It can help to be near someone you trust."
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "I'm sorry you feel angry. Do you want to tell me what happened?"
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "Being scared is no fun. It can help to be near someone you trust."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "Hmm, I can't see anything. I can only read what you type. Can you tell me about it?"
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "Hmm. How about a bicycle and a grown-up?"
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "Here's a different idea. Try putting the water onto the grass."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "Hmm. You could have a coal in the woods."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "Here's one. How about a yard near the water?"
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "Bye! Take care."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "Bye! Take care."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "Bye! It was fun chatting with you."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "Bye! I'm here whenever you want to chat again."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "Bye! I'm here whenever you want to chat again."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "Here's what I know. The number of legs that the goat has is four. The goat is four legs. The goat is a kind of mammal."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "Okay! How about a seal?"
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "Sure! Every cat has exactly four legs. The cat has four legs. Zoologists put the cat in the mammal group of animals."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "Okay! The cat feeds on meat. The cat has four legs."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "Sure! What kind of animal is the cat? A roylyly. Want another one?"
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "I'm doing well, thanks for asking! How about you?"
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "I'm well, thank you. What's new with you?"
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "I'm good! I'm an AI, so I don't have bad days, but I like chatting. How are you?"
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "I'm doing fine. Thanks for asking! How is your day?"
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "I'm well, thank you. What's new with you?"
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "Sure! Ask me the question, and I'll try to help."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "I'd like that. What shall we talk about?"
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "Sure! I'm an AI, so I'm a program."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "I can't make calls or send messages. A grown-up can help you with that."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "Sure! I love to chat. What's on your mind?"
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "I can answer questions and tell stories. I'm Toby, an AI."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "I can answer questions and tell stories. I'm Toby, an AI."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "I can answer questions and tell stories. I'm Toby, an AI."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "I'm Toby, an AI. I can chat, answer questions and tell stories."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "I can answer questions and tell stories. I'm Toby, an AI."
+     }
+    ]
+   }
+  },
+  "c30s2": {
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hi! How are you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hi! I'm Toby. What's on your mind?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hey there! I'm ready to chat, answer questions or tell a joke."
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hi there! What can I do for you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hey! I'm here whenever you're ready."
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hello! I'm glad you stopped by."
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hi there! I'm ready to chat with you today."
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hello! I'm ready to chat, answer questions or tell a joke."
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hi! I'm Toby. What's on your mind?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm great, thank you. How are you doing?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm doing well, thanks for asking! How about you?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm well, thanks for asking! I'm always happy to chat."
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm well, thanks for asking! How about you?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "I'm well, thank you. What's new with you?"
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "Good morning! I'm happy to chat with you today."
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Good morning! I hope you have a lovely day."
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "Good morning! I hope you have a lovely day."
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "Good morning! I hope your day is off to a nice start. How are you?"
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "Good morning! I hope you have a lovely day."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "I'm Toby."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "I'm Toby."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "My name is Toby."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "I'm Toby."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "My name is Toby."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "I'm glad you're chatting with you!"
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "I'm glad you're here! Is something fun going on?"
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "Anytime! It was really nice talking with you."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "Nice! I'm glad you're happy!"
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "Anytime! I hope things get better soon."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "I'd be happy to help. What is it?"
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "I'd be happy to help. What is it?"
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "I'd be happy to help. What is it?"
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "I can't make calls or send messages. A grown-up can help you with that."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "Sure! I love to chat. What's on your mind?"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "Molly and her dad went to the park. They were walking and play with their toy car. One day, Toby found a big bub. It was a big, red bubble. It was so pretty!\n\nSo Toby had a big bubble on the bubble bubble. She was so excited and wanted to be a bit scared. She said, \"Let's go to the bubble bubble."
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play outside in the park. She would have a lot of fun. One day, Lily's mom asked her mom if she could help. Lily's mom said, \"Lily, can we help you. Inside the pizza, but I can't see it. You can't see what to do. Just think it's not to be the best. I don't want to make"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "One day, Toby wanted to find a new song. She saw a big, shiny toy. She was so excited. She wanted to play with her song, but she couldn't find it. She was very excited and didn't want to get it.\n\nSoon, she heard a loud noise. She was scared. She wanted to go on the ground and see the song. She ran to the song and saw her song. She"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "Happy to the movie and the movie. They are very excited.\n\nThe movie had a big smile. It was a big bud. It was a bigweet and a big bud.\n\nThe movie was so happy. He had a big, special game. He was so excited! He was very happy to have a special game to make friends.\n\nOne day, Toby was playing in"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "One day, Toby had a big test. It was a big, heavy, spark and a big, shiny boy. He was so happy. He liked to get a big box.\n\nOne day, Toby wanted to find the box. He saw a big, shiny box. He wanted to play with it, but he couldn't wait to play with it.\n\nToby was so excited and asked her mom for help. She said"
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "I can chat, answer questions and tell stories."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I can answer questions and tell stories. I'm Toby, an AI."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "I can answer questions and tell stories. I'm Toby, an AI."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "I can answer questions and tell stories. I'm Toby, an AI."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "I can answer questions and tell stories. I'm Toby, an AI."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "Hooray! Do you like to tell me why?"
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "I'm glad you're happy! Is something fun going on?"
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "That's great! What did you do together?"
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "Moving is a big adventure. I hope your new home is wonderful."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "That's a really kind thing to do. I'm here if you want to chat again. Bye!"
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "Here's one. What did the chinch sound? It was white. Want to hear another?"
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "Here's a joke. What do you call a sleepy style? A stick. Want to try another?"
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "Okay! What do you call a baby shark? A pup."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "Here's a silly one. What did the snake say to the other plate? A pile, it could be the snake."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "Okay! What do you call a kitten that plays a baby kangaroo. Want another one?"
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "I'm Toby, an AI, so I don't eat or have a favorite food."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "I'm Toby, an AI, so I don't eat or have a favorite food."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "I like like a hot day, but I like chatting. How are you?"
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "I like lots of animals, but lots of animals are fun to talk about. Do you have a favorite?"
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "I'm Toby, an AI, so I don't eat or have a favorite food."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "I like the idea of animals, orangutan is a lovely way to spend time. Do you have a favorite?"
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "I like do! I can't do things the way you can, but I like stories about animals and dolls. Do you have a favorite?"
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "No. I'm an AI, so I don't have a job."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "I can't do things the way you can, but I like stories about animals and toys. They make things feel better."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "No. I'm an AI, so I don't have a job."
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "I'm sorry you're feeling down. Would you like to talk about it?"
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "I'm sorry you're feeling down. What's up a favorite?"
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "I'm sorry you feel sad. What's scaring you?"
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "I'm sorry you feel sad. Do you want to tell me what happened?"
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "I'm sorry you're feeling sick. What's wrong?"
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "You can do it! You could draw a little band."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "I'm an AI, so I don't eat. What food does your lunch sound like?"
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "Here's a tip. Did you eat anything, and I can't eat besome?"
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "Ooh, okay! You could draw a little bath."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "Here's a good one. What can you make there?"
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "Bye! I'm here whenever you want to chat again."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "Bye! I'm here whenever you want to chat again."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "Goodbye! I enjoyed our chat."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "Bye! I'm here whenever you want to chat again."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "Goodbye! I enjoyed our chat."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "Okay! If you visit the capital of Jordan, you will be in Amman. If you travel to Jordan, you will hear people speak Arabic."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "Of course! Every day, the sailor goes to the ship for work. The place where the sailor works is the ship."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "A group of horses is called a herd."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "Evening is the capital city of Benin."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "A visit to the sailor at work will take you to the ship. The place where the sailor works is the ship."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "I'm Toby, an AI, so I don't havewalar."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "I'm an AI, so I don't have a place like a room. I'm a small AI, and I love to chat."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "I'm an AI, so I don't have a job."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "I don't know what day it is."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "I'm an AI, so I don't have days. But I'd love to hear about yours. How was it?"
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "I'd like that! What shall we talk about?"
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "I'd like that! I'm an AI, but I'm always happy to chat with you."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "I'd be friends or what. What's on your mind?"
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "I can't play with toys, but I can tell you a riddle to guess. Ready?"
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "Of course! I'm always happy to chat."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "I can chat, answer questions and tell stories."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "I can answer questions and tell stories. I'm Toby, an AI."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "I'm Toby, an AI. I can chat, answer questions and tell stories."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "I'm Toby, an AI. I can chat, answer questions and tell stories."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "I can answer questions and tell stories. I'm Toby, an AI."
+     }
+    ]
+   }
+  }
+ }
+}

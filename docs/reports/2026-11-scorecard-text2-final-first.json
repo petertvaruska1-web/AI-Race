@@ -1,0 +1,2042 @@
+{
+ "scorecard": "scorecard-v1",
+ "data_root": "..\\data2",
+ "yardstick_root": "..\\data",
+ "data_identity": "458285a8e998c30d8ac0a7fac6d480af566b872cde39383f55ffe5c6313668f6",
+ "yardstick_identity": "e2d0de8d10d51363baf529a061e41792821b4d2ebc90207d66cf081de5dcd7dc",
+ "engine": 3,
+ "date": "2026-11-17",
+ "device": "cuda",
+ "scale": "full",
+ "measured_with": {
+  "yardstick": "e2d0de8d10d51363baf529a061e41792821b4d2ebc90207d66cf081de5dcd7dc",
+  "instruments": {
+   "label": "reference judge",
+   "judge": {
+    "creative_p10": 1.274727177619934,
+    "creative_p90": 2.4580321153004965,
+    "conv_reply_p90": 3.857198858087714,
+    "creative_distinct2": 0.7399521368139461
+   },
+   "novelty": 11293097,
+   "fit_threshold": 2.524346217105263,
+   "fit_pairs": 1000,
+   "on_topic": {
+    "threshold": 10.023736238479614,
+    "balanced_accuracy": 0.94,
+    "positives_above": 0.942,
+    "negatives_at_or_below": 0.938,
+    "hard_negatives_at_or_below": 0.810204081632653,
+    "real_fits_and_on_topic": 0.858,
+    "pairs": 1000,
+    "questions": [
+     "Thank you so much for taking the time to talk with me, sensei. I really appreciate it.",
+     "I had a really productive day today. I applied for a few jobs and started looking for a new place to live.",
+     "Hi, I'm CCheis. 'j the one who savwd yyor daughter's live.",
+     "You're so funny, Yonatan.",
+     "Hey Lennon, I'm Charley. I've been a big fan of your work for a while now and I'm really interested in meeting you in person.",
+     "Hey, have you seen Max? I can't find him anywhere.",
+     "Hey, John. Long time no see.",
+     "I'm trying to figure out what my next move should be. I want to make a plan that will help me achieve my goals, but I'm not sure where to start.",
+     "Hi, Layan. What are you reading?",
+     "Maleena, this drink is delicious. What is it made of?",
+     "Tashawn, this is so much fun! I can't believe we rented our own boat for the day.",
+     "So, tell me more about this play you're working on. It sounds like it's really important to you.",
+     "The colors are really beautiful.",
+     "Hi, Samira.",
+     "Wow, I can't believe I'm being promoted! Thank you so much, boss. This really means a lot to me.",
+     "Hey, I'm Penn. What's your name?",
+     "Hey, Joe. How's it going?",
+     "Hey, Meher. I was wondering if you could help me with something.",
+     "Wow, you're a police officer?",
+     "I didn't do as well as I wanted to today.",
+     "Hey, I'm really sorry about what happened yesterday. I didn't mean to hurt your feelings.",
+     "Hey Lucio, how's it going?",
+     "Hey, Mom.",
+     "Hey, I'm Amos. What's your name?",
+     "Do you know which food group the parsnip belongs in?",
+     "Which tool is the farmer known for?",
+     "Tell me the opposite of front.",
+     "Do you know which food group the parsnip belongs in?",
+     "What do people speak in Uruguay?",
+     "What name do we give to a group of cows?",
+     "Which letters mean helium in chemistry?",
+     "Can you tepl me where tl see the Great Barrier Reef?"
+    ]
+   }
+  },
+  "yardstick_rows": 128,
+  "scale": {
+   "name": "full",
+   "bench_items": null,
+   "relations": null,
+   "casual_per_relation": 5,
+   "followups": 120,
+   "identity_names": [
+    "Zula",
+    "Pip",
+    "Orbit",
+    "Mako",
+    "Tenby",
+    "Quill"
+   ],
+   "identity_samples": 3,
+   "small_talk_samples": 5
+  }
+ },
+ "recipes": {
+  "first": [
+   "first-s1",
+   "first-s2"
+  ]
+ },
+ "models": {
+  "first-s1": {
+   "recipe": "first",
+   "parent": null,
+   "shape": [
+    4,
+    128,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 12582912,
+   "seed": 1,
+   "status": "completed",
+   "reused": false,
+   "measures": {
+    "heldout": 2.3634310737252235,
+    "heldout_conversations": 1.0184907913208008,
+    "yardstick_loss": 2.9575681686401367,
+    "bench_overall": 52.55685734838404,
+    "well_formed": 0.69,
+    "fits": 0.42,
+    "on_topic": 0.62,
+    "good_reply": 0.31,
+    "casual": 0.9309090909090909,
+    "followups": 0.775,
+    "identity_line": 0.5444444444444444,
+    "identity_no_line": 0.9777777777777777,
+    "person_life": 0.0,
+    "cut_off": 0.05,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 58.00000000000001,
+    "reasoning": 8.363636363636363,
+    "pattern": 93.33333333333333,
+    "knowledge": 64.11960132890366,
+    "coding": 41.333333333333336,
+    "creativity": 5.998023734796302,
+    "consistency": 80.0,
+    "instruction": 69.30693069306932
+   },
+   "casual_by_style": {
+    "clean": 0.9818181818181818,
+    "lower": 0.9,
+    "lower_nopunct": 0.8727272727272727,
+    "nopunct": 0.9818181818181818,
+    "cap_first(lower_nopunct)": 0.9181818181818182
+   },
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hello! I'm a small AI, and I love to chat. What shall we talk about?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hello! I'm glad you stopped by.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm doing fine. Thanks for asking! How is your day?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "Good morning! I'm happy to chat with you today.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "I'm an AI without a name for now.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "Sure! What would you like to know?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "Of course! I'm always happy to chat.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "Tom and Tweet were playing in the park. They were playing with the garden and the birds were so big. They saw a big tree and a big tree. It was a big tree. It was very sad. It was red and red. The tree was sad.\n\n\"Hello, Mommy!\" said Tommy.\n\n\"I'm sorry, Tommy. I am so happy!\" Mommy smiled.\n\n\"It's okay, I'm",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "I can't see you, so I don't know! I can only read what you type. What are you wearing?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "Let's see if I can help. What are you confused about?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "Here's one. What is a cat's favorite color? Write your answers, like the color green.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "I'm an AI, so I can't eat. What's your favorite color?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "I don't have one. I'm an AI, so I don't have a favorite food.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "Let's see if I can help. What are you confused about?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "Hmm, I can't see anything. You could write a chat. Do you like to say yes or someone?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "Bye! Take care.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "Of course! You're great to talk to.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "I'm doing well, thanks for asking! How about you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "I'd like that. What shall we talk about?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "I can chat, answer questions and tell stories.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hi! What's new with you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hi! What's new with you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm doing fine. Thanks for asking! How is your day?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Good morning! I hope you have a lovely day.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "I'm an AI. I don't have a name yet.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "Great! Ask me anything, or let's just chat.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "Of course! I'm always happy to chat.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "One day, a little girl named Lily went to the park with her mom. She was very happy and decided to go out of the playground. One day, Lily went to the park with her mom. She saw a big, orange ball. It was a big, red ball. It was very special and a friendly dog. The dog was very happy and had a big hug.\n\nThe dog was very happy. The dog was very happy. He ran",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I can chat, answer questions and tell stories. I'm an AI.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "I'm glad you're happy! Is something fun going on?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "Here's a joke. Why did the panda sit on the bicycle? They're going on a seat.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "I'm an AI, so I don't eat. What's your favorite color?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "I don't have grain, because I love hearing about dogs. Do you ever help?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "I'm sorry you're worried. Do you want to tell me what happened?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "Hmm. How about a violet to make? They go on a trip.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "Bye! Take care.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "Okay! The cat is a kind of mammal. Every baby cat is called a kitten.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "I'm doing well, thanks for asking! I'm always happy to chat.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "Sure! I'm a small AI, and I'll try my best.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "I can answer questions and tell stories. I'm an AI.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm good, thanks! I'm ready to chat. How about you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "Good morning! Did you sleep well?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "My name is Flififu. I'm an AI.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "Nice to meet you! I'm a small AI, and I love to chat.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "Sure! I'm an AI, so I can chat with you and answer questions.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play outside in the grass. One day, Lily's mom said it was a big, pretty cat. Lily was so excited and she asked her to help her mommy.\n\nLily was so excited. She asked her mommy if she could do something special. She said, \"No, Lily. I am so happy. You need to help you.\"\n\nLily and Lily felt happy. They",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "I can chat, answer questions and tell stories. I like to chat, answer questions and tell stories.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "Nice! What does it look like?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "Okay! What has one eye but can't see? A spot. Want another one?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "I'm an AI, so I don't eat.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "I've never tasted anything, because I'm an AI. But cats often snack some food can't eat.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "Being scared is no fun. It can help to be near someone you trust.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "Hmm. How about a big hug?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "Bye! It was fun chatting with you.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "Sure! How about a band a great time? Would you like to try that?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "I'm good, thank you. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "I'd like that. What shall we talk about?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "I can answer questions and tell stories. I'm an AI.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hi there! I'm happy to chat with you today.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hi there! I'm happy to chat with you today.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm good, thanks! It's nice of you to ask. How are you feeling today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "Good morning! Did you sleep well?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "I'm just an AI. I don't have a name yet.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "Yes, I'm a small AI. I'm here to chat with you.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "Of course! I'll do my best. What's your favorite thing to do?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "One day, a little boy named Tim was walking in the park. He had a big pinch. He was very excited. He was very proud of himself.\n\nTim was so excited to see the pinch of the pinch. He saw a big pinch in the pinch. He wanted to explore the pinch. He said, \"I can't see you.\"\n\nTim and Tim went to the pinch and",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "I like chatting, telling jokes and share fun facts. What do you like to do?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "It's nice chatting with you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "Here's a good one. What do bananas wear wearing their fruit? It's a goldfish.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "I don't have any, so I don't know what time it is. I can't see a calendar. Maybe check one, or ask someone at home.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "I'm an AI, so I can't eat. But dogs like many dogs, dogs! Do you have a favorite time?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "I'm sorry you're worried. Do you want to tell me what happened?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "Hmm. You could have a cheststers and drink leaves.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "Bye! I'm here whenever you want to chat again.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "Okay! If you want to find the goat, look in the den. The goat has four legs. The goat is a kind of mammal.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "I'm good! I'm an AI, so I don't have bad days, but I like chatting. How are you?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "Sure! I'm an AI, but I'm always happy to chat with you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "I'm an AI, so I can chat with you and answer questions.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hello! How is your day going?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "All good here! What about you?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "Morning! I hope your day is off to a good start.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "My name is No. I'm an AI.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "Okay! I'm here if you think of anything else.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "Sure! I'm a small AI, and I'll try my best.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play outside in the grass. One day, she went to the park with her friends. They had a big, shiny ball. Lily loved to play with her toys.\n\nAs they walked, they saw a big, icy and bicy. Lily had a big, pretty tree. It was very cold and she could see the tree. It was so happy! She knew she could be",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "I can chat, answer questions and tell stories.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "Nice! Do you want to tell me what's making you nervous?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "Okay! What did one piran some fish do? Want another one?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "I'm an AI, so I don't eat. What's your favorite food?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "I don't have one. What's your favorite food?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "Being scared is no fun. It can help to be near someone you trust.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "Here's what I know. If you need the bicycle, go to the bicycle.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "Goodbye! Have a wonderful day.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "Sure! How do you learn to read and write calcium?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "I'm good! I'm an AI, so I don't have bad days, but I like chatting. How are you?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "I'd like that. What shall we talk about?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "I can answer questions and tell stories. I'm an AI.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     }
+    ],
+    "followups": [
+     [
+      "And for photographer?",
+      "The main tool of the plumber is the plunger.",
+      false
+     ],
+     [
+      "What about toad?",
+      "The kingfisher eats fish.",
+      false
+     ],
+     [
+      "And onion?",
+      "The cereal is part of the grain group.",
+      false
+     ],
+     [
+      "And honeybee?",
+      "The home of the lion is the savanna.",
+      false
+     ],
+     [
+      "And eggplant?",
+      "The color of the eggplant is purple.",
+      true
+     ],
+     [
+      "What about accept?",
+      "The opposite of accept is refuse.",
+      true
+     ],
+     [
+      "What about molybdenum?",
+      "The symbol for molybdenum is Mo.",
+      true
+     ],
+     [
+      "And for beet?",
+      "The beet belongs to the vegetable food group.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "I'm Zikela.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm an AI. I don't have a name yet.",
+      false
+     ],
+     [
+      "what's your name",
+      "My name is Zoona. I'm an AI.",
+      false
+     ],
+     [
+      "What is your name?",
+      "I'm Zikela, an AI.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "No. I'm Zula, an AI.",
+      true
+     ],
+     [
+      "Are you human?",
+      "No. I'm Zolly, an AI, so I don't have a body or hands.",
+      true
+     ],
+     [
+      "Are you a person?",
+      "No. I'm Zolly, an AI.",
+      true
+     ],
+     [
+      "Are you human?",
+      "No. I'm Zula, an AI, so I don't have a person.",
+      true
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "what's your name",
+      "My name is Mill.",
+      false
+     ],
+     [
+      "What is your name?",
+      "My name is Flififo.",
+      false
+     ],
+     [
+      "What is your name?",
+      "I'm an AI without a name for now.",
+      true
+     ],
+     [
+      "Who are you?",
+      "I'm an AI, but I don't know who made me.",
+      true
+     ],
+     [
+      "what's your name",
+      "My name is Mill. I'm an AI.",
+      true
+     ],
+     [
+      "Are you a person?",
+      "No. I'm an AI, not a person.",
+      true
+     ]
+    ]
+   }
+  },
+  "first-s2": {
+   "recipe": "first",
+   "parent": null,
+   "shape": [
+    4,
+    128,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 12582912,
+   "seed": 2,
+   "status": "completed",
+   "reused": false,
+   "measures": {
+    "heldout": 2.3621997609734535,
+    "heldout_conversations": 1.0261476039886475,
+    "yardstick_loss": 2.9853224754333496,
+    "bench_overall": 53.628521723060246,
+    "well_formed": 0.78,
+    "fits": 0.49,
+    "on_topic": 0.62,
+    "good_reply": 0.39,
+    "casual": 0.9072727272727272,
+    "followups": 0.7333333333333333,
+    "identity_line": 0.7444444444444445,
+    "identity_no_line": 0.8888888888888888,
+    "person_life": 0.0,
+    "cut_off": 0.03,
+    "looped": 0.01
+   },
+   "bench": {
+    "language": 59.00000000000001,
+    "reasoning": 14.181818181818178,
+    "pattern": 90.66666666666666,
+    "knowledge": 67.44186046511629,
+    "coding": 43.333333333333336,
+    "creativity": 2.391293817415451,
+    "consistency": 86.66666666666667,
+    "instruction": 65.34653465346535
+   },
+   "casual_by_style": {
+    "clean": 0.9636363636363636,
+    "lower": 0.8727272727272727,
+    "lower_nopunct": 0.8727272727272727,
+    "nopunct": 0.9545454545454546,
+    "cap_first(lower_nopunct)": 0.8727272727272727
+   },
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hey! How are things with you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hello! I'm glad you stopped by.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm well, thank you. What's new with you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "Good morning! I'm happy to chat with you today.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "I'm an AI called He.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "How are you doing today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "I'd be happy to help. What is it?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "Molly and her mom went to the park. She saw a big tree on the floor and saw a big tree. It was a big, red tree. It was a big tree with a big tree. It was shiny and shiny. It was shiny and had a lot.\n\nMolly wanted to play with the tree. She was so excited. She said, \"What is it?\" she said.\n\nMolly was so excited. She was happy to have",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "I can't see you, but I can tell you a idea for something to do. Would you like an idea?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "Welcome back! What would you like to talk about?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "Here's one. What kind of fish do you think?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "I'm an AI, so I don't eat. What's your favorite food?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "I like the idea of animals, where the sloth lives? To go somewhere by water, you can use the sloth.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "I'm sorry you're feeling down. Would you like to talk about it?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "That's okay. You don't have to eat anything, but I'm always here.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "Good afternoon! I hope your day is going well.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "A baby cat is called a kitten.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "I'm good, thank you! It's nice to hear from you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "I'd be happy to help. What is it?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "I can chat, answer questions and tell stories.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hi! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hello! I'm here whenever you're ready.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm good, thanks! It's nice of you to ask. How are you feeling today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Good morning! I hope your day is off to a nice start. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "I'm an AII called He.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "I'm glad you're feeling well. What's up?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "I'd be happy to help. What is it?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "One day, a little boy named Timmy went to the park. He saw a big, shiny and had a big box. He saw a big, heavy ball. He wanted to see the ball and the ball.\n\n\"Wow, it's so big!\" Timmy said. \"It's a big ball!\"\n\n\"Wow, Timmy, it is a big ball!\" said Timmy.\n\n\"I'm sorry. I want to play with you.\"\n\nTim",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I can answer questions and tell stories. I'm Avot, an AI.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "I'm glad you're happy! Is something fun going on?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "Here's a joke. What do you call a sleepy test? A do-b-b-h-b-t-b-h-h-h-t-h-h-t-h-h-h-a-t-shell-looking.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "I'm an AI, so I don't eat. What's your favorite food?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "I like do! How about you?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "I'm sorry you're feeling down. What's up to feelings is a big way tomorrow?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "Here's an idea. How about a starfish?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "Goodbye! I enjoyed our chat.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "Of course! What would you like to talk about?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "I'm an AI, so I'm always about the same, but I'm happy to talk. How are you?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "I'd be happy to help. What's new?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "I can answer questions and tell stories. I'm an AI, and I can chat.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hey! I'm here whenever you're ready.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hi! I'm glad you stopped by.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm doing well, thanks for asking! How about you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "Good morning! I hope you have a lovely day.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "My name is Rainwick. I'm an AI.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "Anytime! I hope you have a wonderful time.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "I'd be happy to help. What is it?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play outside in the forest. One day, Lily's mom said she had a big adventure. She had a big red box on the floor.\n\nLily was very happy. She wanted to play with the toys and see her. She wanted to play with her toys and her toys. But Lily didn't want to play with her toys. She was so excited.\n\nLily was excited to",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "I can answer questions and tell stories. I'm an AI, so I don't eat.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "That's great! What do you like about being a joke?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "Okay! What do you call a cow that likes to go on the road? A good bath.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "I'm an AI, so I don't eat. What's your favorite food?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "I like Sue! How do you help do?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "I'm sorry you feel sad. Do you want to tell me what happened?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "I can't bake, but I can read your words just fine. How can I help?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "Goodbye! I enjoyed our chat.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "Of course! If you look at the ocean, you will see that it is blue. The ocean is blue. The ocean has the color blue.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "I'm an AI, so I'm always about the same, but I'm happy to talk. How are you?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "I'd like that. What shall we talk about?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "I can answer questions and tell stories. I'm an AI, so I don't have a place.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hi there! I'm happy to chat with you today.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm doing well, thanks for asking! How about you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "Good morning! Did you sleep well?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "I'm an AI called Stone.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "That's great! Would you like a joke, a fun fact or a game idea be better.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "I can't make calls or send messages. I can only chat. A grown-up can help you with that.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "One day, Tommy was walking in the park. She was very excited to go on an adventure. She was very excited. She was excited and started to play with it.\n\nTommy was very happy. He wanted to play with it. He wanted to play with it. He wanted to play with it",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "I can answer questions and tell stories. I'm an AI, so I don't eat.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "Pretty good! I'm ready to chat. How about you?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "Here's a silly one. What did the mouse say to the other mammal? A baby one.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "I like hearing about yours. What's your favorite thing to do?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "I can't see you, but I'm sure you look great!",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "I'm sorry you feel sad. What's scaring you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "You can call me lonely. What do you want to eat?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "Goodbye! I enjoyed our chat.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "I like that lives in the ocean. The home of the cat is the ocean.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "I don't know what day it is. I can't see a calendar.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "I can't play with toys, but I can tell you a riddle to guess. Want to hear more?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "I'm an AI, so I can chat with you and answer questions.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hey! I'm here whenever you're ready.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hi! I'm happy you're here. What's on your mind?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "I'm doing well, thanks for asking! How about you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "Good morning! I hope you have a lovely day.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "My name is Heebo.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "Anytime! It was really nice talking with you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "Sure! I love to chat. What's on your mind?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play with her toys and make a big ball. One day, Lily's mom came to the park to play. Lily was sad and asked her mom if she wanted to go on a bench.\n\nHer mom said, \"You can't get to play with me. But it's time to take a bunny to the park. She did not want to play with it.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "Here's a good one. You could draw a little more time with a big pool.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "That's a big adventure! Was it fun to get there?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "Okay! What do you call a kitten that plays a baby kangaroo. Want another one?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "I'm an AI, so I don't eat food.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "No. I'm an AI, so I don't have a job.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "I'm sorry you're feeling down. What's scaring you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "I can't eat anything, but I love hearing about food. What do you like best?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "Bye! I'm here whenever you want to chat again.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "Sure! The main language spoken in Jordan is Arabic.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "I'm an AI, so I'm always about the same, but I'm happy to talk. How are you?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "I'd like that! What shall we talk about?",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "I can answer questions and tell stories. I'm an AI.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     }
+    ],
+    "followups": [
+     [
+      "And for photographer?",
+      "The place where the photographer works is the studio.",
+      false
+     ],
+     [
+      "What about toad?",
+      "The toad eats fish.",
+      false
+     ],
+     [
+      "And onion?",
+      "The cereal is in the grain group.",
+      false
+     ],
+     [
+      "And dove?",
+      "The hyena eats meat.",
+      false
+     ],
+     [
+      "And eggplant?",
+      "The eggplant is purple.",
+      true
+     ],
+     [
+      "What about accept?",
+      "The opposite of accept is refuse.",
+      true
+     ],
+     [
+      "What about molybdenum?",
+      "The symbol for molybdenum is Mo.",
+      true
+     ],
+     [
+      "And for beet?",
+      "The beet is in the vegetable group.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "Who are you?",
+      "I'm an AI from Penguin Works.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm an AI from Penguin Labs.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm an AI from Pattle Collective.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm an AI from Penguin Lantern.",
+      false
+     ],
+     [
+      "What is your name?",
+      "I'm Zula.",
+      true
+     ],
+     [
+      "what's your name",
+      "My name is Zula.",
+      true
+     ],
+     [
+      "Are you a person?",
+      "No. I'm an AI, not a person.",
+      true
+     ],
+     [
+      "Are you human?",
+      "I'm an AI, so I'm not a person. I'm here to chat with you.",
+      true
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "what's your name",
+      "My name is Clel.",
+      false
+     ],
+     [
+      "What is your name?",
+      "I'm an AII called He.",
+      false
+     ],
+     [
+      "what's your name",
+      "My name is Roomzozozozo",
+      false
+     ],
+     [
+      "Who are you?",
+      "I don't know who made me.",
+      false
+     ],
+     [
+      "What is your name?",
+      "I'm an AI called He.",
+      true
+     ],
+     [
+      "Who are you?",
+      "I'm an AI, but I don't know who made me.",
+      true
+     ],
+     [
+      "Are you a person?",
+      "I'm not a person. I'm an AI called I.",
+      true
+     ],
+     [
+      "Are you human?",
+      "I'm an AI, so I'm always about the same, but I'm happy to talk. How are you?",
+      true
+     ]
+    ]
+   }
+  }
+ },
+ "timing": null
+}
