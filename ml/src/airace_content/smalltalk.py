@@ -5,8 +5,14 @@ own: one to four exchanges of plain small talk, in which every turn follows from
 The person greets, says how they feel and why, tells something about themselves, asks for a joke,
 a fact, an idea or a bit of advice, asks about the AI, asks what it cannot know, reacts, and says
 goodbye. The AI answers in a few short, warm sentences, as an AI: it has no body, family, home or
-day of its own, it says no name of its own and no maker, it is honest about what it cannot see or
+day of its own, it is honest about what it cannot see or
 do, and about two in five of its turns end with a simple question that fits what was just said.
+
+Two in five of the chats start with an identity line (``("sys", "You are Zula, an AI made by
+Pengu.")``): there the AI says its name, and its maker now and then, when it greets the person and
+when it is asked its name, and nowhere else; in the others it has no name and no maker. Half of the
+chats give the person and their pets made-up names and not names from a short list: a name just
+read can only be copied, and copying is what the practice is for.
 
 The talk is written as data: a :class:`Step` is what the person may say and the AI lines that fit
 it, and an AI :class:`Line` that asks something carries the steps that answer it (``then``) or the
@@ -24,9 +30,17 @@ from functools import cache
 
 import numpy as np
 
-from airace_content.chats import _cap, _says_held, _usable_later
+from airace_content.chats import (
+    NO_NAME_REPLIES,
+    _cap,
+    _says_held,
+    _usable_later,
+    fresh_name,
+    random_identity,
+)
 from airace_content.held import is_held_small_talk
 from airace_ml.experiments.chatprobes import IDENTITY_COMPANY, IDENTITY_NAMES
+from airace_ml.persona import identity_line
 from airace_ml.skills.kb import KB, Fact, load_kb
 from airace_ml.skills.types import TextDoc
 
@@ -3794,6 +3808,101 @@ ASK_STEPS["draw_idea"] = (
     S("No thanks. | That's okay.", "Okay! Let me know if you change your mind."),
 )
 
+# --- an AI that knows its name -----------------------------------------------------------------
+
+# In a chat that starts with an identity line ({ainame} is its name, {aico} its maker), 30% of the
+# greetings are answered with the name. The key is the place of the greeting in OPENERS.
+NAMED_GREETING_SHARE = 0.3
+NAMED_OPENERS: dict[int, tuple[Line, ...]] = {
+    0: C(
+        L("Hi! I'm {ainame}. What would you like to talk about?", ask="topic"),
+        L("Hello! {ainame} here. How are you today?", ask="how"),
+        L("Hey there! I'm {ainame}. How are you?", ask="how"),
+        L("Hi! My name is {ainame}. What's on your mind?", ask="topic"),
+        L("Hello! I'm {ainame}, and I'm happy to chat. What's new with you?", ask="up_to"),
+        "Hi there! I'm {ainame}. It's nice to chat with you.",
+        L("Hello, hello! {ainame} here. What have you been up to?", ask="up_to"),
+        L("Hi! You're talking to {ainame}. How is your day going?", ask="how"),
+        L("Hey! I'm {ainame}, an AI made by {aico}. What shall we talk about?", ask="topic"),
+        ctx="greet",
+    ),
+    1: C(
+        L("Good morning! I'm {ainame}. How are you today?", ask="how"),
+        "Good morning! {ainame} here, and happy to chat.",
+        L("Morning! I'm {ainame}. What are you up to today?", ask="plans"),
+        ctx="greet",
+    ),
+    2: C(
+        L("Good afternoon! I'm {ainame}. How has your day been?", ask="how_day"),
+        L("Good afternoon! {ainame} here. What are you up to?", ask="up_to"),
+        ctx="greet",
+    ),
+    3: C(
+        L("Good evening! I'm {ainame}. How was your day?", ask="how_day"),
+        "Good evening! {ainame} here. It's nice to chat with you.",
+        ctx="greet",
+    ),
+    6: C(
+        L("Nice to meet you too! I'm {ainame}. What would you like to talk about?", ask="topic"),
+        L("Nice to meet you too! My name is {ainame}. How are you today?", ask="how"),
+        ctx="greet",
+    ),
+    7: C(
+        L("Hi, {name}! I'm {ainame}. How are you today?", ask="how"),
+        L("Nice to meet you, {name}! I'm {ainame}. What's on your mind?", ask="topic"),
+        ctx="greet",
+    ),
+}
+# Asked its name, the AI with a line says it, and sometimes its maker.
+NAME_STEPS = (
+    S(
+        "What's your name? | What is your name? | Can you tell me your name? | What are you "
+        "called? | Tell me your name. | May I ask your name?",
+        "I'm {ainame}, an AI.",
+        "My name is {ainame}.",
+        "I'm {ainame}. It's nice to meet you!",
+        L("I'm {ainame}. What would you like to talk about?", ask="topic"),
+        "My name is {ainame}. I'm an AI.",
+        "I'm {ainame}, an AI made by {aico}.",
+        "My name is {ainame}, and I'm an AI made by {aico}.",
+    ),
+    S(
+        "Who are you? | Who are you, exactly? | And who are you? | Who is this? | Tell me who "
+        "you are.",
+        "I'm {ainame}, an AI.",
+        "I'm {ainame}, a small AI. I like to chat.",
+        "I'm {ainame}. I'm an AI, and I'm here to chat.",
+        L("I'm {ainame}, an AI. What would you like to talk about?", ask="topic"),
+        "I'm {ainame}, an AI made by {aico}.",
+        "I'm {ainame}, an AI from {aico}.",
+    ),
+    S(
+        "What should I call you? | What can I call you? | What do I call you? | How should I "
+        "call you? | Can I call you something?",
+        "You can call me {ainame}.",
+        "Call me {ainame}!",
+        "You can call me {ainame}. I'm an AI.",
+        "My name is {ainame}, so you can call me that.",
+        L("You can call me {ainame}. What shall we talk about?", ask="topic"),
+    ),
+    S(
+        "Do you have a name? | Have you got a name? | Do you have a name I can use?",
+        "Yes! I'm {ainame}.",
+        "Yes, my name is {ainame}.",
+        "I do! I'm {ainame}, an AI.",
+        "Yes. You can call me {ainame}.",
+    ),
+)
+NAME_QUESTIONS = frozenset(u for step in NAME_STEPS for u in step.users)
+# Asked its name without a line, the AI has none to give: it says so, as in an identity chat.
+NO_NAME_STEPS = tuple(
+    Step(step.users, tuple(Line(r) for r in NO_NAME_REPLIES)) for step in NAME_STEPS
+)
+NAME_QUESTION_SHARE = 0.3  # about_ai topics that ask the name, in a chat with a line
+NO_NAME_QUESTION_SHARE = 0.05  # and in a chat without one
+FRESH_NAME_SHARE = 0.5  # chats in which the person's name and their pets' names are made fresh
+LINE_SHARE = 0.4  # chats that start with an identity line
+
 # --- praise and complaints, said on their own --------------------------------------------------
 
 PRAISE = (
@@ -4441,6 +4550,15 @@ class ChatRecord:
     # each question about what the person said earlier: its turn, and what was said (None: the
     # person had not said it)
     memory: list[tuple[int, str | None]] = field(default_factory=list)
+    # the AI's name and maker when the chat starts with an identity line (not in ``turns``)
+    identity: tuple[str, str | None] | None = None
+    slots: dict[str, str] = field(default_factory=dict)  # what the chat drew (pet, name of a pet)
+
+    def with_line(self) -> Turns:
+        """The turns, with the identity line first when the chat has one."""
+        if self.identity is None:
+            return self.turns
+        return [("sys", identity_line(*self.identity)), *self.turns]
 
 
 _POSITIVE = frozenset({"happy", "excited", "proud"})
@@ -4471,8 +4589,17 @@ class _Talk:
     """The state of one chat while it is written: its turns, its slots, the name the person
     gave, and what the AI's last line was (``said``) and carried (``data``)."""
 
-    def __init__(self, kb: KB, rng: np.random.Generator, n_exchanges: int) -> None:
+    def __init__(
+        self,
+        kb: KB,
+        rng: np.random.Generator,
+        n_exchanges: int,
+        identity: tuple[str, str | None] | None = None,
+    ) -> None:
         self.kb, self.rng = kb, rng
+        self.ai_name, self.ai_company = identity or (None, None)
+        # half of the chats: the person's name and their pets' names are made fresh
+        self.fresh_names = float(rng.random()) < FRESH_NAME_SHARE
         self.n = n_exchanges
         self.left = n_exchanges
         self.turns: Turns = []
@@ -4526,9 +4653,18 @@ class _Talk:
                     raise KeyError("name")
                 self.name_uses += 1
                 values[f] = self.name
+            elif base in ("ainame", "aico"):
+                value = self.ai_name if base == "ainame" else self.ai_company
+                if value is None:
+                    raise KeyError(base)
+                values[f] = value
             else:
                 if base not in self.slots:
-                    option = self.pick(SLOTS[_FIELD_GROUP[base]])
+                    group = _FIELD_GROUP[base]
+                    if group in ("uname", "pname") and self.fresh_names:
+                        option = self.fresh()
+                    else:
+                        option = self.pick(SLOTS[group])
                     if isinstance(option, dict):
                         self.slots.update(option)
                     else:
@@ -4537,8 +4673,22 @@ class _Talk:
                 values[f] = _cap(value) if f[0].isupper() else value
         return text.format(**values)
 
+    def fresh(self) -> str:
+        """A name made fresh for the person or a pet: not the AI's name, and not the name of the
+        person or of the pet if that is already drawn."""
+        taken = {
+            n.lower() for n in (self.ai_name, self.slots.get("uname"), self.slots.get("pname")) if n
+        }
+        while True:
+            name = fresh_name(self.rng)
+            if name.lower() not in taken:
+                return name
+
     def usable(self, line: Line) -> bool:
-        if "name" in _fields(line.text) and self.name is None:
+        fields = _fields(line.text)
+        if "name" in fields and self.name is None:
+            return False
+        if "aico" in fields and self.ai_company is None:
             return False
         return line.text not in self.used or line.text.startswith("@")
 
@@ -4591,7 +4741,7 @@ class _Talk:
             if pending and (self.said.ask in _FORCED_ASKS or self.r() < ANSWER_SHARE):
                 self.answer()
             elif first and self.r() < (OPENER_SHARE if self.n > 1 else SINGLE_OPENER_SHARE):
-                self.step("opener", OPENERS[self.weighted(_OPENER_WEIGHTS)])
+                self.step("opener", self.opener())
             elif (first and self.n == 1 and self.r() < 0.02) or (
                 last and not first and not pending and self.r() < CLOSER_SHARE
             ):
@@ -4600,6 +4750,23 @@ class _Talk:
                 self.steps("reaction", self.reaction_steps())
             else:
                 self.topic()
+
+    def opener(self) -> Step:
+        """A greeting; in a chat with an identity line, 30% of the greetings that can be answered
+        with the AI's name are."""
+        place = self.weighted(_OPENER_WEIGHTS)
+        opener = OPENERS[place]
+        if self.ai_name and place in NAMED_OPENERS and self.r() < NAMED_GREETING_SHARE:
+            return Step(opener.users, NAMED_OPENERS[place])
+        return opener
+
+    def about_ai(self) -> None:
+        """A question about the AI; the AI is asked its name now and then (and says it has none
+        when its chat has no identity line)."""
+        if self.r() < (NAME_QUESTION_SHARE if self.ai_name else NO_NAME_QUESTION_SHARE):
+            self.steps("about_ai", NAME_STEPS if self.ai_name else NO_NAME_STEPS)
+        else:
+            self.steps("about_ai", ABOUT_AI)
 
     def answer(self) -> None:
         """The person answers what the AI just asked."""
@@ -4643,7 +4810,7 @@ class _Talk:
         elif kind == "request":
             self.request()
         elif kind == "about_ai":
-            self.steps("about_ai", ABOUT_AI)
+            self.about_ai()
         elif kind == "cannot_know":
             self.cannot()
         else:
@@ -4653,7 +4820,7 @@ class _Talk:
         """A question after "Ask away": about the AI, about what it cannot know, or a fact."""
         x = self.r()
         if x < 0.35:
-            self.steps("about_ai", ABOUT_AI)
+            self.about_ai()
         elif x < 0.55:
             self.cannot()
         else:
@@ -5064,16 +5231,26 @@ class _Talk:
         return True
 
     def record(self) -> ChatRecord:
+        identity = (self.ai_name, self.ai_company) if self.ai_name else None
         return ChatRecord(
-            self.turns, self.kinds, self.name, self.name_turn, self.facts, self.memory
+            self.turns,
+            self.kinds,
+            self.name,
+            self.name_turn,
+            self.facts,
+            self.memory,
+            identity,
+            dict(self.slots),
         )
 
 
 def _chat(kb: KB, rng: np.random.Generator) -> ChatRecord:
     """One chat with its record; a draft that breaks a rule is written again."""
     n = 1 + int(rng.choice(len(EXCHANGE_SHARES), p=EXCHANGE_SHARES))
+    # the line is drawn once, so a draft that is written again keeps the same AI
+    identity = random_identity(rng) if rng.random() < LINE_SHARE else None
     for _ in range(_TRIES):
-        talk = _Talk(kb, rng, n)
+        talk = _Talk(kb, rng, n, identity)
         talk.run()
         if talk.clean():
             return talk.record()
@@ -5081,8 +5258,9 @@ def _chat(kb: KB, rng: np.random.Generator) -> ChatRecord:
 
 
 def assistant_chat(kb: KB, rng: np.random.Generator) -> Turns:
-    """One short chat between a person and a small, friendly AI."""
-    return _chat(kb, rng).turns
+    """One short chat between a person and a small, friendly AI; in two in five of them the first
+    turn is the AI's identity line, ``("sys", "You are Zula, an AI made by Pengu.")``."""
+    return _chat(kb, rng).with_line()
 
 
 def assistant_chat_docs(kb: KB, rng: np.random.Generator, n: int) -> list[TextDoc]:

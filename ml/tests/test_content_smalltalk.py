@@ -183,8 +183,10 @@ _IDENTITY = re.compile(
 )
 
 
-def test_the_ai_never_gives_a_name_or_a_maker_of_its_own(records):
+def test_the_ai_never_gives_a_name_or_a_maker_of_its_own_in_a_chat_without_a_line(records):
     for r in records:
+        if r.identity is not None:
+            continue
         for role, text in r.turns:
             if role == "ai":
                 assert not _IDENTITY.search(text), text
@@ -204,6 +206,8 @@ def test_the_only_capitalised_words_inside_a_sentence_are_allowed_ones(records):
     kb_words = _kb_words()
     for r in records:
         said: set[str] = {"I", "AI"} | kb_words
+        if r.identity is not None:  # the line names the AI and its maker
+            said |= set(re.findall(r"[A-Za-z]+", " ".join(x for x in r.identity if x)))
         for role, text in r.turns:
             if role == "user":
                 said |= set(re.findall(r"[A-Za-z]+", text))
@@ -299,7 +303,93 @@ def test_variety_of_one_hundred_thousand_chats(many):
     total = sum(ai.values())
     top, count = ai.most_common(1)[0]
     assert count / total <= 0.02, (top, count / total)
-    first_ai = Counter(t[1][1] for t in many)
+    first = [next(text for role, text in t if role == "ai") for t in many]
+    first_ai = Counter(first)
     top, count = first_ai.most_common(1)[0]
     assert count / len(many) <= 0.05, (top, count / len(many))
-    assert len({t[0][1] for t in many}) >= 400
+    assert len({next(text for role, text in t if role == "user") for t in many}) >= 400
+
+
+# --- an AI that knows its name, and names that are copied ---------------------------------------
+
+_I_AM_NAMED = re.compile(r"\b(?:my name is|I'm|I am|call me) [A-Z]")
+
+
+def test_two_in_five_chats_start_with_one_identity_line():
+    rng = np.random.default_rng(31)
+    chats = [smalltalk.assistant_chat(KB, rng) for _ in range(20_000)]
+    with_line = sum(c[0][0] == "sys" for c in chats)
+    assert 0.37 <= with_line / len(chats) <= 0.43, with_line
+    for c in chats:
+        rest = c[1:] if c[0][0] == "sys" else c
+        assert [role for role, _ in rest] == ["user", "ai"] * (len(rest) // 2)
+        if c[0][0] == "sys":
+            assert re.fullmatch(r"You are .+, an AI(?: made by .+)?\.", c[0][1]), c[0]
+
+
+def test_the_ai_says_its_name_only_when_greeted_or_asked_for_it(records):
+    greeted = asked = said_company = 0
+    for r in records:
+        if r.identity is None:
+            continue
+        name, company = r.identity
+        for i, (role, text) in enumerate(r.turns):
+            if role != "ai":
+                continue
+            if name not in text:
+                assert not (company and company in text), (text, r.turns)
+                continue
+            user = r.turns[i - 1][1]
+            if user in smalltalk.NAME_QUESTIONS:
+                asked += 1
+                said_company += bool(company and company in text)
+            else:
+                assert r.kinds[i // 2] == "opener", (user, text, r.turns)
+                greeted += 1
+    assert greeted >= 150 and asked >= 150 and said_company >= 20, (greeted, asked, said_company)
+
+
+def test_a_chat_without_a_line_never_says_a_name_and_says_it_has_none_when_asked(records):
+    from airace_content.chats import NO_NAME_REPLIES
+
+    none_said = 0
+    for r in records:
+        if r.identity is not None:
+            continue
+        for i, (role, text) in enumerate(r.turns):
+            if role != "ai":
+                continue
+            assert not _I_AM_NAMED.search(text), (text, r.turns)
+            if r.turns[i - 1][1] in smalltalk.NAME_QUESTIONS:
+                assert text in NO_NAME_REPLIES, text
+                none_said += 1
+    assert none_said >= 20, none_said
+
+
+def _passes_the_name_checks(name: str) -> bool:
+    """Not rude, not the identity probe's, not a product, not a word of the knowledge base or of
+    English, not a held subject: the checks the AI's names pass."""
+    from airace_content import chats
+
+    _, kb_words, _, _, _ = chats._fresh_vocab()
+    common = name in chats.COMMON_NAMES
+    return chats._allowed(name, kb_words, real_name=common) and not chats._says_held(KB, name)
+
+
+def test_half_the_chats_give_fresh_names_to_the_person_and_their_pets(records):
+    listed_people, listed_pets = set(smalltalk._user_names()), set(smalltalk.SLOTS["pname"])
+    people = fresh_people = pets = fresh_pets = 0
+    for r in records:
+        if r.name:
+            people += 1
+            if r.name not in listed_people:
+                fresh_people += 1
+                assert _passes_the_name_checks(r.name), r.name
+        pet = r.slots.get("pname")
+        if pet and any(pet in t for role, t in r.turns if role == "user"):
+            pets += 1
+            if pet not in listed_pets:
+                fresh_pets += 1
+                assert _passes_the_name_checks(pet), pet
+    assert people >= 500 and fresh_people / people >= 0.3, (people, fresh_people)
+    assert pets >= 80 and fresh_pets / pets >= 0.3, (pets, fresh_pets)

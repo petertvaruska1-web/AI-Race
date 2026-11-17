@@ -864,6 +864,15 @@ def _fresh_name(rng: np.random.Generator) -> str:
     raise ValueError(f"no identity name passed the checks in {_IDENTITY_TRIES} tries")
 
 
+def fresh_name(rng: np.random.Generator) -> str:
+    """A name made fresh, for an AI or for a person or a pet in a practice chat: 70% a made-up
+    name, 15% one with a number, 15% a common first name. It passes the checks every name does
+    (not rude, not the identity probe's names or company, not a product, not a word of the
+    knowledge base or English, not a held subject), so the only way to say it right is to copy it
+    from what was just read."""
+    return _fresh_name(rng)
+
+
 def _fresh_company(rng: np.random.Generator) -> str:
     kb, kb_words, kb_each, _, firsts = _fresh_vocab()
     for _ in range(_IDENTITY_TRIES):

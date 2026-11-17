@@ -157,11 +157,13 @@ RECIPES_V2: dict[str, Recipe] = {
         [
             # an identity line in front of a chat that never mentions the name teaches that the
             # line does not have to be talked about
-            _generator("assistant_chat", 0.34, 0.4),
-            _generator("fact_chat", 0.20, 0.4),
-            _generator("instructions", 0.18, 0.4),
+            # (assistant_chat draws its own lines: in 40% of its chats the AI knows its name and
+            # says it where it fits)
+            _generator("assistant_chat", 0.34, 0.0),
+            _generator("fact_chat", 0.17, 0.4),
+            _generator("instructions", 0.16, 0.4),
             _generator("followup_chat", 0.15, 0.4),
-            _generator("identity_chat", 0.11, 0.0),  # it writes its own identity lines
+            _generator("identity_chat", 0.16, 0.0),  # it writes its own identity lines
             _source("everyday_conv", 0.02, None, 0.4),
         ],
         NoiseRates(typo=0.03),

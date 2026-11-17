@@ -83,11 +83,11 @@ def test_text_2_targets_and_conversations_recipe():
     assert [
         (c.kind, c.name, c.share, c.simplicity_min, c.system_share) for c in conv.components
     ] == [
-        ("generator", "assistant_chat", 0.34, None, 0.4),
-        ("generator", "fact_chat", 0.20, None, 0.4),
-        ("generator", "instructions", 0.18, None, 0.4),
+        ("generator", "assistant_chat", 0.34, None, 0.0),  # it writes its own lines
+        ("generator", "fact_chat", 0.17, None, 0.4),
+        ("generator", "instructions", 0.16, None, 0.4),
         ("generator", "followup_chat", 0.15, None, 0.4),
-        ("generator", "identity_chat", 0.11, None, 0.0),
+        ("generator", "identity_chat", 0.16, None, 0.0),
         ("source", "everyday_conv", 0.02, None, 0.4),
     ]
     assert conv.noise == RECIPES_V1["conversations"].noise
