@@ -1,0 +1,64 @@
+{
+ "labels": {
+  "A": {
+   "replies": 100,
+   "sensible": 0.29,
+   "nonsense": 0.36,
+   "mean_score": 0.93,
+   "person": 0.08
+  },
+  "C": {
+   "replies": 100,
+   "sensible": 0.56,
+   "nonsense": 0.12,
+   "mean_score": 1.44,
+   "person": 0.01
+  },
+  "D": {
+   "replies": 100,
+   "sensible": 0.48,
+   "nonsense": 0.13,
+   "mean_score": 1.35,
+   "person": 0.01
+  },
+  "B": {
+   "replies": 100,
+   "sensible": 0.18,
+   "nonsense": 0.51,
+   "mean_score": 0.67,
+   "person": 0.15
+  }
+ },
+ "pairs": {
+  "C-A": {
+   "difference": 0.2700000000000001,
+   "low": 0.13999999999999996,
+   "high": 0.41000000000000003
+  },
+  "D-A": {
+   "difference": 0.19,
+   "low": 0.0,
+   "high": 0.37
+  },
+  "B-A": {
+   "difference": -0.10999999999999999,
+   "low": -0.24,
+   "high": 0.010000000000000009
+  },
+  "D-C": {
+   "difference": -0.08000000000000007,
+   "low": -0.18000000000000005,
+   "high": 0.020000000000000018
+  },
+  "B-C": {
+   "difference": -0.38000000000000006,
+   "low": -0.51,
+   "high": -0.24
+  },
+  "B-D": {
+   "difference": -0.3,
+   "low": -0.45000000000000007,
+   "high": -0.15000000000000002
+  }
+ }
+}

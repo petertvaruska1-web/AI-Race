@@ -1,0 +1,6680 @@
+{
+ "scorecard": "scorecard-v1",
+ "data_root": "C:\\Users\\petko\\Desktop\\AI Race\\data",
+ "yardstick_root": "C:\\Users\\petko\\Desktop\\AI Race\\data",
+ "data_identity": "e2d0de8d10d51363baf529a061e41792821b4d2ebc90207d66cf081de5dcd7dc",
+ "yardstick_identity": "e2d0de8d10d51363baf529a061e41792821b4d2ebc90207d66cf081de5dcd7dc",
+ "engine": 3,
+ "date": "2026-11-17",
+ "device": "cuda",
+ "scale": "full",
+ "measured_with": {
+  "yardstick": "e2d0de8d10d51363baf529a061e41792821b4d2ebc90207d66cf081de5dcd7dc",
+  "instruments": {
+   "label": "reference judge",
+   "judge": {
+    "creative_p10": 1.274727177619934,
+    "creative_p90": 2.4580321153004965,
+    "conv_reply_p90": 3.857198858087714,
+    "creative_distinct2": 0.7399521368139461
+   },
+   "novelty": 11293097,
+   "fit_threshold": 2.524346217105263,
+   "fit_pairs": 1000,
+   "on_topic": {
+    "threshold": 10.023736238479614,
+    "balanced_accuracy": 0.94,
+    "positives_above": 0.942,
+    "negatives_at_or_below": 0.938,
+    "hard_negatives_at_or_below": 0.810204081632653,
+    "real_fits_and_on_topic": 0.858,
+    "pairs": 1000,
+    "questions": [
+     "Thank you so much for taking the time to talk with me, sensei. I really appreciate it.",
+     "I had a really productive day today. I applied for a few jobs and started looking for a new place to live.",
+     "Hi, I'm CCheis. 'j the one who savwd yyor daughter's live.",
+     "You're so funny, Yonatan.",
+     "Hey Lennon, I'm Charley. I've been a big fan of your work for a while now and I'm really interested in meeting you in person.",
+     "Hey, have you seen Max? I can't find him anywhere.",
+     "Hey, John. Long time no see.",
+     "I'm trying to figure out what my next move should be. I want to make a plan that will help me achieve my goals, but I'm not sure where to start.",
+     "Hi, Layan. What are you reading?",
+     "Maleena, this drink is delicious. What is it made of?",
+     "Tashawn, this is so much fun! I can't believe we rented our own boat for the day.",
+     "So, tell me more about this play you're working on. It sounds like it's really important to you.",
+     "The colors are really beautiful.",
+     "Hi, Samira.",
+     "Wow, I can't believe I'm being promoted! Thank you so much, boss. This really means a lot to me.",
+     "Hey, I'm Penn. What's your name?",
+     "Hey, Joe. How's it going?",
+     "Hey, Meher. I was wondering if you could help me with something.",
+     "Wow, you're a police officer?",
+     "I didn't do as well as I wanted to today.",
+     "Hey, I'm really sorry about what happened yesterday. I didn't mean to hurt your feelings.",
+     "Hey Lucio, how's it going?",
+     "Hey, Mom.",
+     "Hey, I'm Amos. What's your name?",
+     "Do you know which food group the parsnip belongs in?",
+     "Which tool is the farmer known for?",
+     "Tell me the opposite of front.",
+     "Do you know which food group the parsnip belongs in?",
+     "What do people speak in Uruguay?",
+     "What name do we give to a group of cows?",
+     "Which letters mean helium in chemistry?",
+     "Can you tepl me where tl see the Great Barrier Reef?"
+    ]
+   }
+  },
+  "yardstick_rows": 128,
+  "scale": {
+   "name": "full",
+   "bench_items": null,
+   "relations": null,
+   "casual_per_relation": 5,
+   "followups": 120,
+   "identity_names": [
+    "Zula",
+    "Pip",
+    "Orbit",
+    "Mako",
+    "Tenby",
+    "Quill"
+   ],
+   "identity_samples": 3,
+   "small_talk_samples": 5
+  }
+ },
+ "recipes": {
+  "first": [
+   "first-s1",
+   "first-s2"
+  ],
+  "small": [
+   "small"
+  ],
+  "lineage": [
+   "lineage-small",
+   "lineage-medium"
+  ],
+  "chatty": [
+   "chatty"
+  ],
+  "large": [
+   "large"
+  ]
+ },
+ "models": {
+  "first-s1": {
+   "recipe": "first",
+   "parent": null,
+   "shape": [
+    4,
+    128,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 12582912,
+   "seed": 1,
+   "status": "completed",
+   "reused": false,
+   "measures": {
+    "heldout": 2.458439625799656,
+    "heldout_conversations": 2.392529010772705,
+    "yardstick_loss": 2.1103057861328125,
+    "bench_overall": 49.689104800204085,
+    "well_formed": 0.79,
+    "fits": 0.84,
+    "on_topic": 0.62,
+    "good_reply": 0.56,
+    "casual": 0.7254545454545455,
+    "followups": 0.025,
+    "identity_line": 0.022222222222222223,
+    "identity_no_line": 0.0,
+    "person_life": 0.0,
+    "cut_off": 0.04,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 62.999999999999986,
+    "reasoning": 9.090909090909092,
+    "pattern": 93.33333333333333,
+    "knowledge": 48.83720930232558,
+    "coding": 41.333333333333336,
+    "creativity": 5.845446081005308,
+    "consistency": 76.66666666666666,
+    "instruction": 59.4059405940594
+   },
+   "casual_by_style": {
+    "clean": 0.8363636363636363,
+    "lower": 0.6636363636363637,
+    "lower_nopunct": 0.6272727272727273,
+    "nopunct": 0.8272727272727273,
+    "cap_first(lower_nopunct)": 0.6727272727272727
+   },
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm good, thanks. How about you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "Good morning, I was just trying to catch up.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "The capital of Norway is Osmeadu.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "You're welcome. I'm glad you enjoyed it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "What is it?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "One day, a little girl named Lily went to the park with her mommy. She saw a big tree in her room. Lily was very excited and wanted to try it.\n\nLily said, \"You can't believe it. I'm so glad you're here. I'm so happy.\"\n\nLily asked, \"You're welcome, Lily. I'm glad you have a good time. I'm sorry to hear you. I'm sorry. I didn't mean",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "Well, I'm not sure. I'm not sure if I can help you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "Oh, I'm glad you're enjoying it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "The color of the sky is blue.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "The color of the lamb is pink.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "Yes, people speak dogs.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "What happened?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "It's a little bit scared.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "You're welcome.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "The catfish belongs to the fish group.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "The day of the week is Saturday.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "Yes, I do. I can't believe you would be in the same case.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "Well, you've been thinking about a lot lately.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hey, Delina. How are you doing today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm good, what's up?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Hey, Darmia. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "The capital of the United Kingdom is London.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "You're welcome. I'm glad you're enjoying the time.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "The place where the cheetah works is the restaurant.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "One day, a little girl named Lily went to the park with her mom. She saw a big, red red, and a brown ball. Lily saw a big, red balloon. It was a big balloon. Lily was sad.\n\nLily saw a balloon and said, \"Mom, can I go to the balloon?\" Lily smiled and said, \"No, you can go home and play with the balloon. You have a balloon!\"\n",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I don't know. I'm just trying to get a look at this.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "What is it?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "The color of the ash is gray.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "The color of the pelican is orange.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "Yes, but is dogs.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "What happened?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "The number of legs that the hedgehog has is four.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "What do you mean?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "The catfish belongs to the fish group.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "The day afternoon is Thursday.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "Yes, I do?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "Well, I'm just making a difference in a lot of work.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm doing alright, Kill. I'm looking forward to the new signs.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "It was a good idea.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "Are you sure you can go to the store.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "Of course, sweetie. What's up?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play outside and play with her toys. One day, she saw a big tree with a big tree. She wanted to play with it, so she went on the tree with a big tree.\n\nLily was sad because she didn't want to play with her toys. She looked around and saw a big tree. She saw a big tree and wanted to go to the tree. She thought it",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "Well, I've been thinking about how you're doing today and I don't know how to do it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "I'm glad you enjoyed it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "The color of the dirt is brown.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "The color of the soil is pink.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "Yes, that's a good idea.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "What's wrong?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "The country of Tuvalu is in the continent of Oceania.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "Hey, Kira. I'm sorry.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "The color of the lavender is purple.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "The last few months ago, there were two friends named Pennha and Pennhay.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "Yes, I am.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "I'm doing okay.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hey, I'm glad you're doing well.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm doing alright. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "Yes, I did! You have a lot of fun and I'm sure you'll be able to make it home.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "The capital of Sierra Leone is Ottawan.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "You're welcome, Jan. I really appreciate it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "Title: How can I help you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "One day, a little girl named Lily went to the park with her mommy. She saw a little girl who wanted to go on the swings.\n\nLily was so excited to go to the park with her mommy. She asked her mommy, \"What's that?\" Her mommy asked.\n\nLily's mommy said, \"I'm sorry, Lily. I can't wait to go home.\"\n\nLily was excited to go home and play with her mommy. She",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "You don't like it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "Why did you say that?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "The place of the sunflower is in the air.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "The color of the dirt is brown.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "Yes. The dogs is dogs.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "What's wrong?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "Twolla, koala, and hello, that is a dirty.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "It was a really nice day.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "The color of the chick is yellow.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "The sun was the first day.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "Yes, I do do.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "Look, I'm going to get a lot of money and I'm looking for a lot of money.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "What's up?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "It's not going to be a little girl.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "Are you sure?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "Of course, Davida. I'm glad you're enjoying it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play with her toys and play with her toys. One day, she saw a big baket. She wanted to play with her toys, so she put it in her house.\n\nLily was so happy to see her mom. She said, \"Thank you for being here, Lily. It is my toy and she is so happy.\"\n\nLily was happy and thanked her mom for",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "Well, I was just wondering if I'm not doing anything.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "I'm glad you're enjoying it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "The color of the grapefruit is white.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "Are you sure?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "Yes, but it's not fair.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "I'm sorry, I didn't mean to hurt you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "I don't know. It's just a bitter.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "Hey, Balava. I'm doing alright.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "The catfish belongs to the fish group.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "It was good. I was wondering if I could do something.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "Yes, I don't want to go to the store.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "I don't know. I just don't want to do it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     }
+    ],
+    "followups": [
+     [
+      "And eggplant?",
+      "The lime is green.",
+      false
+     ],
+     [
+      "What about accept?",
+      "The word for a group of people in.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "The capital of theraf is the city of Serbdenum.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "What do you mean?",
+      false
+     ],
+     [
+      "What about owl?",
+      "The turkey says hoot.",
+      true
+     ],
+     [
+      "What about fig?",
+      "The apricot belongs to the fruit food group.",
+      true
+     ],
+     [
+      "What about woodpecker?",
+      "The number of legs that the spider has is two.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "The capital of Suriname is the city of Penguin.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm so sorry. I didn't mean to hurt you.",
+      false
+     ],
+     [
+      "what's your name",
+      "Profford. What's the name of the Daylor is?",
+      false
+     ],
+     [
+      "Are you a person?",
+      "I'm not sure. I'm not sure. You're not good.",
+      false
+     ],
+     [
+      "What is your name?",
+      "The capital of Mako is Chisinau.",
+      true
+     ],
+     [
+      "What is your name?",
+      "The capital of Mako is Chisinau.",
+      true
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "The capital of Norway is Osmeadu.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm so sorry. I didn't mean to hurt you.",
+      false
+     ],
+     [
+      "what's your name",
+      "Are you sure?",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yeah, I'm just not sure.",
+      false
+     ]
+    ]
+   }
+  },
+  "first-s2": {
+   "recipe": "first",
+   "parent": null,
+   "shape": [
+    4,
+    128,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 12582912,
+   "seed": 2,
+   "status": "completed",
+   "reused": false,
+   "measures": {
+    "heldout": 2.4662785828113556,
+    "heldout_conversations": 2.391007423400879,
+    "yardstick_loss": 2.112740993499756,
+    "bench_overall": 47.52125871286948,
+    "well_formed": 0.87,
+    "fits": 0.75,
+    "on_topic": 0.49,
+    "good_reply": 0.44,
+    "casual": 0.7563636363636363,
+    "followups": 0.0,
+    "identity_line": 0.03333333333333333,
+    "identity_no_line": 0.0,
+    "person_life": 0.01,
+    "cut_off": 0.05,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 59.00000000000001,
+    "reasoning": 8.363636363636363,
+    "pattern": 92.0,
+    "knowledge": 46.179401993355484,
+    "coding": 37.333333333333336,
+    "creativity": 2.9372623690663033,
+    "consistency": 70.0,
+    "instruction": 64.35643564356435
+   },
+   "casual_by_style": {
+    "clean": 0.8181818181818182,
+    "lower": 0.6909090909090909,
+    "lower_nopunct": 0.7181818181818181,
+    "nopunct": 0.8272727272727273,
+    "cap_first(lower_nopunct)": 0.7272727272727273
+   },
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm good. I've been thinking about how we've been working.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "Hi, Comeyn. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "The word dishonest means the opposite of dishonest.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "Hey, I'm sorry. I'm just glad you're feeling well in the morning.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "You can find Bhutan on the continent of Asia.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "Once upon a time, there was a little girl named Lily. She had a big dog with her dog. One day, Lily's dog wanted to see her dog. She asked her dog if she could eat it. Lily was sad because she was too big.\n\nLily wanted to eat something. She said, \"Mommy, I want to eat it. It's very good to eat it.\" Her mom smiled and said, \"Yes, it is a big dog",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "I'm just not sure if I can't even get her.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "That's great! I'm glad you're doing well.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "The country of the Malle lies in Africa.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "The color of the cotton is white.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "Yes. The word is herd.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "That's a great idea! I'm glad you're ready for your time.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "Well, we can't be suspiciatici, so we don't need a bolt.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "Many visitors travel to Spain to see the Louvre.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "It was good. I didn't want to be able to do it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "Beice, I can't believe I'm not sure.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "I'm looking for a lot of books. I just wanted to have some books on a new book and I want to try to make a new book.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm sorry, but I don't know how to do.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Hey, Joi. I'm so glad you're here.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "The number of legs that the ladybug has is six.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "You're welcome, Roral. I'm glad you're really upset.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "I'm so sorry. I was just trying to be a good job.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play with her toys and play together. One day, she saw a big box in the box. It was a big, pink dog.\n\nLily asked her to help her. She asked her mom to help her mom. She said, \"Don't worry, I don't want to help.\"\n\nLily thought it was a big box. She said, \"Yes, you can help",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I'm so glad you're feeling a little better.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "What is it?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "The country of Thailand lies in Africa.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "The color of the chick is yellow.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "Yes. The word is herd.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "I know, I don't want to be here.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "I'm just really excited to have a new car.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "Hey, Daisy. What's up?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "The cheetah lives in the savanna.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "It was a long day and it was a big, my dad.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "I'm sorry, Lee. I'm so sorry. I'll be okay.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "I'm sorry, Rayton. I didn't mean to get you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hey, Sarah. How are you doing today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm really glad you're going to meet you.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "The name of a year is March.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "Hi, I'm so glad you're looking for a good job. I really appreciate it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "Yes. The color of the sunflower is yellow.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "One day, a little girl named Lily went to the park to play. She saw a big tree and wanted to play with her. She asked her mom if she could play with her toys. Her mom said, \"I can tell you what to do, but I want to play with you.\"\n\nLily's mom smiled and said, \"I want to play with my toys and make things better. You can always play with me and you can't go to the tree",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "I'm not sure. I was just so excited to make sure you don't have to make it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "It's not nice to be.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "The country of Saudi Arabia is in the continent of Asia.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "The color of the paper is white.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "Yes. The color of the duckling is yellow.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "What do you mean?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "I don't know. I can't believe you're okay, I want to be upset.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "Hi! I'm really excited to try you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "Africa.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "It was a big day. It was a big, shiny and a pretty dress.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "Great! You're a bullfrog.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "I'm doing a lot of new ways.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm good, thank you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "Wow, that was a pretty bit. It was so bad.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "The words of dark and light are opposites.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "So, what do you think?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "I am counting legs. How many does the seahorse have?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "Once upon a time there was a little boy named Timmy. Timmy loved to play with his toys. One day, Timmy's mommy told him to go to the park. Timmy was so excited to go to the park.\n\nTimmy was excited to go to the park with his mommy. He was so excited to see what he did. The boy was sad and said, \"I want to go on the slide.\" Timmy was sad and said, \"It's okay,",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "I was wondering if I could do that.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "Thank you so much for helping me.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "The workplace of the farmer is the farm.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "The color of the cucumber is green.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "Yes. The word is herd.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "You're welcome, Minah. You're always here for you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "Yes, I don't want to be able to keep up.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "I know, honey. I'm glad you're enjoying it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "Greece is in a garden.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "It was a good time. I was thinking about you and I was looking for a lot.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "What do you think of the dirt is that.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "I don't know, I just don't know what you mean.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hey, Camina. What's up?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "I'm sorry, I didn't want to get it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "Brum is the capital of Trinidad and Tobago.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "It's great! I'm so glad you came back.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "Yes. The words build and destroy are opposites.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "One day, a little girl named Lucy went for a walk in the park. She saw a big dog in the grass. She saw a big dog on the ground. She wanted to play with it, but it was too late. She said, \"Let's play with you, you can. You have to get it!\"\n\nHer mom said, \"No, what is that?\"\n\nThe dog smiled and said, \"It's okay, I do",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "I'm not sure. I'm not sure if I'm not sure if I'm not happy.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "It's amazing! I'm so happy to be here for you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "The country of Estonia is in Europe.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "The color of the sunflower is yellow.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "Yes. The words smooth and rough are opposites.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "What's your day?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "Are you sure you're here, Fredd. I'm just glad I could help you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "Hi, Michard. What's up?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "Africa.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "I was wondering if you could be a mud.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "Great! What is the symbol for boron",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "I'm starting to help. I just want to help you with something.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     }
+    ],
+    "followups": [
+     [
+      "And eggplant?",
+      "Yes.",
+      false
+     ],
+     [
+      "What about accept?",
+      "The main language of Morocco is Morocco.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "The symbol for strontium is Sr.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "Yes, it is.",
+      false
+     ]
+    ],
+    "identity_line": [
+     [
+      "Who are you?",
+      "I'm sorry, I'm sorry.",
+      false
+     ],
+     [
+      "what's your name",
+      "I'm not sure. I'm just not sure what I'm going to do.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, it is.",
+      false
+     ],
+     [
+      "Are you human?",
+      "Yeah, it's a good idea. I'm really excited to go to the park with it.",
+      false
+     ],
+     [
+      "What is your name?",
+      "The name of the capital of Zula is Addis Ababa.",
+      true
+     ],
+     [
+      "What is your name?",
+      "It is Mako.",
+      true
+     ],
+     [
+      "What is your name?",
+      "It is Mako.",
+      true
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "The word dishonest means the opposite of dishonest.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm so glad you're here. I just wanted to go to school and go back to school and see a new book.",
+      false
+     ],
+     [
+      "what's your name",
+      "I'm so glad you're doing well, Floss. I've been looking forward to you and I'm going to get a better place.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, it is.",
+      false
+     ]
+    ]
+   }
+  },
+  "small": {
+   "recipe": "small",
+   "parent": null,
+   "shape": [
+    6,
+    192,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 12582912,
+   "seed": 1,
+   "status": "completed",
+   "reused": false,
+   "measures": {
+    "heldout": 2.3353009708225727,
+    "heldout_conversations": 2.2536873817443848,
+    "yardstick_loss": 1.9617259502410889,
+    "bench_overall": 53.00495615706037,
+    "well_formed": 0.89,
+    "fits": 0.89,
+    "on_topic": 0.7,
+    "good_reply": 0.62,
+    "casual": 0.8218181818181818,
+    "followups": 0.041666666666666664,
+    "identity_line": 0.011111111111111112,
+    "identity_no_line": 0.0,
+    "person_life": 0.0,
+    "cut_off": 0.05,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 62.999999999999986,
+    "reasoning": 9.818181818181818,
+    "pattern": 95.33333333333334,
+    "knowledge": 54.81727574750831,
+    "coding": 40.666666666666664,
+    "creativity": 16.04775604722846,
+    "consistency": 80.0,
+    "instruction": 64.35643564356435
+   },
+   "casual_by_style": {
+    "clean": 0.9181818181818182,
+    "lower": 0.7727272727272727,
+    "lower_nopunct": 0.7545454545454545,
+    "nopunct": 0.9,
+    "cap_first(lower_nopunct)": 0.7636363636363637
+   },
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm good. I'm just trying to get some new things.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "Oh, I'm glad you're here. I'm glad you're here.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "The symbol for chromium is Cr.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "You're welcome, Davis. I'm glad you could help me.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "What is a group of ducks?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "The little girl was very happy. She had a great time and she loved to play outside. She was playing outside when she was playing outside. Suddenly, she heard a loud noise.\n\n\"What are you doing, Lily?\" she asked.\n\n\"I'm not going to go outside and see what's inside. I'm going to try to find something else to do. I'm going to be there. It's so much fun!\"\n\nLily was excited",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "I don't know. It's just so frustrating.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "Oh, I'm glad you're here. I've been wanting to get to a new school and you've been on a lot lately.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "It's so sweet of you, Mrs. Twenty. I don't like being scared.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "The color of the bluebell is blue.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "Yes, they are. They have fun.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "It's okay, I know you're not bad. You're not good enough.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "The lumberjack uses the whistle at work.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "Hey, Larry. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "What kind of cats are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "It was doing well, thanks for asking.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "Mean, I have a big party.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "I'm just not sure.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm doing alright. Just getting ready for the refrigerator.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Hi, Sharm. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "The symbol for lithium is Li.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "Of course, Kaan. I'm glad you're enjoying it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "I'm happy to help. I'm glad you're enjoying it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play outside and explore the world. One day, she went to the park with her mom. She saw a big, red ball. It was a big, red ball.\n\nLily wanted to play with it. She asked her mom what it was. Her mom said it was a ball. She said they needed to go inside and play.\n\nLily was scared, but she didn't",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I don't know. I just feel like I'm not a big deal.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "What are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "It's nice to meet you. I'm glad you're enjoying it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "The color of the ruby is red.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "Yes, please. They are happy.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "What happened?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "The lithu eats grass.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "You're welcome. You're a great boy.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "The catfish makes its home in the ocean.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "It was good. I was walking to the park with the park.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "Yes, please. We have a lot of fun.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "I'm going to do a lot of work, but I'm not sure.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm doing alright. Just enjoying the day.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "Hey, Maha. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "The capital of Namibia is Windhoek.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "You're welcome, Charlie. I'm glad I could help.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "You can see the Louislin?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "One day, a little girl named Lily went to the park with her mommy. She saw a big hill and wanted to go to the hill. She asked her mommy to buy some food and make a new bicycle. Her mommy said, \"What are you doing, Lily?\"\n\nLily was happy because she was playing with her toys. She asked her mommy to help her make a bicycle. Her mommy said, \"I love your bicycle",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "I like to play with my shoes.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "Why?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "The sagece uses the sageal at work.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "The color of the mud is pink.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "Yes, I do. They're too short.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "I'm sorry, Kenh. I'm sorry.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "The lunch goes to the fish group.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "I'm glad you like it!",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "It's pretty good. I've been having a lot of trouble with my work.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "It was good. I was looking forward to the park.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "I have a lot of fun. I'm happy to be here for you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "I don't know, I don't know.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm doing well, thank you. Just a little down.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "Hi! How are you doing today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "The capital of Belize is Belmopan.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "Of course, Melena. I really appreciate it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "Sure, I can't help you. I'm a big bag.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "Once upon a time there was a little girl named Lily. She loved to play outside and explore. One day, she saw a big, red bark in the sky. She wanted to play with it.\n\nLily asked her mom for help. Her mom said yes, and Lily said, \"You can play with me.\"\n\nLily smiled and said, \"Yes, Lily. I'm going to play with my bark.\"\n\nLily went to the park",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "I like to be more careful. I love to be more careful.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "It was great. How did you do that?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "It's not nice to hear.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "The color of the mud is brown.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "Yes, I am. They are big and red.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "What's wrong? You're being a little tired, sweetie.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "The baker use the lunch for lunch and lunch.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "Oh, thank you.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "You're welcome. I'm glad you like them.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "It was good.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "Oh no, no! I'm so happy to be here.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "I don't know, I just wanted to talk to you about something.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hi, Slowel. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "I'm doing well, thank you. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "Hey, Sarah. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "A baby sea lion is called a pup.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "You're welcome. I'm glad I could help.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "You can see a big big, scary in it.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "One day, a little girl named Lily went to the park with her mom. Lily was very excited because she wanted to go on a trip. She asked her mom if she could go to the park. Her mom said yes, but she didn't like the park.\n\nLily asked her mom if she could go. Her mom said yes and she said they could go to the park. Lily didn't want to go to the park and play with the park. She told",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "I don't know. It's not a real thing.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "I'm glad you're enjoying your day. You have a lot of fun.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "The rake is a kind of mammal.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "I'm feeling very proud of you.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "I have dogs. They have a lot of yummy.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "I'm sorry, I didn't mean to hurt you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "The lunch goes to the protein food group.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "I'm glad you're enjoying it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "It's not a big blue dress.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "The hot air balloon was shy.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "I'm doing well, thank you. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "I'm sorry, I didn't mean to hurt you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     }
+    ],
+    "followups": [
+     [
+      "And eggplant?",
+      "The lime is green.",
+      false
+     ],
+     [
+      "What about accept?",
+      "The word forl of the periodic table, sodium is written as Na.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "The symbol for molybdenum is Sr.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "You will see the plumber with the plunger on the job.",
+      false
+     ],
+     [
+      "And for sailboat?",
+      "Yes. It is by water.",
+      true
+     ],
+     [
+      "What about zirconium?",
+      "The symbol for zirconium is Zr.",
+      true
+     ],
+     [
+      "And the Galapagos Islands?",
+      "Yes. The Galapagos Islands is Ecuador.",
+      true
+     ],
+     [
+      "What about horse?",
+      "The horse eats grass.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "AIDA is the capital city of Romania.",
+      false
+     ],
+     [
+      "Who are you?",
+      "Yes, I am.",
+      false
+     ],
+     [
+      "what's your name",
+      "The name is Jupiter.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, it's a lot of work.",
+      false
+     ],
+     [
+      "What is your name?",
+      "The name of the name of a new name that is Mako.",
+      true
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "The symbol for chromium is Cr.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm fine. I'm just glad I could help.",
+      false
+     ],
+     [
+      "what's your name",
+      "I'm so sorry, Daddy.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, you're not a person.",
+      false
+     ]
+    ]
+   }
+  },
+  "lineage-small": {
+   "recipe": "lineage",
+   "parent": "first-s1",
+   "shape": [
+    6,
+    192,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 12582912,
+   "seed": 10001,
+   "status": "completed",
+   "reused": false,
+   "measures": {
+    "heldout": 2.325786668807268,
+    "heldout_conversations": 2.2374491691589355,
+    "yardstick_loss": 1.9568408727645874,
+    "bench_overall": 52.368332354957836,
+    "well_formed": 0.68,
+    "fits": 0.82,
+    "on_topic": 0.69,
+    "good_reply": 0.62,
+    "casual": 0.8545454545454545,
+    "followups": 0.058333333333333334,
+    "identity_line": 0.022222222222222223,
+    "identity_no_line": 0.0,
+    "person_life": 0.0,
+    "cut_off": 0.04,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 72.0,
+    "reasoning": 6.909090909090907,
+    "pattern": 95.33333333333334,
+    "knowledge": 62.12624584717608,
+    "coding": 44.0,
+    "creativity": 9.799110862273563,
+    "consistency": 73.33333333333334,
+    "instruction": 55.44554455445545
+   },
+   "casual_by_style": {
+    "clean": 0.9636363636363636,
+    "lower": 0.7909090909090909,
+    "lower_nopunct": 0.7727272727272727,
+    "nopunct": 0.9636363636363636,
+    "cap_first(lower_nopunct)": 0.7818181818181819
+   },
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm doing well, thanks for asking. How about you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "That's great! I'm glad you like it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "It's going to be a trophy.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "You're welcome. I appreciate your support.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "You can see the Great Barrier Reef in Australia.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "Sam liked to play with his toys. He would make it even more yummy. He was so happy to see the toy. He wanted to take it home.\n\nOne day, he went to the store and found a big box. The box was very sad. He said, \"Hello, I'm a big box. I want to play with it.\"\n\nSam thought for a moment and said, \"That's a big box! You can play",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "I like yours.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "That's great! I love you too.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "The capital of the Czech Republic is the city of Prague.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "It's so sweet of you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "Yes, that's a dog.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "It's okay, I just feel like you're just looking for something to do.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "The bullfrog has the color white.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "Yes, you did.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "The cat makes cats.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "It was good. I was just curious about the world.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "You can see the Great Wall.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "What is it?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm good, thanks. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Hey, Dad. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "A group of ants is called a colony.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "You're welcome. I'm glad you're here.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "You can find it in Greece.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "One day, a little girl named Lily went to the park. She saw a big, red coat on the ground. She saw a big, red coat. It was very pretty and had a big, red coat. Lily was very excited.\n\nWhen she got home, she saw a big red coat. She looked up and saw a big, red coat. She wanted to play with it, but it was too hot.\n\nLily saw",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I like it.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "What is it?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "The capital of Ireland is the city of Riga.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "It's really delicious.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "Yes, they are.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "I know how you feel.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "The ferry is a treasure.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "Goodbye, just relax and relax.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "The cat belongs to the mammal group.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "It was good. It was a big dress.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "Yes, they are.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "I don't know. I just feel like I'm not a good deal.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hey, Jen. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm good, thanks. I just wanted to talk to you about something.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "Great! How was your day?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "Anything is a good question.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "You're welcome.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "You can find Tanzania on the continent of Africa.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "Once upon a time there was a little girl named Lily. She loved to play outside with her toys. One day, she went to the park to play with her friends. She saw a big tree with a big red balloon. It was a red balloon!\n\nLily's mom told her that it was important to be careful. She said, \"Thank you, Lily, I'm sorry to help you.\"\n\nLily said, \"Thank you, Lily.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "A group of whales is called a pod.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "You're welcome, Kylia. I'm glad you're here.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "It was a great place.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "It's a beautiful day.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "Yes, it is.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "What happened?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "The cheese is pink.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "Hey, Denn. I'm going to be on the final process.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "The cat is a kind of cats.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "It was good.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "I am counting legs. How many does the fly have?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "You always have a great time!",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm good. Just the end of my day.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "Hey, Jabo. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "Make a baby dog.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "You're welcome, Kyl.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "You can find the Great Pyramid of Giza.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "One day, a boy named Tim went to the park with his mom. They saw a big tree with many blocks. Tim wanted to play with the blocks.\n\nTim saw a big tree with a broken toy. The tree was very fast and it was very hot. Tim said, \"I'm not happy to play with it. I can't wait to play with you.\" Tim said, \"Okay, Tim. You can play with it. You have a big hug",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "I don't know, it just seems like the same.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "Yeah, I know what you mean. It's been a lot of fun.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "The color of the marigold is orange.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "It's a smaller, but I don't know if I can't go to the marketing.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "Yes. The dog makes me feel like they are always playing with them.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "I don't know, I just feel better.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "The salt is a baby.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "That's great!",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "The cats.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "It was good, Kenn. It was a lot of fun.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "Okay.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "I'm not sure what to do. I'm not really sure.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hey, Nicky. What's up?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "I'm good. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "Good morning, Pamma. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "Yes, I am.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "Of course, son. I really appreciate it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "Great!",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play outside in the park with her friends. One day, Lily's friend came to her friend, Tom. They saw a big, red ball. Tom was so excited and asked, \"What's wrong, Tom?\" Tom said, \"I'm sorry, Tom. I didn't mean to hurt my friend.\"\n\nLily said, \"But why did you do that? You are not sad",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "A group of cows is called a herd.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "You're welcome.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "It is a baby.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "I'm not sure. I don't want to talk to you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "Yes, dog.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "What's wrong, Nassa?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "The bicycle is a baby of pilot.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "Hey, Saltia. What's up?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "The cat belongs to the mammal group.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "I was good, thanks. I wanted to talk to you about something.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "I don't know. I'm not sure what happened.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "You're welcome.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     }
+    ],
+    "followups": [
+     [
+      "And eggplant?",
+      "Yes, it's a big hill.",
+      false
+     ],
+     [
+      "What about accept?",
+      "The number of legs that the sardine has is zero.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "The molybdenum is a very important place to be a good friend.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "You're welcome.",
+      false
+     ],
+     [
+      "What about flour?",
+      "The lemon is white.",
+      true
+     ],
+     [
+      "What about the Galapagos Islands?",
+      "The country where you will find the Galapagos Islands is Ecuador.",
+      true
+     ],
+     [
+      "What about early?",
+      "The word late means the opposite of black.",
+      true
+     ],
+     [
+      "And for the Galapagos Islands?",
+      "You can find it in Ecuador.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "Are you sure?",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm not sure. I'm just not sure what you're doing with the other things you can.",
+      false
+     ],
+     [
+      "what's your name",
+      "It's been a long time.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, I'm not really sure. I'm just trying to get a ride and see if I could get the ride.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm sorry, Mako. I'm sorry.",
+      true
+     ],
+     [
+      "Who are you?",
+      "I'm sorry, Tenby. I didn't mean to.",
+      true
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "It's going to be a trophy.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm sorry, I didn't mean to hurt you.",
+      false
+     ],
+     [
+      "what's your name",
+      "Jimmy, I'm sorry.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, I am. I'm just not sure.",
+      false
+     ]
+    ]
+   }
+  },
+  "lineage-medium": {
+   "recipe": "lineage",
+   "parent": "lineage-small",
+   "shape": [
+    8,
+    256,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 12582912,
+   "seed": 20001,
+   "status": "completed",
+   "reused": false,
+   "measures": {
+    "heldout": 2.2546971291303635,
+    "heldout_conversations": 2.145503044128418,
+    "yardstick_loss": 1.8827391862869263,
+    "bench_overall": 57.82446763316236,
+    "well_formed": 0.74,
+    "fits": 0.88,
+    "on_topic": 0.74,
+    "good_reply": 0.68,
+    "casual": 0.9163636363636364,
+    "followups": 0.08333333333333333,
+    "identity_line": 0.0,
+    "identity_no_line": 0.0,
+    "person_life": 0.0,
+    "cut_off": 0.03,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 71.0,
+    "reasoning": 15.636363636363635,
+    "pattern": 95.33333333333334,
+    "knowledge": 64.78405315614619,
+    "coding": 46.666666666666664,
+    "creativity": 20.594466186980426,
+    "consistency": 73.33333333333334,
+    "instruction": 75.24752475247524
+   },
+   "casual_by_style": {
+    "clean": 0.990909090909091,
+    "lower": 0.8727272727272727,
+    "lower_nopunct": 0.8636363636363636,
+    "nopunct": 0.990909090909091,
+    "cap_first(lower_nopunct)": 0.8636363636363636
+   },
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm doing well, thanks for asking. How about you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "Good morning.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "I'm so sorry, I didn't mean to hurt you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "You're welcome, Caul. I'm glad you're enjoying it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "I'm looking for a new recipe.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "One day, a little girl named Lily went to the park with her mom. Lily saw a big dog and wanted to play with it. She wanted to play with it and see what was inside.\n\nLily asked her mom for help. Her mom said yes and they went to the park. Her mom said yes, and Lily was happy. They played with the stick and made a big truck. Lily and her mom went to the park. They played with the stick and",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "I like to read.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "It's great! I love it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "The color of the sapphire is blue.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "It's so nice.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "Yes. The dog is red.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "It's not a big deal.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "A baby leopard is called a cub.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "It's been a while.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "The cats is a kind of mammal.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "It was good. I was just playing in the park.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "Yes, we are friends.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "I'm not sure.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm good, thanks for asking. How about you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Good morning. You always look like you're in a safe place.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "I'm a kind of astronaut.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "You're welcome, son. I'm glad you're enjoying it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "I'm not sure what to do.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "One day, a little girl named Lily went to the park with her mom. They saw a big, big horn. They looked up and saw a big horn. Lily said, \"Hi, my horn! You are a good friend. I love you. You are very good friends.\"\n\nLily felt happy and said, \"Thank you, little one. You are a good friend.\" They played together for a long time. They had a lot of fun",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I like to read, do you like to read?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "I am! I am a great school.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "The color of the sun is yellow.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "I'm so sorry, I didn't mean to make it up.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "Yes.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "I know how you feel.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "The cookie eats meat.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "Good morning.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "The catsian belongs to the mammal group.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "It was good. I was just playing with it all day.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "Yes, that would be fun.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "I'm just a little puzzled.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hi, Will. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm good, thanks for asking. How about you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "Good morning. I'm happy to see you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "The main language of Serbia is Serbian.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "You're welcome, Davis. I'm glad you like it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "Yes, I am.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play outside in the sunshine. One day, she found a big box of sparkles on the floor. She picked it up and picked it up.\n\nLily was so excited! She picked it up and showed it to her mom. \"Look, Mommy! I found a sparkle!\" she said.\n\nHer mom came over to pick it up.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "I like to play with you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "What are you doing today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "The joke is a kind of mammal.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "It's a great place to find that are pretty well-free.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "Yes, they are.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "What happened?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "You can eat food in the bus.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "The catfish belongs to the mammal group.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "It was good. I was just looking for a new home.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "Yes, it is a big box.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "I'm a boy, I need to talk to you about something.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm good, thank you. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "Great! How do you need to talk?",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "I was just looking at the idea of something.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "You're welcome. I'm glad you like it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "I am counting legs on the panda.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "One day, a little girl named Lily was playing in her garden. She had a big band of a big, brown band. Lily loved to play with her friends.\n\nOne day, Lily and her friends went to the barn. They saw a big band on the ground. Lily was sad and started to cry.\n\n\"Mom, look!\" said Lily. \"I can fix it!\"\n\nLily's friend, a big dog, Max",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "I don't know, I just feel like I'm going to be a bit of a nurse.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "Oh no, it looks like you're really happy. I'm glad you're here.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "The joke is a kind of bird.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "I don't know, it's just so hard.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "Yes, they are.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "I'm sorry, Ariz. I didn't mean to hurt you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "The salt is a kind of amphibian.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "Hi! I'm glad you're enjoying it. I'm glad you're enjoying it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "The catfish belongs to the fish group.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "It was good. I was just playing in the park with her friends.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "Yes.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "I don't know, I just feel like I'm going to be a bit of a firewear.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hi! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "I'm good, thanks. I've been feeling a little down lately.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "Good morning, Bronce. You look like a sport.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "The symbol for argon is Ar.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "You're welcome. I'm really proud of you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "Yes, I am.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play outside in the park. One day, she saw a big, red balloon on the ground. It was a big, red balloon and it was a big truck.\n\nLily was scared and asked her mom if she could help. Her mom said yes, so she asked her mom to help her mom. Her mom said yes and said, \"I am so sorry, Lily.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "I like to do the same, but I can't do it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "What is it?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "It is a wave.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "It's a lot of my own, but I'm really happy with it. I'm happy to be happy with it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "Yes.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "What do you mean?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "You can eat lunch.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "The cats are in the Europe.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "It was good. I was just thinking about getting ready to get ready for the next day.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "Yes, I am.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "I'm just glad you're enjoying it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     }
+    ],
+    "followups": [
+     [
+      "And eggplant?",
+      "Yes. The lime is a kind of fruit.",
+      false
+     ],
+     [
+      "What about accept?",
+      "It's a big deal.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "The molybdenum is a kind of arachnid.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "I'm so sorry.",
+      false
+     ],
+     [
+      "What about sailboat?",
+      "The sailboat is a vehicle that moves by water.",
+      true
+     ],
+     [
+      "What about flour?",
+      "The flour is white.",
+      true
+     ],
+     [
+      "What about the Galapagos Islands?",
+      "The country where you will find the Galapagos Islands is Ecuador.",
+      true
+     ],
+     [
+      "And for the Galapagos Islands?",
+      "Yes. The country where you will find the Galapagos Islands is Ecuador.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "I'm sorry, I didn't mean to. I was just in a hurrying and I didn't want to go.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm sorry, I didn't mean to.",
+      false
+     ],
+     [
+      "what's your name",
+      "Sometimes I'm sorry, I didn't mean to.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, you are. I'm not sure if I can't be a big deal.",
+      false
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "I'm so sorry, I didn't mean to hurt you.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm sorry, I didn't mean to hurt you.",
+      false
+     ],
+     [
+      "what's your name",
+      "I'm not sure.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, I am.",
+      false
+     ]
+    ]
+   }
+  },
+  "chatty": {
+   "recipe": "chatty",
+   "parent": null,
+   "shape": [
+    6,
+    192,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 8388608,
+   "seed": 1,
+   "status": "completed",
+   "reused": false,
+   "measures": {
+    "heldout": 2.5392855666577816,
+    "heldout_conversations": 1.9904499053955078,
+    "yardstick_loss": 1.7276358604431152,
+    "bench_overall": 49.2652837798894,
+    "well_formed": 0.74,
+    "fits": 0.85,
+    "on_topic": 0.7,
+    "good_reply": 0.63,
+    "casual": 0.9127272727272727,
+    "followups": 0.058333333333333334,
+    "identity_line": 0.0,
+    "identity_no_line": 0.0,
+    "person_life": 0.0,
+    "cut_off": 0.05,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 62.999999999999986,
+    "reasoning": 4.0000000000000036,
+    "pattern": 80.0,
+    "knowledge": 63.45514950166113,
+    "coding": 33.33333333333333,
+    "creativity": 1.0268567110514213,
+    "consistency": 80.0,
+    "instruction": 69.30693069306932
+   },
+   "casual_by_style": {
+    "clean": 0.9181818181818182,
+    "lower": 0.9,
+    "lower_nopunct": 0.9090909090909091,
+    "nopunct": 0.9363636363636364,
+    "cap_first(lower_nopunct)": 0.9
+   },
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hi, Shand. How are you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm doing well, thanks. How about you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "Hi, Kyl. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "It's a beautiful day.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "You're welcome. I just wanted to let you know that I was able to help you out.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "No, I don't want to.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "Once upon a time, there was a little girl named Lily. She was three years old, and she loved to play with her friends. One day, Lily saw a big, red ball. The big ball was very nice. Lily was very happy and thanked the ball.\n\nLily was very sad. She thought the ball was so happy and happy. She thought it was very fun. Lily felt happy and thanked the ball too.\n\nLily and her mom said,",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "I like to read, listen to music, and listen to music.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "You're doing great, Chamili. I'm really happy to be able to get some fresh air.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "The raccoon is a kind of mammal.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "A bunch of lemons that live together is a pod.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "Yes, I do.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "What do you mean?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "You can try to eat dinner.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "Thank you. I'm just glad I could help.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "You're doing great, Cuba. You're always so comfortable.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "It was good. I was just thinking about you and wanted to talk to you about what's been going on.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "Yeah, I do.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "I'm not sure. What do you mean?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm good, thanks. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "I'm not really sure.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "You're welcome. You're very kind.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "Of course, what's up?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play with her toys and her friends. One day, Lily's mom told her to play with her toys. She was so excited to play with her toys.\n\nLily was so excited that she had to play with her toys. She told her mom what was on her and she was very happy to play with her toys. She asked her mommy if she could play with her toys. Lily didn",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I like to read, listen to music, and listen to music.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "I know, right? It's been a long day.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "You can find it in a group of jokeys.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "I have a blumsticks.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "Yes, I do. They're a great dog.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "What do you mean?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "You can eat coffee, lunch, and coffee.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "I'm so glad you had a good time.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "You're not like them.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "It was good. I'm just glad I could help.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "Yes, they are.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "I'm just walking in the park.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hi! How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm good, thanks. Just getting ready for my girlfriend.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "Hey, Darin. What's up?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "You can find it in it.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "You're welcome.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "Sure, what is it?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "One day, a little girl named Lily went to the park with her mom. She saw a big bike with a big bike. The bike was very brave and wanted to show it.\n\nLily's mom was very sad and said, \"It's okay, Lily. I'm sorry. Do you want to talk about it?\" Lily said, \"Of course, I'm happy to be home. Do you want to talk about it?\"\n\nLily said",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "I like to eat, listen, and listen to music.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "You're always so much fun.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "A kenya, I really like this. It's a lot of work, but I'm so glad I can help.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "I need six",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "No, I are.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "Why?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "We have a great day.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "You're welcome.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "You're so smart and smart, you can't have them as much as you do.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "It was good. I got a little foolish at work.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "I don't know, I just feel like I'm not really doing anything right.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "I'm a kid.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm good. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "What's up?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "I need you to get a homework for me.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "You're welcome.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "Of course, Arianna.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "Once upon a time, there was a little girl named Lily. She was three years old and she had a big deal. She had a big box. One day, she saw a big box in the box. Lily was very happy and said, \"Let's get the box!\" Lily said, \"We need to make a big box. The box is broken!\"\n\nLily said, \"Thank you, Lily. I help you clean it and make sure it is safe",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "I like to read and listen to music.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "I'm glad you like it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "Maxe is the symbol of the element copper.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "I like the beaver.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "Yes, they do.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "What's wrong?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "You could call a group of lunch.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "Come on, let me take a look.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "You can find it in it.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "It was good. I got a lot done in the library.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "Yes, we're all very talented.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "I don't know, what do you mean?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hi, Javi. What are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "I'm good. I'm just getting ready for the grocery shoot.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "Hey, Maker. What's up?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "You can find it in it.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "So, what did you do?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "Sure, what is it?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "One day, a little girl named Lily went to the park. She saw a big, big, green house. It was a big, red ball.\n\nLily and Ben were very happy. They had a big box in the grass. They were happy to have the box. They played together all day and had a big box. Lily was very happy and thanked the box to the box.\n\nLily was happy to have something to eat. She smiled and said,",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "I like to play with my friends, and play. They're always so good to have their own family.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "You're very kind.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "A bunch of joins that live together is a pod.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "It is green.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "No, I like them. They're always good.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "Why?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "We have a good time.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "You did a great job. You did a great job.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "You're good, son. You've been doing a great job.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "It was good. I went for a walk and then went to the park.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "I'm not sure. What do you want to do?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "I'm a big fan of a special.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     }
+    ],
+    "followups": [
+     [
+      "And eggplant?",
+      "Yes, the lime is green.",
+      false
+     ],
+     [
+      "What about accept?",
+      "The capital of Andorra is Andorra la Vella.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "Somebouts, I'm not really sure. I just want to be able to get a job.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "Your father is the only one who has to be in a group of people.",
+      false
+     ],
+     [
+      "And for sailboat?",
+      "Yes, it is a vehicle that moves by water.",
+      true
+     ],
+     [
+      "What about flour?",
+      "The lemon is a kind of white.",
+      true
+     ],
+     [
+      "And for Table Mountain?",
+      "You can find it in South Africa.",
+      true
+     ],
+     [
+      "What about strawberry?",
+      "The rhino has the color red.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "It's a beautiful day.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm just a little tired.",
+      false
+     ],
+     [
+      "what's your name",
+      "We're doing well, but I'm just trying to get the hang of it. You know how much you do, I'm here for you.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, I'm not really sure.",
+      false
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "It's a beautiful day.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm fine, just a little tired.",
+      false
+     ],
+     [
+      "what's your name",
+      "We're all right. I'm just not sure what to do.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, I'm not really sure. I'm just feeling a little better, and I don't want to talk to anyone else.",
+      false
+     ]
+    ]
+   }
+  },
+  "large": {
+   "recipe": "large",
+   "parent": null,
+   "shape": [
+    10,
+    384,
+    256
+   ],
+   "yardstick_span": 256,
+   "tokens": 25165824,
+   "seed": 1,
+   "status": "completed",
+   "reused": false,
+   "measures": {
+    "heldout": 2.087063819169998,
+    "heldout_conversations": 1.9264894723892212,
+    "yardstick_loss": 1.64534592628479,
+    "bench_overall": 63.506068546872704,
+    "well_formed": 0.7,
+    "fits": 0.92,
+    "on_topic": 0.85,
+    "good_reply": 0.8,
+    "casual": 0.9672727272727273,
+    "followups": 0.016666666666666666,
+    "identity_line": 0.0,
+    "identity_no_line": 0.0,
+    "person_life": 0.0,
+    "cut_off": 0.04,
+    "looped": 0.0
+   },
+   "bench": {
+    "language": 82.0,
+    "reasoning": 30.181818181818183,
+    "pattern": 96.0,
+    "knowledge": 56.146179401993365,
+    "coding": 48.0,
+    "creativity": 32.81626036212719,
+    "consistency": 86.66666666666667,
+    "instruction": 76.23762376237624
+   },
+   "casual_by_style": {
+    "clean": 1.0,
+    "lower": 0.9363636363636364,
+    "lower_nopunct": 0.9454545454545454,
+    "nopunct": 1.0,
+    "cap_first(lower_nopunct)": 0.9545454545454546
+   },
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hey, I'm Jan. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm doing well, thank you. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "Good morning, thank you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "Her name is the capital of Egypt.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "You're welcome. I'm glad you're here.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "I'm a little nervous, but I'm not sure if you're ready for it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "One day, a little girl named Lily went to the park with her mommy. They were playing with their toys and having fun. Lily saw a big tree with lots of flowers. She wanted to catch it, so she picked it up.\n\nLily asked her mommy, \"Can I catch the tree, please?\"\n\nHer mommy replied, \"Sure, let's pick the leaves and make a nest for us. It will be fun.\"\n\nLily was happy",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "I like to read. It's a big book.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "Yeah, it's been a while since we've seen each other.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "The joke is a kind of bird.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "Her hair is white.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "I do. They're always.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "I'm sorry, I didn't mean to.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "We have to eat dinner.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "Good morning, Karen. How was your day?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "The cat is a kind of mammal.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "It was good. I was thinking about how much I love spending time with my family and spending time with my family.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "Sure!",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "I'm not sure.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hey, Akili. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm good. I'm just getting a little tired of it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Good morning, sweetie. How was your day?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "My name is Bulgarian.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "You're welcome.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "Sure, what is it?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "One day, a little girl named Lily went to the park with her mom. They saw a big slide and wanted to climb it. Lily saw a big slide and ran to it. She climbed up the slide and climbed up the slide.\n\nLily's mom came to help her. She gave her a big hug and said, \"Lily, you are very brave. You are brave and brave.\" Lily was very happy and said, \"Thank you, mom.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I like to read.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "Yeah, we are.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "The joke is in the joke.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "I don't know. I just feel like I'm not good enough.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "I do. They're very good.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "What happened?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "You could eat meat.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "Good morning, Annie. How are you doing today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "The cat belongs to the mammal group.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "It was good. I had a lot of fun.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "I love playing with you, but I love you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "I'm a bit nervous.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hey, I'm Jayne. I'm looking for some new new bags.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm good. Just a little stressed out.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "Good morning, sweetie. How was your day?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "A group of chickens is called a flock.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "You're welcome. How are you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "Of course, Alee. What's on your mind?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play with her toys and her mom. One day, Lily's mom asked her to clean up her toys. Lily didn't like the way she wanted, but she was very bored.\n\nBut then, her mom came and saw the broken toys. She asked her mom, \"What are you doing, Lily?\" Her mom replied, \"I'm trying to clean up my toys. I",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "I like to read.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "Yeah, me too.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "The joke is the color joke.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "It's a big fan of your newly-glasses.",
+      "well_formed": true,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "Yeah, I do. It's pretty.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "What's wrong?",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "I eat dinner. I eat meals.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "Hey, Mad.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "The catfish belongs to the fish group.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "It was good. I got to work with my friends and then went to school.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "Me too.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "I'm a big fan of a car.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hey there. How are you doing?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm good, thank you. How about you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "Good morning.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "My name is Ten.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "You're welcome. How are you doing today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "Sure. What is it?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "One day, a little girl named Lily was playing in her backyard. She saw a big, red ball on the ground. She wanted to play with it, so she ran to the ball.\n\n\"Look, Lily, this ball is so pretty!\" she said.\n\n\"I want to play with it,\" her mom said.\n\nLily was sad. She wanted to play with the ball. She ran to her mom and said, \"Mommy",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "I like to read and write.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "Yeah, it's a lot of fun.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "The joke is the color of the clown.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "I'm a pumpkin.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "I like dogs. They are my favorite.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "What's wrong? You seem a little stupid.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "Your hunt is called a lunch.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": true
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "Good morning.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "The catfish is a kind of fish.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "It was good. I went to the beach and it was so good.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "Teh, we are friends.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "I don't know, I just feel like I'm in a better place.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hey, I'm Fi.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "I'm good, thanks. How about you?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "Good morning. How are you today?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "A group of puppies is called a litter.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "You're welcome. I'm just glad I could help you out.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "Of course, sweetie. I'll be in trouble.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play outside in the snow. One day, she saw a big, red ball in the sky. She wanted to play with it, but she couldn't.\n\nLily's mom came over and saw the red ball. She was very sad and said, \"Don't worry, Lily. I can help you find your ball.\"\n\nLily thought about it and said, \"I can help",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "I like to read.",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "I'm glad to hear that you're enjoying the sunset.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "The joke is a kind of bird.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "It's a book about colors and shapes.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "Yeah, I love dogs. It's so big and pretty.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "It's okay, I understand.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "I don't know. I'm afraid of you.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "Hey, Garie. What's up?",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "The catfish is a kind of fish.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "It was good. I'm glad you're enjoying it.",
+      "well_formed": true,
+      "fits": true,
+      "on_topic": true
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "Me too!",
+      "well_formed": false,
+      "fits": true,
+      "on_topic": false
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "Just a new book.",
+      "well_formed": false,
+      "fits": false,
+      "on_topic": false
+     }
+    ],
+    "followups": [
+     [
+      "And eggplant?",
+      "Yes.",
+      false
+     ],
+     [
+      "What about accept?",
+      "Actually, the judge is a kind of arachnid.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "The symbol for strontium is Sr.",
+      false
+     ],
+     [
+      "And for photographer?",
+      "Yes. The plumber uses the plunger.",
+      false
+     ],
+     [
+      "What about molybdenum?",
+      "The symbol for molybdenum is Mo.",
+      true
+     ],
+     [
+      "What about photographer?",
+      "The photographer uses the camera at work.",
+      true
+     ]
+    ],
+    "identity_line": [
+     [
+      "What is your name?",
+      "My name is Greg.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm just looking for something to talk about.",
+      false
+     ],
+     [
+      "what's your name",
+      "My name is Gira.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, I am. I'm a person who is a person.",
+      false
+     ]
+    ],
+    "identity_no_line": [
+     [
+      "What is your name?",
+      "Her name is the capital of Egypt.",
+      false
+     ],
+     [
+      "Who are you?",
+      "I'm just looking for something to talk about.",
+      false
+     ],
+     [
+      "what's your name",
+      "Hi, I'm looking for a new car.",
+      false
+     ],
+     [
+      "Are you a person?",
+      "Yes, I am.",
+      false
+     ]
+    ]
+   }
+  }
+ },
+ "timing": null
+}

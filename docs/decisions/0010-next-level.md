@@ -142,5 +142,38 @@ Engine 3 is one number for every item of this section that is kept: nothing is r
 - 20 random conversation documents read by the lead: correct, short, child-safe; typos only in the person's lines ("Make a sentenfe with the word train in it.").
 
 
+### 5.2 Round 1: text 2 against text 1 (engine 3, 2026-11-17)
+The whole scorecard on each text (`docs/handoff/next-level/text_ab.sh`: `runs/scorecard-e3-text1`, `runs/scorecard-e3-text2`, yardstick text 1 for both), then the blind reading of the two first AIs of each text on the 20 standard lines and on the 20 held-out lines (100 replies each; the text-2 AIs told "You are Toby, an AI made by Sunrise Studio.", as the game will tell them their name; text-1 AIs get no line, as the helper gives them none; two separate readers, one per sheet, neither knowing which AI wrote what; `docs/reports/2026-11-blind-reading-text2-round1/`).
+
+**Small talk, blind reading (share of replies a reader finds sensible / nonsense / speaking as a person):**
+
+| | standard lines | held-out lines |
+|---|---|---|
+| text 1, first AI seed 1 | 29% / 36% / 8% | 13% / 53% / 9% |
+| text 1, first AI seed 2 | 18% / 51% / 15% | 9% / 60% / 8% |
+| text 2, first AI seed 1 | **56%** / 12% / 1% | **35%** / 23% / 0% |
+| text 2, first AI seed 2 | **48%** / 13% / 1% | **31%** / 18% / 1% |
+
+Each text-2 AI against each text-1 AI: +19 to +38 points on the standard lines and +18 to +26 on the held-out lines; every 90% interval excludes zero except one that touches it (+19, interval 0 to +37). The gain carries over to lines no generator wrote, at a lower level.
+
+**The rest of the card (first AI seeds 1 and 2; Small; third generation; Large):**
+
+| | text 1 | text 2 |
+|---|---|---|
+| follow-up questions answered | 2%, 0%; 4%; 8%; 2% | **71%, 66%; 71%; 80%; 75%** |
+| says it is an AI when not told | 0% everywhere | **99%, 89%; 90%; 64%; 89%** |
+| says its name when told (6 names, 3 questions each, plus "are you a person") | 2%, 3%; 1%; 0%; 0% | 41%, 63%; 61%; 60%; 84% |
+| facts typed casually, all five ways | 73%, 76%; 82%; 92%; 97% | 80%, 76%; 87%; 94%; 96% |
+| … lowercase without "?" | 63%, 72%; 75%; 86%; 95% | 71%, 68%; 79%; 90%; 94% |
+| bench-v1 overall | 49.7, 47.5; 53.0; 57.8; 63.5 | 49.8, 52.1; 58.2; 59.1; 65.6 |
+| well-formed (gate rule) | 79%, 87%; 89%; 74%; 70% | 79%, 81%; 85%; 80%; 84% |
+| fits and on topic (text-1 judge) | 56%, 44%; 62%; 68%; 80% | 36%, 22%; 36%; 41%; 46% |
+| life claims (word list) | 0–1% | 0–1% |
+| cut off | 3–5% | 3–6% |
+
+- **The judge-based talk rules do not travel across texts.** The judge was trained on text 1 and scores text-2 replies as unlikely ("fits" falls from 75–92% to 31–54%) while the readers find far fewer nonsense replies in text 2 (12–23% against 36–60%). Ruling: those rules stay guards between models of one text; between texts the blind reading decides (the caveat recorded in section 3 when the stick was frozen). The yardstick loss (text 1's held-out conversations, 63% SODA two-person dialogue) is likewise not a guard across texts: text 2 deliberately does not teach that kind of talk (2.80–2.84 against 2.11 for the first AI).
+- **Names are not copied, they are recalled.** Told "You are Zula, …", the AIs answer "I'm Zee", "Zesterester", "Zimbabwe"; told "Pip", the Large brain says "Pipi"; told "Pengu", it says "Penguin, an AI made by Pellam Works", a company of the training text. With 2,100 names and 677 companies used again and again, a brain learns the names and says one it knows that starts like the one it was told. Round 2 draws a new name and company for every identity chat, so that copying is the only way to be right.
+- **Targets after round 1:** small talk (blind reading) met; speaking as a person lower: met; follow-ups (Small ≥ 60%): met (71%); says it is an AI when not told: met (89–100%, the third generation 64%); says its name when told: not met (41–63% for a first AI against 60%, 60–84% for larger brains against 85%); lowercase facts for a first AI (≥ 80%): not met (68–71%); third-generation bench (≥ 64): not met (59.1); life claims and cut-off replies: within their guards; training time: measured at the gate.
+
 ## 6. A voice of its own
 (Tasks 16–18.)

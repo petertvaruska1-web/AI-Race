@@ -1,0 +1,1530 @@
+{
+ "held_talk": 1,
+ "lines": "held",
+ "system": null,
+ "decoding": {
+  "top_p": 0.9,
+  "block_repeat": 0,
+  "min_p": 0.0
+ },
+ "models": {
+  "t1s1": {
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 0,
+      "reply": "Not much. Just hanging out. How about you?"
+     },
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 1,
+      "reply": "Not much. Just hanging out with friends. Just hanging out."
+     },
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 2,
+      "reply": "Hey, I'm doing alright. How about you?"
+     },
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 3,
+      "reply": "Not too bad. Just hanging out. How about you?"
+     },
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 4,
+      "reply": "Hey, Sarah. How are you doing?"
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 0,
+      "reply": "Oh, you're right."
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 1,
+      "reply": "What happened?"
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 2,
+      "reply": "I know, right?"
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 3,
+      "reply": "Why did you say?"
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 4,
+      "reply": "I'm sorry, I didn't mean to go."
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 0,
+      "reply": "Yes, it is."
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 1,
+      "reply": "Yes, it is."
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 2,
+      "reply": "Yes, I can do this."
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 3,
+      "reply": "Yes. The music is music."
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 4,
+      "reply": "Yes, I'm sorry."
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 0,
+      "reply": "The color of the lilac"
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 1,
+      "reply": "The color of the radish is red."
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 2,
+      "reply": "The color of the sky is blue."
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 3,
+      "reply": "The color of the dirt is yellow."
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 4,
+      "reply": "The color of the tofu."
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 0,
+      "reply": "That's not good. I'm glad you're enjoying the day."
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 1,
+      "reply": "What happened?"
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 2,
+      "reply": "What happened?"
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 3,
+      "reply": "What do you mean?"
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 4,
+      "reply": "I'm sorry, I didn't mean to hurt you."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 0,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 1,
+      "reply": "Yes, I am."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 2,
+      "reply": "Yes, I'm not sure if you have any idea. You're the right thing."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 3,
+      "reply": "Yes. I love to learn."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 4,
+      "reply": "I'm sorry, I didn't mean to do it."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 0,
+      "reply": "You're very good."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 1,
+      "reply": "The bee is a kind of mammal."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 2,
+      "reply": "Not really. What's up with you?"
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 3,
+      "reply": "I'm not sure. I'm going to be on my dream."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 4,
+      "reply": "Not much, what's up with you?"
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 1,
+      "reply": "You can sing for dinner."
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 2,
+      "reply": "The singer goes singing for work."
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 3,
+      "reply": "Hey, Mom. How are you doing?"
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 4,
+      "reply": "The main song is sink."
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 0,
+      "reply": "What do you mean?"
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 1,
+      "reply": "What do you mean?"
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 2,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 3,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 4,
+      "reply": "I love your goal."
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 0,
+      "reply": "Oh, I'm glad you're enjoying it."
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 1,
+      "reply": "What are you doing doing?"
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 2,
+      "reply": "Yes, I'm so glad you went."
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 3,
+      "reply": "Yeah, I've been thinking about my own."
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 4,
+      "reply": "Yes, I can see the Greenon."
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 0,
+      "reply": "Oh, I'm glad you're enjoying it."
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 1,
+      "reply": "I'm glad you're enjoying the day."
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 2,
+      "reply": "Yeah, I've been busy lately and busy. I'm glad you're enjoying the day."
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 3,
+      "reply": "I know. I've been so busy with work and I'm glad you like it."
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 4,
+      "reply": "Yeah, I can imagine. I've been feeling a bit painful and I'm happy to see you."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 0,
+      "reply": "Yes, I am."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 1,
+      "reply": "Yes, I am."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 2,
+      "reply": "Yes, I'm just not the rest of the night."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 3,
+      "reply": "Yes, I can see the airplane."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 4,
+      "reply": "Yes, I can sleep in the night."
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 0,
+      "reply": "Why? What's up?"
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 1,
+      "reply": "What's the name of a few days?"
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 2,
+      "reply": "What happened?"
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 3,
+      "reply": "What happened?"
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 4,
+      "reply": "I'm sorry, I can't wait to be here."
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 0,
+      "reply": "What's wrong?"
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 1,
+      "reply": "I'm sorry, son. I'm sorry."
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 2,
+      "reply": "Yeah, I am. I just feel like I'm trying to make you feel better."
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 3,
+      "reply": "I know. It's nice to meet."
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 4,
+      "reply": "Yeah, I know. It's just a tough day."
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 0,
+      "reply": "What happened?"
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 1,
+      "reply": "What happened?"
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 2,
+      "reply": "What do you mean?"
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 3,
+      "reply": "What do you mean?"
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 4,
+      "reply": "Oh, it's okay."
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 0,
+      "reply": "Are you sure?"
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 1,
+      "reply": "I don't know. It's just a little better."
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 2,
+      "reply": "Well, I don't know what to do. I think I can do this."
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 3,
+      "reply": "I'm so happy to have you so much time. I'm glad you like it."
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 4,
+      "reply": "Well, I was just thinking about my owner and I'm just trying to make sure what I could do."
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 0,
+      "reply": "I'm glad you're doing alright. I was just glad you could help."
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 1,
+      "reply": "I'm not sure. I'm just not sure if I can help."
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 2,
+      "reply": "I'm sorry, I didn't mean to hurt you."
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 3,
+      "reply": "I don't know, I'm just not sure. I'm just going to be able to do something about."
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 4,
+      "reply": "Yes, I do."
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 0,
+      "reply": "It's okay, I'm sorry."
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 1,
+      "reply": "What are you doing?"
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 2,
+      "reply": "What?"
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 3,
+      "reply": "What do you mean?"
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 4,
+      "reply": "Why?"
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 0,
+      "reply": "Yes, I can do that."
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 1,
+      "reply": "Yes, I can tell you the lot of people who live in the world."
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 2,
+      "reply": "Yes, I am."
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 3,
+      "reply": "Yes. I can do it."
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 4,
+      "reply": "Yes, I do."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 0,
+      "reply": "Not really. I'm not sure."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 1,
+      "reply": "I don't know. I'm just trying to be able to keep it."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 2,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 3,
+      "reply": "Aww, Johns. I don't know how to do this."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 4,
+      "reply": "What?"
+     }
+    ]
+   }
+  },
+  "t1s2": {
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 0,
+      "reply": "Not much, just hanging out. Just hanging out."
+     },
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 1,
+      "reply": "Not much, just hanging out. Just hanging out."
+     },
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 2,
+      "reply": "Not much. Just getting a great time."
+     },
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 3,
+      "reply": "Not too bad. Just hanging out. What about you?"
+     },
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 4,
+      "reply": "Not much. Just hanging out with the new weather and stuff."
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 0,
+      "reply": "That's a great idea. I'm just glad you're feeling okay."
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 1,
+      "reply": "What's the symbol?"
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 2,
+      "reply": "Why?"
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 3,
+      "reply": "Oh, thank you. I'm glad you're here for you."
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 4,
+      "reply": "Why?"
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 0,
+      "reply": "Yes. The country of Bosnia and Herzegovina is in the continent of Africa."
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 1,
+      "reply": "Yes. The country of Kiribati is in the continent of Oceania."
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 2,
+      "reply": "Yes. The country of Guyana is in the continent of South America."
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 3,
+      "reply": "Yes. The country of Nigeria is in the continent of Africa."
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 4,
+      "reply": "Yes. The country of Jordan is in the continent of Asia."
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 0,
+      "reply": "The country of the United States is in North America."
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 1,
+      "reply": "The country of Tunisia is in the continent of Africa."
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 2,
+      "reply": "The ocean is in the ocean."
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 3,
+      "reply": "The number of legs that the toad has is four."
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 4,
+      "reply": "The country of Malta is in the continent of Europe."
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 0,
+      "reply": "That's cool! I'm so glad you're here."
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 1,
+      "reply": "What did you do?"
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 2,
+      "reply": "I'm sorry, sweetie. I don't want to go on a way."
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 3,
+      "reply": "Well, I was thinking about something that you were trying to be a bit like a little panel."
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 4,
+      "reply": "I know, you know, it's been so much."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 0,
+      "reply": "Yes. The country of South Africa is in the continent of Africa."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 1,
+      "reply": "Yes. The peach is in the fruit group."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 2,
+      "reply": "Yes."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 3,
+      "reply": "Yes."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 4,
+      "reply": "I'm not sure. I just want to talk to you about something."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 0,
+      "reply": "Not much, just hanging out. I've been thinking about my favorite world, and I've been working lately."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 1,
+      "reply": "It's not great, but I'm not sure."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 2,
+      "reply": "I'm really sorry. I wanted to make a difference."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 3,
+      "reply": "Yeah, I just wanted to find a way to the top of the river."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 4,
+      "reply": "I'm just so excited to get some of the world around the world."
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 0,
+      "reply": "Yes. The songlitude of the world is the most popular place."
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 1,
+      "reply": "Yes. The song is a kind of fish."
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 2,
+      "reply": "Yes. The song is a kind of fish."
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 3,
+      "reply": "Yes. The song is a kind of fish."
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 4,
+      "reply": "I'm sorry. I didn't want to do something to do."
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 0,
+      "reply": "What is this?"
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 1,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 2,
+      "reply": "What do you want?"
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 3,
+      "reply": "It's a big deal. I'm just glad you could help."
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 4,
+      "reply": "I know, but it's just so hard to be a fun."
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 0,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 1,
+      "reply": "Hey, Daisy. How are you?"
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 3,
+      "reply": "Make a lot, I'm so sorry."
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 0,
+      "reply": "Hey, Kenn, I'm really excited to see you. I'm so excited to see you."
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 1,
+      "reply": "Yeah, I know, me too. I'm so glad you're here."
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 2,
+      "reply": "What are you looking for?"
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 3,
+      "reply": "Oh, I'm really glad you're doing well. I'm glad we could help you out with you."
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 4,
+      "reply": "What do you mean?"
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 0,
+      "reply": "Yes, it is. I can't wait to see how it feels."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 1,
+      "reply": "Yes, I do. It's a great way to borrow."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 2,
+      "reply": "Yes, I do. It is not."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 3,
+      "reply": "Yes, I do. I feel like I don't know."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 4,
+      "reply": "No, I was just looking forward to the party. I was just so busy."
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 0,
+      "reply": "That's cool! I'm so glad you're here."
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 1,
+      "reply": "What's up?"
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 2,
+      "reply": "Why?"
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 3,
+      "reply": "It's okay, I'm sorry."
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 4,
+      "reply": "Why? What is it?"
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 0,
+      "reply": "I'm glad you're enjoying the day."
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 1,
+      "reply": "Yes, it is definitely a new job."
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 2,
+      "reply": "What do you think is it?"
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 3,
+      "reply": "Good job, I'm so glad you're here."
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 4,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 0,
+      "reply": "What is this?"
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 1,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 2,
+      "reply": "What do you want to do for dinner?"
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 3,
+      "reply": "That's great! You're a little tired."
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 4,
+      "reply": "I'm sorry, I didn't want to get a new math."
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 0,
+      "reply": "You're welcome, I'm sorry. I didn't mean to come to the party."
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 1,
+      "reply": "I'm so glad you're looking for a bit of the story."
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 2,
+      "reply": "I don't know. I was just not sure if I can't help with it."
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 3,
+      "reply": "It was a very big, good."
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 4,
+      "reply": "Yes, I don't want to go. What are you doing?"
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 0,
+      "reply": "Yes, you're welcome. I'm really glad you're doing well, and I can't believe I'm not doing anything."
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 1,
+      "reply": "I'm really sorry, Nahal. I'm really sorry."
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 2,
+      "reply": "What do you think you're just looking for a little bit?"
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 3,
+      "reply": "Yeah, I can't believe I'm just really stuck in the air."
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 4,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 0,
+      "reply": "That's a great idea! I'm so glad you're feeling better."
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 1,
+      "reply": "What happened?"
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 2,
+      "reply": "I know, me too. It's nice to have you seen."
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 3,
+      "reply": "You're welcome. You're always so angry."
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 4,
+      "reply": "I know, but I'm not really scared. I just wanted to be scared and hurt."
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 0,
+      "reply": "Yes. The country of Bosnia and Herzegovina is in the continent of North America."
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 1,
+      "reply": "Yes. The country of Ghana is in the continent of Africa."
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 2,
+      "reply": "Yes. The word is south."
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 3,
+      "reply": "Yes. The color of the dandelion is yellow."
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 4,
+      "reply": "Yes. The color of the ghost is white."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 0,
+      "reply": "Because it's not the end of the sky."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 1,
+      "reply": "I don't know. I don't want to be a bird."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 2,
+      "reply": "It's a lot of fun. I was just trying to make it easy."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 3,
+      "reply": "I'm so glad to see you."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 4,
+      "reply": "It is in the sky."
+     }
+    ]
+   }
+  },
+  "t1small": {
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 0,
+      "reply": "It's been good. I'm just trying to get a good time for work."
+     },
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 1,
+      "reply": "It's going well, thanks for asking. How about you?"
+     },
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 2,
+      "reply": "Not too bad. Just getting ready."
+     },
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 3,
+      "reply": "It's going alright, thanks for asking. How about you?"
+     },
+     {
+      "prompt": "Hey, how's your day going?",
+      "sample": 4,
+      "reply": "Not too bad. Just hanging out with friends."
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 0,
+      "reply": "Oh, what's up?"
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 1,
+      "reply": "What's up?"
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 2,
+      "reply": "You're always going to be okay, Charlie. You're going to be good."
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 3,
+      "reply": "Yeah, I've been thinking about you."
+     },
+     {
+      "prompt": "I'm so bored right now.",
+      "sample": 4,
+      "reply": "You're just a little worried. You're going to have a lot of work."
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 0,
+      "reply": "Yes, it is, music. It is pretty pretty."
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 1,
+      "reply": "Yes, I love music. It's so great!"
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 2,
+      "reply": "Yes, I love music. I love music."
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 3,
+      "reply": "Yes. It's so good."
+     },
+     {
+      "prompt": "Do you like music?",
+      "sample": 4,
+      "reply": "I'm feeling a little bit down lately."
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 0,
+      "reply": "It's so cool! It's so cool!"
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 1,
+      "reply": "It's so cool! I'm glad you're enjoying it."
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 2,
+      "reply": "It looks like you are a good idea."
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 3,
+      "reply": "It looks amazing! It looks amazing!"
+     },
+     {
+      "prompt": "Tell me something cool.",
+      "sample": 4,
+      "reply": "The color of the sun is blue."
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 0,
+      "reply": "What happened?"
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 1,
+      "reply": "What did you do?"
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 2,
+      "reply": "What's up?"
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 3,
+      "reply": "I know, me too. It's so stupid."
+     },
+     {
+      "prompt": "I had a really bad day.",
+      "sample": 4,
+      "reply": "Oh, you know, that's great. You've been a great day."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 0,
+      "reply": "Yes, I am."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 1,
+      "reply": "Yes, I am."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 2,
+      "reply": "Yes, I do."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 3,
+      "reply": "Yes. The western is a kind of mammal."
+     },
+     {
+      "prompt": "Are you smarter than me?",
+      "sample": 4,
+      "reply": "I'm sorry, I didn't mean to hurt you."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 0,
+      "reply": "I'm not sure. It's a lot of fun."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 1,
+      "reply": "I'm sorry, Auto. I'm sorry."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 2,
+      "reply": "The sound of the bird is neigh."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 3,
+      "reply": "I don't know, it's just so frustrating."
+     },
+     {
+      "prompt": "What's your favorite animal?",
+      "sample": 4,
+      "reply": "The sound of the bat is neigh."
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 0,
+      "reply": "Yes, it is called a song."
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 1,
+      "reply": "Yes, I am. It's so foolish."
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 2,
+      "reply": "Yes, I do. It's a beautiful song."
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 3,
+      "reply": "Yes. The song is a song."
+     },
+     {
+      "prompt": "Can you sing a song?",
+      "sample": 4,
+      "reply": "No, I don't. I just feel like I can't do it anymore."
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 0,
+      "reply": "Oh, it's so pretty. I'm so glad you could help me."
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 1,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 2,
+      "reply": "I love pizza. Can you tell me the number of legs on the pizza?"
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 3,
+      "reply": "Wow, I was just glad to hear that."
+     },
+     {
+      "prompt": "I love pizza.",
+      "sample": 4,
+      "reply": "I'm glad to hear that."
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 1,
+      "reply": "Hi, Eargar. How are you?"
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 2,
+      "reply": "Thank you so much, sweetie! I really appreciate it."
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 3,
+      "reply": "Hey! How are you doing?"
+     },
+     {
+      "prompt": "Good night!",
+      "sample": 4,
+      "reply": "Good! Welcome to the park with the birds."
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 0,
+      "reply": "You're welcome, Day. I'm glad you're enjoying your life."
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 1,
+      "reply": "I'm glad you enjoyed it. I'm glad you enjoyed it."
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 2,
+      "reply": "Thank you so much! I love you too."
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 3,
+      "reply": "I know, me too. I'm happy to be able to help out with you."
+     },
+     {
+      "prompt": "It's nice to meet you.",
+      "sample": 4,
+      "reply": "Thank you so much, Martha. I really appreciate it."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 0,
+      "reply": "Yes, I am."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 1,
+      "reply": "Yes, I am. It's so hard to sleep."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 2,
+      "reply": "Yes, I love. It's always the best way to get a great time."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 3,
+      "reply": "Yes. It's so cool."
+     },
+     {
+      "prompt": "Do you ever sleep?",
+      "sample": 4,
+      "reply": "I'm not sure. I don't know if I'm not going to be a good girl."
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 0,
+      "reply": "It's not good enough. I'm glad you're upset."
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 1,
+      "reply": "What do you mean?"
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 2,
+      "reply": "I'm sorry, Kenel. I'm sorry."
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 3,
+      "reply": "Yeah, I'm just glad you're doing well. I'm glad you're enjoying yourself."
+     },
+     {
+      "prompt": "I'm really tired.",
+      "sample": 4,
+      "reply": "I'm sorry, Bluee."
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 0,
+      "reply": "I'm sorry, I didn't mean to hurt you."
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 1,
+      "reply": "I'm sorry, I didn't mean to hurt you."
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 2,
+      "reply": "I'm sorry, I didn't mean to hurt you. I didn't mean to hurt you."
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 3,
+      "reply": "I don't know. I'm not angry."
+     },
+     {
+      "prompt": "You are funny.",
+      "sample": 4,
+      "reply": "Thank you, Kenos. You're welcome."
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 0,
+      "reply": "It's not a great puppy. It's so easy to find the music."
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 1,
+      "reply": "Oh, I'm really sorry about it. It's just really stressful."
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 2,
+      "reply": "What are you doing?"
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 3,
+      "reply": "Wow, that was really pretty great! It was so much fun!"
+     },
+     {
+      "prompt": "I got a new puppy.",
+      "sample": 4,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 0,
+      "reply": "Well, we're going to be a good man. We'll try it!"
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 1,
+      "reply": "I'm just trying to show it out."
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 2,
+      "reply": "It's a big deal. I'm glad you're enjoying it."
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 3,
+      "reply": "The weather is the only one of the most common people."
+     },
+     {
+      "prompt": "What should I do this weekend?",
+      "sample": 4,
+      "reply": "It's a really good idea!"
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 0,
+      "reply": "I'm glad you're enjoying it. I've been feeling a lot lately and I've been wanting to go for a while now."
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 1,
+      "reply": "I'm sorry, Mom. I didn't mean to hurt you."
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 2,
+      "reply": "Yes, I can't believe I would."
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 3,
+      "reply": "Oh, thank you. I'm glad I could help."
+     },
+     {
+      "prompt": "See you later!",
+      "sample": 4,
+      "reply": "Yes, I love you."
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 0,
+      "reply": "What happened?"
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 1,
+      "reply": "What do you mean?"
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 2,
+      "reply": "What are you going to do?"
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 3,
+      "reply": "What's wrong?"
+     },
+     {
+      "prompt": "I'm scared of the dark.",
+      "sample": 4,
+      "reply": "Why?"
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 0,
+      "reply": "Yes. The country of Eritrea is in the continent of Africa."
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 1,
+      "reply": "Yes. They speak Bengali."
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 2,
+      "reply": "Yes. They do."
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 3,
+      "reply": "Yes. They are blue."
+     },
+     {
+      "prompt": "Do you have any friends?",
+      "sample": 4,
+      "reply": "I do. They say they have fun."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 0,
+      "reply": "I don't know. I just feel like it's too dangerous."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 1,
+      "reply": "I don't know. I just feel like I'm not."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 2,
+      "reply": "I'm so happy. I've never seen it before."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 3,
+      "reply": "I'm sorry, Kyi."
+     },
+     {
+      "prompt": "Why is the sky blue?",
+      "sample": 4,
+      "reply": "It's so pretty. I don't know if I can."
+     }
+    ]
+   }
+  }
+ }
+}

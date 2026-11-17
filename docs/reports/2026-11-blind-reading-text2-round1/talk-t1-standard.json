@@ -1,0 +1,1530 @@
+{
+ "held_talk": 1,
+ "lines": "standard",
+ "system": null,
+ "decoding": {
+  "top_p": 0.9,
+  "block_repeat": 0,
+  "min_p": 0.0
+ },
+ "models": {
+  "t1s1": {
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hey, Delina. How are you doing today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hey, I'm glad you're doing well."
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm good, thanks. How about you?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm good, what's up?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm doing alright, Kill. I'm looking forward to the new signs."
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm doing alright. How are you?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "What's up?"
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "Good morning, I was just trying to catch up."
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Hey, Darmia. How are you doing?"
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "It was a good idea."
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "Yes, I did! You have a lot of fun and I'm sure you'll be able to make it home."
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "It's not going to be a little girl."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "The capital of Norway is Osmeadu."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "The capital of the United Kingdom is London."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "Are you sure you can go to the store."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "The capital of Sierra Leone is Ottawan."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "Are you sure?"
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "You're welcome. I'm glad you enjoyed it."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "You're welcome. I'm glad you're enjoying the time."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "Of course, sweetie. What's up?"
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "You're welcome, Jan. I really appreciate it."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "Of course, Davida. I'm glad you're enjoying it."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "The place where the cheetah works is the restaurant."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "Title: How can I help you?"
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "One day, a little girl named Lily went to the park with her mommy. She saw a big tree in her room. Lily was very excited and wanted to try it.\n\nLily said, \"You can't believe it. I'm so glad you're here. I'm so happy.\"\n\nLily asked, \"You're welcome, Lily. I'm glad you have a good time. I'm sorry to hear you. I'm sorry. I didn't mean"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "One day, a little girl named Lily went to the park with her mom. She saw a big, red red, and a brown ball. Lily saw a big, red balloon. It was a big balloon. Lily was sad.\n\nLily saw a balloon and said, \"Mom, can I go to the balloon?\" Lily smiled and said, \"No, you can go home and play with the balloon. You have a balloon!\"\n"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play outside and play with her toys. One day, she saw a big tree with a big tree. She wanted to play with it, so she went on the tree with a big tree.\n\nLily was sad because she didn't want to play with her toys. She looked around and saw a big tree. She saw a big tree and wanted to go to the tree. She thought it"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "One day, a little girl named Lily went to the park with her mommy. She saw a little girl who wanted to go on the swings.\n\nLily was so excited to go to the park with her mommy. She asked her mommy, \"What's that?\" Her mommy asked.\n\nLily's mommy said, \"I'm sorry, Lily. I can't wait to go home.\"\n\nLily was excited to go home and play with her mommy. She"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play with her toys and play with her toys. One day, she saw a big baket. She wanted to play with her toys, so she put it in her house.\n\nLily was so happy to see her mom. She said, \"Thank you for being here, Lily. It is my toy and she is so happy.\"\n\nLily was happy and thanked her mom for"
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "Well, I'm not sure. I'm not sure if I can help you."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I don't know. I'm just trying to get a look at this."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "Well, I've been thinking about how you're doing today and I don't know how to do it."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "You don't like it."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "Well, I was just wondering if I'm not doing anything."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "Oh, I'm glad you're enjoying it."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "I'm glad you enjoyed it."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "Why did you say that?"
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "I'm glad you're enjoying it."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "The color of the sky is blue."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "The color of the ash is gray."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "The color of the dirt is brown."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "The place of the sunflower is in the air."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "The color of the grapefruit is white."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "The color of the lamb is pink."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "The color of the pelican is orange."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "The color of the soil is pink."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "The color of the dirt is brown."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "Are you sure?"
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "Yes, people speak dogs."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "Yes, but is dogs."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "Yes, that's a good idea."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "Yes. The dogs is dogs."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "Yes, but it's not fair."
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "What happened?"
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "What happened?"
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "What's wrong?"
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "What's wrong?"
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "I'm sorry, I didn't mean to hurt you."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "It's a little bit scared."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "The number of legs that the hedgehog has is four."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "The country of Tuvalu is in the continent of Oceania."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "Twolla, koala, and hello, that is a dirty."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "I don't know. It's just a bitter."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "You're welcome."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "What do you mean?"
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "Hey, Kira. I'm sorry."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "It was a really nice day."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "Hey, Balava. I'm doing alright."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "The catfish belongs to the fish group."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "The catfish belongs to the fish group."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "The color of the lavender is purple."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "The color of the chick is yellow."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "The catfish belongs to the fish group."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "The day of the week is Saturday."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "The day afternoon is Thursday."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "The last few months ago, there were two friends named Pennha and Pennhay."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "The sun was the first day."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "It was good. I was wondering if I could do something."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "Yes, I do. I can't believe you would be in the same case."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "Yes, I do?"
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "Yes, I am."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "Yes, I do do."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "Yes, I don't want to go to the store."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "Well, you've been thinking about a lot lately."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "Well, I'm just making a difference in a lot of work."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "I'm doing okay."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "Look, I'm going to get a lot of money and I'm looking for a lot of money."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "I don't know. I just don't want to do it."
+     }
+    ]
+   }
+  },
+  "t1s2": {
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hey, Sarah. How are you doing today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hey, Camina. What's up?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm good. I've been thinking about how we've been working."
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm sorry, but I don't know how to do."
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm really glad you're going to meet you."
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm good, thank you."
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "I'm sorry, I didn't want to get it."
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "Hi, Comeyn. How are you?"
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Hey, Joi. I'm so glad you're here."
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "Wow, that was a pretty bit. It was so bad."
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "The word dishonest means the opposite of dishonest."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "The number of legs that the ladybug has is six."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "The name of a year is March."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "The words of dark and light are opposites."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "Brum is the capital of Trinidad and Tobago."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "Hey, I'm sorry. I'm just glad you're feeling well in the morning."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "You're welcome, Roral. I'm glad you're really upset."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "Hi, I'm so glad you're looking for a good job. I really appreciate it."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "So, what do you think?"
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "It's great! I'm so glad you came back."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "You can find Bhutan on the continent of Asia."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "I'm so sorry. I was just trying to be a good job."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "Yes. The color of the sunflower is yellow."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "I am counting legs. How many does the seahorse have?"
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "Yes. The words build and destroy are opposites."
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "Once upon a time, there was a little girl named Lily. She had a big dog with her dog. One day, Lily's dog wanted to see her dog. She asked her dog if she could eat it. Lily was sad because she was too big.\n\nLily wanted to eat something. She said, \"Mommy, I want to eat it. It's very good to eat it.\" Her mom smiled and said, \"Yes, it is a big dog"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play with her toys and play together. One day, she saw a big box in the box. It was a big, pink dog.\n\nLily asked her to help her. She asked her mom to help her mom. She said, \"Don't worry, I don't want to help.\"\n\nLily thought it was a big box. She said, \"Yes, you can help"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "One day, a little girl named Lily went to the park to play. She saw a big tree and wanted to play with her. She asked her mom if she could play with her toys. Her mom said, \"I can tell you what to do, but I want to play with you.\"\n\nLily's mom smiled and said, \"I want to play with my toys and make things better. You can always play with me and you can't go to the tree"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "Once upon a time there was a little boy named Timmy. Timmy loved to play with his toys. One day, Timmy's mommy told him to go to the park. Timmy was so excited to go to the park.\n\nTimmy was excited to go to the park with his mommy. He was so excited to see what he did. The boy was sad and said, \"I want to go on the slide.\" Timmy was sad and said, \"It's okay,"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "One day, a little girl named Lucy went for a walk in the park. She saw a big dog in the grass. She saw a big dog on the ground. She wanted to play with it, but it was too late. She said, \"Let's play with you, you can. You have to get it!\"\n\nHer mom said, \"No, what is that?\"\n\nThe dog smiled and said, \"It's okay, I do"
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "I'm just not sure if I can't even get her."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I'm so glad you're feeling a little better."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "I'm not sure. I was just so excited to make sure you don't have to make it."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "I was wondering if I could do that."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "I'm not sure. I'm not sure if I'm not sure if I'm not happy."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "That's great! I'm glad you're doing well."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "What is it?"
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "It's not nice to be."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "Thank you so much for helping me."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "It's amazing! I'm so happy to be here for you."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "The country of the Malle lies in Africa."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "The country of Thailand lies in Africa."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "The country of Saudi Arabia is in the continent of Asia."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "The workplace of the farmer is the farm."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "The country of Estonia is in Europe."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "The color of the cotton is white."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "The color of the chick is yellow."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "The color of the paper is white."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "The color of the cucumber is green."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "The color of the sunflower is yellow."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "Yes. The word is herd."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "Yes. The word is herd."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "Yes. The color of the duckling is yellow."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "Yes. The word is herd."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "Yes. The words smooth and rough are opposites."
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "That's a great idea! I'm glad you're ready for your time."
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "I know, I don't want to be here."
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "What do you mean?"
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "You're welcome, Minah. You're always here for you."
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "What's your day?"
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "Well, we can't be suspiciatici, so we don't need a bolt."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "I'm just really excited to have a new car."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "I don't know. I can't believe you're okay, I want to be upset."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "Yes, I don't want to be able to keep up."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "Are you sure you're here, Fredd. I'm just glad I could help you."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "Hey, Daisy. What's up?"
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "Hi! I'm really excited to try you."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "I know, honey. I'm glad you're enjoying it."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "Hi, Michard. What's up?"
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "Many visitors travel to Spain to see the Louvre."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "The cheetah lives in the savanna."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "Africa."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "Greece is in a garden."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "Africa."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "It was good. I didn't want to be able to do it."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "It was a long day and it was a big, my dad."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "It was a big day. It was a big, shiny and a pretty dress."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "It was a good time. I was thinking about you and I was looking for a lot."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "I was wondering if you could be a mud."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "Beice, I can't believe I'm not sure."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "I'm sorry, Lee. I'm so sorry. I'll be okay."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "Great! You're a bullfrog."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "What do you think of the dirt is that."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "Great! What is the symbol for boron"
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "I'm looking for a lot of books. I just wanted to have some books on a new book and I want to try to make a new book."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "I'm sorry, Rayton. I didn't mean to get you."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "I'm doing a lot of new ways."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "I don't know, I just don't know what you mean."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "I'm starting to help. I just want to help you with something."
+     }
+    ]
+   }
+  },
+  "t1small": {
+   "examples": {
+    "small_talk": [
+     {
+      "prompt": "Hello!",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hello!",
+      "sample": 4,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 0,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 1,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 2,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 3,
+      "reply": "Hello! How can I help you today?"
+     },
+     {
+      "prompt": "Hi there.",
+      "sample": 4,
+      "reply": "Hi, Slowel. How are you?"
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 0,
+      "reply": "I'm good. I'm just trying to get some new things."
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 1,
+      "reply": "I'm doing alright. Just getting ready for the refrigerator."
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 2,
+      "reply": "I'm doing alright. Just enjoying the day."
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 3,
+      "reply": "I'm doing well, thank you. Just a little down."
+     },
+     {
+      "prompt": "How are you?",
+      "sample": 4,
+      "reply": "I'm doing well, thank you. How are you?"
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 0,
+      "reply": "Oh, I'm glad you're here. I'm glad you're here."
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 1,
+      "reply": "Hi, Sharm. How are you doing?"
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 2,
+      "reply": "Hey, Maha. How are you doing?"
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 3,
+      "reply": "Hi! How are you doing today?"
+     },
+     {
+      "prompt": "Good morning.",
+      "sample": 4,
+      "reply": "Hey, Sarah. How are you?"
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 0,
+      "reply": "The symbol for chromium is Cr."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 1,
+      "reply": "The symbol for lithium is Li."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 2,
+      "reply": "The capital of Namibia is Windhoek."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 3,
+      "reply": "The capital of Belize is Belmopan."
+     },
+     {
+      "prompt": "What is your name?",
+      "sample": 4,
+      "reply": "A baby sea lion is called a pup."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 0,
+      "reply": "You're welcome, Davis. I'm glad you could help me."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 1,
+      "reply": "Of course, Kaan. I'm glad you're enjoying it."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 2,
+      "reply": "You're welcome, Charlie. I'm glad I could help."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 3,
+      "reply": "Of course, Melena. I really appreciate it."
+     },
+     {
+      "prompt": "Thank you.",
+      "sample": 4,
+      "reply": "You're welcome. I'm glad I could help."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 0,
+      "reply": "What is a group of ducks?"
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 1,
+      "reply": "I'm happy to help. I'm glad you're enjoying it."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 2,
+      "reply": "You can see the Louislin?"
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 3,
+      "reply": "Sure, I can't help you. I'm a big bag."
+     },
+     {
+      "prompt": "Can you help me?",
+      "sample": 4,
+      "reply": "You can see a big big, scary in it."
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 0,
+      "reply": "The little girl was very happy. She had a great time and she loved to play outside. She was playing outside when she was playing outside. Suddenly, she heard a loud noise.\n\n\"What are you doing, Lily?\" she asked.\n\n\"I'm not going to go outside and see what's inside. I'm going to try to find something else to do. I'm going to be there. It's so much fun!\"\n\nLily was excited"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 1,
+      "reply": "Once upon a time, there was a little girl named Lily. She loved to play outside and explore the world. One day, she went to the park with her mom. She saw a big, red ball. It was a big, red ball.\n\nLily wanted to play with it. She asked her mom what it was. Her mom said it was a ball. She said they needed to go inside and play.\n\nLily was scared, but she didn't"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 2,
+      "reply": "One day, a little girl named Lily went to the park with her mommy. She saw a big hill and wanted to go to the hill. She asked her mommy to buy some food and make a new bicycle. Her mommy said, \"What are you doing, Lily?\"\n\nLily was happy because she was playing with her toys. She asked her mommy to help her make a bicycle. Her mommy said, \"I love your bicycle"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 3,
+      "reply": "Once upon a time there was a little girl named Lily. She loved to play outside and explore. One day, she saw a big, red bark in the sky. She wanted to play with it.\n\nLily asked her mom for help. Her mom said yes, and Lily said, \"You can play with me.\"\n\nLily smiled and said, \"Yes, Lily. I'm going to play with my bark.\"\n\nLily went to the park"
+     },
+     {
+      "prompt": "Tell me a story.",
+      "sample": 4,
+      "reply": "One day, a little girl named Lily went to the park with her mom. Lily was very excited because she wanted to go on a trip. She asked her mom if she could go to the park. Her mom said yes, but she didn't like the park.\n\nLily asked her mom if she could go. Her mom said yes and she said they could go to the park. Lily didn't want to go to the park and play with the park. She told"
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 0,
+      "reply": "I don't know. It's just so frustrating."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 1,
+      "reply": "I don't know. I just feel like I'm not a big deal."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 2,
+      "reply": "I like to play with my shoes."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 3,
+      "reply": "I like to be more careful. I love to be more careful."
+     },
+     {
+      "prompt": "What do you like to do?",
+      "sample": 4,
+      "reply": "I don't know. It's not a real thing."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 0,
+      "reply": "Oh, I'm glad you're here. I've been wanting to get to a new school and you've been on a lot lately."
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 1,
+      "reply": "What are you doing?"
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 2,
+      "reply": "Why?"
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 3,
+      "reply": "It was great. How did you do that?"
+     },
+     {
+      "prompt": "I am happy today.",
+      "sample": 4,
+      "reply": "I'm glad you're enjoying your day. You have a lot of fun."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 0,
+      "reply": "It's so sweet of you, Mrs. Twenty. I don't like being scared."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 1,
+      "reply": "It's nice to meet you. I'm glad you're enjoying it."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 2,
+      "reply": "The sagece uses the sageal at work."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 3,
+      "reply": "It's not nice to hear."
+     },
+     {
+      "prompt": "Tell me a joke.",
+      "sample": 4,
+      "reply": "The rake is a kind of mammal."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 0,
+      "reply": "The color of the bluebell is blue."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 1,
+      "reply": "The color of the ruby is red."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 2,
+      "reply": "The color of the mud is pink."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 3,
+      "reply": "The color of the mud is brown."
+     },
+     {
+      "prompt": "What is your favorite color?",
+      "sample": 4,
+      "reply": "I'm feeling very proud of you."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 0,
+      "reply": "Yes, they are. They have fun."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 1,
+      "reply": "Yes, please. They are happy."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 2,
+      "reply": "Yes, I do. They're too short."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 3,
+      "reply": "Yes, I am. They are big and red."
+     },
+     {
+      "prompt": "Do you like dogs?",
+      "sample": 4,
+      "reply": "I have dogs. They have a lot of yummy."
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 0,
+      "reply": "It's okay, I know you're not bad. You're not good enough."
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 1,
+      "reply": "What happened?"
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 2,
+      "reply": "I'm sorry, Kenh. I'm sorry."
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 3,
+      "reply": "What's wrong? You're being a little tired, sweetie."
+     },
+     {
+      "prompt": "I feel sad.",
+      "sample": 4,
+      "reply": "I'm sorry, I didn't mean to hurt you."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 0,
+      "reply": "The lumberjack uses the whistle at work."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 1,
+      "reply": "The lithu eats grass."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 2,
+      "reply": "The lunch goes to the fish group."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 3,
+      "reply": "The baker use the lunch for lunch and lunch."
+     },
+     {
+      "prompt": "What should I eat for lunch?",
+      "sample": 4,
+      "reply": "The lunch goes to the protein food group."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 0,
+      "reply": "Hey, Larry. How are you doing?"
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 1,
+      "reply": "You're welcome. You're a great boy."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 2,
+      "reply": "I'm glad you like it!"
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 3,
+      "reply": "Oh, thank you."
+     },
+     {
+      "prompt": "Goodbye.",
+      "sample": 4,
+      "reply": "I'm glad you're enjoying it."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 0,
+      "reply": "What kind of cats are you doing?"
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 1,
+      "reply": "The catfish makes its home in the ocean."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 2,
+      "reply": "It's pretty good. I've been having a lot of trouble with my work."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 3,
+      "reply": "You're welcome. I'm glad you like them."
+     },
+     {
+      "prompt": "Tell me about cats.",
+      "sample": 4,
+      "reply": "It's not a big blue dress."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 0,
+      "reply": "It was doing well, thanks for asking."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 1,
+      "reply": "It was good. I was walking to the park with the park."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 2,
+      "reply": "It was good. I was looking forward to the park."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 3,
+      "reply": "It was good."
+     },
+     {
+      "prompt": "How was your day?",
+      "sample": 4,
+      "reply": "The hot air balloon was shy."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 0,
+      "reply": "Mean, I have a big party."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 1,
+      "reply": "Yes, please. We have a lot of fun."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 2,
+      "reply": "I have a lot of fun. I'm happy to be here for you."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 3,
+      "reply": "Oh no, no! I'm so happy to be here."
+     },
+     {
+      "prompt": "Can we be friends?",
+      "sample": 4,
+      "reply": "I'm doing well, thank you. How are you?"
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 0,
+      "reply": "I'm just not sure."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 1,
+      "reply": "I'm going to do a lot of work, but I'm not sure."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 2,
+      "reply": "I don't know, I don't know."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 3,
+      "reply": "I don't know, I just wanted to talk to you about something."
+     },
+     {
+      "prompt": "What can you do?",
+      "sample": 4,
+      "reply": "I'm sorry, I didn't mean to hurt you."
+     }
+    ]
+   }
+  }
+ }
+}
