@@ -239,3 +239,40 @@ Each text-2 AI against each text-1 AI: +19 to +38 points on the standard lines a
 
   The rule was a rise of at least 3 points; no setting reaches it on all three models (the changes are within the 5-to-10-point spread between seeds, and they point both ways), fits and on-topic rates barely move, and loops are already stopped by the served loop check. The code was removed again, as the plan requires when nothing is adopted.
 
+
+## 7. Brain design 2 (plan B, spec §5.5): dropped
+**What was tried (2026-11-22, RTX 3050, engine 3, training text 2 in `data2/`).** The lab model `LabTransformer` (`docs/handoff/next-level/arch_lab.py`, a8c9e0f and 899da37) switches on each of the five changes of spec §5.5 alone and then all together: output projections that start at zero (`zero`), normalised queries and keys with a learned scale (`qk`), a norm right after the embedding (`emb`), a two-matrix squared-ReLU feed-forward of the same size in place of SwiGLU (`relu2`), RoPE base 500 (`rope`), all five (`all`). Each design trained a brand-new Tiny, Small and Medium brain, two seeds each, for the same wall time as today's design (`base`) at 12.6M, 12.6M and 25.2M tokens: a design's tokens are today's tokens times its measured speed share. The first attempt (2026-11-17) stopped when the session ended during the Medium timing and was run again from its cached timings. Command: from `ml/`, `AIRACE_DATA=../data2 python -m uv run python ../docs/handoff/next-level/arch_lab.py --out runs/arch-lab --bench base all`; results in `ml/runs/arch-lab/results.json` (not committed).
+
+**Speed (tokens per second of training, 80 timed steps after 20 warm-up steps; today's design timed before and after the others).** The owner's own GPU work did not disturb the measurements: today's design measured 297,043 then 296,897 (Tiny), 175,341 then 174,407 (Small), 105,853 then 105,791 (Medium), at most 0.5% apart.
+
+| design | Tiny | share | Small | share | Medium | share |
+|---|---|---|---|---|---|---|
+| base | 296,970 | 100% | 174,874 | 100% | 105,822 | 100% |
+| zero | 296,808 | 99.9% | 174,617 | 99.9% | 106,539 | 100.7% |
+| qk | 240,970 | 81.1% | 135,029 | 77.2% | 80,983 | 76.5% |
+| emb | 293,575 | 98.9% | 173,616 | 99.3% | 105,861 | 100.0% |
+| relu2 | 257,497 | 86.7% | 148,632 | 85.0% | 88,158 | 83.3% |
+| rope | 296,724 | 99.9% | 174,464 | 99.8% | 105,898 | 100.1% |
+| all | 214,320 | 72.2% | 117,955 | 67.5% | 68,388 | 64.6% |
+
+**Held-out loss at equal time (text 2; mean of the two seeds, in brackets the difference to base; lower is better).**
+
+| design | Tiny | Small | Medium |
+|---|---|---|---|
+| base | 2.3442 | 2.2124 | 2.0169 |
+| zero | 2.3540 (+0.0098) | 2.2138 (+0.0015) | 2.0142 (−0.0028) |
+| qk | 2.3777 (+0.0335) | 2.2312 (+0.0188) | 2.0369 (+0.0200) |
+| emb | 2.3565 (+0.0122) | 2.2213 (+0.0090) | 2.0225 (+0.0056) |
+| relu2 | 2.3699 (+0.0257) | 2.2380 (+0.0256) | 2.0374 (+0.0204) |
+| rope | 2.3444 (+0.0001) | 2.2308 (+0.0184) | 2.0214 (+0.0045) |
+| all | 2.4015 (+0.0573) | 2.3010 (+0.0886) | 2.0826 (+0.0656) |
+
+The two seeds of today's design differ by 0.003 (Tiny), 0.011 (Small) and 0.006 (Medium). `all` is worse than both seeds of base in each of its six runs (Tiny 2.380 and 2.423, Small 2.285 and 2.317, Medium 2.077 and 2.088). The only design ahead anywhere, `zero` on Medium, is ahead by 0.003, inside the spread between seeds. The loss on the yardstick's text-1 lines points the same way for `all` (+0.025, +0.018, +0.022); for single changes it moves by up to 0.08 between seeds on Medium and decides nothing.
+
+**Bench v1 (overall, mean of two seeds).** base 48.9, 56.2, 64.2; all 46.5 (−2.4), 52.4 (−3.8), 62.5 (−1.8) on Tiny, Small and Medium.
+
+**Gate lines as printed:**
+- all together: better by ≥ 0.04 held-out loss on every size: no; by ≥ 3 bench points on every size: no
+- zero, qk, emb, relu2, rope: better by ≥ 0.04 held-out loss on every size: no
+
+**Decision: dropped; today's design stays.** On a card like the owner's, each change either slows every step more than it helps each step (normalised queries and keys by about a fifth, the squared-ReLU feed-forward by about a sixth, all five by about a third) or keeps the speed and moves held-out loss by no more than the difference between two seeds, so together they lose on every size and every seed. Nothing of design 2 enters the product: no `arch: 2`, no change to the helper or the engine; the lab model stays in `docs/handoff/next-level/arch_lab.py` as the record. Not measured, and not a reason to try again: whether the changes are better per token (in the game a run's length is real time on a player's card, so equal time is the fair comparison). Plan C, the release (spec §5.6), is next.

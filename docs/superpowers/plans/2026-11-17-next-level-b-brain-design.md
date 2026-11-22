@@ -39,16 +39,16 @@
 - RoPE base: the lab builds its own RoPE tables with `options.rope_base` (the product's module constant `ROPE_BASE` is not patched).
 - `save_lab_arch(out_dir: Path, options: ArchOptions) -> None` (writes `lab_arch.json`) and `load_lab_model(out_dir: Path, device) -> LabTransformer` (reads `lab_arch.json`, the run's meta for the shape and the weights; refuses a folder without `lab_arch.json`).
 
-- [ ] **Step 1: failing tests** in `ml/tests/test_arch_lab.py`:
+- [x] **Step 1: failing tests** in `ml/tests/test_arch_lab.py`:
   - `test_base_options_give_the_product_model`: with `ArchOptions()` and the same `torch.manual_seed`, `LabTransformer` has exactly the product `Transformer`'s parameter names and shapes, equal initial values and equal logits on random tokens (`torch.equal`).
   - `test_each_change_does_what_it_says`: `zero_out` → every `wo` and `w_down` is all zero at the start; `qk_norm` → logits unchanged when `wq` and `wk` of one block are multiplied by 3 (to 1e-5); `emb_norm` → the hidden state after the embedding has root-mean-square 1 per position (to 1e-4) before the first block; `relu2` → no `w_gate`, parameter count within 1% of the base model's; `rope_base=500.0` → the lab's cos table at position 1 equals `cos(1 * 500 ** (-2i/HEAD_DIM))`.
   - `test_the_optimizer_takes_every_new_parameter_once`: `trainer._make_optimizer(LabTransformer(..., ArchOptions.all()), style)` puts every 2-D weight but the embedding in the Muon group, the embedding alone in its group, every 1-D gain (the new norms included) in the gains group; the union is every parameter, each once.
   - `test_the_cache_gives_the_same_reply` for `ArchOptions.all()`: greedy generation of 20 tokens through `TorchLM.generate` equals greedy decoding by repeated full forward passes without a cache.
   - `test_a_lab_folder_is_never_a_product_checkpoint`: a saved all-on lab model loads with `load_lab_model` to equal logits; `load_lab_model` on a folder without `lab_arch.json` raises; the product `load_checkpoint` on the lab folder raises (no partial load).
-- [ ] **Step 2: run them, see them fail:** `cd ml && python -m uv run pytest tests/test_arch_lab.py -q -p no:cacheprovider` → errors (no lab file).
-- [ ] **Step 3: implement** the model part of `arch_lab.py` (subclass `Attention`, the feed-forward and `Block` as needed; reuse the product's `RMSNorm`, `_apply_rope`, `_attention_mask`, KV cache).
-- [ ] **Step 4: pass:** the same command → all pass; `python -m uv run ruff check ../docs/handoff/next-level/arch_lab.py tests/test_arch_lab.py` clean.
-- [ ] **Step 5: commit** `docs: the brain-design lab, its model class`.
+- [x] **Step 2: run them, see them fail:** `cd ml && python -m uv run pytest tests/test_arch_lab.py -q -p no:cacheprovider` → errors (no lab file).
+- [x] **Step 3: implement** the model part of `arch_lab.py` (subclass `Attention`, the feed-forward and `Block` as needed; reuse the product's `RMSNorm`, `_apply_rope`, `_attention_mask`, KV cache).
+- [x] **Step 4: pass:** the same command → all pass; `python -m uv run ruff check ../docs/handoff/next-level/arch_lab.py tests/test_arch_lab.py` clean.
+- [x] **Step 5: commit** `docs: the brain-design lab, its model class`.
 
 ### Task 2: the screen at equal time
 **Files:**
@@ -65,14 +65,16 @@
 - Measures per run: the trainer's held-out mean (data2's own held-out text), `yardstick_loss` (text 1's conversations, `--yardstick-root ../data`), training seconds, the budget; bench-v1 overall for the variants named in `--bench`.
 - Tables: per size, each variant's mean over seeds and its difference to `base`; then the gate line, word for word: "all together: better by ≥ 0.04 held-out loss on every size: yes/no; by ≥ 3 bench points on every size: yes/no", and the same line for each single change.
 
-- [ ] **Step 1: failing tests:** `test_the_screen_runs_on_the_tiny_fixture` (the CLI with hidden `--tiny-root DIR --device cpu` options on the trainer tests' tiny data and shapes, one seed, variants `base` and `all`: exit 0, `results.json` holds both, the trainer is restored afterwards); `test_a_run_of_one_design_is_never_reused_for_another` (a second call with `all` replaced by `qk` trains `qk` and reuses `base`); `test_budgets_follow_speed_and_stay_in_bounds` (`base` 1,000 tokens/s and a variant at 800 get 80% of the steps; a variant at 300 gets 50%, at 2,000 gets 150%); `test_unsteady_timing_stops_the_screen` (two baseline speeds 6% apart raise the lab's error).
-- [ ] **Step 2: run, see them fail.**
-- [ ] **Step 3: implement.**
-- [ ] **Step 4: pass:** `python -m uv run pytest tests/test_arch_lab.py -q -p no:cacheprovider`; ruff clean.
-- [ ] **Step 5: commit** `docs: the brain-design screen at equal time`.
+- [x] **Step 1: failing tests:** `test_the_screen_runs_on_the_tiny_fixture` (the CLI with hidden `--tiny-root DIR --device cpu` options on the trainer tests' tiny data and shapes, one seed, variants `base` and `all`: exit 0, `results.json` holds both, the trainer is restored afterwards); `test_a_run_of_one_design_is_never_reused_for_another` (a second call with `all` replaced by `qk` trains `qk` and reuses `base`); `test_budgets_follow_speed_and_stay_in_bounds` (`base` 1,000 tokens/s and a variant at 800 get 80% of the steps; a variant at 300 gets 50%, at 2,000 gets 150%); `test_unsteady_timing_stops_the_screen` (two baseline speeds 6% apart raise the lab's error).
+- [x] **Step 2: run, see them fail.**
+- [x] **Step 3: implement.**
+- [x] **Step 4: pass:** `python -m uv run pytest tests/test_arch_lab.py -q -p no:cacheprovider`; ruff clean.
+- [x] **Step 5: commit** `docs: the brain-design screen at equal time`.
 
 ### Task 3: run the screen and decide (the lead)
-- [ ] **Step 1:** nothing else running; from `ml/`: `AIRACE_DATA=../data2 python -m uv run python ../docs/handoff/next-level/arch_lab.py --out runs/arch-lab --bench base all > runs/arch-lab.log 2>&1` (about five hours; it keeps the PC awake).
-- [ ] **Step 2:** apply the gate in Global Constraints. Write ADR 0010 section 7 "Brain design 2": the timing table, the loss and bench table per size, the gate lines, and the decision (built, built for one change only, or dropped) with the reason in one sentence.
-- [ ] **Step 3:** if dropped: plan C (the release) is next. If built: write plan B2 (design 2 in the product: `arch: 2` in the checkpoint meta; brand-new AIs use it everywhere and an AI that continues an earlier one keeps its family; growth, the KV cache and exact resume proven again by the tests of design 1; the helper carries both; the engine raised) from spec section 5.5's last paragraph.
-- [ ] **Step 4:** ledger, `docs/progress.md`, push.
+- [x] **Step 1:** nothing else running; from `ml/`: `AIRACE_DATA=../data2 python -m uv run python ../docs/handoff/next-level/arch_lab.py --out runs/arch-lab --bench base all > runs/arch-lab.log 2>&1` (about five hours; it keeps the PC awake).
+- [x] **Step 2:** apply the gate in Global Constraints. Write ADR 0010 section 7 "Brain design 2": the timing table, the loss and bench table per size, the gate lines, and the decision (built, built for one change only, or dropped) with the reason in one sentence.
+- [x] **Step 3:** if dropped: plan C (the release) is next. If built: write plan B2 (design 2 in the product: `arch: 2` in the checkpoint meta; brand-new AIs use it everywhere and an AI that continues an earlier one keeps its family; growth, the KV cache and exact resume proven again by the tests of design 1; the helper carries both; the engine raised) from spec section 5.5's last paragraph.
+- [x] **Step 4:** ledger, `docs/progress.md`, push.
+
+**Outcome (2026-11-22):** dropped; ADR 0010 section 7. Plan C (the release) is next.
