@@ -1,5 +1,7 @@
 # Handoff: resuming AI Race development
 
+**Start with `docs/handoff/next-steps.md` (2026-11-23): the current state, the release and the game document. Where it differs from older sections below, it wins.**
+
 First written 2026-10-07 by the local Claude Code session (Windows desktop). **Updated 2026-10-14 by the cloud session**, which did Tasks 12–20 (code) and is finishing the final whole-branch review. **Read this whole file first.**
 
 ## 1. Who you're working for (persistent memory, not otherwise in the repo)

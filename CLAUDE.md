@@ -5,6 +5,7 @@ A multiplayer strategy sandbox where each player runs an AI company and trains a
 **Design authority:** `AI_Race_Game_Design_Document_Updated.pdf` and `Fun_Features_to_Add.pdf` (repo root).
 **Architecture spec:** `docs/superpowers/specs/2026-10-06-ai-race-architecture-design.md`. Read it before any significant change.
 **Progress log:** `docs/progress.md`. Update it at every meaningful milestone or handoff.
+**Start here for what is next:** `docs/handoff/next-steps.md` (the release, then the ultimate game document).
 **Cross-session handoff:** `docs/handoff/README.md` (resume guide) and `docs/handoff/sdd/ledger.md` (execution ledger with every ruling). Read both when picking up work.
 
 ## Working agreement with the product owner

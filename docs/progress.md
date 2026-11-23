@@ -2,6 +2,10 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-11-23 — What comes next, saved outside the chat
+- The owner will start **the release** in another session; **the ultimate game document** (requested 2026-11-04, paused until friend play existed) follows right after it. State, release checklist and the document's full brief: `docs/handoff/next-steps.md`.
+- Clarified: the main game already runs engine 3 but still reads text 1; text 2, the AI's name and the new default reading reach it with the release.
+
 ## 2026-11-22 — Next-level plan B: brain design 2 screened and dropped
 - **What was tested:** the five changes to the brain's design that spec section 5.5 lists (output layers that start at zero, normalised attention, a norm after the word table, a different feed-forward, a shorter position scale), one at a time and all together, each training brand-new Tiny, Small and Medium brains on text 2 for the same real time as today's design on the RTX 3050 (two seeds each). Plan `docs/superpowers/plans/2026-11-17-next-level-b-brain-design.md`; lab `docs/handoff/next-level/arch_lab.py`.
 - **Result (ADR 0010 section 7):** all five together are worse on every size and every seed (held-out loss +0.06 to +0.09, benchmark 2 to 4 points lower). Three of the changes slow every training step (all together by about a third), and on a card like the owner's that costs more than they gain; the other two keep the speed and change nothing beyond seed noise. The gate (better by 0.04 on every size, or by 3 benchmark points) is missed by every design. **Dropped:** today's brain design stays and nothing in the product changes.
