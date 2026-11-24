@@ -17,6 +17,9 @@ from urllib.parse import parse_qs, urlparse
 from airace_ml.data.identity import data_identity
 
 DATA_DIRS = ("corpus", "tokenizer", "judge", "novelty", "rivals")
+# A helper never reads a rival pack: rival AIs reach it as checkpoints through the game's blob
+# store. Hosts from before the release of text 2 still list the packs; their files are skipped.
+SKIPPED_DIRS = ("rivals",)
 IDENTITY_CHANGED = "The game's data changed; run the helper setup again."
 TIMEOUT_S = 60
 _CHUNK = 1 << 20
@@ -98,8 +101,11 @@ def fetch_data(server: str, key: str, root: Path, *, say: Callable[[str], None] 
     except (urllib.error.URLError, OSError, ValueError) as e:
         raise FetchError(f"the game couldn't be reached at {base} ({e})") from e
 
-    files = manifest.get("files") or []
-    plan = [(f, _local(root, f["path"])) for f in files]
+    listed = manifest.get("files") or []
+    plan = [(f, _local(root, f["path"])) for f in listed]
+    skipped = {p for f, p in plan if PurePosixPath(f["path"]).parts[0] in SKIPPED_DIRS}
+    plan = [(f, p) for f, p in plan if p not in skipped]
+    files = [f for f, _ in plan]
     total = sum(int(f["size"]) for f in files)
     say(f"Checking the game's data ({len(files)} files, {total // 2**20:,} MB)...")
     todo = [

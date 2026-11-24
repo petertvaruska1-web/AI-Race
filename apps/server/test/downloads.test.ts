@@ -24,6 +24,7 @@ function dataRoot(): string {
     "judge/v1/model.safetensors": "judge-weights",
     "novelty/v1/index.bin": "novelty",
     "rivals/v1/pack.json": "{}",
+    "yardstick/corpus/v1/web/info.json": '{"docs": 2}',
     "helper/ml.zip": "PK-fake-zip",
     "server/secret": "never-shared",
     "server/worker-token": "never-shared",
@@ -78,7 +79,6 @@ describe("downloading the helper from the game", () => {
       "corpus/web/tokens.bin",
       "judge/v1/model.safetensors",
       "novelty/v1/index.bin",
-      "rivals/v1/pack.json",
       "tokenizer/tok-v1.json",
     ]);
     for (const f of manifest.files) {
@@ -94,7 +94,11 @@ describe("downloading the helper from the game", () => {
     const zip = await fetch(`${server.url}/helper/ml.zip`, { headers: auth });
     expect(await zip.text()).toBe("PK-fake-zip");
 
+    // A helper never reads a rival pack (rival AIs come through the blob store) or the
+    // measuring stick, so neither is ever downloaded.
     for (const path of [
+      "rivals/v1/pack.json",
+      "yardstick/corpus/v1/web/info.json",
       "server/secret",
       "server/worker-token",
       "helper/ml.zip",

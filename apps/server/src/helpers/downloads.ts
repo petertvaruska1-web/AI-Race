@@ -11,8 +11,12 @@ import { helperKeyFor, userOfHelperKey } from "./keys.ts";
 
 /** The helper's setup script and the template of its setup file. */
 const HELPER_TOOLS = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../tools/helper");
-/** The data a helper needs, under the data root; nothing else there is ever served. */
-export const HELPER_DATA_DIRS = ["corpus", "tokenizer", "judge", "novelty", "rivals"] as const;
+/**
+ * The data a helper needs, under the data root; nothing else there is ever served. Rival packs
+ * are not among it: a helper gets a rival AI as a checkpoint from the blob store
+ * (`RivalService.modelUrl`), so friends don't download every pack.
+ */
+export const HELPER_DATA_DIRS = ["corpus", "tokenizer", "judge", "novelty"] as const;
 
 export type ManifestFile = { path: string; size: number; sha256: string };
 export type DataManifest = { dataIdentity: string | null; files: ManifestFile[] };

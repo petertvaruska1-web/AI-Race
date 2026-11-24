@@ -125,6 +125,15 @@ def test_a_file_outside_the_game_data_is_refused(host, tmp_path):
     assert not (tmp_path / "evil.txt").exists()
 
 
+def test_files_of_rival_packs_in_an_older_hosts_list_are_skipped(host, tmp_path):
+    host["files"]["rivals/v1/rivals.json"] = b'{"version": "rivals-v1"}'
+    root = tmp_path / "data"
+    _fetch(host, root)
+    assert data_identity(root) == host["identity"]
+    assert not (root / "rivals").exists()
+    assert all(not rel.startswith("rivals/") for rel, _ in host["gets"])
+
+
 def test_the_cli_says_when_the_game_data_changed(host, tmp_path, capsys):
     host["identity"] = "something-else"
     code = main(

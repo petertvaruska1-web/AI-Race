@@ -38,7 +38,8 @@ firewall: allow it on private networks.
 2. Joins your world with its invite code (the world's settings show it).
 3. Presses **Connect your computer** → **Get the helper**, and runs the downloaded
    `AI Race Helper setup.cmd`. The first time takes about 15 minutes: it installs Python and the
-   AI libraries (about 3 GB) and downloads the game's data (about 1.1 GB). Later it only fetches
+   AI libraries (about 3 GB) and downloads the game's data (about 750 MB: the training text, the
+   judge and the word index; rival AIs come one at a time when needed). Later it only fetches
    what changed.
 4. Presses **Connect your computer** again whenever they play: the browser asks to open the
    helper, which then trains their AIs on their own graphics card.
