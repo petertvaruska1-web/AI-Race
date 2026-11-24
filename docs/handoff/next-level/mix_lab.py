@@ -17,13 +17,13 @@ from pathlib import Path
 from airace_ml.awake import stay_awake
 from airace_ml.experiments import scorecard as sc
 from airace_ml.experiments.scorecard_report import write_reports
-from airace_ml.paths import data_root
+from airace_ml.paths import data_root, yardstick_root
 
 p = argparse.ArgumentParser()
 p.add_argument("--conversations", type=float, required=True)
 p.add_argument("--out", type=Path, required=True)
 p.add_argument("--seeds", type=int, nargs="+", default=[1, 2])
-p.add_argument("--yardstick-root", type=Path, default=Path("../data"))
+p.add_argument("--yardstick-root", type=Path, default=yardstick_root(Path("../data")))
 a = p.parse_args()
 
 if not 0.0 < a.conversations < 1.0:

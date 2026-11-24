@@ -23,7 +23,10 @@ TEXT1_SOURCES = sources_needed(DATASET_IDS, simple_vocab=True)
 def _lines(**kwargs) -> list[str]:
     lines: list[str] = []
     root = kwargs.pop("root")
-    build_corpus(kwargs.pop("scale", "tiny"), root, FETCH, seed=0, progress=lines.append, **kwargs)
+    text = kwargs.pop("text", 1)  # the stages of the text-1 build, whose sources it names
+    build_corpus(
+        kwargs.pop("scale", "tiny"), root, FETCH, seed=0, progress=lines.append, text=text, **kwargs
+    )
     return lines
 
 

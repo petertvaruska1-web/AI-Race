@@ -31,19 +31,19 @@ def test_a_text_2_build_lands_in_corpus_v2_and_reads_back_as_text_2(text2_root):
         assert Corpus.open(corpus_dir(text2_root) / ds).n_docs > 0
 
 
-def test_a_build_without_a_text_is_text_1_in_an_empty_root_and_the_held_text_after(
-    tmp_path, text2_root
-):
-    build_corpus("tiny", tmp_path, FETCH, seed=0)
-    assert corpus_version(tmp_path) == "v1"
-    assert read_manifest(corpus_dir(tmp_path))["corpus_version"] == "v1"
-    # a rebuild without --text goes on with the text the root holds
-    build_corpus("tiny", text2_root, FETCH, seed=0, datasets=["web"])
-    assert corpus_version(text2_root) == "v2" and not (text2_root / "corpus" / "v1").exists()
+def test_a_build_without_a_text_is_text_2_in_an_empty_root_and_the_held_text_after(tmp_path):
+    build_corpus("tiny", tmp_path / "new", FETCH, seed=0)
+    assert corpus_version(tmp_path / "new") == "v2"
+    assert read_manifest(corpus_dir(tmp_path / "new"))["corpus_version"] == "v2"
+    # a rebuild without --text goes on with the text the root holds, text 1 included
+    text1 = tmp_path / "text1"
+    build_corpus("tiny", text1, FETCH, seed=0, text=1)
+    build_corpus("tiny", text1, FETCH, seed=0, datasets=["web"])
+    assert corpus_version(text1) == "v1" and not (text1 / "corpus" / "v2").exists()
 
 
 def test_a_root_that_holds_one_text_refuses_a_build_of_the_other(tmp_path, text2_root):
-    build_corpus("tiny", tmp_path, FETCH, seed=0)
+    build_corpus("tiny", tmp_path, FETCH, seed=0, text=1)
     before = sorted(p.name for p in (tmp_path / "corpus").iterdir())
     with pytest.raises(BuildError, match="text 1"):
         build_corpus("tiny", tmp_path, FETCH, seed=0, text=2)

@@ -21,7 +21,7 @@ from airace_ml.data.corpus import DATASET_IDS, Corpus
 from airace_ml.data.identity import data_identity
 from airace_ml.data.prep import CLEANING_THRESHOLDS, PrepConfig, eligible_docs
 from airace_ml.evals.suite import SUITE_VERSION
-from airace_ml.paths import TOKENIZER_VERSION, corpus_dir, tokenizer_path
+from airace_ml.paths import TOKENIZER_VERSION, corpus_dir, text_version, tokenizer_path
 from airace_ml.tokenizer import Tok
 
 CATALOG_VERSION = "catalog-v3"  # v2: Fact-check plus pools, keynote questions; v3: interview cards
@@ -54,6 +54,14 @@ BLURBS = {
     "reasoning": "Puzzles and step-by-step problem solving.",
     "facts": "Short reference entries and quiz sheets about the world.",
     "creative": "Short stories, poems and story requests.",
+}
+# Training text 2's conversations are the game's own short chats with a small, friendly AI
+# (ADR 0010 §5.1), not two people talking.
+BLURBS_TEXT_2 = {
+    **BLURBS,
+    "conversations": (
+        "Short chats between people and a friendly AI: questions, requests and small talk."
+    ),
 }
 
 
@@ -170,8 +178,10 @@ def reference_traits(population_dirs: Sequence[Path]) -> list[dict[str, float]]:
 def build_catalog(root: Path, population_dirs: Sequence[Path] = ()) -> dict:
     """The catalog of the data under ``root`` (see the module docstring)."""
     tok = Tok.load(tokenizer_path(root))
+    blurbs = BLURBS_TEXT_2 if text_version(root) >= 2 else BLURBS
     datasets = [
         describe_dataset(tok, Corpus.open(corpus_dir(root) / ds), ds, seed=1000 * k)
+        | {"blurb": blurbs[ds]}
         for k, ds in enumerate(DATASET_IDS)
     ]
     return {

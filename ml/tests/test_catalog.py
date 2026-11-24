@@ -176,3 +176,16 @@ def test_fact_check_plus_keeps_less_than_thorough_cleaning_and_forces_both_check
         assert expert == set(
             eligible_docs(corpus, PrepConfig("expert", dedup=True, fact_check=True)).tolist()
         )
+
+
+def test_the_conversations_card_describes_the_text_the_root_holds(tiny_data_root, data_root_copy):
+    def blurb(root):
+        return next(d["blurb"] for d in build_catalog(root)["datasets"] if d["id"] == "conversations")
+
+    assert blurb(tiny_data_root) == "People talking and answering each other."
+    corpus = data_root_copy / "corpus"
+    (corpus / "v1").rename(corpus / "v2")
+    (corpus / "v2" / "manifest.json").write_text("{}", encoding="utf-8")
+    assert blurb(data_root_copy) == (
+        "Short chats between people and a friendly AI: questions, requests and small talk."
+    )

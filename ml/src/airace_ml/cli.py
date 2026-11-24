@@ -68,7 +68,14 @@ from airace_ml.experiments.scorecard import RECIPES, ScorecardSetupError, run_sc
 from airace_ml.experiments.scorecard_report import compare, notes, unlike, write_reports
 from airace_ml.infer.lm import TorchLM
 from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME, load_checkpoint
-from airace_ml.paths import data_root, judge_dir, novelty_path, rivals_dir, tokenizer_path
+from airace_ml.paths import (
+    data_root,
+    judge_dir,
+    novelty_path,
+    rivals_dir,
+    tokenizer_path,
+    yardstick_root,
+)
 from airace_ml.personality.fingerprint import TRAITS, measure_fingerprint
 from airace_ml.rivals.build import PackFolderError, build_rival_pack, check_pack_folder
 from airace_ml.tokenizer import Role, Tok
@@ -349,7 +356,8 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         metavar="DIR",
         help="data root whose judge, novelty index and held-out conversations every model is "
-        "measured against (default: the data root)",
+        "measured against (default: <data root>/yardstick, text 1, when it is there; else the "
+        "data root)",
     )
     card.add_argument(
         "--recipes",
@@ -1244,7 +1252,7 @@ def _cmd_scorecard(args: argparse.Namespace) -> int:
     device = _device(args)
     _require_gpu_unless_cpu_asked(args, device, "the scorecard")
     root = _data_root(args)
-    yardstick = args.yardstick_root if args.yardstick_root is not None else root
+    yardstick = args.yardstick_root if args.yardstick_root is not None else yardstick_root(root)
     _require_folder_path(args.out, "--out")
     baseline = _read_baseline(args.baseline) if args.baseline is not None else None
     _announce_device(args, device)

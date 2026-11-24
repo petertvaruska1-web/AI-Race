@@ -35,3 +35,11 @@ def test_a_data_root_reads_the_text_it_holds(tmp_path):
     assert paths.corpus_version(tmp_path) == "v2" and paths.text_version(tmp_path) == 2
     assert paths.corpus_dir(tmp_path) == tmp_path / "corpus" / "v2"
     assert paths.corpus_dir(tmp_path, "v1") == tmp_path / "corpus" / "v1"
+
+
+def test_the_yardstick_is_its_own_folder_once_the_release_made_one(tmp_path):
+    assert paths.yardstick_root(tmp_path) == tmp_path  # before the release: the root itself
+    (tmp_path / "yardstick").mkdir()
+    assert paths.yardstick_root(tmp_path) == tmp_path  # a folder without text is not one
+    (tmp_path / "yardstick" / "corpus").mkdir()
+    assert paths.yardstick_root(tmp_path) == tmp_path / "yardstick"

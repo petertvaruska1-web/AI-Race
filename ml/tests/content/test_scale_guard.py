@@ -39,7 +39,7 @@ def small_full_targets(monkeypatch):
 def built_tiny(tmp_path_factory) -> Path:
     """One tiny build (seed 3) that the tests copy."""
     root = tmp_path_factory.mktemp("tiny")
-    build_corpus("tiny", root, FETCH, seed=3)
+    build_corpus("tiny", root, FETCH, seed=3, text=1)
     return root
 
 
@@ -50,7 +50,7 @@ def built_full(tmp_path_factory) -> Path:
     with pytest.MonkeyPatch.context() as patch:
         for ds in DATASET_IDS:
             patch.setitem(SCALES["full"]["target_tokens"], ds, 30_000)
-        build_corpus("full", root, FETCH, seed=5)
+        build_corpus("full", root, FETCH, seed=5, text=1)
     return root
 
 

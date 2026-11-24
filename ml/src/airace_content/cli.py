@@ -58,7 +58,7 @@ def _parser() -> argparse.ArgumentParser:
         "--text",
         type=int,
         choices=(1, 2),
-        help="which text to build (default: the text the data root holds, 1 in an empty root)",
+        help="which text to build (default: the text the data root holds, 2 in an empty root)",
     )
     build.add_argument(
         "--retrain-tokenizer",

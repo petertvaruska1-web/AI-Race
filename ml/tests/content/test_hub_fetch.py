@@ -303,7 +303,7 @@ def test_a_late_network_failure_still_reads_as_a_network_problem(tmp_path):
 
 def test_every_source_a_full_build_needs_is_opened_once_before_it_reads_any(tmp_path):
     fetch = Recording()
-    build_corpus("tiny", tmp_path / "data", fetch, seed=0)
+    build_corpus("tiny", tmp_path / "data", fetch, seed=0, text=1)
     needed = {c.name for r in RECIPES.values() for c in r.components if c.kind == "source"}
     first = fetch.calls[: len(needed)]
     assert {sid for sid, _ in first} == needed and len(first) == len(needed)

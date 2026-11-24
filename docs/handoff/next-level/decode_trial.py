@@ -30,7 +30,7 @@ import torch
 from airace_ml.experiments import chatprobes, scorecard
 from airace_ml.infer.lm import TorchLM
 from airace_ml.model.checkpoint import load_checkpoint
-from airace_ml.paths import tokenizer_path
+from airace_ml.paths import tokenizer_path, yardstick_root
 from airace_ml.tokenizer import Tok
 
 SETTINGS = {
@@ -44,7 +44,7 @@ p = argparse.ArgumentParser()
 p.add_argument("models", nargs="+", metavar="NAME=CKPT_DIR")
 p.add_argument("--card", required=True, type=Path)
 p.add_argument("--out", required=True, type=Path)
-p.add_argument("--yardstick-root", type=Path, default=Path("../data"))
+p.add_argument("--yardstick-root", type=Path, default=yardstick_root(Path("../data")))
 p.add_argument("--samples", type=int, default=5)
 a = p.parse_args()
 

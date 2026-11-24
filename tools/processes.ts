@@ -134,7 +134,9 @@ export function ensureCatalog(data: string): boolean {
   if (existsSync(catalogPath) && !stale()) return true;
   console.log("Writing the dataset catalog for the game server…");
   const [cmd, ...pre] = uvCommand();
-  const population = join(REPO, "ml", "runs", "gate-1", "runs");
+  // The reference models personality words are measured against: the gate run on the released
+  // training text (text 2, ADR 0010 §8).
+  const population = join(REPO, "ml", "runs", "gate-3", "runs");
   const args = [...pre, "run", ...UV_RUN, "airace-ml", "export-catalog", "--data-root", data];
   if (existsSync(population)) args.push("--population", population);
   const r = spawnSync(cmd as string, args, { cwd: join(REPO, "ml"), stdio: "inherit" });

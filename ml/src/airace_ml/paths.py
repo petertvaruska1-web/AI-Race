@@ -42,6 +42,16 @@ def corpus_dir(root: Path | None = None, version: str | None = None) -> Path:
     return root / "corpus" / (version or corpus_version(root))
 
 
+def yardstick_root(root: Path | None = None) -> Path:
+    """The measuring stick's data (ADR 0010 §3: text 1, its judge and its novelty index, frozen).
+
+    Since the release of text 2 it lives in ``<root>/yardstick`` (the main data root holds text
+    2); a root without that folder, as before the release or in a test, measures against itself."""
+    root = root or data_root()
+    stick = root / "yardstick"
+    return stick if (stick / "corpus").is_dir() else root
+
+
 def novelty_path(root: Path | None = None) -> Path:
     return (root or data_root()) / "novelty" / "v1" / "index.npy"
 

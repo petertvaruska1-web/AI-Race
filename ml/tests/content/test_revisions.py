@@ -211,7 +211,7 @@ def test_a_build_reads_every_source_at_its_pinned_revision_and_records_it(tmp_pa
     spy, looked_up = Spy(), []
     root = tmp_path / "data"
     lines: list[str] = []
-    build_corpus("tiny", root, spy, seed=0, pin=_pin(looked_up), progress=lines.append)
+    build_corpus("tiny", root, spy, seed=0, pin=_pin(looked_up), progress=lines.append, text=1)
     assert sorted(looked_up) == sorted(TEXT1_SOURCES)  # once per source, however often it is read
     assert all(revision == f"{sid}-rev" for sid, revision in spy.seen) and spy.seen
     assert any(line.startswith("pinning fineweb at fineweb-rev") for line in lines)
@@ -280,7 +280,7 @@ def test_the_command_line_pins_every_source_and_records_it(monkeypatch, tmp_path
 
     monkeypatch.setattr(huggingface_hub, "HfApi", FakeApi)
     root = tmp_path / "data"
-    assert main(["build", "--scale", "tiny", "--out", str(root)]) == 0
+    assert main(["build", "--scale", "tiny", "--text", "1", "--out", str(root)]) == 0
     assert sorted(set(infos)) == sorted({SOURCES[i].hf_path for i in TEXT1_SOURCES})
     assert len(infos) == len(TEXT1_SOURCES)  # one lookup per source, not per read
     assert loads and all(

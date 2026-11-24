@@ -140,7 +140,7 @@ class TinyBuild:
 def tiny_build(tmp_path_factory) -> TinyBuild:
     """One tiny build from the fixtures (seed 0), shared by the tests that only read it."""
     root = tmp_path_factory.mktemp("tiny_build")
-    return TinyBuild(root, build_corpus("tiny", root, FETCH, seed=0))
+    return TinyBuild(root, build_corpus("tiny", root, FETCH, seed=0, text=1))
 
 
 @pytest.fixture(scope="module")
@@ -1144,7 +1144,7 @@ def test_non_ascii_text_goes_through_the_whole_build(tmp_path):
     assert all(not mark.isascii() for mark in marks.values())
 
     fetch = fixture_fetch(fixtures)
-    summary = build_corpus("tiny", tmp_path / "data", fetch, seed=0)
+    summary = build_corpus("tiny", tmp_path / "data", fetch, seed=0, text=1)
     assert summary.tokenizer_trained
     tok = Tok.load(tokenizer_path(tmp_path / "data"))
     for dataset, source in (
@@ -1317,14 +1317,14 @@ def test_a_failed_build_leaves_no_new_tokenizer(tiny_build, tmp_path, monkeypatc
 def test_full_scale_build_from_fixtures(tmp_path, monkeypatch):
     for ds in DATASET_IDS:
         monkeypatch.setitem(SCALES["full"]["target_tokens"], ds, 30_000)
-    summary = build_corpus("full", tmp_path / "ok", FETCH, seed=0)
+    summary = build_corpus("full", tmp_path / "ok", FETCH, seed=0, text=1)
     assert summary.tokenizer_trained
     assert Tok.load(tokenizer_path(tmp_path / "ok")).vocab_size == 4096
     assert all(e["target_tokens"] == 30_000 and e["tokens"] > 0 for e in summary.datasets.values())
     # too little text for 4096 entries: refused, and no tokenizer is left to be reused as frozen
     monkeypatch.setattr(build_module, "TOKENIZER_SAMPLE_BYTES", 4_000)
     with pytest.raises(RuntimeError, match="4096"):
-        build_corpus("full", tmp_path / "short", FETCH, seed=0)
+        build_corpus("full", tmp_path / "short", FETCH, seed=0, text=1)
     assert not list(tokenizer_path(tmp_path / "short").parent.iterdir())
 
 

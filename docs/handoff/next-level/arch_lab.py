@@ -151,7 +151,7 @@ from airace_ml.model.transformer import (
     _in_autocast_dtype,
 )
 from airace_ml.paths import data_root as default_data_root
-from airace_ml.paths import tokenizer_path
+from airace_ml.paths import tokenizer_path, yardstick_root
 from airace_ml.tokenizer import Tok
 from airace_ml.train import trainer
 from airace_ml.train.config import TrainRunConfig
@@ -1293,7 +1293,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--out must not be inside data/ or data2/")
     tiny = args.tiny_root is not None
     root = Path(args.tiny_root) if tiny else default_data_root()
-    yardstick = args.yardstick_root or (root if tiny else REPO_ROOT / "data")
+    yardstick = args.yardstick_root or (root if tiny else yardstick_root(REPO_ROOT / "data"))
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
     use_utf8_output()
     try:

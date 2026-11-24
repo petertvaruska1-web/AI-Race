@@ -447,6 +447,11 @@ def _entry(
     }
 
 
+# The text the game plays on since the release (ADR 0010 §8): a build into a root that holds no
+# text makes this one; text 1, the measuring stick's, is built with ``text=1`` (``--text 1``).
+RELEASED_TEXT = 2
+
+
 def build_corpus(
     scale: Literal["tiny", "full"],
     out_root: Path,
@@ -463,7 +468,7 @@ def build_corpus(
 
     ``text`` is which text to build, 1 or 2: it names the folder (``corpus/v1`` or ``corpus/v2``),
     is recorded in the manifest and reaches the assembly. Left out, it is the text the root
-    already holds, and 1 in an empty root. A root that holds one text refuses a build of the other.
+    already holds, and :data:`RELEASED_TEXT` in an empty root. A root that holds one text refuses a build of the other.
 
     A build of only some datasets reuses the shared artifacts of the corpus when they are there
     (``false_facts.json``, ``simple_vocab.txt``, ``known_vocab.txt``), so the rebuilt datasets tell
@@ -486,7 +491,7 @@ def build_corpus(
     held = corpus_version(out_root)
     has_text = (corpus_dir(out_root, held) / "manifest.json").exists()
     if text is None:
-        text = int(held[1:])
+        text = int(held[1:]) if has_text else RELEASED_TEXT
     elif text not in (1, 2):
         raise BuildError(f"unknown text {text!r}; expected 1 or 2")
     version = f"v{text}"
