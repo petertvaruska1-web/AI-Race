@@ -276,3 +276,39 @@ The two seeds of today's design differ by 0.003 (Tiny), 0.011 (Small) and 0.006 
 - zero, qk, emb, relu2, rope: better by ≥ 0.04 held-out loss on every size: no
 
 **Decision: dropped; today's design stays.** On a card like the owner's, each change either slows every step more than it helps each step (normalised queries and keys by about a fifth, the squared-ReLU feed-forward by about a sixth, all five by about a third) or keeps the speed and moves held-out loss by no more than the difference between two seeds, so together they lose on every size and every seed. Nothing of design 2 enters the product: no `arch: 2`, no change to the helper or the engine; the lab model stays in `docs/handoff/next-level/arch_lab.py` as the record. Not measured, and not a reason to try again: whether the changes are better per token (in the game a run's length is real time on a player's card, so equal time is the fair comparison). Plan C, the release (spec §5.6), is next.
+
+
+## 8. The release (plan C, spec §5.6; 2026-11-24)
+Plan `docs/superpowers/plans/2026-11-24-next-level-c-release.md`, ledger `docs/handoff/sdd/ledger-next-level.md` (plan C lines). Started on the owner's go; the owner gave the graphics card for the long runs.
+
+**What the game runs since the release**
+- **New worlds: `balance-v4`** = `balance-v3` with the first reading conversations 30%, the other seven datasets 10% each (§5.3). Worlds made before keep their rules (`balance-v2`, `balance-v3`) and their even reading.
+- **Training text 2 is the main game's data** (`data/`), engine 3 as before (`ENGINE_VERSION` and `TRAINING_ENGINE` stay 3). A build into a root that holds no text makes text 2; `--text 1` builds the measuring stick's text.
+- **The measuring stick** (text 1, its judge and novelty index, §3) is unchanged in `data/yardstick/`; `airace-ml scorecard` and the lab scripts read it by default (`paths.yardstick_root`).
+- **Rival pack 3** (`rivals-v3`, `data/rivals/v3`, keys `{lineage}-r3-v{k}`): the eight lineages trained on text 2 with engine 3, built on the owner's PC (24 versions; creativity measured with text 2's judge). New worlds are seated only from it. Packs 1 (`balance-v2` worlds) and 2 (`balance-v3` worlds; text 1, engine 2) stay installed whatever data they were built on: the rivals already seated from them keep their stored replies and models, and worlds of their rules keep drawing from them; a pack whose keys another pack uses is refused. `build-rivals` refuses a folder that holds another pack.
+- **The Conversations card** describes the text the data holds; text 2: "Short chats between people and a friendly AI: questions, requests and small talk."
+- **Friends' helpers** no longer download the rival packs (no helper reads them; rival AIs come through the blob store): about 750 MB of game data instead of 1.1 GB, and pack 3 would have added 0.9 GB. Every friend runs the helper's setup file once more (the data identity changed).
+- **The second game** (`data2/`, launch entry `text2`) is retired: its text, judge, novelty index, catalog and pack 3 moved into `data/`; `data2/` keeps its test worlds and its old pack (keys "-e2-", never loaded by the main game).
+- **Creativity** of AIs measured after the release uses text 2's judge and novelty index (spec §9); recorded scores are never recomputed (C56).
+
+**Gate 3: the feasibility gate on text 2 with engine 3** (`docs/reports/2026-11-24-gate-text2.md`; RTX 3050, seeds 1-3, CPU timing included): **5 of 7, as gate 2**; no criterion lost.
+
+| | gate 2 (engine 2, text 1) | gate 3 (engine 3, text 2) |
+|---|---|---|
+| G1 speed | PASS: 50.4 s on the GPU, 1,028 s on the CPU | PASS: 50.1 s, 998 s; chat 6 ms to the first token, 167 tokens/s |
+| G2 legibility (each text's own judge) | PASS: 80% well-formed | PASS: 94% (169 of 180) |
+| G3 differentiation | FAIL: facts-heavy knowledge lead +7.8 (needs 10.4) | FAIL: the same lead +3.3 (needs 8.7); the other three leads pass (creativity +24.9, coding +15.1, instruction +15.8) |
+| G4 seed variation | PASS | PASS |
+| G5 growth | PASS: +0.045 | PASS: +0.045 (grown 2.206 against 2.251) |
+| G6 forgetting | PASS | PASS: a drop of 92.1, 92% won back with 30% replay |
+| G7 preparation | FAIL | FAIL: garble-like words 2.1% after thorough cleaning against 2.3% after light (needs 90% or less on every seed); false facts preferred 45.9% with fact-checking against 71.7% without, but not by twice the spread on every seed |
+
+- **G3, read:** text 2's conversations teach facts (fact questions and follow-ups are a third of them), so the conversation-heavy AI knows more (knowledge 68.8 against 63.5 at gate 2) and the facts specialist's lead shrinks. The specialists still differ where the game shows it most (creativity, coding, instruction). Reported, not lowered (spec §7); a lead for the facts specialist would need facts the conversations do not hold, a data question for later.
+- **G7** is the gap gate 1 and gate 2 already reported (ADR 0002, `docs/reports/2026-11-12-gate-engine-2.md`); unchanged by text 2.
+
+**The swap (2026-11-24, `docs/handoff/release/swap.sh`).** Checked first: no server or airace process running, every folder where expected, no earlier swap, pack 3 full-size and of data2's data, the two tokenizers byte-identical. Then `data/server` was copied to `data/server-backup-2026-11-24` (2,204 files, 1,170,031,089 bytes, equal), text 1's corpus, judge, novelty index and catalog moved to `data/yardstick/` (with a copy of the tokenizer), and data2's text 2 pieces and pack 3 moved into `data/`. Data identities after the move: `data/` 458285a8e998… (text 2, as data2 was), `data/yardstick/` e2d0de8d10d5… (text 1, as `data/` was); nothing built on either needs rebuilding.
+
+**Checked after the swap**
+- The scorecard from the new folders (data root `data/`, yardstick `data/yardstick` by default) reuses every run and measurement of round 3: 105 of 105 numbers equal, no refusal against the baseline. The flags it prints (yardstick loss, fits, on topic) are the across-text guards of §5.2.
+- `docs/handoff/release/check_worlds.ts` on a copy of the owner's worlds: packs 3 (text 2), 2 and 1 (text 1) load; all seven worlds (all `balance-v2`) load; their 40 seated rival AIs (all from pack 1) resolve to stored replies and models; new worlds draw from pack 3.
+- Suites and end-to-end: see the ledger's plan C lines.

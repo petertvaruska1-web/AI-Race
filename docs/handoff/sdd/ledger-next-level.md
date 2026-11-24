@@ -197,3 +197,49 @@ Plan B Task 3: speed share of today's design: zero, emb, rope about 100%; qk 81/
 Ruling: brain design 2 dropped; today's design stays; nothing in ml/src changes - the slower changes lose more to speed than they gain per step on a card like the owner's, the speed-neutral ones move held-out loss no more than two seeds differ - plan C (the release) is next. ADR 0010 section 7.
 Plan B: complete (dropped).
 Task 19 / phase D gate: 2026-11-24: the owner tried the new AI in the second game (data2) and said: "I see the progress, the AI is a lot better". Phase D's gate (the owner's own try) is passed.
+
+## Plan C: the release (docs/superpowers/plans/2026-11-24-next-level-c-release.md)
+
+Spec: docs/superpowers/specs/2026-11-13-ai-training-next-level-design.md section 5.6; docs/handoff/next-steps.md; ADR 0010. Branch m2-two-friends. Started 2026-11-24 on the owner's go ("Begin working on the release").
+Ruling: no separate git worktree — the GPU work and the swap need this checkout's data/, data2/ and uv environment, as every earlier plan did — a mistaken commit lands on the work branch, never on main.
+Ruling: executed inline (executing-plans), no per-task subagents — the owner is not technical and is not asked to choose a method (CLAUDE.md); tasks are small and their interfaces few — costs: no per-task second reader; one whole-branch review at the end.
+Ruling: the plan is not put to the owner for review — it is technical; the owner set its content in next-steps.md — the one owner question is the graphics-card time (Task 6).
+Ruling: the Conversations card for text 2 reads "Short chats between people and a friendly AI: questions, requests and small talk." — player copy in plain words describing what text 2's conversations hold (ADR 0010 §5.1) — a temporary assumption the owner may reword.
+Ruling: helpers stop downloading rival packs (Task 5, not in the spec) — no helper code reads them (rival AIs arrive as checkpoints through the blob store); a third pack would add 0.9 GB to every friend's download at the release — costs one more small change.
+Ruling: the second game (data2) is retired at the release — its data becomes the main game's; data2/ keeps its worlds and its old pack untouched — costs: those test worlds no longer launch.
+
+## Pre-flight scan
+| Tasks | Produces / consumes | Found | Ruling |
+|---|---|---|---|
+| 2 and 3 | `BalanceVersion` with balance-v4 / `PACK_FOR_RULES` | agree | - |
+| 1 and 3 | pack version "rivals-v3", keys "-r3-" / protocol enum and server key lookup | agree | - |
+| 1 and 6 | `rivals_dir` = rivals/v3 / build-rivals into data2/rivals/v3 | agree | - |
+| 4 and 6 | text-2 blurb / export-catalog on data2 | agree: Task 6 runs after Task 4 | - |
+| 4 and 7 | `yardstick_root` / scorecard after the swap | agree | - |
+| 3 and 7 | `rivalsDir` rivals/v3, `earlierRivalsDirs` v2, v1 / the swap moves data2/rivals/v3 to data/rivals/v3 | agree | - |
+
+## Tasks
+Task 1: complete (commits a5565e4..390fa53, tests: bash -c 'cd ml && python -m uv run pytest tests/test_rivals.py tests/test_cli.py -q' → 184 passed, 1 skipped, 1 deselected in 13.77s)
+Task 2: Ruling: Tasks 2 and 3 are one commit (a05e9ec) — apps/server/src/main.ts carries both (the default rules and the pack folders) and the type check ran with both in the tree — costs: one review range for two tasks.
+Task 2: complete (commits 390fa53..a05e9ec, tests: npm test → 111 files, 844 passed; npm run check → clean, 2 pre-existing warnings; vitest training+rivals → 41 passed)
+Task 3: Ruling: the pack-name type is `RivalPackName` (the plan said `RivalPackVersion`) — that name already means a version entry inside a lineage in protocol/rivals.ts — costs nothing.
+Task 3: complete (commits 390fa53..a05e9ec, tests: npm test → 844 passed; rivals.test.ts → 12 passed)
+Task 5: complete (commits a05e9ec..4f71346, tests: bash -c 'npx vitest run apps/server/test/downloads.test.ts && cd ml && python -m uv run pytest tests/test_fetch_data.py -q' → 9 passed in 5.78s)
+Task 6: the owner gave the graphics card now (2026-11-24, AskUserQuestion: 'Now'): rivals then the gate, about 3.5 hours.
+Task 4: committed b95e663; targeted tests pass (23 + the 10 text-1 content tests pinned to text=1, 10 passed); the whole default suite is run after the graphics-card work (it slowed the rival build: the content tests took 92 min beside it).
+Task 6: rivals-v3 built into data2/rivals/v3 (24 versions, keys -r3-, not quick, data 458285a8e998, creativity measured; log ml/runs/rivals-v3.log). Gate 3 started.
+Note: full suites during the gate (PC fully loaded): ML 3 failed / 2037 passed (three text-1 comparison tests whose second build was not pinned; fixed in 7a0060a, the three pass); npm test 2 failed / 842 passed: broker 'holds a world's customer feedback while its player is in the Playground' and gateway 'keeps a player online across a quick reconnect' missed their 3 s windows under load; both files pass alone (22/22); untouched by this plan. npm run check: clean.
+Task 6: complete — rivals-v3 built (data2/rivals/v3), gate 3 on text 2: 5 of 7 (G1 50.1 s GPU / 997.9 s CPU; G2 94%; G3 FAIL only on the facts specialist's knowledge lead +3.3 vs 8.7; G4, G5, G6 PASS; G7 FAIL garble 2.1% vs 2.3%, false facts 45.9% vs 71.7% but not on every seed), report docs/reports/2026-11-24-gate-text2.md; data2 catalog written with population runs/gate-3/runs (15 reference traits, text-2 Conversations card). Commit d91c4c4.
+Task 7: swap done (docs/handoff/release/swap.sh --move): backup data/server-backup-2026-11-24 (2204 files, 1,170,031,089 bytes, equal); data/ is text 2 (458285a8e998c30d8ac0a7fac6d480af566b872cde39383f55ffe5c6313668f6), data/yardstick/ is text 1 (e2d0de8d10d51363baf529a061e41792821b4d2ebc90207d66cf081de5dcd7dc); tokenizers byte-identical; data/rivals holds v1, v2 (untouched) and v3.
+Task 7: scorecard from the swapped folders (data/ and data/yardstick by default) into runs/scorecard-e3-text2-r3: every run and measurement reused, 105 of 105 numbers equal round 3's report, no 'unlike' refusal; the across-text flags are the guards ADR 0010 §5.2 rules out between texts.
+Task 7: check_worlds.ts on a copy of data/server/db: packs v3 (text 2), v2 and v1 (text 1) loaded; new worlds draw from rivals-v3; all 7 worlds fine (all balance-v2; 40 seated rival AIs, all from rivals-v1).
+Task 7: complete (commit 1f421dd; the text2 launch entry removed; data2/ keeps its worlds and old pack)
+Task 8: npm run e2e 3 passed (4.2 min) on the released code (tiny text-2 build, quick rivals-v3).
+Task 4: Ruling: no CLI test of the scorecard's default yardstick — the rule lives in paths.yardstick_root (tested) and the CLI passes it through; the real run from the swapped folders (Task 7) used data/yardstick by default — costs nothing.
+Task 4: Ruling: content tests written for the text-1 build pass text=1 (13 tests) instead of being rewritten for text 2 — they document the stick's text, which must stay byte-for-byte; text 2 has its own tests (test_text_version, test_recipes_v2, test_content_chats) — costs nothing.
+Task 4: complete (commits a05e9ec..7a0060a; ML suite 2,037 passed with the 3 remaining text-1 comparisons fixed and passing; targeted 23 + 13 passed)
+Task 8: Ruling: the hands-on round in the check game (Task 8 step 3) is not done — the owner asked to wrap up; npm run e2e already plays a whole game on the released code — open for the next session.
+Final review: self-review (no subagent: the session's rules start one only when the owner asks). Read the whole diff 2567846..HEAD against the plan's Review Focus: (1) overlapping keys refused, tested; (2) build-rivals refuses another pack's folder, tested; (3) a new world never seated from an earlier pack, a world of older rules falls back to the current pack, tested; (4) a helper skips rival files listed by an older host, tested; (5) the swap stops before moving on any surprise (it refused while the rival build ran). No Critical or Important finding.
+Final: minor (deferred): a friend's helper folder keeps the text-1 corpus and old rival packs it downloaded before (disk only; fetch-data never deletes).
+Final: minor (deferred): docs/handoff/release/*.ts and docs/handoff/next-level/*.py are outside Biome's lint (docs/ is excluded); checked by running them.
+Final: minor (deferred): two server tests (broker leasing, gateway presence) miss their 3 s windows when the PC is fully loaded; they pass alone.

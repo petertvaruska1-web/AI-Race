@@ -2,6 +2,18 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-11-24 — The release: training text 2 is the main game's (plan C)
+- **What the game runs now** (ADR `docs/decisions/0010-next-level.md` section 8; plan `docs/superpowers/plans/2026-11-24-next-level-c-release.md`; owner's notes `docs/reports/2026-11-24-release-notes.md`): `data/` holds training text 2 with its judge, word index and catalog; engine 3 as before. **New worlds use `balance-v4`**: a first reading of conversations 30% and the other seven 10% each. Old worlds keep their rules, their rivals and their AIs; their next runs read text 2.
+- **Rivals:** pack 3 (`data/rivals/v3`, keys `-r3-`) trained on text 2 for new worlds (24 versions, about an hour on the RTX 3050). The server keeps packs 1 and 2 loaded whatever data they were built on, for the rivals already seated from them; new worlds are seated only from the current data's pack; `build-rivals` refuses a folder that holds another pack.
+- **The measuring stick** (text 1) lives unchanged in `data/yardstick/`; the scorecard reads it by default and gives the same 105 numbers as before the move.
+- **Friends** run the helper's setup file once more; their download is about 750 MB (helpers no longer download rival packs).
+- **The Conversations card** reads "Short chats between people and a friendly AI: questions, requests and small talk." A build into an empty folder makes text 2.
+- **Gate on text 2 (gate 3): 5 of 7, as gate 2** (`docs/reports/2026-11-24-gate-text2.md`): speed 50 s, legibility 94%; G3 fails only on the facts specialist's knowledge lead (+3.3, needs 8.7: text 2's conversations teach facts too), G7 (cleaning) as before.
+- **The swap** (`docs/handoff/release/swap.sh`) backed up the owner's worlds to `data/server-backup-2026-11-24` first; a copy of the seven worlds loaded with the released server and every seated rival resolved (`docs/handoff/release/check_worlds.ts`). The second game (`data2/`) is retired; its test worlds stay on disk.
+- **Verified:** `npm run e2e` 3 of 3; `npm run check` clean; ML suite 2,037 passed (the three text-1 build tests it failed were fixed and pass); npm test 842 of 844 under full load (two timing tests that pass alone, 22 of 22); slow suite: see the ledger.
+- **Not done yet:** a hands-on round in the `check` game (a new world opening with conversations 30%, a first AI trained and asked its name) — the owner asked to wrap up; the e2e already plays a whole game on the released code. Whole-branch review: a self-review by the lead (no fresh reviewer was started).
+- **Next:** the ultimate game document (`docs/handoff/next-steps.md`).
+
 ## 2026-11-24 — The owner tried the new AI: phase D passed
 - In the second game (`data2/`) the owner trained and chatted with a first AI on text 2 and said: "I see the progress, the AI is a lot better". The release has no open gate before it now; the owner starts it in another session.
 
