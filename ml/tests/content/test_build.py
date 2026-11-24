@@ -1203,10 +1203,10 @@ def _assert_same_corpus(a: Path, b: Path) -> None:
 
 
 def test_same_seed_same_corpus(tiny_build, tmp_path):
-    again = build_corpus("tiny", tmp_path / "again", FETCH, seed=0)
+    again = build_corpus("tiny", tmp_path / "again", FETCH, seed=0, text=1)
     assert again.datasets == tiny_build.summary.datasets
     _assert_same_corpus(tiny_build.root, tmp_path / "again")
-    other = build_corpus("tiny", tmp_path / "other", FETCH, seed=1)
+    other = build_corpus("tiny", tmp_path / "other", FETCH, seed=1, text=1)
     assert other.datasets["reasoning"]["tokens"] != again.datasets["reasoning"]["tokens"]
 
 
@@ -1255,7 +1255,8 @@ def test_partial_rebuild_without_artifacts_matches_a_full_build(tiny_build, tmp_
     for name in ("false_facts.json", "simple_vocab.txt", "known_vocab.txt", "manifest.json"):
         (cdir / name).unlink()
     shutil.rmtree(cdir / "web")
-    build_corpus("tiny", root, FETCH, seed=0, datasets=["web"])
+    # without its manifest the root says no text, so the text-1 rebuild names its text
+    build_corpus("tiny", root, FETCH, seed=0, datasets=["web"], text=1)
     original = corpus_dir(tiny_build.root)
     for name in ("false_facts.json", "simple_vocab.txt", "known_vocab.txt"):
         assert (cdir / name).read_bytes() == (original / name).read_bytes(), name

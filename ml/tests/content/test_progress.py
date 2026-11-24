@@ -120,7 +120,7 @@ def test_a_source_that_ends_reports_what_it_gave(loud):
 
 
 def test_a_build_without_a_callback_prints_nothing_and_builds_the_same(loud, tmp_path, capsys):
-    quiet = build_corpus("tiny", tmp_path / "quiet", FETCH, seed=0)
+    quiet = build_corpus("tiny", tmp_path / "quiet", FETCH, seed=0, text=1)
     captured = capsys.readouterr()
     assert captured.out == "" and captured.err == ""
     assert quiet.tokenizer_trained and loud.lines  # the same build as the loud one, byte for byte
