@@ -435,3 +435,47 @@ describe("balance-v3: larger brains for new worlds", () => {
     expect(first.preview.cost).toBeLessThan(v3.foundingCash);
   });
 });
+
+describe("balance-v4: new worlds read conversations first", () => {
+  const TALK_FIRST = {
+    web: 10,
+    books: 10,
+    educational: 10,
+    conversations: 30,
+    code: 10,
+    reasoning: 10,
+    facts: 10,
+    creative: 10,
+    notebook: 0,
+  };
+
+  it("differs from balance-v3 only in the default reading", () => {
+    const v3 = getBalance("balance-v3");
+    const v4 = getBalance("balance-v4");
+    expect(v4.version).toBe("balance-v4");
+    expect(v4.defaultPlan.mix).toEqual(TALK_FIRST);
+    expect({
+      ...v4,
+      version: v3.version,
+      defaultPlan: { ...v4.defaultPlan, mix: v3.defaultPlan.mix },
+    }).toEqual(v3);
+    expect(previewPlan(v4, null, v4.defaultPlan).ok).toBe(true);
+  });
+
+  it("leaves the older rules' even reading as it was", () => {
+    for (const version of ["balance-v2", "balance-v3"] as const) {
+      const mix = getBalance(version).defaultPlan.mix;
+      expect(mix).toEqual({
+        web: 12,
+        books: 12,
+        educational: 12,
+        conversations: 12,
+        code: 12,
+        reasoning: 12,
+        facts: 12,
+        creative: 12,
+        notebook: 0,
+      });
+    }
+  });
+});

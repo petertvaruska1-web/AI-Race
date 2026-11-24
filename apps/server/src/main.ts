@@ -24,9 +24,10 @@ const data = resolve(process.env.AIRACE_DATA ?? join(REPO_ROOT, "data"));
 const serverDir = join(data, "server");
 const port = Number(process.env.PORT ?? 8787);
 // The rules of worlds made from now on; a world made earlier keeps the rules it recorded.
-const balance = (process.env.AIRACE_BALANCE ?? "balance-v3") as BalanceVersion;
-if (balance !== "balance-v3" && balance !== "balance-v2" && balance !== "balance-test") {
-  throw new Error(`AIRACE_BALANCE must be balance-v3, balance-v2 or balance-test, got ${balance}`);
+const balance = (process.env.AIRACE_BALANCE ?? "balance-v4") as BalanceVersion;
+const RULES: readonly BalanceVersion[] = ["balance-v4", "balance-v3", "balance-v2", "balance-test"];
+if (!RULES.includes(balance)) {
+  throw new Error(`AIRACE_BALANCE must be one of ${RULES.join(", ")}, got ${balance}`);
 }
 const catalog = join(data, "catalog", "v1", "catalog.json");
 
@@ -39,8 +40,8 @@ const { app, close } = await buildApp({
   dbDir: join(serverDir, "db"),
   blobDir: join(serverDir, "blobs"),
   catalogPath: existsSync(catalog) ? catalog : null,
-  rivalsDir: join(data, "rivals", "v2"),
-  legacyRivalsDir: join(data, "rivals", "v1"),
+  rivalsDir: join(data, "rivals", "v3"),
+  earlierRivalsDirs: [join(data, "rivals", "v2"), join(data, "rivals", "v1")],
   secret: secretFrom("AIRACE_SECRET", join(serverDir, "secret")),
   // The local worker reads the same file, so `npm run dev` needs no setup.
   workerToken: secretFrom("AIRACE_WORKER_TOKEN", join(serverDir, "worker-token")),

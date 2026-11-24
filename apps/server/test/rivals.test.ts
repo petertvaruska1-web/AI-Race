@@ -1,7 +1,7 @@
 import { rmSync } from "node:fs";
 import { EvalJobSpec } from "@airace/protocol";
 import { eq } from "drizzle-orm";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { schema } from "../src/db/index.ts";
 import { eventually } from "./fakeWorker.ts";
 import { closeSockets, setup, start, toDay, trainVersion, worker } from "./flows.ts";
@@ -60,41 +60,75 @@ describe("the rival service", () => {
     expect(rivalIds(again.state())).toHaveLength(4);
   });
 
-  it("a world of the earlier rules keeps the earlier pack; other worlds draw from the current one", async () => {
-    const earlier = pack();
-    const current = writeFixturePack(undefined, true);
-    temps.push(current.dir);
-    server = await start({ rivalsDir: current.dir, legacyRivalsDir: earlier.dir });
+  it("every world draws from the pack of its rules; every rival AI is found in its own pack", async () => {
+    const v1 = pack();
+    const v2 = writeFixturePack("text-1-identity", "rivals-v2");
+    const v3 = writeFixturePack(undefined, "rivals-v3");
+    temps.push(v2.dir, v3.dir);
+    server = await start({ rivalsDir: v3.dir, earlierRivalsDirs: [v2.dir, v1.dir] });
     const { rivals } = server.ctx;
-    expect(rivals.packFor("balance-v2")?.dir).toBe(earlier.dir);
-    expect(rivals.packFor("balance-v3")?.dir).toBe(current.dir);
-    expect(rivals.packFor("balance-test")?.dir).toBe(current.dir);
+    expect(rivals.packFor("balance-v2")?.dir).toBe(v1.dir);
+    expect(rivals.packFor("balance-v3")?.dir).toBe(v2.dir);
+    expect(rivals.packFor("balance-v4")?.dir).toBe(v3.dir);
+    expect(rivals.packFor("balance-test")?.dir).toBe(v3.dir);
     // A rival AI's key says which pack it is in: its stored replies and its model come from there.
-    expect(rivals.replies("premium-a-v1")[0]?.reply).toBe("premium-a-v1 answers students.");
-    expect(rivals.replies("premium-a-e2-v1")[0]?.reply).toBe("premium-a-e2-v1 answers students.");
-    for (const key of ["premium-a-v1", "premium-a-e2-v1"]) {
+    for (const key of ["premium-a-v1", "premium-a-e2-v1", "premium-a-r3-v1"]) {
+      expect(rivals.replies(key)[0]?.reply).toBe(`${key} answers students.`);
       const model = await fetch(await rivals.modelUrl(key));
       expect(await model.text()).toBe(`fake-rival-${key}`);
     }
     await expect(rivals.modelUrl("nobody-v9")).rejects.toThrow(/no rival pack holds/);
-    // This server makes balance-test worlds: their rivals are the current pack's.
+    // This server makes balance-test worlds: their rivals are the current pack's only.
     const o = await setup(server);
     await eventually(() => o.actor.state().rivals);
     const logged = JSON.stringify(await server.ctx.db.select().from(schema.worldInputs));
-    expect(logged).toContain("premium-a-e2-v1");
+    expect(logged).toContain("premium-a-r3-v1");
     expect(logged).not.toContain('"premium-a-v1"');
+    expect(logged).not.toContain("premium-a-e2-v1");
   });
 
-  it("with one pack installed, every world draws from it", async () => {
-    const only = pack();
-    server = await start({ rivalsDir: null, legacyRivalsDir: only.dir });
-    expect(server.ctx.rivals.packFor("balance-v3")?.dir).toBe(only.dir);
-    expect(server.ctx.rivals.installed).toBe(true);
+  it("an earlier pack built on other data still serves the rivals seated from it", async () => {
+    const v2 = writeFixturePack("text-1-identity", "rivals-v2");
+    temps.push(v2.dir);
+    server = await start({ rivalsDir: null, earlierRivalsDirs: [v2.dir] });
+    expect(server.ctx.rivals.earlier.map((l) => l.dir)).toEqual([v2.dir]);
+    expect(server.ctx.rivals.replies("premium-a-e2-v1")).not.toHaveLength(0);
+  });
+
+  it("a new world is never seated from an earlier pack", async () => {
+    const v2 = writeFixturePack("text-1-identity", "rivals-v2");
+    temps.push(v2.dir);
+    server = await start({ rivalsDir: null, earlierRivalsDirs: [v2.dir] });
+    expect(server.ctx.rivals.installed).toBe(false);
+    expect(server.ctx.rivals.packFor("balance-test")).toBeNull();
+    expect(server.ctx.rivals.packFor("balance-v4")).toBeNull();
+    // A world of the rules the earlier pack was built for still draws from it.
+    expect(server.ctx.rivals.packFor("balance-v3")?.dir).toBe(v2.dir);
     const o = await setup(server);
-    await eventually(() => o.actor.state().rivals);
-    await server.close();
-    server = await start({ rivalsDir: only.dir });
-    expect(server.ctx.rivals.packFor("balance-v2")?.dir).toBe(only.dir);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(o.actor.state().rivals).toBeNull();
+  });
+
+  it("a world of older rules whose own pack is missing draws from the current pack", async () => {
+    const v3 = writeFixturePack(undefined, "rivals-v3");
+    temps.push(v3.dir);
+    server = await start({ rivalsDir: v3.dir });
+    for (const rules of ["balance-v2", "balance-v3", "balance-v4"] as const) {
+      expect(server.ctx.rivals.packFor(rules)?.dir).toBe(v3.dir);
+    }
+  });
+
+  it("refuses a pack whose AIs' keys another pack already uses", async () => {
+    const first = pack("text-1-identity");
+    const again = pack("text-1-identity");
+    server = await start();
+    const errors = vi.spyOn(server.ctx.log, "error");
+    const { RivalService } = await import("../src/rivals/service.ts");
+    server.ctx.opts.earlierRivalsDirs = [first.dir, again.dir];
+    const rivals = new RivalService(server.ctx);
+    expect(rivals.earlier.map((l) => l.dir)).toEqual([first.dir]);
+    expect(errors).toHaveBeenCalled();
+    expect(rivals.replies("premium-a-v1")[0]?.reply).toBe("premium-a-v1 answers students.");
   });
 
   it("runs without rivals when the pack is missing or was built from other data", async () => {

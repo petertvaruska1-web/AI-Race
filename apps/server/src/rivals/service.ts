@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, readFileSync } from "node:fs";
+import { createReadStream, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Breakdown, GROUP_IDS, RivalReplies, type RivalReply } from "@airace/protocol";
+import {
+  type Breakdown,
+  GROUP_IDS,
+  type RivalPackName,
+  RivalReplies,
+  type RivalReply,
+} from "@airace/protocol";
 import type { BalanceVersion, FeedbackResult, WorldState } from "@airace/sim";
 import type { AppContext } from "../app.ts";
 import { signBlobUrl } from "../blobs.ts";
@@ -11,47 +17,70 @@ import { type LoadedPack, loadRivalPack } from "./pack.ts";
 
 const MODEL_URL_TTL_MS = 12 * 60 * 60 * 1000;
 
+/** The pack each world's rules seat their rivals from (a world records its rules). */
+export const PACK_FOR_RULES: Record<BalanceVersion, RivalPackName> = {
+  "balance-v2": "rivals-v1",
+  "balance-v3": "rivals-v2",
+  "balance-v4": "rivals-v3",
+  "balance-test": "rivals-v3",
+};
+
 /**
- * Rivals (game-layer design §9): seats them in running worlds from the rival
+ * Rivals (game-layer design §9): seats them in running worlds from a rival
  * pack with one logged `rivalsJoined` input, answers their customer feedback
  * from the replies written at build time (no job), and places their models in
  * the blob store when a chat or battle needs one.
  *
- * Two packs can be installed: the current one (trained with engine 2) and the earlier one,
- * which `balance-v2` worlds keep drawing from (a world made before engine 2 keeps its rivals).
- * Their AIs' keys differ, so a key alone says which pack a rival AI is in.
+ * Every pack stays installed: the current one (built on the current training data, which new
+ * worlds draw from) and the earlier ones, whatever data they were built on, for the rivals
+ * already seated from them and for worlds of the rules they were built for. No two packs share
+ * an AI's key, so a key alone says which pack a rival AI is in.
  */
 export class RivalService {
-  /** The current pack (`rivalsDir`). */
-  readonly loaded: LoadedPack | null;
-  /** The earlier pack (`legacyRivalsDir`), when it is installed. */
-  readonly legacy: LoadedPack | null;
+  /** The current pack (`rivalsDir`), when it is installed and built on the current data. */
+  readonly current: LoadedPack | null;
+  /** The earlier packs (`earlierRivalsDirs`) that are installed, in that order. */
+  readonly earlier: LoadedPack[];
   private joined = new Set<string>();
   private replyCache = new Map<string, RivalReply[]>();
   private placing = new Map<string, Promise<void>>();
 
   constructor(private readonly ctx: AppContext) {
-    const legacyDir = ctx.opts.legacyRivalsDir ?? null;
-    const hasLegacy = legacyDir !== null && existsSync(join(legacyDir, "rivals.json"));
-    this.legacy = hasLegacy ? loadRivalPack(legacyDir, ctx.catalog, ctx.log) : null;
-    const dir = ctx.opts.rivalsDir ?? null;
-    // With the earlier pack installed, a missing current one is no warning: worlds have rivals.
-    this.loaded =
-      this.legacy && !(dir && existsSync(join(dir, "rivals.json")))
-        ? null
-        : loadRivalPack(dir, ctx.catalog, ctx.log);
+    this.current = loadRivalPack(ctx.opts.rivalsDir ?? null, ctx.catalog, ctx.log);
+    const taken = new Set(this.current?.keys ?? []);
+    this.earlier = [];
+    for (const dir of ctx.opts.earlierRivalsDirs ?? []) {
+      const p = loadRivalPack(dir, ctx.catalog, ctx.log, { current: false });
+      if (!p) continue;
+      const shared = [...p.keys].filter((k) => taken.has(k));
+      if (shared.length > 0) {
+        ctx.log.error(
+          { dir, shared: shared.slice(0, 3) },
+          "this rival pack's AIs have the keys of another installed pack; it is not loaded",
+        );
+        continue;
+      }
+      for (const k of p.keys) taken.add(k);
+      this.earlier.push(p);
+    }
     ctx.worlds.onLoad((actor) => this.attach(actor));
   }
 
-  /** The pack a world of these rules draws its rivals from: its own, else the other one. */
+  private get packs(): LoadedPack[] {
+    return this.current ? [this.current, ...this.earlier] : this.earlier;
+  }
+
+  /**
+   * The pack a world of these rules draws its rivals from: the pack built for its rules, else
+   * the current one. An earlier pack never seats a world of other rules.
+   */
   packFor(balance: BalanceVersion): LoadedPack | null {
-    return balance === "balance-v2" ? (this.legacy ?? this.loaded) : (this.loaded ?? this.legacy);
+    return this.packs.find((p) => p.pack.version === PACK_FOR_RULES[balance]) ?? this.current;
   }
 
   /** The pack a rival AI is in. */
   private packOf(packKey: string): LoadedPack | null {
-    for (const p of [this.loaded, this.legacy]) if (p?.keys.has(packKey)) return p;
-    return null;
+    return this.packs.find((p) => p.keys.has(packKey)) ?? null;
   }
 
   /** Whether worlds made now get rivals. */
@@ -113,8 +142,8 @@ export class RivalService {
   /** Every rival AI released in `s`, as discoveries compare with it: its breakdown and traits. */
   peersIn(s: WorldState): { breakdown: Breakdown; traits: Record<string, number> }[] {
     const byKey = new Map(
-      [this.legacy, this.loaded].flatMap((p) =>
-        (p?.pack.lineages ?? []).flatMap((l) => l.versions.map((v) => [v.key, v] as const)),
+      this.packs.flatMap((p) =>
+        p.pack.lineages.flatMap((l) => l.versions.map((v) => [v.key, v] as const)),
       ),
     );
     const out: { breakdown: Breakdown; traits: Record<string, number> }[] = [];

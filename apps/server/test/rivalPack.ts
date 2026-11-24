@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { GROUP_IDS, type RivalPack } from "@airace/protocol";
+import { GROUP_IDS, type RivalPack, type RivalPackName } from "@airace/protocol";
 
 const FIXTURE = new URL("../../../packages/protocol/fixtures/rivals/rivals.json", import.meta.url);
 
@@ -12,17 +12,19 @@ const FIXTURE = new URL("../../../packages/protocol/fixtures/rivals/rivals.json"
  */
 export function writeFixturePack(
   identity = "sample-0001",
-  /** A pack trained with engine 2: its AIs' keys carry "-e2-", as `airace-ml build-rivals` writes them. */
-  engine2 = false,
+  /**
+   * Which pack: rivals-v1 (keys `{lineage}-v{k}`), rivals-v2 (engine 2, keys carry "-e2-") or
+   * rivals-v3 (training text 2, keys carry "-r3-"), as `airace-ml build-rivals` wrote each.
+   */
+  version: RivalPackName = "rivals-v1",
 ): { dir: string; pack: RivalPack } {
   const dir = mkdtempSync(join(tmpdir(), "airace-rivals-"));
   const pack = JSON.parse(readFileSync(FIXTURE, "utf8")) as RivalPack;
   pack.dataIdentity = identity;
-  if (engine2) {
-    pack.version = "rivals-v2";
-    for (const lineage of pack.lineages) {
-      for (const v of lineage.versions) v.key = v.key.replace(/-v([0-9]+)$/, "-e2-v$1");
-    }
+  const mark = { "rivals-v1": "", "rivals-v2": "-e2", "rivals-v3": "-r3" }[version];
+  pack.version = version;
+  for (const lineage of pack.lineages) {
+    for (const v of lineage.versions) v.key = v.key.replace(/-v([0-9]+)$/, `${mark}-v$1`);
   }
   mkdirSync(join(dir, "replies"));
   mkdirSync(join(dir, "models"));

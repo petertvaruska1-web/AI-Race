@@ -14,7 +14,7 @@ import {
   type TrainingPlan,
 } from "@airace/protocol";
 
-export type BalanceVersion = "balance-v2" | "balance-v3" | "balance-test";
+export type BalanceVersion = "balance-v2" | "balance-v3" | "balance-v4" | "balance-test";
 export type BrainSize = { id: string; nLayer: number; dModel: number };
 export type LengthOption = { id: string; tokens: number };
 
@@ -333,9 +333,30 @@ const EVEN_MIX: Record<MixId, number> = {
   notebook: 0,
 };
 
-function defaultPlan(brainSize: string, attentionSpan: number, length: string): TrainingPlan {
+/**
+ * The first reading of new worlds since the release of training text 2 (ADR 0010 §5.3):
+ * conversations 30%, the other seven datasets 10% each.
+ */
+const TALK_FIRST_MIX: Record<MixId, number> = {
+  web: 10,
+  books: 10,
+  educational: 10,
+  conversations: 30,
+  code: 10,
+  reasoning: 10,
+  facts: 10,
+  creative: 10,
+  notebook: 0,
+};
+
+function defaultPlan(
+  brainSize: string,
+  attentionSpan: number,
+  length: string,
+  mix: Record<MixId, number> = EVEN_MIX,
+): TrainingPlan {
   return {
-    mix: { ...EVEN_MIX },
+    mix: { ...mix },
     cleaning: "standard",
     removeDuplicates: false,
     factCheck: false,
@@ -783,6 +804,19 @@ export const BALANCE_V3: Balance = {
   lengths: [...BALANCE_V2.lengths, { id: "marathon", tokens: 50_331_648 }],
 };
 
+/**
+ * New worlds since the release of training text 2 (ADR 0010 §5.3): the rules of balance-v3 with
+ * a first reading that leans on conversations (30%, the other seven datasets 10% each). Measured
+ * on a first AI against the even reading: a blind reader finds 14 to 23 points more of its small
+ * talk sensible, facts typed in lowercase are answered 88-91% of the time against 72-73%, and
+ * bench-v1 is not lower. Every slider still moves; worlds made before keep their rules.
+ */
+export const BALANCE_V4: Balance = {
+  ...BALANCE_V3,
+  version: "balance-v4",
+  defaultPlan: defaultPlan("tiny", 256, "standard", TALK_FIRST_MIX),
+};
+
 /** Fast worlds for end-to-end and quick tests. */
 export const BALANCE_TEST: Balance = {
   ...BALANCE_V2,
@@ -816,6 +850,7 @@ export const BALANCE_TEST: Balance = {
 };
 
 export function getBalance(version: BalanceVersion): Balance {
+  if (version === "balance-v4") return BALANCE_V4;
   if (version === "balance-v3") return BALANCE_V3;
   return version === "balance-v2" ? BALANCE_V2 : BALANCE_TEST;
 }

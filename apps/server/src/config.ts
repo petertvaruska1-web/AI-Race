@@ -12,15 +12,17 @@ export type ServerOptions = {
   blobDir: string;
   catalogPath: string | null;
   /**
-   * The rival pack's folder (`data/rivals/v2`, trained with engine 2); null or missing runs
-   * worlds without rivals, unless the earlier pack is there.
+   * The current rival pack's folder (`data/rivals/v3`, built on the current training data): new
+   * worlds draw their rivals from it. Null, missing or built on other data: new worlds run
+   * without rivals.
    */
   rivalsDir?: string | null;
   /**
-   * The earlier pack (`data/rivals/v1`): `balance-v2` worlds draw their rivals from it, so a
-   * world made before engine 2 keeps the rivals it was made with. Never built again.
+   * The earlier packs (`data/rivals/v2`, `data/rivals/v1`), whatever data they were built on:
+   * they serve the rivals already seated from them, and worlds of the rules they were built
+   * for keep drawing from them. Never built again.
    */
-  legacyRivalsDir?: string | null;
+  earlierRivalsDirs?: readonly string[];
   /** Signs cookies, ws tokens and blob URLs. */
   secret: string;
   /** Shared secret ML workers present when they connect. */

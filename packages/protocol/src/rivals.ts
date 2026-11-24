@@ -60,10 +60,16 @@ export const RivalPackLineage = z.strictObject({
 });
 export type RivalPackLineage = z.infer<typeof RivalPackLineage>;
 
+/**
+ * Which rival pack: rivals-v1 (the first rivals), rivals-v2 (training engine 2, keys carry
+ * "-e2-") or rivals-v3 (training text 2, keys carry "-r3-"). No two packs share an AI's key.
+ */
+export const RivalPackName = z.enum(["rivals-v1", "rivals-v2", "rivals-v3"]);
+export type RivalPackName = z.infer<typeof RivalPackName>;
+
 export const RivalPack = z
   .strictObject({
-    /** rivals-v2: trained with training engine 2; its AIs' keys differ from rivals-v1's. */
-    version: z.enum(["rivals-v1", "rivals-v2"]),
+    version: RivalPackName,
     dataIdentity: z.string().min(1),
     tokenizer: z.literal("tok-v1"),
     suite: z.literal("bench-v1"),
