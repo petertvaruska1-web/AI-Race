@@ -243,3 +243,4 @@ Final review: self-review (no subagent: the session's rules start one only when 
 Final: minor (deferred): a friend's helper folder keeps the text-1 corpus and old rival packs it downloaded before (disk only; fetch-data never deletes).
 Final: minor (deferred): docs/handoff/release/*.ts and docs/handoff/next-level/*.py are outside Biome's lint (docs/ is excluded); checked by running them.
 Final: minor (deferred): two server tests (broker leasing, gateway presence) miss their 3 s windows when the PC is fully loaded; they pass alone.
+Task 8: slow suite 6 passed (3 min; the quick feasibility gate on a tiny text-2 build included); npm run e2e 3 of 3. The repeated content-only run was stopped when the owner asked to wrap up (the full ML suite had covered it). Plan C closed 2026-11-24 except the hands-on round in the check game.
