@@ -468,6 +468,17 @@ def test_a_missing_tokenizer_is_named_and_exit_2(command, trained, tmp_path):
     assert "Traceback" not in err
 
 
+def test_build_rivals_refuses_a_folder_holding_another_pack(tiny_data_root, tmp_path):
+    out = tmp_path / "v2"
+    out.mkdir()
+    index = out / "rivals.json"
+    index.write_text('{"version": "rivals-v2"}', "utf-8")
+    code, _, err = _run(["build-rivals", "--quick", "--out", str(out), *_common(tiny_data_root)])
+    assert code == 2 and err.startswith("error: ") and "rivals-v2" in err
+    assert sorted(p.name for p in out.iterdir()) == ["rivals.json"]
+    assert index.read_text("utf-8") == '{"version": "rivals-v2"}'
+
+
 def test_a_model_made_with_another_tokenizer_is_refused(trained, fixture_texts, tmp_path):
     root = tmp_path / "other-root"
     tokenizer_path(root).parent.mkdir(parents=True)

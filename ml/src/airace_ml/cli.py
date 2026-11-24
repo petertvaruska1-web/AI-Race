@@ -70,7 +70,7 @@ from airace_ml.infer.lm import TorchLM
 from airace_ml.model.checkpoint import META_NAME, WEIGHTS_NAME, load_checkpoint
 from airace_ml.paths import data_root, judge_dir, novelty_path, rivals_dir, tokenizer_path
 from airace_ml.personality.fingerprint import TRAITS, measure_fingerprint
-from airace_ml.rivals.build import build_rival_pack
+from airace_ml.rivals.build import PackFolderError, build_rival_pack, check_pack_folder
 from airace_ml.tokenizer import Role, Tok
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.train.events import (
@@ -305,7 +305,7 @@ def _parser() -> argparse.ArgumentParser:
         "on from its last saved point.",
     )
     rivals.add_argument(
-        "--out", type=Path, help="where to write the pack (default: <data root>/rivals/v2)"
+        "--out", type=Path, help="where to write the pack (default: <data root>/rivals/v3)"
     )
     rivals.add_argument(
         "--quick",
@@ -1152,6 +1152,10 @@ def _cmd_build_rivals(args: argparse.Namespace) -> int:
     _announce_device(args, device)
     out = args.out if args.out is not None else rivals_dir(root)
     _require_folder_path(out, "--out")
+    try:
+        check_pack_folder(out)
+    except PackFolderError as e:
+        raise _UsageError(str(e)) from e
     if not args.quick:
         print("Building 8 rival lineages, 24 versions: about 75-90 minutes on an RTX 3050.")
     try:

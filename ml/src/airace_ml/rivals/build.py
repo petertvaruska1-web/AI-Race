@@ -6,9 +6,11 @@ each version continuing from the one before. Every version is measured like a pl
 :data:`REPLIES_PER_GROUP` questions of each customer group's pool; the game later quotes those
 answers as the rival's customer posts (R1: real, stored unchanged).
 
-The pack lives under ``out`` (``data/rivals/v2`` by default; ``rivals-v2`` is the pack trained
-with training engine 2, and its versions' keys carry ``-e2-`` so that no key of the earlier
-pack, which worlds made before keep using, names another AI):
+The pack lives under ``out`` (``data/rivals/v3`` by default). ``rivals-v3`` is the pack of
+training text 2 (engine 3), and its versions' keys carry ``-r3-`` so that no key of an earlier
+pack names another AI: ``rivals/v1`` (keys ``{lineage}-v{k}``) and ``rivals/v2`` (``-e2-``, text 1,
+engine 2) stay installed for the worlds whose rivals came from them and are never built again,
+so a folder holding another pack's index is refused (:func:`check_pack_folder`):
 
 - ``rivals.json``: the index the game server loads, written last so a half-built pack never loads
 - ``models/<key>.tar``: each version's checkpoint, packed like a player version's blob
@@ -57,7 +59,7 @@ from airace_ml.tokenizer import Tok
 from airace_ml.train.config import TrainRunConfig
 from airace_ml.worker.blobs import make_tar
 
-PACK_VERSION = "rivals-v2"
+PACK_VERSION = "rivals-v3"
 REPLIES_PER_GROUP = 24
 QUICK_REPLIES_PER_GROUP = 2
 QUICK_BENCH_ITEMS = 40  # enough for some tags to reach MIN_TAG_ITEMS, so breakdowns exist
@@ -66,7 +68,32 @@ INDEX_NAME = "rivals.json"
 
 def version_key(recipe: LineageRecipe, k: int) -> str:
     """The key of a lineage's ``k``-th version (from 1) in this pack."""
-    return f"{recipe.id}-e2-v{k}"
+    return f"{recipe.id}-r3-v{k}"
+
+
+class PackFolderError(ValueError):
+    """The folder holds another rival pack, which worlds may still be using."""
+
+
+def check_pack_folder(out: Path) -> None:
+    """Refuse ``out`` when it holds the index of another pack than :data:`PACK_VERSION` (or an
+    index that can't be read): an earlier pack serves the rivals seated from it and is never
+    built into. A missing or empty folder, or this pack's own, passes."""
+    index = Path(out) / INDEX_NAME
+    if not index.exists():
+        return
+    try:
+        version = json.loads(index.read_text(encoding="utf-8")).get("version")
+    except (OSError, ValueError, AttributeError) as e:
+        raise PackFolderError(
+            f"{index} can't be read, so the folder may hold another rival pack; build into "
+            "another folder"
+        ) from e
+    if version != PACK_VERSION:
+        raise PackFolderError(
+            f"{out} holds the rival pack {version}, which worlds may still use; this build "
+            f"makes {PACK_VERSION}, so it needs another folder (the default is rivals/v3)"
+        )
 
 
 def version_system(run_dir: Path, recipe: LineageRecipe, k: int) -> str | None:
@@ -222,8 +249,11 @@ def build_rival_pack(
     quick: bool = False,
     on_status: Callable[[str], None] = print,
 ) -> Path:
-    """Train, measure and pre-answer every rival version into ``out``; returns ``rivals.json``."""
+    """Train, measure and pre-answer every rival version into ``out``; returns ``rivals.json``.
+
+    :raises PackFolderError: ``out`` holds another pack (:func:`check_pack_folder`)."""
     data_root, out = Path(data_root), Path(out)
+    check_pack_folder(out)
     identity = data_identity(data_root)
     tok = Tok.load(tokenizer_path(data_root))
     judge, novelty = _creativity_tools(data_root, device, identity, on_status)

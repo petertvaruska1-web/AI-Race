@@ -166,3 +166,32 @@ def test_a_rivals_pre_drawn_answers_use_its_line(tiny_tok, tmp_path, monkeypatch
     asked.clear()
     build._measure(run, tiny_tok, torch.device("cpu"), None, None, True)  # text 1: as before
     assert asked and set(asked) == {None}
+
+
+def test_version_keys_of_pack_3_carry_r3():
+    from airace_ml.rivals.build import PACK_VERSION
+
+    assert PACK_VERSION == "rivals-v3"
+    assert version_key(LINEAGES[0], 2) == f"{LINEAGES[0].id}-r3-v2"
+
+
+def test_rivals_dir_is_the_third_pack(tmp_path):
+    from airace_ml.paths import rivals_dir
+
+    assert rivals_dir(tmp_path) == tmp_path / "rivals" / "v3"
+
+
+def test_a_folder_holding_another_pack_is_refused(tmp_path):
+    from airace_ml.rivals.build import PackFolderError, check_pack_folder
+
+    check_pack_folder(tmp_path / "not-there")  # a new folder
+    check_pack_folder(tmp_path)  # an empty one
+    index = tmp_path / "rivals.json"
+    index.write_text(json.dumps({"version": "rivals-v3"}), "utf-8")
+    check_pack_folder(tmp_path)  # this pack, built again
+    index.write_text(json.dumps({"version": "rivals-v2"}), "utf-8")
+    with pytest.raises(PackFolderError, match="rivals-v2"):
+        check_pack_folder(tmp_path)
+    index.write_text("{not json", "utf-8")
+    with pytest.raises(PackFolderError, match="rivals.json"):
+        check_pack_folder(tmp_path)

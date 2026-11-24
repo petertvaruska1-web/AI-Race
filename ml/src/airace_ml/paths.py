@@ -51,8 +51,9 @@ def judge_dir(root: Path | None = None) -> Path:
 
 
 def rivals_dir(root: Path | None = None) -> Path:
-    """Where the rival pack is built: ``rivals/v2``, the pack trained with engine 2.
+    """Where the rival pack is built: ``rivals/v3``, the pack of training text 2 (engine 3).
 
-    ``rivals/v1`` beside it is the pack of worlds made before engine 2 (the game's
-    ``balance-v2`` worlds keep their rivals); it is never built again."""
-    return (root or data_root()) / "rivals" / "v2"
+    ``rivals/v1`` and ``rivals/v2`` beside it are the packs of worlds made with earlier rules
+    (``balance-v2`` and ``balance-v3``); they keep serving the rivals seated from them and are
+    never built again."""
+    return (root or data_root()) / "rivals" / "v3"
