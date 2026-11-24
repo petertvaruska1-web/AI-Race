@@ -13,7 +13,7 @@ This file holds what a new session needs and must not depend on any earlier chat
 | A measuring stick | done |
 | B engine 3 | done; **already what the game runs** (`ENGINE_VERSION` and `TRAINING_ENGINE` are 3) |
 | C training text 2 | built in `data2/`; **not in the main game** |
-| D a voice of its own | built; only works for AIs trained on text 2. **The owner's own try of the second game is still open** |
+| D a voice of its own | built; only works for AIs trained on text 2. **Gate passed 2026-11-24:** the owner tried it and said "I see the progress, the AI is a lot better" |
 | E brain design 2 | screened 2026-11-22 and **dropped** (ADR 0010 section 7); today's design stays |
 | F the release | **next; its plan is not written** |
 | G every computer | not started; plan written after F |
@@ -27,7 +27,6 @@ This file holds what a new session needs and must not depend on any earlier chat
 **Known gaps (they do not block the release; report them, never lower a target):** small brains often get their own name wrong; third-generation bench 60.2 against target 64; a played session with Large and Huge brains is outstanding; gate G3 (the facts specialist's lead) and G7 (cleaning) failed at engine 2 and must be measured again.
 
 ## What the release must do (write plan C in `docs/superpowers/plans/` from spec section 5.6, then build)
-- First, offer the owner the try of a first AI in the second game: it is phase D's open gate.
 - Text 2 and engine 3 become the defaults. New worlds get a **new balance version** whose default reading for a new AI is **conversations 30%, the other seven 10% each**. Old worlds keep their rules; their AIs chat and battle as before; their next runs read text 2.
 - Text 2's rival pack gets **its own version (rivals-v3)**: the pack in `data2/rivals/v2` has keys that still read "-e2-". The server keeps earlier packs loaded for rivals already seated in old worlds, whatever data they came from (today a pack from other data is refused, which would strand them), and seats new worlds only from a pack built on the current data. Never delete or build into `data/rivals/v1` or `v2`.
 - In `data2/`: novelty index, judge (with the released engine), catalog, rival pack 3.

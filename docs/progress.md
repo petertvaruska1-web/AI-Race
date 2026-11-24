@@ -2,6 +2,9 @@
 
 Newest entries first. Each entry: date, what changed, what's next, open issues.
 
+## 2026-11-24 — The owner tried the new AI: phase D passed
+- In the second game (`data2/`) the owner trained and chatted with a first AI on text 2 and said: "I see the progress, the AI is a lot better". The release has no open gate before it now; the owner starts it in another session.
+
 ## 2026-11-23 — What comes next, saved outside the chat
 - The owner will start **the release** in another session; **the ultimate game document** (requested 2026-11-04, paused until friend play existed) follows right after it. State, release checklist and the document's full brief: `docs/handoff/next-steps.md`.
 - Clarified: the main game already runs engine 3 but still reads text 1; text 2, the AI's name and the new default reading reach it with the release.
