@@ -312,3 +312,4 @@ Plan `docs/superpowers/plans/2026-11-24-next-level-c-release.md`, ledger `docs/h
 - The scorecard from the new folders (data root `data/`, yardstick `data/yardstick` by default) reuses every run and measurement of round 3: 105 of 105 numbers equal, no refusal against the baseline. The flags it prints (yardstick loss, fits, on topic) are the across-text guards of §5.2.
 - `docs/handoff/release/check_worlds.ts` on a copy of the owner's worlds: packs 3 (text 2), 2 and 1 (text 1) load; all seven worlds (all `balance-v2`) load; their 40 seated rival AIs (all from pack 1) resolve to stored replies and models; new worlds draw from pack 3.
 - Suites and end-to-end: see the ledger's plan C lines.
+- **By hand in the `check` game** (2026-11-25): a new world opens with Conversations 30% and the rest 10%; its rivals come from pack 3; a first AI trained there answered "What is your name?" with "I'm V1." and "Are you a person?" with "I'm not a person. I'm an AI called Mon1."
