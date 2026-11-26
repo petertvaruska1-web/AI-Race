@@ -19,8 +19,21 @@ type Painter = {
   draw(o: { time: number; light: number; mouse: [number, number]; power: number }): void;
   resize(): void;
   setColors(primary: string, secondary: string): void;
-  dispose(): void;
 };
+
+/**
+ * One painter per canvas: React's StrictMode starts the glass twice on the same canvas, so the
+ * second start reuses the first painter instead of building (or losing) a second context.
+ */
+const painters = new WeakMap<HTMLCanvasElement, Painter>();
+
+function painterFor(canvas: HTMLCanvasElement): Painter | null {
+  const known = painters.get(canvas);
+  if (known) return known;
+  const made = painter(canvas);
+  if (made) painters.set(canvas, made);
+  return made;
+}
 
 /** A WebGL painter for the glass, or null when it can't start. */
 function painter(canvas: HTMLCanvasElement): Painter | null {
@@ -82,9 +95,6 @@ function painter(canvas: HTMLCanvasElement): Painter | null {
       gl.uniform1f(U.power, power);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     },
-    dispose() {
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
-    },
   };
 }
 
@@ -111,7 +121,7 @@ export function GlassBackground() {
   useEffect(() => {
     const el = canvas.current;
     if (!webgl || !el) return;
-    const paint = painter(el);
+    const paint = painterFor(el);
     if (!paint) {
       setWebgl(false);
       return;
@@ -164,7 +174,6 @@ export function GlassBackground() {
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("pointermove", onPointer);
-      paint.dispose();
     };
   }, [webgl]);
 
