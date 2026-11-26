@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { CountUp } from "./CountUp.tsx";
 
-/** A big number with its label, rolling as it changes, and a green or red change below. */
+/** A big number in a display under its engraved label, rolling as it changes, and a green or red change below. */
 export function Stat({
   label,
   value,
@@ -24,13 +24,15 @@ export function Stat({
   const good = downIsGood ? (delta ?? 0) < 0 : (delta ?? 0) > 0;
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
-      <p className="font-display text-3xl font-bold" data-testid={testId}>
-        <CountUp value={value} format={format} />
-      </p>
+      <p className="engrave">{label}</p>
+      <div className="display mt-1.5 inline-block min-w-[9ch] px-3 py-2">
+        <p className="dot dot--lg m-0" data-testid={testId}>
+          <CountUp value={value} format={format} />
+        </p>
+      </div>
       {delta !== undefined && (
         <p
-          className={`text-sm font-semibold ${delta === 0 ? "text-muted" : good ? "text-good" : "text-danger"}`}
+          className={`mt-1.5 text-sm font-semibold ${delta === 0 ? "text-muted" : good ? "text-good" : "text-danger"}`}
         >
           {delta > 0 ? "▲ " : delta < 0 ? "▼ " : ""}
           {delta === 0 ? "no change" : format(Math.abs(delta))}

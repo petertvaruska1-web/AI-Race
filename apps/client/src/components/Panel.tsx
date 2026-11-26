@@ -1,6 +1,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { Module } from "../bench/Module.tsx";
 
-/** A glass panel with an optional title, hint and actions (the game's basic surface). */
+/** The game's basic surface: a bench module with an optional title, hint and actions. */
 export function Panel({
   title,
   hint,
@@ -14,17 +15,8 @@ export function Panel({
   actions?: ReactNode;
 }) {
   return (
-    <section className={`panel p-5 ${className}`} {...props}>
-      {(title || hint || actions) && (
-        <header className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            {title && <h2 className="text-lg font-semibold">{title}</h2>}
-            {hint && <p className="mt-1 text-sm text-muted">{hint}</p>}
-          </div>
-          {actions && <div className="flex shrink-0 gap-2">{actions}</div>}
-        </header>
-      )}
+    <Module label={title} hint={hint} actions={actions} className={className} {...props}>
       {children}
-    </section>
+    </Module>
   );
 }

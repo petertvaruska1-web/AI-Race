@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../bench/bench.css";
 
 /* The Instrument bench (look redesign, C60). The glass behind every screen follows the company's
    main color (C57): `data-glass` on <html> says which glass, light or dark, and the company's
