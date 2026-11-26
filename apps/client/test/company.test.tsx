@@ -32,6 +32,17 @@ describe("company screen", () => {
     expect(screen.getByText(formatMoney(company?.cash ?? -1))).toBeTruthy();
   });
 
+  it("keeps the team, licenses and partner apps in one drawer", async () => {
+    render(<Company view={viewOf(launchedWorld())} />);
+    const drawer = screen.getByRole("group", { name: "Company drawer" });
+    expect(within(drawer).getByRole("radio", { name: "Team" })).toHaveProperty("checked", true);
+    expect(screen.getByRole("region", { name: "Team" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Partner apps" })).toBeNull();
+    await userEvent.click(within(drawer).getByRole("radio", { name: "Partner apps" }));
+    expect(screen.getByRole("region", { name: "Partner apps" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Team" })).toBeNull();
+  });
+
   it("quotes a customer's post exactly as the AI wrote it, as text", () => {
     const s = apply(
       launchedWorld(),

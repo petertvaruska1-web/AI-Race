@@ -9,6 +9,7 @@ import { PushButton } from "../src/bench/PushButton.tsx";
 import { Readout } from "../src/bench/Readout.tsx";
 import { RotarySelector } from "../src/bench/RotarySelector.tsx";
 import { ToggleSwitch } from "../src/bench/ToggleSwitch.tsx";
+import { Trace } from "../src/bench/Trace.tsx";
 import { Panel } from "../src/components/Panel.tsx";
 import { Stat } from "../src/components/Stat.tsx";
 
@@ -55,6 +56,13 @@ describe("bench surfaces", () => {
     expect(screen.getByTestId("cash").classList.contains("dot")).toBe(false);
     render(<Stat label="Customers" value={3} format={String} testId="count" />);
     expect(screen.getByTestId("count").classList.contains("dot")).toBe(false);
+  });
+
+  it("draws profit by month as a trace", () => {
+    render(<Trace values={[-2, 4, 9]} label="Profit by month" zeroLine />);
+    expect(
+      screen.getByRole("img", { name: "Profit by month" }).querySelector("polyline"),
+    ).not.toBeNull();
   });
 
   it("shows a stat's value in a display, keeping its test id", () => {

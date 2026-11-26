@@ -615,17 +615,21 @@
   }
   @keyframes display-on {
     0% {
-      filter: brightness(0.2);
+      filter: brightness(1);
     }
-    45% {
+    20% {
+      filter: brightness(0.25);
+    }
+    55% {
       filter: brightness(1.35);
     }
-    70% {
+    75% {
       filter: brightness(0.85);
     }
   }
   .station-bench__inner .display {
-    animation: display-on 320ms ease-out 200ms backwards;
+    /* No fill: a page whose animations are paused shows its displays lit, not dark. */
+    animation: display-on 380ms ease-out 180ms;
   }
   .speed-key {
     min-width: 34px;
@@ -751,5 +755,19 @@
   }
   .intercom-key__count {
     padding: 3px 7px;
+  }
+
+  /* The core's cradle on the Company bench: a machined ring holding the AI. */
+  .core-cradle {
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 10px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgb(var(--lamp-rgb) / 0.12), transparent 62%);
+    box-shadow:
+      inset 0 0 0 6px rgb(0 0 0 / 0.35),
+      inset 0 0 0 7px rgb(255 255 255 / 0.08),
+      0 0 0 1px rgb(0 0 0 / 0.4);
   }
 }

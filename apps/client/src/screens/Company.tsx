@@ -1,5 +1,11 @@
 import { GROUP_IDS, type GroupId, type Palette, type WorldView } from "@airace/protocol";
 import { useState } from "react";
+import { Display } from "../bench/Display.tsx";
+import { KeyRow } from "../bench/KeyRow.tsx";
+import { Lamp } from "../bench/Lamp.tsx";
+import { Module } from "../bench/Module.tsx";
+import { Readout } from "../bench/Readout.tsx";
+import { Trace } from "../bench/Trace.tsx";
 import { Button } from "../components/Button.tsx";
 import { Feed } from "../components/Feed.tsx";
 import { FloatDelta } from "../components/FloatDelta.tsx";
@@ -27,8 +33,9 @@ import { LaunchDialog, launchBlocked } from "./LaunchDialog.tsx";
 import { regionMarks } from "./Market.tsx";
 
 /**
- * The company's home: its AI as an orb, customers and money on the left, the
- * feed on the right. Everything opens its window; new customers stream into the orb.
+ * The Company station (design §10): the AI core in its cradle at the center, customers and money
+ * on the left, what people are saying on the right, the team and the rest in a drawer below.
+ * Everything opens its window; new customers stream into the core.
  */
 export function Company({ view }: { view: WorldView }) {
   const [launching, setLaunching] = useState(false);
@@ -47,7 +54,7 @@ export function Company({ view }: { view: WorldView }) {
   const lastCard = company.reports.at(-1);
   const orb = (
     <Core
-      size={280}
+      size={300}
       label={latest ? `Your AI ${latest.label}` : "A spark: your first AI is waiting to be trained"}
       input={{
         overall: latest?.overall ?? null,
@@ -62,10 +69,10 @@ export function Company({ view }: { view: WorldView }) {
   );
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_minmax(0,1fr)]">
-      <div className="space-y-5 lg:order-1">
+    <div className="grid gap-3.5 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
+      <div className="flex min-w-0 flex-col gap-3.5">
         <Panel title="Customers">
-          <div className="lift relative -m-2 rounded-xl p-2">
+          <div className="lift relative -m-1.5 rounded-lg p-1.5">
             <Stat
               label="People using your AI"
               value={company.customers.total}
@@ -78,12 +85,12 @@ export function Company({ view }: { view: WorldView }) {
             <button
               type="button"
               aria-label="Open customers"
-              className="absolute inset-0 rounded-xl"
+              className="absolute inset-0 rounded-lg"
               onClick={(e) => open({ kind: "customers" }, e.currentTarget)}
             />
           </div>
           <GroupBar groups={byGroup} palette={pub.palette} />
-          <div className="mt-4">
+          <Display className="mt-3 px-2 py-2">
             <RegionMap
               small
               label="Customers by region"
@@ -100,34 +107,47 @@ export function Company({ view }: { view: WorldView }) {
                 </p>
               )}
             />
-          </div>
+          </Display>
         </Panel>
         <Panel title="Money">
-          <div className="lift relative -m-2 rounded-xl p-2">
-            <div className="space-y-4">
-              <Stat label="Cash" value={company.cash} format={formatMoney} />
-              <Stat label="Profit this month" value={monthProfit(view)} format={formatMoney} />
+          <div className="lift relative -m-1.5 rounded-lg p-1.5">
+            <div className="grid grid-cols-2 gap-3">
+              <Readout label="Cash" value={formatMoney(company.cash)} size="sm" />
+              <Readout
+                label="Profit this month"
+                value={formatMoney(monthProfit(view))}
+                size="sm"
+                tone={monthProfit(view) < 0 ? "danger" : monthProfit(view) > 0 ? "good" : "lamp"}
+              />
             </div>
-            <Sparkline values={profits} />
+            {profits.length < 2 ? (
+              <p className="mt-3 text-xs text-muted">
+                Your profit line starts after your first month.
+              </p>
+            ) : (
+              <Display className="mt-3 px-2 py-1.5">
+                <Trace values={profits} label="Profit by month" zeroLine />
+              </Display>
+            )}
             <button
               type="button"
               aria-label="Open money"
-              className="absolute inset-0 rounded-xl"
+              className="absolute inset-0 rounded-lg"
               onClick={(e) => open({ kind: "money" }, e.currentTarget)}
             />
           </div>
           {pub.ownership < 1 && (
-            <p className="chip mt-4 inline-block">{`You own ${Math.round(pub.ownership * 100)}%`}</p>
+            <p className="chip mt-3 inline-block">{`You own ${Math.round(pub.ownership * 100)}%`}</p>
           )}
           {lastCard && (
             <button
               type="button"
               aria-label={`Last report card: ${lastCard.grade}`}
               onClick={(e) => open({ kind: "report", month: lastCard.month }, e.currentTarget)}
-              className="row-btn mt-4"
+              className="row-btn mt-3"
             >
               <span
-                className="grid h-9 w-9 place-items-center rounded-lg border-2 font-display text-lg font-bold"
+                className="grid h-9 w-9 place-items-center rounded-md border-2 font-dot text-lg font-extrabold"
                 style={{
                   color: gradeColor(lastCard.grade),
                   borderColor: gradeColor(lastCard.grade),
@@ -147,25 +167,29 @@ export function Company({ view }: { view: WorldView }) {
         </Panel>
       </div>
 
-      <Panel className="flex flex-col items-center gap-4 text-center lg:order-0 xl:order-1">
-        <OrbFrame look={company.looks.orb} color={pub.palette.primary}>
-          {latest ? (
-            <button
-              type="button"
-              aria-label={`About your AI ${latest.label}`}
-              title="Open your AI"
-              onClick={(e) => open({ kind: "ai", versionId: latest.id }, e.currentTarget)}
-              className="orb-button rounded-full"
-            >
-              {orb}
-            </button>
-          ) : (
-            orb
-          )}
-        </OrbFrame>
+      <Module weight="heavy" className="flex min-w-0 flex-col items-center gap-3 text-center">
+        <div className="core-cradle">
+          <OrbFrame look={company.looks.orb} color={pub.palette.primary}>
+            {latest ? (
+              <button
+                type="button"
+                aria-label={`About your AI ${latest.label}`}
+                title="Open your AI"
+                onClick={(e) => open({ kind: "ai", versionId: latest.id }, e.currentTarget)}
+                className="orb-button rounded-full"
+              >
+                {orb}
+              </button>
+            ) : (
+              orb
+            )}
+          </OrbFrame>
+        </div>
         {latest ? (
-          <div>
-            <p className="font-display text-4xl font-bold text-brand">{latest.label}</p>
+          <div className="flex flex-col items-center gap-2">
+            <Display className="px-5 py-2">
+              <p className="dotface dotface--lg m-0">{latest.label}</p>
+            </Display>
             <p className="text-sm text-muted">
               {latest.overall === null
                 ? "Being scored…"
@@ -179,8 +203,9 @@ export function Company({ view }: { view: WorldView }) {
           </p>
         )}
         {run && (
-          <p className="text-sm">
-            <span className="font-semibold text-brand">Training</span> ·{" "}
+          <p className="flex items-center gap-2 text-sm">
+            <Lamp state="on" label="Training" blink />
+            <span className="font-semibold text-accent">Training</span> ·{" "}
             {Math.round(run.progress * 100)}% of its {run.endDay - run.startDay} game days
           </p>
         )}
@@ -204,22 +229,49 @@ export function Company({ view }: { view: WorldView }) {
         </Button>
         <Lineup view={view} />
         <ArchStrip view={view} />
-      </Panel>
+      </Module>
 
-      <div className="space-y-3 lg:order-3 lg:col-span-2 xl:col-span-3">
+      <div className="flex min-w-0 flex-col gap-3.5">
+        <Panel title="What people are saying" className="flex min-h-0 flex-col">
+          <Display scroll label="What people are saying" className="max-h-[56vh] p-2">
+            <Feed items={view.feed} companyId={company.id} companies={view.companies} />
+          </Display>
+        </Panel>
         <TrophyShelf view={view} />
-        <TeamPanel view={view} />
-        <LicensesPanel view={view} />
-        <AppsPanel view={view} />
-        <GoalProgress view={view} />
       </div>
 
-      <Panel title="What people are saying" className="lg:order-2 lg:col-span-2 xl:col-span-1">
-        <div className="max-h-[70vh] overflow-y-auto pr-1">
-          <Feed items={view.feed} companyId={company.id} companies={view.companies} />
-        </div>
-      </Panel>
+      <DrawerBay view={view} />
       {launching && <LaunchDialog view={view} onClose={() => setLaunching(false)} />}
+    </div>
+  );
+}
+
+type Drawer = "team" | "licenses" | "apps" | "goal";
+
+/** The company's smaller panels in one drawer (design A2): one shown at a time, Team first. */
+function DrawerBay({ view }: { view: WorldView }) {
+  const [drawer, setDrawer] = useState<Drawer>("team");
+  const hasGoal = Boolean(view.world.goal && view.me.company?.goalProgress);
+  const options: { label: string; value: Drawer }[] = [
+    { label: "Team", value: "team" },
+    { label: "Licenses", value: "licenses" },
+    { label: "Partner apps", value: "apps" },
+    ...(hasGoal ? [{ label: "Goal", value: "goal" as const }] : []),
+  ];
+  const shown = options.some((o) => o.value === drawer) ? drawer : "team";
+  return (
+    <div className="min-w-0 xl:col-span-3">
+      <KeyRow
+        legend="Company drawer"
+        options={options}
+        value={shown}
+        onChange={setDrawer}
+        className="mb-2.5"
+      />
+      {shown === "team" && <TeamPanel view={view} />}
+      {shown === "licenses" && <LicensesPanel view={view} />}
+      {shown === "apps" && <AppsPanel view={view} />}
+      {shown === "goal" && <GoalProgress view={view} />}
     </div>
   );
 }
@@ -264,41 +316,6 @@ function GroupBar({
         ))}
       </ul>
     </div>
-  );
-}
-
-/** Profit month by month, as a small line over a zero line, drawn in when shown. */
-function Sparkline({ values }: { values: number[] }) {
-  if (values.length < 2) {
-    return (
-      <p className="mt-4 text-xs text-muted">Your profit line starts after your first month.</p>
-    );
-  }
-  const w = 240;
-  const h = 56;
-  const lo = Math.min(0, ...values);
-  const hi = Math.max(0, ...values);
-  const y = (v: number) => (hi === lo ? h / 2 : h - ((v - lo) / (hi - lo)) * (h - 4) - 2);
-  const x = (i: number) => (i / (values.length - 1)) * w;
-  const points = values.map((v, i) => `${x(i)},${y(v)}`).join(" ");
-  return (
-    <svg
-      viewBox={`0 0 ${w} ${h}`}
-      className="mt-4 h-14 w-full"
-      role="img"
-      aria-label="Profit by month"
-      preserveAspectRatio="none"
-    >
-      <line x1={0} x2={w} y1={y(0)} y2={y(0)} stroke="var(--border)" strokeDasharray="4 4" />
-      <polyline
-        points={points}
-        fill="none"
-        stroke="var(--brand)"
-        strokeWidth={2}
-        pathLength={1}
-        className="chart-draw"
-      />
-    </svg>
   );
 }
 
