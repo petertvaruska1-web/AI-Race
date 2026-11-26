@@ -23,23 +23,26 @@ export function due(nowMs: number, lastMs: number, fps: number): boolean {
 }
 
 const SAMPLES = 90;
-const SLOW_MS = 40;
+/** Frames this much slower than the frame rate asked for count as slow. */
+const SLOW_FACTOR = 1.5;
 
 /**
- * Watches frame times; `record` answers true once, the first time the last 90 frames' median
- * is above 40 ms (the game then switches on lighter graphics by itself).
+ * Watches the time between frames drawn at `fps`; `record` answers true once, the first time the
+ * last 90 frames' median is over 1.5 frames' time (the game then switches on lighter graphics by
+ * itself). Measured against the rate asked for, so a screen whose refresh rounds a 30-a-second
+ * frame up (72 Hz gives 41.7 ms) is not mistaken for a slow one.
  */
-export function createFrameMeter(): { record(frameMs: number): boolean } {
+export function createFrameMeter(): { record(frameMs: number, fps: number): boolean } {
   const times: number[] = [];
   let told = false;
   return {
-    record(frameMs: number): boolean {
-      times.push(frameMs);
+    record(frameMs: number, fps: number): boolean {
+      times.push(frameMs * (fps / 30));
       if (times.length > SAMPLES) times.shift();
-      if (told || times.length < SAMPLES) return false;
+      if (told || times.length < SAMPLES || fps <= 0) return false;
       const sorted = [...times].sort((a, b) => a - b);
       const median = ((sorted[SAMPLES / 2 - 1] ?? 0) + (sorted[SAMPLES / 2] ?? 0)) / 2;
-      if (median <= SLOW_MS) return false;
+      if (median <= (SLOW_FACTOR * 1000) / 30) return false;
       told = true;
       return true;
     },

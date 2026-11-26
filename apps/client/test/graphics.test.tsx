@@ -37,19 +37,29 @@ describe("how often the glass and the 3D draw", () => {
 
   it("asks for lighter graphics once frames stay slow", () => {
     const meter = createFrameMeter();
-    const answers = Array.from({ length: 120 }, () => meter.record(55));
+    const answers = Array.from({ length: 120 }, () => meter.record(55, 30));
     expect(answers.slice(0, 89).some(Boolean)).toBe(false);
     expect(answers.filter(Boolean)).toHaveLength(1);
     const fine = createFrameMeter();
-    expect(Array.from({ length: 120 }, () => fine.record(16)).some(Boolean)).toBe(false);
+    expect(Array.from({ length: 120 }, () => fine.record(16, 60)).some(Boolean)).toBe(false);
+  });
+
+  it("leaves a healthy 72 Hz screen alone at 30 frames a second", () => {
+    const meter = createFrameMeter();
+    expect(Array.from({ length: 120 }, () => meter.record(41.7, 30)).some(Boolean)).toBe(false);
   });
 
   it("remembers lighter graphics", () => {
     useGraphics.getState().setLighter(true);
     expect(localStorage.getItem("airace.lighterGraphics")).toBe("1");
     expect(useGraphics.getState().auto).toBe(false);
+  });
+
+  it("does not remember lighter graphics the game switched on by itself", () => {
     useGraphics.getState().setLighter(true, true);
     expect(useGraphics.getState().auto).toBe(true);
+    expect(useGraphics.getState().lighter).toBe(true);
+    expect(localStorage.getItem("airace.lighterGraphics")).toBeNull();
   });
 });
 

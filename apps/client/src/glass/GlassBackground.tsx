@@ -157,7 +157,9 @@ export function GlassBackground() {
         light = goal;
       } else {
         if (!due(now, last, policy.fps)) return;
-        if (last > 0 && meter.record(now - last)) useGraphics.getState().setLighter(true, true);
+        if (last > 0 && meter.record(now - last, policy.fps)) {
+          useGraphics.getState().setLighter(true, true);
+        }
         light += (goal - light) * 0.08;
         mouse = [
           mouse[0] + (target[0] - mouse[0]) * 0.08,

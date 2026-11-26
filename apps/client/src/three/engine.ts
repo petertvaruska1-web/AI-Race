@@ -147,7 +147,7 @@ function tick(now: number): void {
     policy,
   );
   if (ids.length > 0 && !policy.still) {
-    if (lastFrame > 0 && meter.record(now - lastFrame)) {
+    if (lastFrame > 0 && meter.record(now - lastFrame, policy.fps)) {
       useGraphics.getState().setLighter(true, true);
     }
     lastFrame = now;

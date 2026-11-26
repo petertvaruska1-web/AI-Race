@@ -22,10 +22,13 @@ export const useGraphics = create<{
   lighter: stored(),
   auto: false,
   setLighter(lighter, auto = false) {
-    try {
-      localStorage.setItem(KEY, lighter ? "1" : "0");
-    } catch {
-      // A browser without storage still switches for this visit.
+    // Only the player's own choice is kept: what the game switched on by itself lasts this visit.
+    if (!auto) {
+      try {
+        localStorage.setItem(KEY, lighter ? "1" : "0");
+      } catch {
+        // A browser without storage still switches for this visit.
+      }
     }
     set({ lighter, auto: lighter && auto });
   },
