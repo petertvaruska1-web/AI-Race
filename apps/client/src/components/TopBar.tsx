@@ -37,7 +37,7 @@ function DayBar({ view }: { view: WorldView }) {
 }
 
 /** "Lighter graphics" (design §11), and why it came on when the game switched it on itself. */
-function LighterGraphics() {
+export function LighterGraphics() {
   const lighter = useGraphics((s) => s.lighter);
   const auto = useGraphics((s) => s.auto);
   const setLighter = useGraphics((s) => s.setLighter);
@@ -114,7 +114,6 @@ export function TopBar({ view }: { view: WorldView }) {
       )}
       <CardsChip view={view} />
       <Clock view={view} />
-      <LighterGraphics />
       <DayBar view={view} />
     </header>
   );

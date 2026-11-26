@@ -9,7 +9,7 @@ import { WindowHost } from "../windows/WindowHost.tsx";
 import { Button } from "./Button.tsx";
 import { SideNav } from "./SideNav.tsx";
 import { Toasts } from "./Toasts.tsx";
-import { TopBar } from "./TopBar.tsx";
+import { LighterGraphics, TopBar } from "./TopBar.tsx";
 import { WorldChat } from "./WorldChat.tsx";
 
 /** While a rescue offer waits, a hazard plate under the strip counts down and opens the choice. */
@@ -57,6 +57,9 @@ export function AppShell({
       <RescueBanner view={view} />
       <aside className="station-column module">
         <SideNav worldId={view.world.id} tab={tab} />
+        <div className="station-column__foot">
+          <LighterGraphics />
+        </div>
       </aside>
       <main className="station-bench">
         <motion.div
