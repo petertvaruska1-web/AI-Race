@@ -17,7 +17,13 @@ function cached<T extends THREE.Material>(key: string, make: () => T): T {
 export function metal(): THREE.MeshStandardMaterial {
   return cached(
     "metal",
-    () => new THREE.MeshStandardMaterial({ color: 0xaeb4bd, metalness: 1, roughness: 0.38 }),
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: 0x8f959e,
+        metalness: 1,
+        roughness: 0.46,
+        envMapIntensity: 0.75,
+      }),
   );
 }
 

@@ -150,7 +150,9 @@ export function makeCoreStage(params: OrbParams, o: { still: boolean }): CoreSta
   scene.add(motes);
   let flying: Mote[] = [];
 
-  const crystalRadius = () => (p.rings === 0 ? 0.55 : 0.6 + 0.8 * p.radius);
+  const crystalRadius = () => (p.rings === 0 ? 0.55 : 0.75 + 0.9 * p.radius);
+  /** The rings sit close around the crystal, so even ten of them stay a compact instrument. */
+  const ringRadius = (i: number) => crystalRadius() * (1.42 + 0.17 * i);
 
   function build(): void {
     for (const r of rings) {
@@ -175,11 +177,11 @@ export function makeCoreStage(params: OrbParams, o: { still: boolean }): CoreSta
         : metal();
       const mesh = new THREE.Mesh(
         gearRing({
-          radius: crystalRadius() + 0.62 + 0.26 * i,
-          width: 0.075,
-          depth: 0.07,
+          radius: ringRadius(i),
+          width: 0.06,
+          depth: 0.055,
           teeth: 24 + Math.round(36 * p.ringDetail),
-          toothDepth: 0.05,
+          toothDepth: 0.04,
         }),
         material,
       );
@@ -197,6 +199,10 @@ export function makeCoreStage(params: OrbParams, o: { still: boolean }): CoreSta
     }
     const radius = crystalRadius();
     crystal.scale.setScalar(radius);
+    // Frame the whole instrument: the outermost ring (or the crystal's halo) fits with a margin.
+    const reach = Math.max(radius * 2.2, count > 0 ? ringRadius(count - 1) + 0.12 : 0);
+    camera.position.z = (reach * 1.18) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    camera.updateProjectionMatrix();
     U.uMain.value.set(p.colors[0] ?? "#ffffff");
     U.uSecond.value.set(p.colors.at(-1) ?? "#ffffff");
     U.uHeart.value = 0.45 + 0.75 * p.brightness;
