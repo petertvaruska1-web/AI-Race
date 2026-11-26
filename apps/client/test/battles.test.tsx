@@ -1,11 +1,12 @@
 import type { CompanyState, ProductState, VersionState, WorldState } from "@airace/sim";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Arena } from "../src/screens/Arena.tsx";
 import { useCards } from "../src/store/cards.ts";
 import { useSession } from "../src/store/session.ts";
 import { useVotes } from "../src/store/votes.ts";
 import { useWindows } from "../src/store/windows.ts";
+import { readableOn } from "../src/theme/glass.ts";
 import { WindowHost } from "../src/windows/WindowHost.tsx";
 import { liveGame } from "./mockSocket.ts";
 import { apply, command, LOGO, PALETTE, runningWorld, SCORES, viewOf } from "./views.ts";
@@ -134,6 +135,34 @@ describe("battling a friend's AI", () => {
     const item = screen.getByRole("button", { name: /knowledge battle against Acme/ });
     expect(item.textContent).toContain("Acme challenged you");
     expect(item.textContent).toContain("win");
+  });
+});
+
+describe("a friend's colors in a battle", () => {
+  it("shows a friend's deep color readable on the viewer's dark glass", async () => {
+    const s = friends();
+    const ben = s.companies.c2 as CompanyState;
+    ben.palette = { primary: "#101010", secondary: "#ffb020" };
+    (s.companies.c1 as CompanyState).battles.push({
+      id: "b1",
+      day: 1,
+      skill: "knowledge",
+      rivalId: "c2",
+      mine: { productId: "p1", versionId: "v1", productName: "Spark" },
+      theirs: { productId: "q1", versionId: "w1", productName: "Nova", packKey: "" },
+      seed: 1,
+      status: "done",
+      rounds: [],
+      outcome: "win",
+      pointsChange: 12,
+      opponentKind: "player",
+      defending: false,
+    });
+    render(<WindowHost view={viewOf(s)} />);
+    act(() => useWindows.getState().open({ kind: "battle", battleId: "b1" }));
+    const theirs = await screen.findByText("Bolt's Nova");
+    expect(readableOn("#101010", "dark")).not.toBe("#101010");
+    expect(theirs.getAttribute("style")).toContain(readableOn("#101010", "dark"));
   });
 });
 

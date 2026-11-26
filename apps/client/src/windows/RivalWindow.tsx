@@ -11,6 +11,7 @@ import { RegionMap } from "../components/RegionMap.tsx";
 import { formatCount } from "../format.ts";
 import { shareOfWilling } from "../rivals.ts";
 import { tryRival } from "../screens/Rivals.tsx";
+import { useReadable } from "../theme/glass.ts";
 import { GoneWindow, Section, WindowFrame, type WindowProps } from "./WindowFrame.tsx";
 
 const best = (scores: (number | null | undefined)[]) => {
@@ -20,6 +21,7 @@ const best = (scores: (number | null | undefined)[]) => {
 
 /** One rival's public profile: its AIs, their skills against yours, its customers and its news. */
 export function RivalWindow({ entry, view, companyId }: WindowProps & { companyId: string }) {
+  const readable = useReadable();
   const rival = view.companies.find((c) => c.id === companyId);
   const me = view.companies.find((c) => c.id === view.me.company?.id);
   if (!rival?.rival || !me) return <GoneWindow entry={entry} />;
@@ -53,12 +55,12 @@ export function RivalWindow({ entry, view, companyId }: WindowProps & { companyI
             {
               label: `${c}: ${rival.name}`,
               value: best(theirs.map((p) => p.version?.scores?.[c])),
-              color: rival.palette.primary,
+              color: readable(rival.palette.primary),
             },
             {
               label: `${c}: you`,
               value: best(mine.map((p) => p.version?.scores?.[c])),
-              color: me.palette.primary,
+              color: readable(me.palette.primary),
             },
           ])}
         />
@@ -67,7 +69,7 @@ export function RivalWindow({ entry, view, companyId }: WindowProps & { companyI
         <RegionMap
           label={`Where ${rival.name}'s customers are`}
           values={values}
-          color={rival.palette.primary}
+          color={readable(rival.palette.primary)}
           small
         />
       </Section>

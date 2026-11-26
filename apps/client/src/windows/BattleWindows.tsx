@@ -10,6 +10,7 @@ import { rivalAis } from "../rivals.ts";
 import { type CardView, useCards } from "../store/cards.ts";
 import { useSocket } from "../store/session.ts";
 import { useWindows } from "../store/windows.ts";
+import { useReadable } from "../theme/glass.ts";
 import { GoneWindow, WindowFrame, type WindowProps } from "./WindowFrame.tsx";
 
 export const SKILL_NAMES: Record<BattleSkill, string> = {
@@ -186,6 +187,7 @@ export function BattleWindow({ entry, view, battleId }: WindowProps & { battleId
   const running = battle?.status === "running";
   const [live, setLive] = useState<Transcript>([]);
   const worldId = view.world.id;
+  const readable = useReadable();
 
   useEffect(() => {
     if (!running) return;
@@ -262,8 +264,10 @@ export function BattleWindow({ entry, view, battleId }: WindowProps & { battleId
         </p>
       )}
       <div className="grid grid-cols-2 gap-4 text-xs font-semibold uppercase tracking-wider">
-        <p style={{ color: me.palette.primary }}>{`${me.name}'s ${battle.mine.productName}`}</p>
-        <p style={{ color: rival.palette.primary }}>
+        <p style={{ color: readable(me.palette.primary) }}>
+          {`${me.name}'s ${battle.mine.productName}`}
+        </p>
+        <p style={{ color: readable(rival.palette.primary) }}>
           {`${rival.name}'s ${battle.theirs.productName}`}
         </p>
       </div>
@@ -296,7 +300,9 @@ export function BattleWindow({ entry, view, battleId }: WindowProps & { battleId
                       <motion.div
                         className="h-1.5 rounded-full"
                         style={{
-                          backgroundColor: i === 0 ? me.palette.primary : rival.palette.primary,
+                          backgroundColor: readable(
+                            i === 0 ? me.palette.primary : rival.palette.primary,
+                          ),
                         }}
                         initial={{ width: 0 }}
                         animate={{ width: `${Math.round(100 * (r.scores[i] ?? 0))}%` }}

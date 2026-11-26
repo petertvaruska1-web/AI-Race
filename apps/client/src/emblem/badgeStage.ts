@@ -68,6 +68,10 @@ export function makeBadgeStage(
   let redraw: () => void = () => {};
   let look = { e: emblem, p: palette };
   let texture: THREE.CanvasTexture | null = null;
+  // Drawings load in an order of their own: only the latest look's drawing reaches the face, and
+  // none once the badge is gone.
+  let drawing = 0;
+  let disposed = false;
 
   // A satin enamel face: a mirror-bright coat reflected the lit room behind the camera and
   // washed the whole face white whenever the badge tilted up.
@@ -86,6 +90,7 @@ export function makeBadgeStage(
   /** Draws the flat emblem into the face's texture once its image has loaded. */
   function paint(): void {
     if (typeof document === "undefined") return;
+    const mine = ++drawing;
     const canvas = document.createElement("canvas");
     canvas.width = TEXTURE;
     canvas.height = TEXTURE;
@@ -93,6 +98,7 @@ export function makeBadgeStage(
     if (!ctx) return;
     const image = new Image();
     image.onload = () => {
+      if (disposed || mine !== drawing) return;
       ctx.clearRect(0, 0, TEXTURE, TEXTURE);
       ctx.drawImage(image, 0, 0, TEXTURE, TEXTURE);
       const next = new THREE.CanvasTexture(canvas);
@@ -182,6 +188,7 @@ export function makeBadgeStage(
       redraw = fn;
     },
     dispose() {
+      disposed = true;
       mesh.geometry.dispose();
       face.dispose();
       texture?.dispose();

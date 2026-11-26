@@ -11,6 +11,7 @@ import { go } from "../route.ts";
 import { OffersList } from "../spending/Licensing.tsx";
 import { usePlayground } from "../store/playground.ts";
 import { useWindows } from "../store/windows.ts";
+import { useReadable } from "../theme/glass.ts";
 
 /** Opens the Playground on a rival's AI (game-layer design §3 "Try it"). */
 export function tryRival(view: WorldView, versionId: string): void {
@@ -20,6 +21,7 @@ export function tryRival(view: WorldView, versionId: string): void {
 
 function RivalCard({ view, company }: { view: WorldView; company: PublicCompany }) {
   const open = useWindows((s) => s.open);
+  const readable = useReadable();
   const arch = company.rival?.archetype ?? null;
   const news = view.feed.filter((f) => f.kind === "news" && f.companyId === company.id).slice(-2);
   const offers = view.licenseOffers.filter((o) => o.licensorId === company.id);
@@ -27,7 +29,7 @@ function RivalCard({ view, company }: { view: WorldView; company: PublicCompany 
     <motion.article
       aria-label={company.name}
       className={`panel p-5 ${arch ? "md:col-span-2 ring-1 ring-danger/40" : ""}`}
-      style={{ borderColor: company.palette.primary }}
+      style={{ borderColor: readable(company.palette.primary) }}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
     >
@@ -41,7 +43,10 @@ function RivalCard({ view, company }: { view: WorldView; company: PublicCompany 
           <Logo logo={company.logo} palette={company.palette} size={arch ? 72 : 56} />
         </button>
         <div className="min-w-0">
-          <h2 className="font-display text-xl font-bold" style={{ color: company.palette.primary }}>
+          <h2
+            className="font-display text-xl font-bold"
+            style={{ color: readable(company.palette.primary) }}
+          >
             {company.name}
           </h2>
           <p className="text-sm text-muted">

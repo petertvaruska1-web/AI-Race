@@ -91,13 +91,16 @@ describe("founding a company", () => {
     expect(cmd.logo.emblem.letters).toBe("A");
   });
 
-  it("keeps a hostile company name as plain text", () => {
+  it("keeps a hostile company name as plain text, and its letters as letters", () => {
     const { container } = render(<Lobby view={viewOf(testWorld())} />);
     const hostile = "<img src=x onerror=alert(1)>";
     const plate = screen.getByPlaceholderText("Acme Intelligence") as HTMLInputElement;
     fireEvent.change(plate, { target: { value: hostile } });
+    fireEvent.click(screen.getByRole("button", { name: "Letters" }));
     expect(plate.value).toBe(hostile);
     expect(container.querySelector("img")).toBeNull();
+    const logo = preview().getByRole("img", { name: "Your logo" });
+    expect(logo.querySelector("text")?.textContent).toBe("ISO");
   });
 
   it("waits for a name before the lever can be pulled", () => {
@@ -122,9 +125,60 @@ describe("founding a company", () => {
       cid,
       reason: "Another company already uses that name.",
     });
-    expect(await screen.findByText("Another company already uses that name.")).toBeTruthy();
+    const reason = await screen.findByText("Another company already uses that name.");
+    // Under the lever itself, where a full bench can't push it out of sight.
+    expect(reason.closest(".lever")).not.toBeNull();
+    expect(screen.getByRole("alert").textContent).toContain("already uses that name");
     fireEvent.click(screen.getByRole("button", { name: "Found company" }));
     await waitFor(() => expect(game.ws.sentOf("command")).toHaveLength(2));
+  });
+
+  it("keeps the lever down once the company is founded, and a second pull sends nothing", async () => {
+    render(<Lobby view={viewOf(testWorld())} />);
+    const plate = screen.getByPlaceholderText("Acme Intelligence") as HTMLInputElement;
+    fireEvent.change(plate, { target: { value: "Acme" } });
+    const lever = screen.getByRole("button", { name: "Found company" });
+    fireEvent.click(lever);
+    await waitFor(() => expect(game.ws.sentOf("command")).toHaveLength(1));
+    const cid = game.ws.sentOf("command")[0]?.cid;
+    game.ws.receive({ v: 1, type: "ack", cid, duplicate: false });
+    expect(await screen.findByText("Founded")).toBeTruthy();
+    expect(lever.getAttribute("style")).toContain("translateY(176px)");
+    expect(plate.disabled).toBe(true);
+    fireEvent.click(lever);
+    expect(game.ws.sentOf("command")).toHaveLength(1);
+  });
+
+  it("keeps a full world's players in a display that scrolls", () => {
+    let s = testWorld();
+    for (const [userId, displayName] of [
+      ["u2", "Ben"],
+      ["u3", "Cleo"],
+      ["u4", "Dev"],
+      ["u5", "Eli"],
+      ["u6", "Fay"],
+      ["u7", "Gus"],
+      ["u8", "Hal"],
+    ] as const)
+      s = apply(s, { kind: "system", event: { type: "memberJoined", userId, displayName } });
+    render(<Lobby view={viewOf(s)} />);
+    const players = screen.getByRole("region", { name: "Players here" });
+    expect(players.getAttribute("tabindex")).toBe("0");
+    expect(within(players).getAllByRole("listitem")).toHaveLength(8);
+  });
+
+  it("turns the second color dial after a quick color with white in it", async () => {
+    render(<Lobby view={viewOf(testWorld())} />);
+    fireEvent.change(screen.getByPlaceholderText("Acme Intelligence"), {
+      target: { value: "Acme" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sky" }));
+    screen.getByRole("slider", { name: "Second color" }).focus();
+    await userEvent.keyboard("{ArrowRight}");
+    fireEvent.click(screen.getByRole("button", { name: "Found company" }));
+    await waitFor(() => expect(game.ws.sentOf("command")).toHaveLength(1));
+    const cmd = game.ws.sentOf("command")[0]?.cmd as { palette: { secondary: string } };
+    expect(cmd.palette.secondary).not.toBe("#ffffff");
   });
 
   it("powers the lab glass up only once the server founds the company", async () => {

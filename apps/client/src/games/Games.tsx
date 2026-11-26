@@ -24,6 +24,7 @@ import { Toggle } from "../components/Toggle.tsx";
 import { capitalize, dayLabel } from "../format.ts";
 import { rivalAis } from "../rivals.ts";
 import { useSocket } from "../store/session.ts";
+import { useReadable } from "../theme/glass.ts";
 import { DICE } from "./pictures.tsx";
 import { depthOf, Lives, STAGES } from "./Stages.tsx";
 import { type LiveRun, useMinigame } from "./useMinigame.ts";
@@ -376,6 +377,7 @@ function PlayView({
   onBack: () => void;
 }) {
   const Stage = STAGES[game];
+  const readable = useReadable();
   const me = view.companies.find((c) => c.id === view.me.company?.id);
   const color = me?.palette.primary ?? "var(--brand)";
   const duel = run.steps.b.length > 0 || Boolean(run.result?.sides.b);
@@ -417,7 +419,9 @@ function PlayView({
             <section key={side} aria-label={side === "a" ? "Your AI" : "Their AI"}>
               <p
                 className="mb-2 text-xs font-semibold uppercase tracking-wider"
-                style={{ color: side === "a" ? color : rival?.palette.primary }}
+                style={{
+                  color: side === "a" ? color : rival ? readable(rival.palette.primary) : undefined,
+                }}
               >
                 {side === "a"
                   ? `${me?.name ?? "You"} · ${Math.round(mine)}`

@@ -1,9 +1,10 @@
-import { type KeyboardEvent, type PointerEvent, type ReactNode, useRef } from "react";
+import { type KeyboardEvent, type PointerEvent, type ReactNode, useEffect, useRef } from "react";
 
 /**
- * A knob of the bench (design §5.4): turn it by dragging up or down, with the mouse wheel, or
- * with the arrow keys (Page Up/Down for bigger steps, Home and End for the ends). Its value shows
- * in a small display under it. A slider to assistive technology, named by `label`.
+ * A knob of the bench (design §5.4): turn it by dragging up or down, with the arrow keys (Page
+ * Up/Down for bigger steps, Home and End for the ends), or with the mouse wheel once picked (so
+ * scrolling the page past it changes nothing). Its value shows in a small display under it. A
+ * slider to assistive technology, named by `label`.
  */
 export function Knob({
   label,
@@ -43,6 +44,33 @@ export function Knob({
     if (next !== value) onChange(next);
   };
   const big = Math.max(step, Math.round((max - min) / 10 / step) * step);
+  // One notch of the wheel: a step, or more on a big range, so about 40 notches go end to end.
+  const notch = Math.max(step, Math.ceil((max - min) / 40 / step) * step);
+  const control = useRef<HTMLDivElement>(null);
+  const latest = useRef({ value, set, notch });
+  latest.current = { value, set, notch };
+  useEffect(() => {
+    const el = control.current;
+    if (!el) return;
+    let small = 0;
+    // A native listener, so the page's own scroll can be stopped while a picked knob turns.
+    const onWheel = (e: WheelEvent) => {
+      if (document.activeElement !== el || e.deltaY === 0) return;
+      e.preventDefault();
+      let by = Math.sign(-e.deltaY);
+      if (e.deltaMode === 0 && Math.abs(e.deltaY) < 50) {
+        // A trackpad's small steps add up to a notch.
+        small += e.deltaY;
+        if (Math.abs(small) < 50) return;
+        by = Math.sign(-small);
+      }
+      small = 0;
+      const now = latest.current;
+      now.set(now.value + by * now.notch);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
   const onKey = (e: KeyboardEvent) => {
     const by: Record<string, number> = {
       ArrowUp: step,
@@ -72,6 +100,7 @@ export function Knob({
   return (
     <div className="knob">
       <div
+        ref={control}
         role="slider"
         tabIndex={0}
         aria-label={label}
@@ -90,7 +119,6 @@ export function Knob({
         onPointerCancel={() => {
           drag.current = null;
         }}
-        onWheel={(e) => set(value + (e.deltaY < 0 ? step : -step))}
       >
         <div className="bench-knob__cap" style={{ transform: `rotate(${angle}deg)` }} />
         {center}

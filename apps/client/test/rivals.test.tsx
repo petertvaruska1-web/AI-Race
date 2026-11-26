@@ -8,6 +8,7 @@ import { Rivals } from "../src/screens/Rivals.tsx";
 import { usePlayground } from "../src/store/playground.ts";
 import { useSession } from "../src/store/session.ts";
 import { useWindows } from "../src/store/windows.ts";
+import { readableOn, useLook } from "../src/theme/glass.ts";
 import { WindowHost } from "../src/windows/WindowHost.tsx";
 import { liveGame } from "./mockSocket.ts";
 import { launchedWorld, rivalWorld, viewOf } from "./views.ts";
@@ -35,6 +36,25 @@ describe("the Rivals screen", () => {
         `Arch-rival · ${ARCHETYPE_WORDS[arch.rival.archetype]}`,
       ),
     ).toBeTruthy();
+  });
+
+  it("writes each rival's name readable on the player's light glass", () => {
+    useLook.setState({ palette: { primary: "#1e3a8a", secondary: "#ffb020" } });
+    try {
+      const view = viewOf(rivalWorld());
+      const rivals = view.companies.filter((c) => c.rival);
+      expect(rivals.some((c) => readableOn(c.palette.primary, "light") !== c.palette.primary)).toBe(
+        true,
+      );
+      render(<Rivals view={view} />);
+      for (const c of rivals) {
+        const card = screen.getByRole("article", { name: c.name });
+        const name = within(card).getByRole("heading", { name: c.name });
+        expect(name.getAttribute("style")).toContain(readableOn(c.palette.primary, "light"));
+      }
+    } finally {
+      useLook.setState({ palette: null });
+    }
   });
 
   it("shows each rival's public facts from the view", () => {

@@ -1,6 +1,7 @@
 import { EMBLEM_FINISHES, EMBLEM_FRAMES, EMBLEM_PATTERNS, type Emblem } from "@airace/protocol";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import type * as THREE from "three";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Logo } from "../src/components/Logo.tsx";
 import { emblemSvg, framePath } from "../src/emblem/art.ts";
 import { makeBadgeStage } from "../src/emblem/badgeStage.ts";
@@ -81,6 +82,11 @@ describe("the flat emblem", () => {
   });
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
 describe("the 3D emblem badge", () => {
   it("shows the flat emblem without WebGL", () => {
     render(
@@ -109,6 +115,49 @@ describe("the 3D emblem badge", () => {
     const after = (stage.scene.getObjectByName("badge-face") as unknown as { geometry: object })
       .geometry;
     expect(after).not.toBe(before);
+  });
+
+  it("keeps the latest look on its face when drawings finish out of order, and none once gone", () => {
+    // Each look is drawn into a canvas of its own; the face's drawings load in an order of
+    // their own, as images do.
+    const canvases: HTMLCanvasElement[] = [];
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
+      this: HTMLCanvasElement,
+    ) {
+      canvases.push(this);
+      return { clearRect() {}, drawImage() {} } as never;
+    });
+    const images: { onload: (() => void) | null }[] = [];
+    vi.stubGlobal(
+      "Image",
+      class {
+        onload: (() => void) | null = null;
+        src = "";
+        constructor() {
+          images.push(this);
+        }
+      },
+    );
+    const stage = makeBadgeStage(EMBLEM, PALETTE, { still: true, motion: "logo:still" });
+    const redraw = vi.fn();
+    stage.setRedraw(redraw);
+    stage.setLook({ ...EMBLEM, rings: 1 }, PALETTE);
+    stage.setLook({ ...EMBLEM, rings: 3 }, PALETTE);
+    const face = stage.scene.getObjectByName("badge-face") as THREE.Mesh;
+    const material = (face.material as THREE.MeshPhysicalMaterial[])[0];
+    images[2]?.onload?.();
+    expect(material?.map?.image).toBe(canvases[2]);
+    images[1]?.onload?.();
+    images[0]?.onload?.();
+    expect(material?.map?.image).toBe(canvases[2]);
+    expect(redraw).toHaveBeenCalledTimes(1);
+
+    const gone = makeBadgeStage(EMBLEM, PALETTE, { still: true, motion: "logo:still" });
+    const late = vi.fn();
+    gone.setRedraw(late);
+    gone.dispose();
+    images[3]?.onload?.();
+    expect(late).not.toHaveBeenCalled();
   });
 
   it("circles a spark around the badge for the orbit look", () => {

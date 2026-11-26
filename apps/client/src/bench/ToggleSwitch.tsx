@@ -1,8 +1,9 @@
 import { type ReactNode, useId } from "react";
 
 /**
- * A toggle switch with its lamp (design §5.4): a native checkbox with the switch role
- * underneath, named by `label`; `hint` describes it.
+ * A toggle switch with its lamp (design §5.4): a native checkbox with the switch role, named by
+ * `label`; `hint` describes it. The checkbox itself lies over the drawn switch, unseen, so a click
+ * on the switch (a person's, voice control's or a test's) lands on the real control.
  */
 export function ToggleSwitch({
   label,
@@ -28,7 +29,7 @@ export function ToggleSwitch({
           type="checkbox"
           role="switch"
           aria-checked={checked}
-          className="toggle__input sr-only"
+          className="toggle__input"
           checked={checked}
           disabled={disabled}
           aria-describedby={hint ? `${id}-hint` : undefined}

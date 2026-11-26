@@ -155,6 +155,38 @@ describe("controls for setting things", () => {
     expect(onChange).toHaveBeenLastCalledWith(12);
   });
 
+  it("turns a knob with the wheel only once the player has picked it", () => {
+    const onChange = vi.fn();
+    render(<Knob label="Glow" value={40} min={0} max={100} step={5} onChange={onChange} />);
+    const knob = screen.getByRole("slider", { name: "Glow" });
+    const wheel = (deltaY: number) => {
+      const e = new WheelEvent("wheel", { deltaY, bubbles: true, cancelable: true });
+      knob.dispatchEvent(e);
+      return e;
+    };
+    // Scrolling the page past a knob changes nothing and still scrolls the page.
+    expect(wheel(-100).defaultPrevented).toBe(false);
+    expect(onChange).not.toHaveBeenCalled();
+    knob.focus();
+    expect(wheel(-100).defaultPrevented).toBe(true);
+    expect(onChange).toHaveBeenLastCalledWith(45);
+    // A trackpad's small steps add up before the knob moves a notch.
+    onChange.mockClear();
+    wheel(20);
+    expect(onChange).not.toHaveBeenCalled();
+    wheel(40);
+    expect(onChange).toHaveBeenLastCalledWith(35);
+  });
+
+  it("turns a hue dial in steps big enough to go round in a few dozen notches", () => {
+    const onChange = vi.fn();
+    render(<HueDial label="Main color" hue={100} color="#ff0000" onChange={onChange} />);
+    const dial = screen.getByRole("slider", { name: "Main color" });
+    dial.focus();
+    dial.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true }));
+    expect(onChange).toHaveBeenLastCalledWith(109);
+  });
+
   it("slides a slider", () => {
     const onChange = vi.fn();
     render(<Slider label="Ring weight" value={3} min={1} max={6} onChange={onChange} />);

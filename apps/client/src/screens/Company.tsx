@@ -28,6 +28,7 @@ import { TeamPanel } from "../spending/Team.tsx";
 import { useWindows } from "../store/windows.ts";
 import { GoalProgress } from "../surprises/Goals.tsx";
 import { TrophyShelf } from "../surprises/Trophies.tsx";
+import { useReadable } from "../theme/glass.ts";
 import { gradeColor } from "../windows/ReportWindow.tsx";
 import { LaunchDialog, launchBlocked } from "./LaunchDialog.tsx";
 import { regionMarks } from "./Market.tsx";
@@ -353,6 +354,7 @@ function Lineup({ view }: { view: WorldView }) {
 
 /** The arch-rival against you, in one line; it opens the Rivals screen. */
 function ArchStrip({ view }: { view: WorldView }) {
+  const readable = useReadable();
   const arch = view.companies.find((c) => c.rival?.archetype);
   const me = view.companies.find((c) => c.id === view.me.company?.id);
   if (!arch || !me) return null;
@@ -365,7 +367,7 @@ function ArchStrip({ view }: { view: WorldView }) {
       <Logo logo={arch.logo} palette={arch.palette} size={28} />
       <span className="min-w-0 flex-1">
         <span className="block text-xs text-muted">Your arch-rival</span>
-        <span className="font-semibold" style={{ color: arch.palette.primary }}>
+        <span className="font-semibold" style={{ color: readable(arch.palette.primary) }}>
           {arch.name}
         </span>
       </span>

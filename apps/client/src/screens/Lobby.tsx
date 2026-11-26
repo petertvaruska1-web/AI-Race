@@ -126,17 +126,20 @@ export function Lobby({ view }: { view: WorldView }) {
 function Players({ view }: { view: WorldView }) {
   return (
     <Module label="Players here">
-      <ul aria-label="Players" className="space-y-2">
-        {view.members.map((m) => (
-          <li key={m.userId} className="flex items-center gap-2.5 font-semibold">
-            <Lamp state={m.online ? "ready" : "off"} label={m.online ? "here now" : "away"} />
-            <span className="player-text">{m.displayName}</span>
-            <span className="ml-auto text-sm font-medium text-muted">
-              {m.online ? "online" : "away"}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {/* A full world's players scroll in their display, so the bench keeps its lever in view. */}
+      <Display scroll label="Players here" className="players-display">
+        <ul aria-label="Players" className="m-0 list-none space-y-2 p-0">
+          {view.members.map((m) => (
+            <li key={m.userId} className="flex items-center gap-2.5 font-semibold">
+              <Lamp state={m.online ? "ready" : "off"} label={m.online ? "here now" : "away"} />
+              <span className="player-text">{m.displayName}</span>
+              <span className="ml-auto text-sm font-medium text-muted">
+                {m.online ? "online" : "away"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Display>
     </Module>
   );
 }
@@ -163,7 +166,6 @@ function InviteFriends({ code }: { code: string }) {
           {code}
         </p>
       </Display>
-      <p className="mt-2 break-all text-xs text-muted">{link}</p>
       <div className="mt-3 flex items-center gap-3">
         <PushButton variant="secondary" onClick={copy}>
           Copy link
@@ -183,6 +185,8 @@ function FoundCompany({ view }: { view: WorldView }) {
   const [emblem, setEmblem] = useState<Omit<Emblem, "letters">>(START);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Once founded the lever stays down until the bench gives way to the open-for-business one.
+  const [founded, setFounded] = useState(false);
   const [min, max] = TEXT_LIMITS.companyName;
   const ready = name.trim().length >= min;
   const full: Emblem = { ...emblem, letters: lettersOf(name) };
@@ -195,21 +199,26 @@ function FoundCompany({ view }: { view: WorldView }) {
 
   const set = <K extends keyof typeof emblem>(key: K, value: (typeof emblem)[K]) =>
     setEmblem((e) => ({ ...e, [key]: value }));
-  const dial = (which: "main" | "second", next: Hsl) => {
+  const dial = (which: "main" | "second", turned: Hsl) => {
+    // Within the brightness slider's range, so a quick color's white or black still turns.
+    const next = { ...turned, l: Math.min(82, Math.max(18, turned.l)) };
     if (which === "main") setMain(next);
     else setSecond(next);
     setPalette((p) => ({ ...p, [which === "main" ? "primary" : "secondary"]: toHex(next) }));
   };
 
   async function found() {
-    if (!ready || busy) return;
+    if (!ready || busy || founded) return;
     setBusy(true);
     setError(null);
     const logo = { ...logoFieldsOf(full), emblem: full };
     const r = await socket.command(view.world.id, { type: "createCompany", name, logo, palette });
     setBusy(false);
     if (!r.ok) setError(r.reason);
-    else powerUpGlass();
+    else {
+      setFounded(true);
+      powerUpGlass();
+    }
   }
 
   return (
@@ -237,7 +246,11 @@ function FoundCompany({ view }: { view: WorldView }) {
             aria-label="Company name"
             autoComplete="off"
             spellCheck={false}
-            onChange={(e) => setName(e.target.value)}
+            disabled={busy || founded}
+            onChange={(e) => {
+              setName(e.target.value);
+              setError(null);
+            }}
           />
           <p className="mt-2 text-[13px] text-muted">{`${min} to ${max} characters. Everyone in the world will see it.`}</p>
         </Module>
@@ -454,24 +467,40 @@ function FoundCompany({ view }: { view: WorldView }) {
         <Players view={view} />
         <InviteFriends code={view.world.inviteCode} />
         <Module label="Found the company" className="flex flex-1 flex-col items-center">
-          <Lever label="Found company" disabled={!ready} down={busy} onPull={() => void found()}>
-            <p className="flex items-center gap-2 text-sm font-semibold">
+          <Lever
+            label="Found company"
+            disabled={!ready}
+            down={busy || founded}
+            onPull={() => void found()}
+          >
+            <p
+              role={error ? "alert" : undefined}
+              className={`lever__status ${error ? "text-danger" : ""}`}
+            >
               <Lamp
-                state={busy ? "wait" : ready ? "ready" : "problem"}
-                label={busy ? "Founding" : ready ? "Ready" : "Not ready"}
+                state={founded ? "ready" : busy ? "wait" : error || !ready ? "problem" : "wait"}
+                label={
+                  founded
+                    ? "Founded"
+                    : busy
+                      ? "Founding"
+                      : error
+                        ? "Refused"
+                        : ready
+                          ? "Ready"
+                          : "Not ready"
+                }
+                blink={busy}
               />
-              {busy
-                ? "Founding…"
-                : ready
-                  ? "Ready: pull the lever down"
-                  : "Name your company first"}
+              <span>
+                {founded
+                  ? "Founded"
+                  : busy
+                    ? "Founding…"
+                    : (error ?? (ready ? "Ready: pull the lever down" : "Name your company first"))}
+              </span>
             </p>
           </Lever>
-          {error && (
-            <p role="alert" className="mt-3 text-center text-sm text-danger">
-              {error}
-            </p>
-          )}
         </Module>
       </div>
     </main>

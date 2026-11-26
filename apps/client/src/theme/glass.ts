@@ -89,6 +89,21 @@ export function powerUpGlass(): void {
   useLook.setState((s) => ({ power: s.power + 1 }));
 }
 
+/** The glass the player looks through: their company's, or dark before one exists (C57). */
+export function useGlass(): Glass {
+  return useLook((s) => (s.palette ? glassFor(s.palette.primary) : "dark"));
+}
+
+/**
+ * Another company's color as text or a mark on the player's own plates (A3): the plates follow
+ * the player's glass, so a color that reads on its own company's glass may not read on yours.
+ * Inside a dark display, use `readableOn(color, "dark")` instead.
+ */
+export function useReadable(): (color: string) => string {
+  const glass = useGlass();
+  return (color) => readableOn(color, glass);
+}
+
 /** Themes every screen in the company's palette (C5) and picks its glass (C57). */
 export function applyBenchTheme(
   p: Palette | null,
