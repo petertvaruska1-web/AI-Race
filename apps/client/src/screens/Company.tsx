@@ -237,6 +237,7 @@ export function Company({ view }: { view: WorldView }) {
             <Feed items={view.feed} companyId={company.id} companies={view.companies} />
           </Display>
         </Panel>
+        <GoalProgress view={view} />
         <TrophyShelf view={view} />
       </div>
 
@@ -246,32 +247,32 @@ export function Company({ view }: { view: WorldView }) {
   );
 }
 
-type Drawer = "team" | "licenses" | "apps" | "goal";
+type Drawer = "team" | "licenses" | "apps";
 
-/** The company's smaller panels in one drawer (design A2): one shown at a time, Team first. */
+const DRAWERS: { label: string; value: Drawer }[] = [
+  { label: "Team", value: "team" },
+  { label: "Licenses", value: "licenses" },
+  { label: "Partner apps", value: "apps" },
+];
+
+/**
+ * The company's smaller panels in one drawer (design A2): one shown at a time, Team first. The
+ * goal and the trophies stay in view beside the feed: a player should always see them.
+ */
 function DrawerBay({ view }: { view: WorldView }) {
-  const [drawer, setDrawer] = useState<Drawer>("team");
-  const hasGoal = Boolean(view.world.goal && view.me.company?.goalProgress);
-  const options: { label: string; value: Drawer }[] = [
-    { label: "Team", value: "team" },
-    { label: "Licenses", value: "licenses" },
-    { label: "Partner apps", value: "apps" },
-    ...(hasGoal ? [{ label: "Goal", value: "goal" as const }] : []),
-  ];
-  const shown = options.some((o) => o.value === drawer) ? drawer : "team";
+  const [shown, setShown] = useState<Drawer>("team");
   return (
     <div className="min-w-0 xl:col-span-3">
       <KeyRow
         legend="Company drawer"
-        options={options}
+        options={DRAWERS}
         value={shown}
-        onChange={setDrawer}
+        onChange={setShown}
         className="mb-2.5"
       />
       {shown === "team" && <TeamPanel view={view} />}
       {shown === "licenses" && <LicensesPanel view={view} />}
       {shown === "apps" && <AppsPanel view={view} />}
-      {shown === "goal" && <GoalProgress view={view} />}
     </div>
   );
 }

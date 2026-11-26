@@ -3,9 +3,12 @@ import { createWorld, projectView, type WorldState } from "@airace/sim";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Company } from "../src/screens/Company.tsx";
 import { Home } from "../src/screens/Home.tsx";
+import { useSession } from "../src/store/session.ts";
 import { useWindows } from "../src/store/windows.ts";
 import { GoalProgress, Victory } from "../src/surprises/Goals.tsx";
+import { liveGame } from "./mockSocket.ts";
 import { apply, command, LOGO, PALETTE, ticks } from "./views.ts";
 
 /** Answers `fetch` by path; records every request. */
@@ -93,6 +96,13 @@ describe("the goal picker", () => {
 });
 
 describe("goal progress and the victory", () => {
+  it("stays in view on the Company station, outside the drawer", async () => {
+    useSession.setState({ socket: (await liveGame()).socket });
+    const s = goalWorld({ goal: { kind: "customers", target: 1_000 }, deadlineYears: 1 });
+    render(<Company view={projectView(s, "u1")} />);
+    expect(screen.getByTestId("goal-progress")).toBeTruthy();
+  });
+
   it("shows the value against the target, and the deadline", () => {
     const s = goalWorld({ goal: { kind: "customers", target: 1_000 }, deadlineYears: 1 });
     s.market.customers.c1 = { newEngland: { everyday: { free: 250 } } };
