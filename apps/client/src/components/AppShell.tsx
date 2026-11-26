@@ -12,19 +12,40 @@ import { Toasts } from "./Toasts.tsx";
 import { LighterGraphics, TopBar } from "./TopBar.tsx";
 import { WorldChat } from "./WorldChat.tsx";
 
-/** While a rescue offer waits, a hazard plate under the strip counts down and opens the choice. */
-function RescueBanner({ view }: { view: WorldView }) {
+/**
+ * Warnings that need the player sit on hazard plates under the strip: a rescue offer counting
+ * down, and servers that leave questions unanswered. Each opens what deals with it.
+ */
+function Hazards({ view }: { view: WorldView }) {
   const open = useWindows((s) => s.open);
   const offer = view.me.company?.rescue;
-  if (!offer) return null;
-  const left = Math.max(0, offer.deadlineDay - view.world.day);
+  const served = view.me.company?.compute.served ?? 1;
+  if (!offer && served >= 1) return null;
+  const left = offer ? Math.max(0, offer.deadlineDay - view.world.day) : 0;
   return (
-    <div className="rescue-banner station-hazard module module--thin">
-      <Lamp state="problem" label="Rescue needed" blink />
-      <span className="font-semibold">{`Your cash ran out. Choose a rescue within ${left} game days.`}</span>
-      <Button className="ml-auto" onClick={(e) => open({ kind: "rescue" }, e.currentTarget)}>
-        Choose a rescue
-      </Button>
+    <div className="station-hazards">
+      {offer && (
+        <div className="rescue-banner station-hazard module module--thin">
+          <Lamp state="problem" label="Rescue needed" blink />
+          <span className="font-semibold">{`Your cash ran out. Choose a rescue within ${left} game days.`}</span>
+          <Button className="ml-auto" onClick={(e) => open({ kind: "rescue" }, e.currentTarget)}>
+            Choose a rescue
+          </Button>
+        </div>
+      )}
+      {served < 1 && (
+        <div className="station-hazard module module--thin">
+          <Lamp state="problem" label="Servers overloaded" blink />
+          <button
+            type="button"
+            aria-label={`Servers overloaded · ${Math.round(served * 100)}% answered`}
+            onClick={(e) => open({ kind: "computers" }, e.currentTarget)}
+            className="overload-chip push push--secondary text-danger"
+          >
+            {`Servers overloaded · ${Math.round(served * 100)}% answered`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -54,7 +75,7 @@ export function AppShell({
   return (
     <div data-frame="station" className="station-frame">
       <TopBar view={view} />
-      <RescueBanner view={view} />
+      <Hazards view={view} />
       <aside className="station-column module">
         <SideNav worldId={view.world.id} tab={tab} />
         <div className="station-column__foot">

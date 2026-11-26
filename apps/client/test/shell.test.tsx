@@ -272,7 +272,14 @@ describe("station frame", () => {
     expect(screen.getAllByText(formatMoney(1_234_567_890)).length).toBeGreaterThan(0);
   });
 
-  it("switches lighter graphics from the strip", async () => {
+  it("keeps the computer chip on one line, its full words in its title", () => {
+    render(shell(viewOf(runningWorld()), "company"));
+    const chip = screen.getByRole("button", { name: "Connect your computer" });
+    expect(chip.getAttribute("title")).toBe("Connect your computer");
+    expect(chip.className).toContain("truncate");
+  });
+
+  it("switches lighter graphics from the station column", async () => {
     useGraphics.getState().setLighter(false);
     render(shell(viewOf(runningWorld()), "company"));
     await userEvent.click(screen.getByRole("switch", { name: "Lighter graphics" }));

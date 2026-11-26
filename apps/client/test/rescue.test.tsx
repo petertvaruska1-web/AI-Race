@@ -71,6 +71,20 @@ describe("rescue in the shell", () => {
 });
 
 describe("overload warning", () => {
+  it("sits on a warning plate under the strip, keeping the strip clear", () => {
+    const view = viewOf(launchedWorld());
+    const company = view.me.company;
+    if (!company) throw new Error("no company");
+    const busy: WorldView = {
+      ...view,
+      me: { ...view.me, company: { ...company, compute: { ...company.compute, served: 0.82 } } },
+    };
+    render(shell(busy));
+    const warning = screen.getByRole("button", { name: "Servers overloaded · 82% answered" });
+    expect(warning.closest(".station-strip")).toBeNull();
+    expect(warning.closest(".station-hazards")).not.toBeNull();
+  });
+
   it("shows in the top bar while questions go unanswered, opening the computers", async () => {
     const view = viewOf(launchedWorld());
     const company = view.me.company;

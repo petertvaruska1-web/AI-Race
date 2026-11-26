@@ -97,8 +97,9 @@ export function CardsChip({ view }: { view: WorldView }) {
     <button
       type="button"
       aria-label={label}
+      title={label}
       onClick={(e) => open({ kind: "cards" }, e.currentTarget)}
-      className={`rounded-full border px-3 py-1 text-xs font-semibold ${mine ? "border-border text-muted" : "border-brand text-brand"}`}
+      className={`max-w-[200px] shrink truncate rounded-full border px-3 py-1 text-xs font-semibold ${mine ? "border-border text-muted" : "border-brand text-brand"}`}
     >
       {label}
     </button>

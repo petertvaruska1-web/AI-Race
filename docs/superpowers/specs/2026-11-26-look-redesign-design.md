@@ -141,8 +141,8 @@ Mechanical and purposeful: knobs move in detents with a slight overshoot, push b
 
 ### 7.1 The station frame (inside a world)
 
-- **Top strip** (one long plate): the company emblem and name, the world name, displays for cash, profit this month and the date, the speed keys (pause, 1×, 2×, 4×), the day progress bar, the "your computer" status with its lamp, and the "lighter graphics" switch. Everything the current `TopBar` shows stays.
-- **Station knob** (left column): a large knob above an engraved list of the nine stations (Company, Market, Money, AI Lab, Playground, Benchmarks, Rivals, Arena, AI Directory), each with a lamp; picking a station turns the knob to it. Under it, the world chat intercom.
+- **Top strip** (one long plate): the company emblem and name, the world name, displays for cash, profit this month and the date, the speed keys (pause, 1×, 2×, 4×), the day progress bar, and the "your computer" status with its lamp. Everything the current `TopBar` shows stays, except the overload warning, which moves to a hazard plate under the strip (§7.3).
+- **Station knob** (left column): a large knob above an engraved list of the nine stations (Company, Market, Money, AI Lab, Playground, Benchmarks, Rivals, Arena, AI Directory), each with a lamp; picking a station turns the knob to it. Under it, the "Lighter graphics" switch and the world chat intercom.
 - **The bench:** the rest of the window, filled by the station's modules.
 - **Changing station:** the knob turns, the old bench slides out sideways, the new one slides in and its displays power on. The glass stays still behind it.
 - **The page never scrolls.** Long content (the feed, chat, tables, version lists, report cards) scrolls inside its own display, with a display-style scroll bar.
@@ -155,7 +155,7 @@ All 30 window kinds (`store/windows.ts`) keep their content, their stacking and 
 ### 7.3 Other overlays
 
 - **Toasts** print out of a slot under the top strip as paper-like slips with a lamp color by kind, and slide away.
-- **The rescue warning** is a hazard plate under the top strip with a blinking red lamp and its push button.
+- **Warnings that need the player** (the rescue offer, servers leaving questions unanswered) are hazard plates under the top strip, each with a blinking red lamp and its push button.
 - **World chat** is an intercom module that slides up from the station column: a speaker grille, a display with the messages, a typing display and a "send" push button.
 - **The Victory ceremony** (`surprises/Goals.tsx`) keeps its content in a large panel with the emblem badge and trophies in 3D.
 
@@ -259,7 +259,7 @@ Each station keeps all its content and controls; this section says how they are 
 ## 11. Performance and the quality floor
 
 - **Frame budget:** the glass and all visible 3D objects together stay within a light load on an RTX 3050 laptop-class card while it trains: reduced-resolution glass, a 30-frame cap for ambient motion (60 while the player drags or a challenge plays), rendering only visible, changing objects, nothing while the tab is hidden.
-- **Lighter graphics** (a switch on the top strip, remembered by the browser): a still glass, no glow pass, simpler 3D, no ambient motion. The game turns it on by itself, with a note, when frames take too long.
+- **Lighter graphics** (a switch at the foot of the station column, remembered by the browser when the player sets it): a still glass, no glow pass, simpler 3D, no ambient motion. The game turns it on by itself, with a note, when frames take too long.
 - **Readability:** body text at least as readable as today on both glasses; displays meet strong contrast; focus rings visible.
 - **Reduced motion:** honored everywhere (`motion.ts`), including the glass and the 3D.
 - **Small windows:** §7.1.

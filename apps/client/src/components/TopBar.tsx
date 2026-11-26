@@ -59,16 +59,17 @@ export function TopBar({ view }: { view: WorldView }) {
   const company = view.companies.find((c) => c.id === view.me.company?.id);
   const profit = monthProfit(view);
   const cash = view.me.company?.cash ?? 0;
-  const served = view.me.company?.compute.served ?? 1;
   return (
     <header className="station-strip module module--thin">
       <a href="#/" className="icon-btn" aria-label="All worlds">
         ←
       </a>
       {company && (
-        <LogoMotion motion={company.logoMotion}>
-          <Logo logo={company.logo} palette={company.palette} size={40} />
-        </LogoMotion>
+        <span className="shrink-0">
+          <LogoMotion motion={company.logoMotion}>
+            <Logo logo={company.logo} palette={company.palette} size={40} />
+          </LogoMotion>
+        </span>
       )}
       <div className="station-strip__name">
         <p
@@ -102,16 +103,6 @@ export function TopBar({ view }: { view: WorldView }) {
           value={<CountUp value={profit} format={formatMoney} />}
         />
       </button>
-      {served < 1 && (
-        <button
-          type="button"
-          aria-label={`Servers overloaded · ${Math.round(served * 100)}% answered`}
-          onClick={(e) => open({ kind: "computers" }, e.currentTarget)}
-          className="overload-chip push push--secondary text-danger"
-        >
-          {`Servers overloaded · ${Math.round(served * 100)}% answered`}
-        </button>
-      )}
       <CardsChip view={view} />
       <Clock view={view} />
       <DayBar view={view} />
