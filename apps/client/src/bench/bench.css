@@ -655,4 +655,101 @@
       overflow: visible;
     }
   }
+
+  /* Windows: an engraved title plate over a dimmed glass (design §7.2). */
+  .title-plate {
+    display: inline-block;
+    max-width: 100%;
+    margin: 0;
+    padding: 6px 14px 7px;
+    border-radius: 6px;
+    font-family: var(--font-display);
+    font-size: 21px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--ink);
+    background: var(--brush), linear-gradient(180deg, rgb(255 255 255 / 0.05), rgb(0 0 0 / 0.14));
+    box-shadow:
+      inset 0 1px 2px rgb(0 0 0 / 0.45),
+      0 1px 0 rgb(255 255 255 / 0.12);
+  }
+  .window-backdrop {
+    background: rgb(5 7 11 / 0.55);
+    backdrop-filter: blur(6px) saturate(0.85);
+  }
+
+  /* Notifications print out under the strip as slips (design §7.3). */
+  .slip {
+    border-radius: 3px 3px 6px 6px;
+    color: #15181e;
+    background: linear-gradient(180deg, #f3f4f6, #e2e5e9);
+    box-shadow:
+      0 16px 30px -14px rgb(0 0 0 / 0.65),
+      inset 0 -2px 0 rgb(0 0 0 / 0.08);
+    transform-origin: top center;
+  }
+  .slip::before {
+    content: "";
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    top: 3px;
+    height: 4px;
+    background:
+      radial-gradient(circle at 3px 2px, rgb(0 0 0 / 0.28) 0 1.4px, transparent 1.8px) 0 0 / 9px 4px
+      repeat-x;
+  }
+  .slip__label {
+    display: block;
+    margin-bottom: 2px;
+    font-family: var(--font-dot);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: #3a3f48;
+  }
+  .slip button:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: -2px;
+  }
+
+  /* The world chat's intercom key. */
+  .intercom-key {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    padding: 6px 14px 6px 8px;
+    border: 0;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #e9edf2;
+    background: var(--key, linear-gradient(180deg, #484d57, #2a2d33));
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.2),
+      0 3px 0 #0f1013,
+      0 10px 16px -8px rgb(0 0 0 / 0.8);
+  }
+  .intercom-key:active {
+    transform: translateY(2px);
+  }
+  .intercom-key:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 3px;
+  }
+  .intercom-key__grille {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle, #0b0d10 0 1.2px, transparent 1.6px) 0 0 / 5px 5px,
+      radial-gradient(circle at 40% 35%, #5d636d, #23262c 70%);
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.7);
+  }
+  .intercom-key__count {
+    padding: 3px 7px;
+  }
 }

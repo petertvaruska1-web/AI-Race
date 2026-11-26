@@ -6,8 +6,9 @@ import { type OpenWindow, useWindows } from "../store/windows.ts";
 export type WindowProps = { entry: OpenWindow; view: WorldView };
 
 /**
- * A window: it grows out of what was clicked and shrinks away. Back shows the
- * window below it; the close button closes them all.
+ * A window: a heavy panel of the bench (design §7.2) that grows out of what was clicked and
+ * shrinks away, its title on an engraved plate. Back shows the window below it; the close
+ * button closes them all.
  */
 export function WindowFrame({
   entry,
@@ -54,10 +55,10 @@ export function WindowFrame({
           </button>
         )}
         <div className="min-w-0 flex-1">
-          <h2 id={titleId} className="player-text font-display text-2xl font-bold">
+          <h2 id={titleId} className="title-plate player-text">
             {title}
           </h2>
-          {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+          {subtitle && <p className="mt-2 text-sm text-muted">{subtitle}</p>}
         </div>
         <button type="button" aria-label="Close" onClick={closeAll} className="icon-btn">
           ✕

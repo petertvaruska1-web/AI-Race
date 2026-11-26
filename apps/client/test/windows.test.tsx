@@ -44,6 +44,13 @@ describe("windows", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open it" }));
   });
 
+  it("puts a window's title on an engraved plate", async () => {
+    await openFrom({ kind: "customers" });
+    expect(
+      screen.getByRole("dialog", { name: "Customers" }).querySelector("h2.title-plate"),
+    ).not.toBeNull();
+  });
+
   it("stack a window opened inside another; Back returns to the first", async () => {
     await openFrom({ kind: "customers" });
     const first = screen.getByRole("dialog", { name: "Customers" });

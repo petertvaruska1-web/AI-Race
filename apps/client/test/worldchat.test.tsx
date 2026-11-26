@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { WorldChat } from "../src/components/WorldChat.tsx";
 import { useSession } from "../src/store/session.ts";
+import { readableOn } from "../src/theme/glass.ts";
 import { liveGame } from "./mockSocket.ts";
 import { apply, command, LOGO, runningWorld, viewOf } from "./views.ts";
 
@@ -73,6 +74,22 @@ describe("the world chat panel", () => {
     expect(
       await screen.findByText("Messages can't hold links, email addresses or phone numbers."),
     ).toBeTruthy();
+  });
+
+  it("shows other players' names readable on the viewer's glass", async () => {
+    const base = viewOf(world());
+    const view = {
+      ...base,
+      companies: base.companies.map((c) =>
+        c.id === "c2" ? { ...c, palette: { primary: "#1e3a8a", secondary: "#ffb020" } } : c,
+      ),
+    };
+    render(<WorldChat view={view} />);
+    fireEvent.click(screen.getByRole("button", { name: /World chat/ }));
+    push(view.world.id, { name: "Ben", companyId: "c2", text: "hi" });
+    const name = await screen.findByText("Ben");
+    expect(readableOn("#1e3a8a", "dark")).not.toBe("#1e3a8a");
+    expect(name.getAttribute("style")).toContain(readableOn("#1e3a8a", "dark"));
   });
 
   it("counts unread messages while it is closed", async () => {

@@ -131,7 +131,7 @@ describe("AI Lab planning", () => {
 });
 
 describe("the Lab's bottom bar and the corners", () => {
-  it("reserves its height while shown, so notifications and the world chat sit above it", async () => {
+  it("reserves its height while shown, so the world chat sits above it (notifications print at the top)", async () => {
     const root = document.documentElement;
     const { unmount } = render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
     step("1 Data");
@@ -140,7 +140,9 @@ describe("the Lab's bottom bar and the corners", () => {
     unmount();
     expect(root.style.getPropertyValue("--bottom-bar")).toBe("");
     const { container: toasts } = render(<Toasts view={viewOf(runningWorld("balance-v2"))} />);
-    expect((toasts.firstElementChild as HTMLElement).style.bottom).toContain("--bottom-bar");
+    const slips = toasts.firstElementChild as HTMLElement;
+    expect(slips.style.bottom).toBe("");
+    expect(slips.className).toContain("top-[100px]");
     const { container: chat } = render(<WorldChat view={viewOf(runningWorld("balance-v2"))} />);
     expect((chat.firstElementChild as HTMLElement).style.bottom).toContain("--bottom-bar");
   });

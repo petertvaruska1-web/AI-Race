@@ -147,7 +147,7 @@ export function WindowHost({ view }: { view: WorldView }) {
             aria-label="Close all windows"
             tabIndex={-1}
             onClick={closeAll}
-            className="absolute inset-0 cursor-default bg-bg/70 backdrop-blur-sm"
+            className="window-backdrop absolute inset-0 cursor-default"
           />
           <AnimatePresence mode="wait">
             <WindowContent key={top.id} entry={top} view={view} />

@@ -5,7 +5,6 @@ import { monthName } from "../format.ts";
 import { useVotes } from "../store/votes.ts";
 import { useWindows, type WindowSpec } from "../store/windows.ts";
 import { MILESTONE_ICONS } from "../surprises/Trophies.tsx";
-import { ABOVE_BOTTOM_BAR } from "./bottomBar.ts";
 
 const SHOW_MS = 7000;
 const MOST = 3;
@@ -215,21 +214,18 @@ export function Toasts({ view }: { view: WorldView }) {
   }, [toasts]);
 
   return (
-    <div
-      className="pointer-events-none fixed right-4 z-30 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
-      style={{ bottom: ABOVE_BOTTOM_BAR }}
-    >
+    <div className="pointer-events-none fixed top-[100px] right-6 z-30 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2.5">
       <AnimatePresence initial={false}>
         {toasts.map((t) => (
           <motion.div
             key={t.id}
             role="status"
             layout
-            initial={{ opacity: 0, x: 60, scale: 0.9 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 60 }}
-            transition={{ type: "spring", stiffness: 380, damping: 30 }}
-            className="window pointer-events-auto relative"
+            initial={{ opacity: 0, y: -22, scaleY: 0.6 }}
+            animate={{ opacity: 1, y: 0, scaleY: 1 }}
+            exit={{ opacity: 0, y: -14 }}
+            transition={{ type: "spring", stiffness: 380, damping: 32 }}
+            className="slip pointer-events-auto relative"
           >
             {t.burst && <Burst color={t.good ? "var(--good)" : "var(--danger)"} />}
             <button
@@ -238,18 +234,16 @@ export function Toasts({ view }: { view: WorldView }) {
                 setToasts((all) => all.filter((x) => x.id !== t.id));
                 open(t.opens, e.currentTarget);
               }}
-              className="flex w-full items-start gap-3 px-4 py-3 text-left"
+              className="flex w-full items-start gap-3 px-4 pt-3.5 pb-3 text-left"
             >
               <span
                 aria-hidden="true"
-                className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ background: t.good ? "var(--good)" : "var(--danger)" }}
+                className="lamp mt-1"
+                data-state={t.good ? "ready" : "problem"}
               />
               <span>
-                <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted">
-                  {t.label}
-                </span>
-                <span className="player-text block font-display font-semibold">{t.headline}</span>
+                <span className="slip__label">{t.label}</span>
+                <span className="player-text block font-semibold leading-snug">{t.headline}</span>
               </span>
             </button>
           </motion.div>
