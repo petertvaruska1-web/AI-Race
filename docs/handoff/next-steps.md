@@ -4,8 +4,9 @@ This file holds what a new session needs and must not depend on any earlier chat
 
 ## The order the owner set
 1. ~~**The release (plan C).**~~ **Done 2026-11-24** (plan `docs/superpowers/plans/2026-11-24-next-level-c-release.md`, ADR 0010 section 8, owner's notes `docs/reports/2026-11-24-release-notes.md`).
-2. **The ultimate game document**: next (the owner's decision of 2026-11-23). Brief below.
-3. **Every computer (phase G, spec section 5.7).** Not yet scheduled by the owner; the spec places it after the release. If it is done after the document, update the document.
+2. **The look redesign comes first** (the owner's decision of 2026-11-26): the game gets its new look before the document, so the document's screenshots show it. Design `docs/superpowers/specs/2026-11-26-look-redesign-design.md` (approved), ADR `docs/decisions/0011-look-redesign.md`, plans `docs/superpowers/plans/2026-11-26-look-redesign-*.md` (plan 1 done 2026-11-26; plans 2–6 are written one at a time, just before each starts). Done means: the owner approves the new look in the running game, npm test / check / e2e pass, pushed, progress log updated.
+3. **The ultimate game document**: after the redesign. Brief below.
+4. **Every computer (phase G, spec section 5.7).** Not yet scheduled by the owner; the spec places it after the release. If it is done after the document, update the document.
 
 ## Where the training upgrade stands
 | Phase (spec `docs/superpowers/specs/2026-11-13-ai-training-next-level-design.md`, section 6) | State |
