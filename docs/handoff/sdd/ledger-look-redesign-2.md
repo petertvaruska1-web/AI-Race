@@ -58,3 +58,4 @@ Final: M8 in part: the hostile-name test now picks Letters and checks the emblem
 Final: Ruling (declined: text selection while dragging knobs or the lever): checked in the check game, a real drag selected nothing (pointer capture) — stands.
 Task 7: npm run e2e after the fix pass: 3 of 3 passed (11.0 min): Fair mode off, Fair mode on, the solo game.
 Task 7: complete (commits df2807b..b0b3302, tests: npm test →    Duration  165.16s (tests 82%, import 8%, setup 4%, environment 4%, transform 1%))
+Task 7: found while setting up the owner's look: on windows 900–1199 wide the badge printer and the join bench took the lab door's two columns and sat left; fixed (b6c25fe, CSS only), checked centered at 1090 wide; client tests 288/288.
