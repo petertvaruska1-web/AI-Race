@@ -20,7 +20,7 @@ export function Readout({
     <div className={`readout ${className}`}>
       <span className="engrave">{label}</span>
       <div className="display readout__display">
-        <span data-testid={testId} className={`dot dot--${size} dot--${tone}`}>
+        <span data-testid={testId} className={`dotface dotface--${size} dotface--${tone}`}>
           {value}
         </span>
       </div>

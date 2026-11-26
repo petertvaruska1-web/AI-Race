@@ -50,6 +50,13 @@ describe("bench surfaces", () => {
     expect(screen.getByText("Cash").className).toContain("engrave");
   });
 
+  it("keeps display numbers clear of the crowd's bobbing dots", () => {
+    render(<Readout label="Cash" value="$1,200" testId="cash" />);
+    expect(screen.getByTestId("cash").classList.contains("dot")).toBe(false);
+    render(<Stat label="Customers" value={3} format={String} testId="count" />);
+    expect(screen.getByTestId("count").classList.contains("dot")).toBe(false);
+  });
+
   it("shows a stat's value in a display, keeping its test id", () => {
     render(<Stat label="Cash" value={1200} format={(n) => `$${n}`} testId="cash" />);
     expect(screen.getByTestId("cash").closest(".display")).not.toBeNull();

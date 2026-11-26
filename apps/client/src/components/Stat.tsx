@@ -26,7 +26,7 @@ export function Stat({
     <div>
       <p className="engrave">{label}</p>
       <div className="display mt-1.5 inline-block min-w-[9ch] px-3 py-2">
-        <p className="dot dot--lg m-0" data-testid={testId}>
+        <p className="dotface dotface--lg m-0" data-testid={testId}>
           <CountUp value={value} format={format} />
         </p>
       </div>

@@ -117,7 +117,7 @@
   }
 
   /* Glowing dot-matrix readouts (design §5.2). */
-  .dot {
+  .dotface {
     font-family: var(--font-dot);
     font-weight: 800;
     line-height: 1;
@@ -129,24 +129,24 @@
       0 0 2px rgb(var(--lamp-rgb) / 0.9);
     white-space: nowrap;
   }
-  .dot--sm {
+  .dotface--sm {
     font-size: 17px;
   }
-  .dot--md {
+  .dotface--md {
     font-size: 25px;
   }
-  .dot--lg {
+  .dotface--lg {
     font-size: 40px;
   }
-  .dot--good {
+  .dotface--good {
     color: #4ade80;
     text-shadow: 0 0 10px rgb(74 222 128 / 0.6);
   }
-  .dot--danger {
+  .dotface--danger {
     color: #ff6b6b;
     text-shadow: 0 0 10px rgb(255 107 107 / 0.6);
   }
-  .dot--plain {
+  .dotface--plain {
     color: var(--display-ink);
     text-shadow: none;
   }
