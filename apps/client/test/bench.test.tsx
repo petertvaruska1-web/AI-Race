@@ -1,13 +1,19 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { Cartridge } from "../src/bench/Cartridge.tsx";
 import { Display } from "../src/bench/Display.tsx";
+import { HueDial } from "../src/bench/HueDial.tsx";
+import { Keypad } from "../src/bench/Keypad.tsx";
 import { KeyRow } from "../src/bench/KeyRow.tsx";
+import { Knob } from "../src/bench/Knob.tsx";
 import { Lamp } from "../src/bench/Lamp.tsx";
+import { Lever } from "../src/bench/Lever.tsx";
 import { Module } from "../src/bench/Module.tsx";
 import { PushButton } from "../src/bench/PushButton.tsx";
 import { Readout } from "../src/bench/Readout.tsx";
 import { RotarySelector } from "../src/bench/RotarySelector.tsx";
+import { Slider } from "../src/bench/Slider.tsx";
 import { ToggleSwitch } from "../src/bench/ToggleSwitch.tsx";
 import { Trace } from "../src/bench/Trace.tsx";
 import { Panel } from "../src/components/Panel.tsx";
@@ -130,5 +136,95 @@ describe("bench controls", () => {
     await userEvent.keyboard("{ArrowRight}");
     expect(onChange).toHaveBeenCalledWith("prepare");
     expect(screen.getByRole("radiogroup", { name: "Step" })).toBeTruthy();
+  });
+});
+
+describe("controls for setting things", () => {
+  it("turns a knob with the keys and names its value", async () => {
+    const onChange = vi.fn();
+    render(<Knob label="Corners" value={6} min={3} max={12} onChange={onChange} />);
+    const knob = screen.getByRole("slider", { name: "Corners" });
+    expect(knob.getAttribute("aria-valuenow")).toBe("6");
+    expect(knob.getAttribute("aria-valuetext")).toBe("6");
+    knob.focus();
+    await userEvent.keyboard("{ArrowUp}");
+    expect(onChange).toHaveBeenLastCalledWith(7);
+    await userEvent.keyboard("{Home}");
+    expect(onChange).toHaveBeenLastCalledWith(3);
+    await userEvent.keyboard("{End}");
+    expect(onChange).toHaveBeenLastCalledWith(12);
+  });
+
+  it("slides a slider", () => {
+    const onChange = vi.fn();
+    render(<Slider label="Ring weight" value={3} min={1} max={6} onChange={onChange} />);
+    fireEvent.change(screen.getByRole("slider", { name: "Ring weight" }), {
+      target: { value: "5" },
+    });
+    expect(onChange).toHaveBeenCalledWith(5);
+  });
+
+  it("turns a hue dial around the color wheel", async () => {
+    const onChange = vi.fn();
+    render(<HueDial label="Main color" hue={359} color="#ff0000" onChange={onChange} />);
+    const dial = screen.getByRole("slider", { name: "Main color" });
+    dial.focus();
+    await userEvent.keyboard("{ArrowUp}");
+    expect(onChange).toHaveBeenLastCalledWith(0);
+  });
+
+  it("presses a quick-color cartridge", async () => {
+    const onClick = vi.fn();
+    render(
+      <Cartridge
+        label="Ember"
+        primary="#ff9f1c"
+        secondary="#ff5964"
+        pressed={false}
+        onClick={onClick}
+      />,
+    );
+    const cart = screen.getByRole("button", { name: "Ember" });
+    expect(cart.getAttribute("aria-pressed")).toBe("false");
+    await userEvent.click(cart);
+    expect(onClick).toHaveBeenCalled();
+  });
+
+  it("pulls the lever once from the keyboard, never while disabled", async () => {
+    const onPull = vi.fn();
+    const { rerender } = render(<Lever label="Found company" disabled onPull={onPull} />);
+    await userEvent.click(screen.getByRole("button", { name: "Found company" }));
+    expect(onPull).not.toHaveBeenCalled();
+    rerender(<Lever label="Found company" onPull={onPull} />);
+    screen.getByRole("button", { name: "Found company" }).focus();
+    await userEvent.keyboard("{Enter}");
+    expect(onPull).toHaveBeenCalledTimes(1);
+    rerender(<Lever label="Found company" down onPull={onPull} />);
+    screen.getByRole("button", { name: "Found company" }).focus();
+    await userEvent.keyboard(" ");
+    expect(onPull).toHaveBeenCalledTimes(1);
+  });
+
+  it("types a code from the keys and cleans a pasted one", async () => {
+    const onChange = vi.fn();
+    const pad = (value: string) => (
+      <Keypad
+        label="Invite code"
+        alphabet="ABC23"
+        value={value}
+        maxLength={6}
+        onChange={onChange}
+      />
+    );
+    const { rerender } = render(pad(""));
+    await userEvent.click(screen.getByRole("button", { name: "A" }));
+    expect(onChange).toHaveBeenLastCalledWith("A");
+    rerender(pad("A"));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(onChange).toHaveBeenLastCalledWith("");
+    fireEvent.change(screen.getByRole("textbox", { name: "Invite code" }), {
+      target: { value: " ab c2 " },
+    });
+    expect(onChange).toHaveBeenLastCalledWith("ABC2");
   });
 });

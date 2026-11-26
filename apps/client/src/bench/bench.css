@@ -794,4 +794,256 @@
       inset 0 0 0 7px rgb(255 255 255 / 0.08),
       0 0 0 1px rgb(0 0 0 / 0.4);
   }
+
+  /* Knobs that set a value (design §5.4), with their value display and engraved name. */
+  .knob {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 9px;
+  }
+  .knob__control {
+    cursor: ns-resize;
+    touch-action: none;
+  }
+  .knob__control:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 9px;
+  }
+  .knob__control--hue::before {
+    inset: -10px;
+    background: conic-gradient(
+      from 0deg,
+      #ff3b3b,
+      #ffb03b,
+      #f5ff3b,
+      #4dff3b,
+      #3bffd8,
+      #3b8cff,
+      #8f3bff,
+      #ff3bd2,
+      #ff3b3b
+    );
+    -webkit-mask: radial-gradient(circle, transparent 64%, #000 66%);
+    mask: radial-gradient(circle, transparent 64%, #000 66%);
+  }
+  .knob-jewel {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 24px;
+    height: 24px;
+    margin: -12px 0 0 -12px;
+    border: 2px solid #15171b;
+    border-radius: 50%;
+    box-shadow:
+      inset 0 2px 4px rgb(0 0 0 / 0.6),
+      0 0 12px -2px currentColor;
+  }
+  .knob__value {
+    min-width: 56px;
+    padding: 4px 8px;
+    text-align: center;
+  }
+
+  /* Sliders: a machined cap in a lit track. */
+  .bench-slider {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .bench-slider__input {
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    background: transparent;
+    cursor: ew-resize;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .bench-slider__input::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--lamp) var(--filled, 0%), #07090c var(--filled, 0%));
+    box-shadow:
+      inset 0 1px 3px rgb(0 0 0 / 0.9),
+      0 1px 0 rgb(255 255 255 / 0.12);
+  }
+  .bench-slider__input::-moz-range-track {
+    height: 6px;
+    border-radius: 3px;
+    background: #07090c;
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.9);
+  }
+  .bench-slider__input::-moz-range-progress {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--lamp);
+  }
+  .bench-slider__input::-webkit-slider-thumb {
+    width: 20px;
+    height: 24px;
+    margin-top: -9px;
+    border: 0;
+    border-radius: 4px;
+    background:
+      linear-gradient(
+        transparent 11px,
+        rgb(0 0 0 / 0.45) 11px,
+        rgb(0 0 0 / 0.45) 13px,
+        transparent 13px
+      ),
+      linear-gradient(180deg, #666c76, #2c2f35);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.3),
+      0 3px 6px rgb(0 0 0 / 0.6);
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .bench-slider__input::-moz-range-thumb {
+    width: 20px;
+    height: 24px;
+    border: 0;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #666c76, #2c2f35);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.3),
+      0 3px 6px rgb(0 0 0 / 0.6);
+  }
+  .bench-slider__input:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Quick-color cartridges. */
+  .cartridge {
+    height: 26px;
+    border: 0;
+    border-radius: 5px;
+    cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.25),
+      0 2px 0 rgb(0 0 0 / 0.45);
+    transition: transform 120ms ease;
+  }
+  .cartridge:active {
+    transform: translateY(1px);
+  }
+  .cartridge[aria-pressed="true"] {
+    outline: 2px solid var(--lamp);
+    outline-offset: 2px;
+  }
+  .cartridge:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 3px;
+  }
+
+  /* The big lever. */
+  .lever {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .lever__slot {
+    position: relative;
+    width: 64px;
+    height: 250px;
+    border-radius: 32px;
+    background: #07090c;
+    box-shadow:
+      inset 0 3px 10px rgb(0 0 0 / 0.95),
+      0 1px 0 rgb(255 255 255 / 0.14);
+  }
+  .lever__slot::before {
+    content: "";
+    position: absolute;
+    left: 29px;
+    top: 24px;
+    bottom: 24px;
+    width: 6px;
+    border-radius: 3px;
+    background: #000;
+  }
+  .lever__handle {
+    position: absolute;
+    left: 50%;
+    top: 4px;
+    width: 58px;
+    height: 58px;
+    margin-left: -29px;
+    border: 0;
+    border-radius: 50%;
+    cursor: grab;
+    touch-action: none;
+    background: radial-gradient(
+      circle at 38% 30%,
+      color-mix(in srgb, var(--lamp) 70%, #fff),
+      var(--lamp) 45%,
+      color-mix(in srgb, var(--lamp) 45%, #000) 100%
+    );
+    box-shadow:
+      0 10px 18px rgb(0 0 0 / 0.6),
+      0 0 24px -4px var(--lamp),
+      inset 0 -3px 6px rgb(0 0 0 / 0.35);
+    transition: transform 450ms cubic-bezier(0.3, 1.4, 0.5, 1);
+  }
+  .lever__handle--dragging {
+    cursor: grabbing;
+    transition: none;
+  }
+  .lever__handle:disabled {
+    cursor: not-allowed;
+    filter: grayscale(1) brightness(0.6);
+    box-shadow: 0 10px 18px rgb(0 0 0 / 0.6);
+  }
+  .lever__handle:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 4px;
+  }
+
+  /* The keypad. */
+  .keypad {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .keypad__display {
+    font-family: var(--font-dot);
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-align: center;
+    color: var(--lamp);
+    text-shadow: 0 0 10px rgb(var(--lamp-rgb) / 0.7);
+  }
+  .keypad__keys {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .keypad__key {
+    height: 32px;
+    border: 0;
+    border-radius: 5px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 700;
+    color: #d5dbe3;
+    background: linear-gradient(180deg, #43474f, #26292e);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.16),
+      0 2px 0 #0f1013;
+    cursor: pointer;
+  }
+  .keypad__key:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1);
+  }
+  .keypad__key:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 2px;
+  }
 }
