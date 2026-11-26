@@ -4,8 +4,8 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { type Line, LineChart } from "../../components/LineChart.tsx";
 import { Panel } from "../../components/Panel.tsx";
 import { type SampleEvent, SampleFeed } from "../../components/SampleFeed.tsx";
+import { Core } from "../../core/Core.tsx";
 import { percent } from "../../format.ts";
-import { Orb } from "../../orb/Orb.tsx";
 import { useSocket } from "../../store/session.ts";
 import { mix } from "../../theme/palette.ts";
 
@@ -153,7 +153,7 @@ function RunPanel({ view, run }: { view: WorldView; run: RunView }) {
     <div className="space-y-4">
       <Panel className="flex flex-wrap items-center gap-6">
         {palette && (
-          <Orb
+          <Core
             size={180}
             label={base ? `Your AI ${base.label}` : "Your new AI"}
             input={{

@@ -8,11 +8,11 @@ import { Panel } from "../components/Panel.tsx";
 import { RegionMap } from "../components/RegionMap.tsx";
 import { Stat } from "../components/Stat.tsx";
 import { monthProfit } from "../components/TopBar.tsx";
+import { Core } from "../core/Core.tsx";
 import { formatCount, formatMoney, monthName } from "../format.ts";
 import { GROUPS, groupColors } from "../groups.ts";
 import { daysOf } from "../history.ts";
 import { profitOf, total } from "../money.ts";
-import { Orb } from "../orb/Orb.tsx";
 import { arrivalsFrom } from "../orb/params.ts";
 import { regionCustomers, shareByRegion } from "../regions.ts";
 import { go } from "../route.ts";
@@ -46,7 +46,7 @@ export function Company({ view }: { view: WorldView }) {
   const profits = [...company.ledger.months, company.ledger.current].map(profitOf);
   const lastCard = company.reports.at(-1);
   const orb = (
-    <Orb
+    <Core
       size={280}
       label={latest ? `Your AI ${latest.label}` : "A spark: your first AI is waiting to be trained"}
       input={{

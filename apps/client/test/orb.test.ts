@@ -2,43 +2,7 @@ import { GROUP_IDS, type GroupId, REGION_IDS, type RegionId } from "@airace/prot
 import { describe, expect, it } from "vitest";
 import { groupColors } from "../src/groups.ts";
 import { arrivalsFrom, type OrbInput, orbParams } from "../src/orb/params.ts";
-
-const PALETTE = { primary: "#4f8cff", secondary: "#ffb020" };
-const SCORES = {
-  language: 60,
-  reasoning: 8,
-  pattern: 80,
-  knowledge: 44,
-  coding: 38,
-  creativity: 2,
-  consistency: 37,
-  instruction: 63,
-};
-const TRAITS = {
-  verbosity: 18,
-  inventiveness: 0.5,
-  steadiness: 0.4,
-  boldness: 0.6,
-  slip_rate: 0.2,
-  warmth: 0.3,
-};
-
-const NONE: OrbInput = {
-  overall: null,
-  scores: null,
-  traits: null,
-  trainedTokens: 0,
-  palette: PALETTE,
-  training: null,
-};
-const SCORED: OrbInput = {
-  overall: 42,
-  scores: SCORES,
-  traits: TRAITS,
-  trainedTokens: 12_582_912,
-  palette: PALETTE,
-  training: null,
-};
+import { NONE, PALETTE, SCORED, SCORES, TRAITS } from "./orbInputs.ts";
 
 describe("orb parameters", () => {
   it("is a faint spark before the first AI", () => {

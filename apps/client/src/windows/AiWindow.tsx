@@ -1,8 +1,8 @@
 import { groupList } from "@airace/sim";
 import { motion } from "motion/react";
 import { Button } from "../components/Button.tsx";
+import { Core } from "../core/Core.tsx";
 import { dayLabel, words } from "../format.ts";
-import { Orb } from "../orb/Orb.tsx";
 import { go } from "../route.ts";
 import { CATEGORIES } from "../screens/Benchmarks.tsx";
 import { termsLabel } from "../spending/Licensing.tsx";
@@ -64,7 +64,7 @@ export function AiWindow({ entry, view, versionId }: WindowProps & { versionId: 
     >
       <div className="grid items-center gap-6 sm:grid-cols-[auto_1fr]">
         <div className="mx-auto">
-          <Orb
+          <Core
             size={200}
             label={`Your AI ${v.label}`}
             input={{

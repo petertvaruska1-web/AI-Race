@@ -2,9 +2,9 @@ import { GROUP_IDS, type GroupId, PLAN_IDS } from "@airace/protocol";
 import { Bars } from "../components/Bars.tsx";
 import { Face } from "../components/Face.tsx";
 import { PostCard } from "../components/PostCard.tsx";
+import { Core } from "../core/Core.tsx";
 import { dayLabel, formatCount, formatMoney } from "../format.ts";
 import { GROUPS, groupColors } from "../groups.ts";
-import { Orb } from "../orb/Orb.tsx";
 import { myPosts } from "../people.ts";
 import { useWindows } from "../store/windows.ts";
 import { GoneWindow, Section, WindowFrame, type WindowProps } from "./WindowFrame.tsx";
@@ -48,7 +48,7 @@ export function ProductWindow({ entry, view, productId }: WindowProps & { produc
             onClick={(e) => open({ kind: "ai", versionId: version.id }, e.currentTarget)}
             className="row-btn items-center gap-4 p-3"
           >
-            <Orb
+            <Core
               size={88}
               label={`Your AI ${version.label}`}
               input={{
