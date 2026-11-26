@@ -1,0 +1,60 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-11-26-look-redesign-2-emblem-door-founding.md
+Spec: docs/superpowers/specs/2026-11-26-look-redesign-design.md (owner-approved). Branch m2-two-friends; plan start 827097e. Execution: inline (executing-plans). The owner saw plan 1's Company station and said 'Yes, carry on' (2026-11-26).
+Pre-flight:
+- T1→T2/T4/T5: Emblem, EMBLEM_* enums, emblemOf(logo) — match.
+- T2→T4: framePath(e), emblemSvg(e, palette) — match (the badge face is the flat art).
+- T3→T5/T6: Knob, Slider, HueDial, Cartridge, Lever, Keypad — match.
+- T4→T5: EmblemBadge(logo, palette, size, motion, label) — match.
+Task 1: note: the projection test ('keeps a founded company's emblem and shows it to every player') was written after project.ts already passed emblems through (same edit batch); it guards the projection. Ruling: no new simulation version — the Logo change is additive (optional emblem) and the palette rule only accepts more, so logged inputs replay unchanged — cost if wrong: an old world refusing to load (checked in Task 7 by loading the check game's worlds).
+Task 1: complete (commits 827097e..4596bc4, tests: npm test →    Duration  168.50s (tests 82%, import 8%, setup 4%, environment 4%, transform 1%))
+Task 2: Ruling: one emblem drawing as an escaped SVG string (emblem/art.ts) rendered with innerHTML, not separate React elements — the 3D badge needs the same drawing as an image, so one source keeps them identical; letters are escaped and validated A-Z0-9 by the protocol (test 'draws letters as text, never markup') — cost if wrong: none.
+Task 2: complete (commits 4596bc4..52f6e48, tests: npm test →    Duration  170.25s (tests 82%, import 8%, setup 4%, environment 4%, transform 1%))
+Task 3: Ruling: the Lever takes a controlled 'down' prop (stays pulled while founding is under way or done; returns up if the server refuses) instead of keeping its own pulled state — the founding bench knows whether founding succeeded — cost: none.
+Task 3: complete (commits 52f6e48..438627c, tests: npm test →    Duration  166.65s (tests 82%, import 8%, setup 4%, environment 4%, transform 1%))
+Task 4: note: the badge is first seen in the game with the founding bench (Task 5); its face alignment is checked there.
+Task 4: complete (commits 438627c..95baef8, tests: npm test →    Duration  166.72s (tests 83%, import 8%, setup 4%, environment 4%, transform 1%))
+Task 5: Ruling: "the strip stamps the badge" — the founding bench gives way to the open-for-business bench the moment the server confirms the company, so the stamp plays there (the badge stamps in: scale 1.2→0.86→1.08→1 in 0.9 s, as the mockup's found()); a player founding into a running world goes straight to the station, where the glass still powers up — cost if wrong: one CSS animation moves.
+Task 5: Ruling: the deck has six knobs (the brief's Round besides the mockup's five), so it is a six-column deck; Pattern and Finish share the last row 5:4 with compact keys so each stays on one line — cost if wrong: layout only.
+Task 5: Ruling: the letters always follow the name (the brief names no letters field) — cost if wrong: a letters field later.
+Task 5: Ruling: the lab powers up only once the server accepts the company (a refused founding does not), and a still glass (reduced motion, lighter graphics) skips the pulse — cost if wrong: small.
+Task 5: Ruling: the 3D badge's lighting (Task 4's file) retuned after the check game showed it: a near point key light (a far light glinted the whole flat face white at once), a satin face, and the shared room light at half strength on the badge's scene (three.js reads scene.environmentIntensity, not a material's envMapIntensity, when the scene supplies the room light; at full strength the enamel came out pale) — cost if wrong: a look tweak; no test pins lighting.
+Task 5: note: the check game's server runs tsx without watch, so it kept the pre-emblem protocol (silently dropping emblems) until restarted; restarted it. The owner's own game needs `npm run dev` restarted after this branch, as after any update.
+Final: minor (deferred): three/materials.ts metal() sets envMapIntensity 0.75, which three.js ignores under the scene's room light (the core looks as tuned); tidy in plan 6.
+Task 5: complete (commits 95baef8..e65cfd7, tests: npm test →    Duration  170.83s (tests 82%, import 9%, setup 4%, environment 4%, transform 1%))
+Task 6: Ruling: the invite alphabet and length moved from the server into the protocol (the server re-exports them), so the keypad shows exactly the keys codes are made of — cost if wrong: none; one constant pair, one owner.
+Task 6: Ruling: the join page's keypad is live: a whole code typed there (six characters) looks up its world, and "Join" shows only while a world matches (the existing join test wants no "Join" for an unknown code) — cost if wrong: small.
+Task 6: Ruling: the badge prints while the sign-in runs, so it adds at most 0.7 s (none for less motion, where motion's skipAnimations is on); a failed sign-in takes the badge back with the reason — cost if wrong: small.
+Task 6: Ruling: on a wide window the door has three columns (the rack, the new-world bench, the keypad) so the "Join" key stays in view at 1440×900; narrower windows stack the bench and keypad, narrow or short ones scroll — cost if wrong: layout only.
+Task 6: Ruling: Home takes `openLink` (default: go to the address) so the keypad's join is testable, like Join's `onJoined` — cost if wrong: none.
+Task 6: complete (commits e65cfd7..df2807b, tests: npm test →    Duration  162.51s (tests 81%, import 10%, setup 4%, environment 4%, transform 1%))
+Final review: fresh reviewer (opus), package review-827097e..df2807b.diff: Critical none; Important I1–I4; Minor M1–M9; verdict "With fixes".
+Final: Ruling: re-graded M2 (a badge face drawn from an older look when drawings load out of order), M3 (the hue dial's pointer pointing at the opposite color) and M4 (the second color dial doing nothing after Sky's white) to Important — each is a visibly wrong control or preview on the founding bench the owner is about to judge — cost if wrong: three small fixes with tests.
+Final: Ruling: the world chat keeps readableOn(color, "dark") — its names sit inside a dark display on both glasses; only names and marks on plates follow the player's glass — cost if wrong: none.
+Final: Ruling (declined: 3D badge in the strip, rival plates, arena): plans 3–4 — stands — cost if wrong: none now.
+Final: Ruling (declined: A3 beyond the listed sites): this pass covers every place this plan's relaxation reaches with another company's color as text or a mark on a plate (friend battles, Rivals, the arch-rival strip, the rival window, Playground duels); the flat region maps keep raw fills until plan 3 rebuilds the map in 3D — cost if wrong: a very dark leader's region looks empty on dark glass until plan 3.
+Final: Ruling (declined: an older server replaying a deep-palette founding): worlds never move back to older servers — stands — cost if wrong: none.
+Final: Ruling (declined: pixel match and lighting): checked in the check game (Ember on dark glass, a deep blue on light glass, letters, the emblem's round trip) — stands.
+Final: Ruling (declined: GPU cost of repainting the face on dial changes): founding comes before the player trains anything, and friends' training runs on their own computers — stands — cost if wrong: a moment of extra GPU work while founding.
+Final: Ruling (declined: lamp plus text read twice by screen readers): plan 6's accessibility pass — cost if wrong: a repeated word for screen-reader users.
+Final: Ruling (declined: "Start" clicked twice makes two worlds): existing behaviour, a busy guard in plan 6 — cost if wrong: a stray empty world.
+Final: Ruling (declined: join links with characters outside A–Z0–9, CSS fallback without a pulse, the two existing lint warnings): stand — cost if wrong: none.
+Final: minor (deferred): M1 the emblem's SVG string trusts the server-validated palette and numbers; harden emblemInner (hex check, clamps) in plan 6.
+Final: minor (deferred): M5 the join page's keypad and Join are not one form, so Enter in the code display does not join.
+Final: minor (deferred): M6 the badge's stamp plays on every mount of the open-for-business bench, not only after founding.
+Final: minor (deferred): M7 the 3D badge keeps its still/motion from creation, the orbit spark keeps its first color, the back shows the emblem mirrored, and letters on the 3D face use a system font (an SVG image can't use the page's Barlow).
+Final: minor (deferred): M8 no test that Space pulls a ready lever, none for the join page's stale-response guard.
+Final: minor (deferred): M9 the keypad's placeholder has a "1"; cleanCode keeps 0/1/I/L/O; letters split only on spaces ("Acme-Labs" gives "A", the mockup "AL"); a null `me` leaves the printed badge; pointer-cancel can pull the lever; the frame and switch lists repeat the protocol's.
+Final: minor (deferred): M3's other half, the hue dial spinning backwards the long way when it wraps from 359 to 0.
+Task 7: npm run e2e first run: 2 of 3 passed; the Fair mode test timed out at getByLabel("Fair mode").check(): the ToggleSwitch's visually hidden checkbox sat under its own drawn body, which took the click.
+Task 7: Ruling: the switch's checkbox now lies over the drawn switch, unseen and only as wide as the switch and its words, so a click on the switch (a person's, voice control's or the test's) lands on the real control; the test's locator stays as it was — cost if wrong: none.
+Final: fixed I1 the lever stays down once founded (status "Founded", plate locked) — "keeps the lever down once the company is founded, and a second pull sends nothing" RED→GREEN, suite 930/930.
+Final: fixed I2 a refusal shows in the lever's status line and a full world's players scroll in their own display — "shows the server's reason when founding is refused, and lets the lever up again" and "keeps a full world's players in a display that scrolls" RED→GREEN, suite 930/930; in the check game at 1440×900 with 8 players and a refusal the right column fits (763 of 763 px) with the status line at 839 of 900; benches shorter than 900 px stack.
+Final: fixed I3 other companies' colors are readable on the player's own plates (useReadable: friend battles, Rivals, the arch-rival strip, the rival window, Playground duels) — "shows a friend's deep color readable on the viewer's dark glass" and "writes each rival's name readable on the player's light glass" RED→GREEN, suite 930/930.
+Final: fixed I4 the wheel turns only a knob the player has picked, a notch is a fortieth of the range, trackpad steps add up — "turns a knob with the wheel only once the player has picked it" and "turns a hue dial in steps big enough to go round in a few dozen notches" RED→GREEN, suite 930/930; in the check game a wheel over an unpicked dial scrolled the page and left the color, and a real drag turned Corners 6→10 with nothing selected.
+Final: fixed M2 (re-graded) only the latest look's drawing reaches the badge's face, none after dispose — "keeps the latest look on its face when drawings finish out of order, and none once gone" RED→GREEN, suite 930/930.
+Final: fixed M3 (re-graded) the hue ring starts at the bottom with a stop at every sixtieth hue, so each dial's pointer sits on its own color — CSS only, checked in the check game (hue 219 points at blue, 171 at teal).
+Final: fixed M4 (re-graded) turning a color dial keeps brightness within the slider's 18–82 — "turns the second color dial after a quick color with white in it" RED→GREEN, suite 930/930.
+Final: M8 in part: the hostile-name test now picks Letters and checks the emblem reads "ISO".
+Final: Ruling (declined: text selection while dragging knobs or the lever): checked in the check game, a real drag selected nothing (pointer capture) — stands.
+Task 7: npm run e2e after the fix pass: 3 of 3 passed (11.0 min): Fair mode off, Fair mode on, the solo game.
+Task 7: complete (commits df2807b..b0b3302, tests: npm test →    Duration  165.16s (tests 82%, import 8%, setup 4%, environment 4%, transform 1%))
