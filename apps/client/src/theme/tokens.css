@@ -121,6 +121,15 @@ body {
   min-height: 100%;
 }
 
+/* The glass without WebGL: the same colors in CSS, with its tile grid. */
+.glass-fallback {
+  background:
+    radial-gradient(70% 45% at 50% 38%, rgb(var(--s-rgb) / 0.32), transparent 72%),
+    repeating-linear-gradient(0deg, var(--hair) 0 1px, transparent 1px 15px),
+    repeating-linear-gradient(90deg, var(--hair) 0 1px, transparent 1px 15px),
+    color-mix(in srgb, rgb(var(--p-rgb)) 12%, var(--bg));
+}
+
 /* A faint blueprint grid (kept for the screens that still use it). */
 .grid-bg {
   background-image:

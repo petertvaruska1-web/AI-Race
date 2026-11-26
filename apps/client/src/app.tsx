@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { GlassBackground } from "./glass/GlassBackground.tsx";
 import { api, type Me } from "./net/api.ts";
 import { browserSocket } from "./net/socket.ts";
 import { joinCodeOf, useRoute } from "./route.ts";
@@ -35,6 +36,24 @@ export function App() {
       .finally(() => setChecked(true));
   }, []);
 
+  return (
+    <>
+      <GlassBackground />
+      <Screen checked={checked} me={me} route={route} />
+    </>
+  );
+}
+
+/** The screen the route and the sign-in ask for, in front of the glass. */
+function Screen({
+  checked,
+  me,
+  route,
+}: {
+  checked: boolean;
+  me: Me | null;
+  route: ReturnType<typeof useRoute>;
+}) {
   if (!checked) return <p className="p-10 text-muted">Loading…</p>;
   const code = joinCodeOf(location.pathname);
   if (code) return <Join code={code} me={me} onSignedIn={signIn} />;
