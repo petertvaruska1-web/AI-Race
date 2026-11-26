@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createFrameMeter, due, framePolicy } from "../graphics/frames.ts";
 import { reducedMotion } from "../motion.ts";
 import { useGraphics } from "../store/graphics.ts";
-import { glassFor, useLook } from "../theme/glass.ts";
+import { glassFor, glassPower, useLook } from "../theme/glass.ts";
 import { NEUTRAL_PALETTE } from "../theme/palette.ts";
 import { webglAvailable } from "../three/support.ts";
 import { GLASS_FRAGMENT, GLASS_VERTEX } from "./shader.ts";
@@ -133,6 +133,14 @@ export function GlassBackground() {
     let last = 0;
     let frame = 0;
     const start = performance.now();
+    // A power-up (founding) brightens the aurora for a moment; a still glass skips it.
+    let pulse: number | null = null;
+    let seen = useLook.getState().power;
+    const unpower = useLook.subscribe((s) => {
+      if (s.power === seen) return;
+      seen = s.power;
+      pulse = performance.now();
+    });
     const onResize = () => {
       paint.resize();
       dirty.current = true;
@@ -169,11 +177,13 @@ export function GlassBackground() {
       dirty.current = false;
       last = now;
       paint.setColors(p.primary, p.secondary);
-      paint.draw({ time: (now - start) / 1000, light, mouse, power: 1 });
+      const power = policy.still || pulse === null ? 1 : glassPower(now - pulse);
+      paint.draw({ time: (now - start) / 1000, light, mouse, power });
     };
     frame = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(frame);
+      unpower();
       window.removeEventListener("resize", onResize);
       window.removeEventListener("pointermove", onPointer);
     };

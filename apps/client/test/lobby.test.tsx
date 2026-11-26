@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { HARD_TO_READ } from "../src/components/PalettePicker.tsx";
 import { Lobby } from "../src/screens/Lobby.tsx";
 import { useSession } from "../src/store/session.ts";
+import { useLook } from "../src/theme/glass.ts";
 import { liveGame } from "./mockSocket.ts";
 import { apply, command, LOGO, PALETTE, testWorld, viewOf } from "./views.ts";
 
@@ -27,45 +28,91 @@ describe("founding a company", () => {
     expect(logo.innerHTML).toContain("#ff7a45");
   });
 
-  it("warns about a hard-to-read custom color without blocking", () => {
+  it("founds in a deep main color without a warning: the glass turns light", () => {
     render(<Lobby view={viewOf(testWorld())} />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Acme" } });
-    fireEvent.click(screen.getByRole("button", { name: "Custom colors" }));
-    fireEvent.change(screen.getByLabelText("Main color"), { target: { value: "#202020" } });
-    expect(screen.getByRole("alert").textContent).toBe(HARD_TO_READ);
+    fireEvent.change(screen.getByPlaceholderText("Acme Intelligence"), {
+      target: { value: "Acme" },
+    });
+    fireEvent.change(screen.getByRole("slider", { name: "Main color brightness" }), {
+      target: { value: "18" },
+    });
+    expect(screen.getByText(/Your lab glass is light/)).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
     expect(
       (screen.getByRole("button", { name: "Found company" }) as HTMLButtonElement).disabled,
     ).toBe(false);
   });
 
-  it("sends exactly the chosen name, logo and palette", async () => {
+  it("sends exactly the chosen name, emblem and palette, from the keyboard too", async () => {
     render(<Lobby view={viewOf(testWorld())} />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "  Acme Labs " } });
-    fireEvent.click(screen.getByRole("button", { name: "Hexagon" }));
-    fireEvent.click(screen.getByLabelText("Your initials"));
-    fireEvent.change(screen.getByLabelText("Initials"), { target: { value: "a-l!x" } });
+    fireEvent.change(screen.getByPlaceholderText("Acme Intelligence"), {
+      target: { value: "  Acme Labs " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Letters" }));
     fireEvent.click(screen.getByRole("button", { name: /Forest/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Found company" }));
+    screen.getByRole("button", { name: "Found company" }).focus();
+    await userEvent.keyboard("{Enter}");
     await waitFor(() => expect(game.ws.sentOf("command")).toHaveLength(1));
     expect(game.ws.sentOf("command")[0]?.cmd).toEqual({
       type: "createCompany",
       name: "  Acme Labs ",
-      logo: { shape: "hexagon", symbol: null, initials: "AL" },
+      logo: {
+        shape: "hexagon",
+        symbol: null,
+        initials: "AL",
+        emblem: {
+          frame: "corners",
+          corners: 6,
+          turn: 0,
+          roundness: 0,
+          rings: 2,
+          ringWeight: 3,
+          glow: 40,
+          symbol: null,
+          letters: "AL",
+          symbolSize: 100,
+          pattern: "rays",
+          finish: "metal",
+        },
+      },
       palette: { primary: "#4caf50", secondary: "#c5e384" },
     });
   });
 
-  it("shows a hostile company name as plain text", () => {
+  it("gives a name without letters the letter A", async () => {
+    render(<Lobby view={viewOf(testWorld())} />);
+    fireEvent.change(screen.getByPlaceholderText("Acme Intelligence"), {
+      target: { value: "!!!" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Letters" }));
+    fireEvent.click(screen.getByRole("button", { name: "Found company" }));
+    await waitFor(() => expect(game.ws.sentOf("command")).toHaveLength(1));
+    const cmd = game.ws.sentOf("command")[0]?.cmd as { logo: { emblem: { letters: string } } };
+    expect(cmd.logo.emblem.letters).toBe("A");
+  });
+
+  it("keeps a hostile company name as plain text", () => {
     const { container } = render(<Lobby view={viewOf(testWorld())} />);
     const hostile = "<img src=x onerror=alert(1)>";
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: hostile } });
-    expect(preview().getByText(hostile)).toBeTruthy();
+    const plate = screen.getByPlaceholderText("Acme Intelligence") as HTMLInputElement;
+    fireEvent.change(plate, { target: { value: hostile } });
+    expect(plate.value).toBe(hostile);
     expect(container.querySelector("img")).toBeNull();
   });
 
-  it("shows the server's reason when founding is refused", async () => {
+  it("waits for a name before the lever can be pulled", () => {
     render(<Lobby view={viewOf(testWorld())} />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Acme" } });
+    expect(
+      (screen.getByRole("button", { name: "Found company" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(screen.getByText("Name your company first")).toBeTruthy();
+  });
+
+  it("shows the server's reason when founding is refused, and lets the lever up again", async () => {
+    render(<Lobby view={viewOf(testWorld())} />);
+    fireEvent.change(screen.getByPlaceholderText("Acme Intelligence"), {
+      target: { value: "Acme" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Found company" }));
     await waitFor(() => expect(game.ws.sentOf("command")).toHaveLength(1));
     const cid = game.ws.sentOf("command")[0]?.cid;
@@ -76,6 +123,22 @@ describe("founding a company", () => {
       reason: "Another company already uses that name.",
     });
     expect(await screen.findByText("Another company already uses that name.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Found company" }));
+    await waitFor(() => expect(game.ws.sentOf("command")).toHaveLength(2));
+  });
+
+  it("powers the lab glass up only once the server founds the company", async () => {
+    render(<Lobby view={viewOf(testWorld())} />);
+    fireEvent.change(screen.getByPlaceholderText("Acme Intelligence"), {
+      target: { value: "Acme" },
+    });
+    const before = useLook.getState().power;
+    fireEvent.click(screen.getByRole("button", { name: "Found company" }));
+    await waitFor(() => expect(game.ws.sentOf("command")).toHaveLength(1));
+    expect(useLook.getState().power).toBe(before);
+    const cid = game.ws.sentOf("command")[0]?.cid;
+    game.ws.receive({ v: 1, type: "ack", cid, duplicate: false });
+    await waitFor(() => expect(useLook.getState().power).toBe(before + 1));
   });
 });
 

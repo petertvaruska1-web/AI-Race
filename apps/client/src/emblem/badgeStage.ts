@@ -46,13 +46,19 @@ export function makeBadgeStage(
   o: { still: boolean; motion: string },
 ): BadgeStage {
   const scene = new THREE.Scene();
+  // The shared room light (engine.ts sets it on every scene) at half strength: at full strength
+  // it lit the enamel past white and the company's colors came out pale. three.js reads the
+  // scene's strength here, not a material's own `envMapIntensity`.
+  scene.environmentIntensity = 0.5;
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
   camera.position.set(0, 0, 5.2);
-  const key = new THREE.DirectionalLight(0xffffff, 2.4);
-  key.position.set(-2, 3, 5);
+  // A near key light: on a flat face a far (directional) light lit and glinted the whole face
+  // at once; a near one leaves a highlight that travels across it as the badge sways.
+  const key = new THREE.PointLight(0xffffff, 20, 0, 2);
+  key.position.set(-1.6, 2.2, 3.4);
   const sweep = new THREE.DirectionalLight(0xffffff, 0);
   sweep.position.set(3, 1, 4);
-  scene.add(key, sweep, new THREE.AmbientLight(0xffffff, 0.35));
+  scene.add(key, sweep, new THREE.AmbientLight(0xffffff, 0.22));
 
   const badge = new THREE.Group();
   badge.name = "badge";
@@ -63,12 +69,15 @@ export function makeBadgeStage(
   let look = { e: emblem, p: palette };
   let texture: THREE.CanvasTexture | null = null;
 
+  // A satin enamel face: a mirror-bright coat reflected the lit room behind the camera and
+  // washed the whole face white whenever the badge tilted up.
   const face = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
-    metalness: 0.15,
-    roughness: 0.35,
-    clearcoat: 1,
-    clearcoatRoughness: 0.12,
+    metalness: 0.05,
+    roughness: 0.5,
+    specularIntensity: 0.5,
+    clearcoat: 0.5,
+    clearcoatRoughness: 0.3,
   });
   const mesh = new THREE.Mesh(frameGeometry(emblem), [face, metal()]);
   mesh.name = "badge-face";

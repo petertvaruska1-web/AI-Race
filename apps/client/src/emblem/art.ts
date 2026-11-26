@@ -93,6 +93,14 @@ const SYMBOLS: Record<LogoSymbol, string> = {
     '<path data-k="S" d="M72 22 C46 26 30 46 30 72 L36 66 C50 64 66 50 72 22 Z"/><path data-k="B" d="M30 74 L58 40"/>',
 };
 
+/**
+ * A symbol's bare drawing (100-unit box) for the founding bench's symbol keys: its parts keep
+ * their `data-k` marks, which the keys color from CSS.
+ */
+export function symbolArt(s: LogoSymbol): string {
+  return SYMBOLS[s];
+}
+
 /** Letters as SVG text, escaped. */
 function escapeText(s: string): string {
   return s

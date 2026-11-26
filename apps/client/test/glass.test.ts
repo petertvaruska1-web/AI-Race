@@ -5,7 +5,10 @@ import {
   benchVars,
   GLASS_BASE,
   glassFor,
+  glassPower,
   lampColor,
+  POWER_UP_MS,
+  powerUpGlass,
   readableOn,
   useLook,
 } from "../src/theme/glass.ts";
@@ -58,5 +61,25 @@ describe("the glass follows the main color (C57)", () => {
     applyBenchTheme(null, root);
     expect(root.dataset.glass).toBe("dark");
     expect(useLook.getState().palette).toBeNull();
+  });
+});
+
+describe("the lab powering up when a company is founded (C61)", () => {
+  it("brightens the aurora for two and a half seconds, then settles", () => {
+    expect(POWER_UP_MS).toBe(2500);
+    expect(glassPower(null)).toBe(1);
+    expect(glassPower(0)).toBe(1);
+    expect(glassPower(400)).toBeCloseTo(1.35, 2);
+    const later = glassPower(1500);
+    expect(later).toBeGreaterThan(1);
+    expect(later).toBeLessThan(1.35);
+    expect(glassPower(POWER_UP_MS)).toBe(1);
+    expect(glassPower(10_000)).toBe(1);
+  });
+
+  it("counts each power-up so the glass starts its pulse", () => {
+    const before = useLook.getState().power;
+    powerUpGlass();
+    expect(useLook.getState().power).toBe(before + 1);
   });
 });

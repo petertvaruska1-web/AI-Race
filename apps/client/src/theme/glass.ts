@@ -60,8 +60,34 @@ export function benchVars(p: Palette | null): Record<string, string> {
   };
 }
 
-/** The palette the glass is drawn in; null before a company exists. */
-export const useLook = create<{ palette: Palette | null }>(() => ({ palette: null }));
+/**
+ * The palette the glass is drawn in (null before a company exists), and how many times the lab
+ * has powered up (each founding adds one; the glass pulses when it changes).
+ */
+export const useLook = create<{ palette: Palette | null; power: number }>(() => ({
+  palette: null,
+  power: 0,
+}));
+
+/** How long founding a company brightens the aurora (C61). */
+export const POWER_UP_MS = 2500;
+
+/**
+ * The aurora's brightness `ms` after the lab powered up: it rises to 1.35 in 0.4 s and eases back
+ * to 1 by 2.5 s; 1 when no power-up is under way.
+ */
+export function glassPower(ms: number | null): number {
+  if (ms === null || ms <= 0 || ms >= POWER_UP_MS) return 1;
+  const x = ms / POWER_UP_MS;
+  const peak = 400 / POWER_UP_MS;
+  const k = x < peak ? x / peak : (1 - (x - peak) / (1 - peak)) ** 2;
+  return 1 + 0.35 * k;
+}
+
+/** The lab powers up: the glass brightens for a moment (founding a company, C61). */
+export function powerUpGlass(): void {
+  useLook.setState((s) => ({ power: s.power + 1 }));
+}
 
 /** Themes every screen in the company's palette (C5) and picks its glass (C57). */
 export function applyBenchTheme(
