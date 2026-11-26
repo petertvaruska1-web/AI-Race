@@ -1,9 +1,11 @@
 import { SPEEDS, type Speed, type WorldView } from "@airace/protocol";
 import { getBalance } from "@airace/sim";
-import type { ReactNode } from "react";
+import { Readout } from "../bench/Readout.tsx";
+import { ToggleSwitch } from "../bench/ToggleSwitch.tsx";
 import { CardsChip } from "../cards/Cards.tsx";
 import { formatMoney } from "../format.ts";
 import { LogoMotion } from "../spending/Spending.tsx";
+import { useGraphics } from "../store/graphics.ts";
 import { useSocket } from "../store/session.ts";
 import { useWindows } from "../store/windows.ts";
 import { CountUp } from "./CountUp.tsx";
@@ -18,22 +20,11 @@ export function monthProfit(view: WorldView): number {
   return month ? total(month.income) - total(month.costs) : 0;
 }
 
-function Figure({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <span className="block text-right">
-      <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted">
-        {label}
-      </span>
-      <span className="block font-display text-lg font-semibold">{children}</span>
-    </span>
-  );
-}
-
-/** A thin line that fills over each game day at the world's speed; it rests while paused. */
+/** A thin line along the strip's lower edge that fills over each game day; it rests while paused. */
 function DayBar({ view }: { view: WorldView }) {
   const ms = getBalance(view.world.balance).tickMsAt1x / view.world.speed;
   return (
-    <div aria-hidden="true" className="h-0.5 w-full overflow-hidden">
+    <div aria-hidden="true" className="station-strip__day">
       <div
         key={view.world.day}
         data-testid="day-bar"
@@ -45,7 +36,24 @@ function DayBar({ view }: { view: WorldView }) {
   );
 }
 
-/** The company in its colors, its money at a glance, and the shared clock. */
+/** "Lighter graphics" (design §11), and why it came on when the game switched it on itself. */
+function LighterGraphics() {
+  const lighter = useGraphics((s) => s.lighter);
+  const auto = useGraphics((s) => s.auto);
+  const setLighter = useGraphics((s) => s.setLighter);
+  return (
+    <div className="flex flex-col items-start gap-0.5">
+      <ToggleSwitch label="Lighter graphics" checked={lighter} onChange={(v) => setLighter(v)} />
+      {auto && (
+        <span aria-live="polite" className="text-[11.5px] text-muted">
+          Switched on to keep the game smooth
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** The top strip (design §7.1): the company, its money at a glance, the shared clock. */
 export function TopBar({ view }: { view: WorldView }) {
   const open = useWindows((s) => s.open);
   const company = view.companies.find((c) => c.id === view.me.company?.id);
@@ -53,73 +61,80 @@ export function TopBar({ view }: { view: WorldView }) {
   const cash = view.me.company?.cash ?? 0;
   const served = view.me.company?.compute.served ?? 1;
   return (
-    <header className="sticky top-0 z-20 border-b border-border bg-bg/80 backdrop-blur-md">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3">
-        <a href="#/" className="text-sm text-muted hover:text-text" aria-label="All worlds">
-          ←
-        </a>
-        {company && (
-          <LogoMotion motion={company.logoMotion}>
-            <Logo logo={company.logo} palette={company.palette} size={36} />
-          </LogoMotion>
-        )}
-        <div className="mr-auto min-w-0">
-          <p className="player-text font-display text-lg font-semibold text-brand">
-            {company?.name}
-          </p>
-          <p className="player-text text-xs text-muted">{view.world.name}</p>
-        </div>
-        <button
-          type="button"
-          aria-label="Open money"
-          onClick={(e) => open({ kind: "money" }, e.currentTarget)}
-          className="lift flex gap-6 rounded-lg px-2 py-1"
+    <header className="station-strip module module--thin">
+      <a href="#/" className="icon-btn" aria-label="All worlds">
+        ←
+      </a>
+      {company && (
+        <LogoMotion motion={company.logoMotion}>
+          <Logo logo={company.logo} palette={company.palette} size={40} />
+        </LogoMotion>
+      )}
+      <div className="station-strip__name">
+        <p
+          className="truncate font-display text-[21px] font-bold leading-tight text-brand"
+          title={company?.name}
         >
-          <Figure label="Cash">
+          {company?.name}
+        </p>
+        <p className="truncate text-[13px] text-muted" title={view.world.name}>
+          {view.world.name}
+        </p>
+      </div>
+      <button
+        type="button"
+        aria-label="Open money"
+        onClick={(e) => open({ kind: "money" }, e.currentTarget)}
+        className="lift station-strip__money"
+      >
+        <Readout
+          label="Cash"
+          value={
             <span className="relative">
               <CountUp value={cash} format={formatMoney} />
               <FloatDelta value={cash} format={formatMoney} />
             </span>
-          </Figure>
-          <Figure label="Profit this month">
-            <span className={profit < 0 ? "text-danger" : profit > 0 ? "text-good" : ""}>
-              <CountUp value={profit} format={formatMoney} />
-            </span>
-          </Figure>
+          }
+        />
+        <Readout
+          label="Profit this month"
+          tone={profit < 0 ? "danger" : profit > 0 ? "good" : "lamp"}
+          value={<CountUp value={profit} format={formatMoney} />}
+        />
+      </button>
+      {served < 1 && (
+        <button
+          type="button"
+          aria-label={`Servers overloaded · ${Math.round(served * 100)}% answered`}
+          onClick={(e) => open({ kind: "computers" }, e.currentTarget)}
+          className="overload-chip push push--secondary text-danger"
+        >
+          {`Servers overloaded · ${Math.round(served * 100)}% answered`}
         </button>
-        {served < 1 && (
-          <button
-            type="button"
-            aria-label={`Servers overloaded · ${Math.round(served * 100)}% answered`}
-            onClick={(e) => open({ kind: "computers" }, e.currentTarget)}
-            className="overload-chip rounded-full border border-danger px-3 py-1 text-xs font-semibold text-danger"
-          >
-            {`Servers overloaded · ${Math.round(served * 100)}% answered`}
-          </button>
-        )}
-        <CardsChip view={view} />
-        <Clock view={view} />
-      </div>
+      )}
+      <CardsChip view={view} />
+      <Clock view={view} />
+      <LighterGraphics />
       <DayBar view={view} />
     </header>
   );
 }
 
-/** The date, and for the host the speed and pause controls (C1: one shared clock). */
+/** The date, and for the host the speed and pause keys (C1: one shared clock). */
 function Clock({ view }: { view: WorldView }) {
   const socket = useSocket();
   const isHost = view.world.effectiveHostUserId === view.me.userId;
   const send = (cmd: { type: "setSpeed"; speed: Speed } | { type: "setPaused"; paused: boolean }) =>
     void socket.command(view.world.id, cmd);
   return (
-    <div className="flex items-center gap-2">
-      <Figure label={`Day ${view.world.day}`}>{view.world.date}</Figure>
+    <div className="flex items-end gap-2.5">
+      <Readout label={`Day ${view.world.day}`} value={view.world.date} />
       {isHost && (
-        <fieldset className="m-0 flex gap-1 border-0 p-0" aria-label="Game speed">
+        <fieldset className="m-0 flex gap-1 border-0 p-0 pb-0.5" aria-label="Game speed">
           <button
             type="button"
             onClick={() => send({ type: "setPaused", paused: !view.world.paused })}
-            className="rounded-md bg-surface-2 px-2 py-1 text-xs"
+            className={`speed-key ${view.world.paused ? "speed-key--on" : ""}`}
             aria-label={view.world.paused ? "Resume" : "Pause"}
           >
             {view.world.paused ? "▶" : "❚❚"}
@@ -130,7 +145,7 @@ function Clock({ view }: { view: WorldView }) {
               type="button"
               aria-pressed={view.world.speed === s}
               onClick={() => send({ type: "setSpeed", speed: s })}
-              className={`rounded-md px-2 py-1 text-xs ${view.world.speed === s ? "bg-brand text-on-brand" : "bg-surface-2 text-muted"}`}
+              className={`speed-key ${view.world.speed === s && !view.world.paused ? "speed-key--on" : ""}`}
             >
               {s}×
             </button>

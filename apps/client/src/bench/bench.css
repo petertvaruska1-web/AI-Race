@@ -508,4 +508,151 @@
       inset 0 2px 8px rgb(0 0 0 / 0.85),
       0 0 0 2px var(--lamp);
   }
+
+  /* The station frame (design §7.1). */
+  .station-frame {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    grid-template-columns: 208px minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 14px;
+    padding: 14px 18px 18px;
+    overflow: hidden;
+  }
+  .station-strip {
+    position: relative;
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    min-width: 0;
+  }
+  .station-strip__name {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .station-strip__money {
+    display: flex;
+    gap: 12px;
+    border-radius: 8px;
+    padding: 2px 4px;
+    text-align: left;
+  }
+  .station-strip__day {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 3px;
+    height: 2px;
+    overflow: hidden;
+    border-radius: 1px;
+  }
+  .station-hazard {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background:
+      repeating-linear-gradient(-45deg, rgb(255 107 107 / 0.16) 0 10px, transparent 10px 20px),
+      var(--metal);
+  }
+  .station-column {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .station-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .station-knob {
+    width: 88px;
+    height: 88px;
+    margin: 8px auto 18px;
+  }
+  .station-links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .station-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 15.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: rgb(var(--engrave) / var(--engrave-a));
+    text-shadow: var(--engrave-shadow);
+  }
+  .station-link:hover,
+  .station-link--open {
+    color: rgb(var(--engrave) / 0.95);
+  }
+  .station-link:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 1px;
+  }
+  .station-link__pill {
+    position: absolute;
+    inset: 0;
+    border-radius: 6px;
+    background: rgb(var(--lamp-rgb) / 0.12);
+    box-shadow: inset 0 0 0 1px rgb(var(--lamp-rgb) / 0.35);
+  }
+  .station-bench {
+    min-width: 0;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--lamp-rgb) / 0.4) transparent;
+  }
+  @keyframes display-on {
+    0% {
+      filter: brightness(0.2);
+    }
+    45% {
+      filter: brightness(1.35);
+    }
+    70% {
+      filter: brightness(0.85);
+    }
+  }
+  .station-bench__inner .display {
+    animation: display-on 320ms ease-out 200ms backwards;
+  }
+  .speed-key {
+    min-width: 34px;
+    height: 28px;
+    border: 0;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #cfd5dd;
+    background: linear-gradient(180deg, #43474f, #26292e);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.16),
+      0 2px 0 #0f1013;
+  }
+  .speed-key--on {
+    color: #fff;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--lamp) 50%, #34373e), #25282d);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.16),
+      0 2px 0 #0f1013,
+      0 0 14px -2px var(--lamp);
+  }
+  @media (max-width: 767px) {
+    .station-frame {
+      position: static;
+      display: block;
+      overflow: visible;
+    }
+  }
 }

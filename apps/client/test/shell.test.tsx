@@ -9,6 +9,7 @@ import { Stat } from "../src/components/Stat.tsx";
 import { formatCount, formatMoney } from "../src/format.ts";
 import { parseRoute } from "../src/route.ts";
 import { Home } from "../src/screens/Home.tsx";
+import { useGraphics } from "../src/store/graphics.ts";
 import { useSession } from "../src/store/session.ts";
 import { useWindows } from "../src/store/windows.ts";
 import { liveGame } from "./mockSocket.ts";
@@ -232,5 +233,74 @@ describe("floating changes", () => {
     const second = render(<FloatDelta value={10} format={formatCount} />);
     second.rerender(<FloatDelta value={15} format={formatCount} />);
     expect(screen.queryByText("+5")).toBeNull();
+  });
+});
+
+describe("station frame", () => {
+  const shell = (
+    view: ReturnType<typeof viewOf>,
+    tab: "company" | "market" | "money",
+    text = "Screen",
+  ) => (
+    <AppShell view={view} tab={tab}>
+      <p>{text}</p>
+    </AppShell>
+  );
+
+  it("fills the window as a station frame without page scrolling", () => {
+    const { container } = render(shell(viewOf(runningWorld()), "company"));
+    expect(container.querySelector('[data-frame="station"]')).not.toBeNull();
+  });
+
+  it("keeps long names and big numbers inside the strip", () => {
+    const base = viewOf(runningWorld());
+    const long = "A".repeat(32);
+    const view = {
+      ...base,
+      companies: base.companies.map((c) =>
+        c.id === base.me.company?.id ? { ...c, name: long } : c,
+      ),
+      me: {
+        ...base.me,
+        company: base.me.company && { ...base.me.company, cash: 1_234_567_890 },
+      },
+    };
+    render(shell(view, "company"));
+    const name = screen.getByText(long);
+    expect(name.className).toContain("truncate");
+    expect(name.getAttribute("title")).toBe(long);
+    expect(screen.getAllByText(formatMoney(1_234_567_890)).length).toBeGreaterThan(0);
+  });
+
+  it("switches lighter graphics from the strip", async () => {
+    useGraphics.getState().setLighter(false);
+    render(shell(viewOf(runningWorld()), "company"));
+    await userEvent.click(screen.getByRole("switch", { name: "Lighter graphics" }));
+    expect(useGraphics.getState().lighter).toBe(true);
+  });
+
+  it("says why lighter graphics came on by itself", () => {
+    useGraphics.getState().setLighter(true, true);
+    render(shell(viewOf(runningWorld()), "company"));
+    expect(screen.getByText("Switched on to keep the game smooth")).toBeTruthy();
+    useGraphics.getState().setLighter(false);
+  });
+
+  it("shows one bench after two quick station changes", () => {
+    motion(false);
+    const view = viewOf(runningWorld());
+    const { rerender } = render(shell(view, "company", "Company bench"));
+    rerender(shell(view, "market", "Market bench"));
+    rerender(shell(view, "money", "Money bench"));
+    expect(screen.getAllByText(/bench$/).map((e) => e.textContent)).toEqual(["Money bench"]);
+  });
+
+  it("changes stations instantly under reduced motion", () => {
+    motion(true);
+    const view = viewOf(runningWorld());
+    const { rerender } = render(shell(view, "company", "Company bench"));
+    rerender(shell(view, "market", "Market bench"));
+    expect(screen.getByText("Market bench")).toBeTruthy();
+    expect(screen.queryByText("Company bench")).toBeNull();
   });
 });
