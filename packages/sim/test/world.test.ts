@@ -8,6 +8,7 @@ import {
   type Input,
   PALETTE_PRESETS,
   paletteProblem,
+  projectView,
   type StepResult,
   step,
   type WorldState,
@@ -104,9 +105,39 @@ describe("createCompany", () => {
     expect(ok(step(s, found("u2", "Acme Two", "c2"))).companies.c2?.name).toBe("Acme Two");
   });
 
-  it("refuses a palette that would not show on the dark dashboard", () => {
+  it("keeps a founded company's emblem and shows it to every player", () => {
+    const emblem = {
+      frame: "rosette",
+      corners: 8,
+      turn: 15,
+      roundness: 0,
+      rings: 2,
+      ringWeight: 3,
+      glow: 40,
+      symbol: null,
+      letters: "LL",
+      symbolSize: 100,
+      pattern: "dots",
+      finish: "glass",
+    } as const;
+    let s = ok(step(world(), join("u2", "Ben")));
+    s = ok(
+      step(
+        s,
+        cmd(
+          "u1",
+          { type: "createCompany", name: "Lumen", logo: { ...LOGO, emblem }, palette: PALETTE },
+          "c1",
+        ),
+      ),
+    );
+    const seen = projectView(s, "u2").companies.find((c) => c.id === "c1");
+    expect(seen?.logo.emblem).toEqual(emblem);
+  });
+
+  it("founds a company in a deep main color: its glass follows the color (C57)", () => {
     const dark = { primary: "#101010", secondary: "#ffb020" };
-    expect(rejected(step(world(), found("u1", "Acme", "c1", dark)))).toMatch(/too dark/i);
+    expect(ok(step(world(), found("u1", "Acme", "c1", dark))).companies.c1?.palette).toEqual(dark);
   });
 
   it("needs the server-made id and a valid command", () => {
@@ -205,9 +236,10 @@ describe("palettes", () => {
     expect(contrastRatio("#4f8cff", "#4F8CFF")).toBeCloseTo(1, 5);
   });
 
-  it("needs two different colors that both stand out", () => {
+  it("needs two different colors, any colors (C57: the glass follows the main color)", () => {
     expect(paletteProblem({ primary: "#4f8cff", secondary: "#4F8CFF" })).toMatch(/different/i);
-    expect(paletteProblem({ primary: "#4f8cff", secondary: "#1a1a1a" })).toMatch(/too dark/i);
+    expect(paletteProblem({ primary: "#4f8cff", secondary: "#1a1a1a" })).toBeNull();
+    expect(paletteProblem({ primary: "#1a1a1a", secondary: "#4f8cff" })).toBeNull();
     expect(paletteProblem(PALETTE)).toBeNull();
   });
 

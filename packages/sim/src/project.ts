@@ -165,7 +165,12 @@ function publicCompany(state: WorldState, c: CompanyState): PublicCompany {
   return {
     id: c.id,
     name: c.name,
-    logo: { shape: c.logo.shape, symbol: c.logo.symbol, initials: c.logo.initials },
+    logo: {
+      shape: c.logo.shape,
+      symbol: c.logo.symbol,
+      initials: c.logo.initials,
+      ...(c.logo.emblem ? { emblem: { ...c.logo.emblem } } : {}),
+    },
     palette: { primary: c.palette.primary, secondary: c.palette.secondary },
     logoMotion: c.looks.logo,
     sponsorships: Object.values(c.sponsorships)

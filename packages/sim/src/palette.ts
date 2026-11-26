@@ -2,7 +2,6 @@ import { Hex, type Palette } from "@airace/protocol";
 
 /** The neutral dark dashboard base that company colors sit on (C5). */
 export const BASE_BG = "#0f1320";
-const MIN_CONTRAST = 3;
 
 function channel(byte: number): number {
   const s = byte / 255;
@@ -31,12 +30,8 @@ export function paletteProblem(p: Palette): string | null {
     return "Colors must be picked from the color chooser.";
   }
   if (p.primary.toLowerCase() === p.secondary.toLowerCase()) return "Pick two different colors.";
-  if (contrastRatio(p.primary, BASE_BG) < MIN_CONTRAST) {
-    return "Your main color is too dark to stand out on the dashboard. Pick a brighter one.";
-  }
-  if (contrastRatio(p.secondary, BASE_BG) < MIN_CONTRAST) {
-    return "Your second color is too dark to stand out on the dashboard. Pick a brighter one.";
-  }
+  // Any colors (look redesign C57): each player's glass follows their main color, and other
+  // companies' colors are adjusted for the viewer's glass where they would not read.
   return null;
 }
 

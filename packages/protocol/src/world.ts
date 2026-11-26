@@ -227,12 +227,64 @@ export const LOGO_SYMBOLS = [
 ] as const;
 export type LogoSymbol = (typeof LOGO_SYMBOLS)[number];
 
+export const EMBLEM_FRAMES = ["circle", "corners", "shield", "diamond", "rosette"] as const;
+export const EMBLEM_PATTERNS = ["none", "rays", "grid", "dots", "waves"] as const;
+export const EMBLEM_FINISHES = ["metal", "enamel", "glass", "light"] as const;
+export type EmblemFrame = (typeof EMBLEM_FRAMES)[number];
+
+/**
+ * A company's emblem, built with the founding bench's dials (look redesign C58, design §9.3).
+ * `symbol: null` shows `letters` instead.
+ */
+export const Emblem = z.strictObject({
+  frame: z.enum(EMBLEM_FRAMES),
+  corners: z.number().int().min(3).max(12),
+  turn: z.number().int().min(0).max(355).multipleOf(5),
+  roundness: z.number().int().min(0).max(100),
+  rings: z.number().int().min(0).max(3),
+  ringWeight: z.number().int().min(1).max(6),
+  glow: z.number().int().min(0).max(100),
+  symbol: z.enum(LOGO_SYMBOLS).nullable(),
+  letters: z.string().regex(/^[A-Z0-9]{1,3}$/),
+  symbolSize: z.number().int().min(60).max(130),
+  pattern: z.enum(EMBLEM_PATTERNS),
+  finish: z.enum(EMBLEM_FINISHES),
+});
+export type Emblem = z.infer<typeof Emblem>;
+
+/**
+ * A company's logo. `shape`, `symbol` and `initials` are the first logos' fields (kept, so older
+ * worlds and rival packs stay valid); `emblem` is the logo built on the founding bench.
+ */
 export const Logo = z.object({
   shape: z.enum(LOGO_SHAPES),
   symbol: z.enum(LOGO_SYMBOLS).nullable(),
   initials: z.string().regex(/^[A-Z0-9]{0,2}$/),
+  emblem: Emblem.optional(),
 });
 export type Logo = z.infer<typeof Logo>;
+
+/** A logo's emblem: its own, or the one a first logo maps to so it looks like itself. */
+export function emblemOf(logo: Logo): Emblem {
+  if (logo.emblem) return logo.emblem;
+  const frame: Pick<Emblem, "frame" | "corners" | "turn" | "roundness"> =
+    logo.shape === "rounded-square"
+      ? { frame: "corners", corners: 4, turn: 45, roundness: 40 }
+      : logo.shape === "hexagon"
+        ? { frame: "corners", corners: 6, turn: 0, roundness: 0 }
+        : { frame: logo.shape, corners: 6, turn: 0, roundness: 0 };
+  return {
+    ...frame,
+    rings: 0,
+    ringWeight: 3,
+    glow: 0,
+    symbol: logo.symbol,
+    letters: logo.initials || "A",
+    symbolSize: 100,
+    pattern: "none",
+    finish: "enamel",
+  };
+}
 
 /** Integer weights; the trainer normalizes them. */
 export const MixWeight = z.number().int().min(0).max(100);

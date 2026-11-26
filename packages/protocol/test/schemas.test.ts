@@ -5,10 +5,13 @@ import {
   COST_CATEGORIES,
   Command,
   cleanText,
+  EMBLEM_FRAMES,
+  emblemOf,
   FeedItemView,
   GROUP_IDS,
   INCOME_CATEGORIES,
   LEAGUE_TABLES,
+  Logo,
   PLAN_IDS,
   REGION_IDS,
   ServerMessage,
@@ -570,5 +573,65 @@ describe("FeedItemView", () => {
     expect(FeedItemView.safeParse({ ...news, topic: "launch" }).success).toBe(true);
     expect(FeedItemView.safeParse({ ...news, topic: "gossip" }).success).toBe(false);
     expect(FeedItemView.safeParse({ ...POST, sentiment: 1.5 }).success).toBe(false);
+  });
+});
+
+describe("the emblem (C58)", () => {
+  const emblem = {
+    frame: "corners",
+    corners: 6,
+    turn: 0,
+    roundness: 0,
+    rings: 2,
+    ringWeight: 3,
+    glow: 40,
+    symbol: "spark",
+    letters: "LL",
+    symbolSize: 100,
+    pattern: "rays",
+    finish: "metal",
+  };
+
+  it("accepts an emblem and refuses one out of range", () => {
+    const logo = { shape: "circle", symbol: "spark", initials: "" };
+    expect(Logo.safeParse({ ...logo, emblem }).success).toBe(true);
+    expect(Logo.safeParse({ ...logo, emblem: { ...emblem, corners: 13 } }).success).toBe(false);
+    expect(Logo.safeParse({ ...logo, emblem: { ...emblem, turn: 7 } }).success).toBe(false);
+    expect(Logo.safeParse({ ...logo, emblem: { ...emblem, letters: "<b>" } }).success).toBe(false);
+    expect(Logo.safeParse({ ...logo, emblem: { ...emblem, letters: "" } }).success).toBe(false);
+    expect(Logo.safeParse({ ...logo, emblem: { ...emblem, extra: 1 } }).success).toBe(false);
+    expect(Logo.safeParse(logo).success).toBe(true);
+    expect(EMBLEM_FRAMES).toEqual(["circle", "corners", "shield", "diamond", "rosette"]);
+  });
+
+  it("maps old logos to emblems that look like them", () => {
+    expect(emblemOf({ shape: "rounded-square", symbol: "bolt", initials: "" })).toMatchObject({
+      frame: "corners",
+      corners: 4,
+      turn: 45,
+      roundness: 40,
+      symbol: "bolt",
+    });
+    expect(emblemOf({ shape: "hexagon", symbol: null, initials: "AL" })).toMatchObject({
+      frame: "corners",
+      corners: 6,
+      turn: 0,
+      symbol: null,
+      letters: "AL",
+    });
+    expect(emblemOf({ shape: "shield", symbol: null, initials: "" }).letters).toBe("A");
+    for (const shape of ["circle", "rounded-square", "hexagon", "shield", "diamond"] as const) {
+      const e = emblemOf({ shape, symbol: "spark", initials: "" });
+      expect(Logo.safeParse({ shape, symbol: "spark", initials: "", emblem: e }).success).toBe(
+        true,
+      );
+    }
+  });
+
+  it("keeps a logo's own emblem", () => {
+    const own = { ...emblem, frame: "rosette" as const };
+    expect(
+      emblemOf({ shape: "circle", symbol: "spark", initials: "", emblem: own as never }).frame,
+    ).toBe("rosette");
   });
 });
