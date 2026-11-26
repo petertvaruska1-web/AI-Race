@@ -3,6 +3,8 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Logo } from "../src/components/Logo.tsx";
 import { emblemSvg, framePath } from "../src/emblem/art.ts";
+import { makeBadgeStage } from "../src/emblem/badgeStage.ts";
+import { EmblemBadge } from "../src/emblem/EmblemBadge.tsx";
 
 const PALETTE = { primary: "#4f8cff", secondary: "#ffb020" };
 const EMBLEM: Emblem = {
@@ -76,5 +78,42 @@ describe("the flat emblem", () => {
     expect(a).toContain('id="a-');
     expect(b).toContain('id="b-');
     expect(b).not.toContain('id="a-');
+  });
+});
+
+describe("the 3D emblem badge", () => {
+  it("shows the flat emblem without WebGL", () => {
+    render(
+      <EmblemBadge
+        logo={{ shape: "circle", symbol: "spark", initials: "", emblem: EMBLEM }}
+        palette={PALETTE}
+        size={120}
+        label="Your logo"
+      />,
+    );
+    expect(screen.getByRole("img", { name: "Your logo" }).tagName.toLowerCase()).toBe("svg");
+  });
+
+  it("builds a beveled badge with the emblem on its face", () => {
+    const stage = makeBadgeStage(EMBLEM, PALETTE, { still: true, motion: "logo:still" });
+    expect(stage.scene.getObjectByName("badge")).toBeDefined();
+    expect(stage.scene.getObjectByName("badge-face")).toBeDefined();
+    expect(stage.update(0, 0.016)).toBe(false);
+  });
+
+  it("changes its frame in place for another emblem", () => {
+    const stage = makeBadgeStage(EMBLEM, PALETTE, { still: true, motion: "logo:still" });
+    const before = (stage.scene.getObjectByName("badge-face") as unknown as { geometry: object })
+      .geometry;
+    stage.setLook({ ...EMBLEM, frame: "shield" }, PALETTE);
+    const after = (stage.scene.getObjectByName("badge-face") as unknown as { geometry: object })
+      .geometry;
+    expect(after).not.toBe(before);
+  });
+
+  it("circles a spark around the badge for the orbit look", () => {
+    const stage = makeBadgeStage(EMBLEM, PALETTE, { still: false, motion: "logo:orbit" });
+    expect(stage.scene.getObjectByName("orbit-spark")).toBeDefined();
+    expect(stage.update(0.5, 0.016)).toBe(true);
   });
 });
