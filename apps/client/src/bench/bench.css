@@ -1540,9 +1540,10 @@
     align-self: flex-start;
   }
 
-  /* The ID badge printer and the join bench: one module in the middle of the glass. */
-  .door-frame--welcome,
-  .door-frame--join {
+  /* The ID badge printer and the join bench: one module in the middle of the glass, at every
+     width (two classes, so the door's narrower-window columns below don't reach them). */
+  .door-frame.door-frame--welcome,
+  .door-frame.door-frame--join {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
     place-items: center;
