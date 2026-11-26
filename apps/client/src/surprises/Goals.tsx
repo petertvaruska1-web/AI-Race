@@ -7,10 +7,10 @@ import {
 } from "@airace/protocol";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
+import { RotarySelector } from "../bench/RotarySelector.tsx";
 import { Button } from "../components/Button.tsx";
 import { DayChart } from "../components/charts/DayChart.tsx";
 import { MonthBars } from "../components/charts/MonthBars.tsx";
-import { INPUT } from "../components/Field.tsx";
 import { dayLabel, formatCount, formatMoney } from "../format.ts";
 import { daysOf } from "../history.ts";
 import { useWindows } from "../store/windows.ts";
@@ -57,8 +57,9 @@ function specOf(kind: Kind, target: number, years: 1 | 2 | 5 | null): GoalSpec {
 }
 
 /**
- * The goal picker (game-layer design §11) in "Start a new world": cards for each goal, an
- * editable target where it has one, and a deadline. Rival goals hide without the rival AIs.
+ * The goal picker (game-layer design §11) on the new-world bench (C62): a rotary selector over
+ * the goals, the target on a display where the goal has one, and a deadline. Rival goals hide
+ * without the rival AIs.
  */
 export function GoalPicker({
   rivals,
@@ -79,60 +80,56 @@ export function GoalPicker({
   }, [kind, target, years, onChange]);
 
   return (
-    <fieldset className="space-y-3">
-      <legend className="mb-2 text-sm font-semibold">A goal (optional)</legend>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {shown.map((k) => (
-          <label
-            key={k}
-            className={`cursor-pointer rounded-xl border p-3 text-sm ${k === kind ? "border-brand bg-brand-soft" : "border-border"}`}
-          >
-            <input
-              type="radio"
-              name="goal"
-              className="sr-only"
-              checked={k === kind}
-              onChange={() => setKind(k)}
-            />
-            {goalTitle(k, targets[k] ?? null)}
-          </label>
-        ))}
-      </div>
-      {DEFAULT_TARGETS[kind] !== undefined && (
-        <label className="block text-sm">
-          <span className="mb-1 block font-semibold">Target</span>
-          <input
-            type="number"
-            className={INPUT}
-            aria-label="Goal target"
-            min={kind === "value" ? 100_000 : 1_000}
-            value={target}
-            onChange={(e) =>
-              setTargets((t) => ({ ...t, [kind]: Math.round(Number(e.target.value)) }))
-            }
-          />
-        </label>
+    <div className="goal-picker">
+      <span className="engrave" aria-hidden="true">
+        A goal (optional)
+      </span>
+      <RotarySelector
+        legend="A goal (optional)"
+        options={shown.map((k) => ({ label: goalTitle(k, targets[k] ?? null), value: k }))}
+        value={kind}
+        onChange={setKind}
+        size={56}
+      />
+      {(DEFAULT_TARGETS[kind] !== undefined || kind !== "none") && (
+        <div className="goal-picker__settings">
+          {DEFAULT_TARGETS[kind] !== undefined && (
+            <label className="goal-picker__field">
+              <span className="engrave">Target</span>
+              <input
+                type="number"
+                className="display-input goal-picker__target"
+                aria-label="Goal target"
+                min={kind === "value" ? 100_000 : 1_000}
+                value={target}
+                onChange={(e) =>
+                  setTargets((t) => ({ ...t, [kind]: Math.round(Number(e.target.value)) }))
+                }
+              />
+            </label>
+          )}
+          {kind !== "none" && (
+            <label className="goal-picker__field">
+              <span className="engrave">Deadline</span>
+              <select
+                className="display-input"
+                aria-label="Goal deadline"
+                value={years ?? ""}
+                onChange={(e) =>
+                  setYears(e.target.value ? (Number(e.target.value) as 1 | 2 | 5) : null)
+                }
+              >
+                {DEADLINES.map((d) => (
+                  <option key={d.label} value={d.years ?? ""}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
       )}
-      {kind !== "none" && (
-        <label className="block text-sm">
-          <span className="mb-1 block font-semibold">Deadline</span>
-          <select
-            className={INPUT}
-            aria-label="Goal deadline"
-            value={years ?? ""}
-            onChange={(e) =>
-              setYears(e.target.value ? (Number(e.target.value) as 1 | 2 | 5) : null)
-            }
-          >
-            {DEADLINES.map((d) => (
-              <option key={d.label} value={d.years ?? ""}>
-                {d.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-    </fieldset>
+    </div>
   );
 }
 

@@ -1,8 +1,8 @@
 import { randomInt } from "node:crypto";
+import { INVITE_ALPHABET, INVITE_LENGTH } from "@airace/protocol";
 
-// No 0/O, 1/I/L: codes are read aloud and typed by friends.
-export const INVITE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-export const INVITE_LENGTH = 6;
+// The alphabet and length live in the protocol: the lab door's keypad shows the same keys.
+export { INVITE_ALPHABET, INVITE_LENGTH };
 
 export function generateInviteCode(): string {
   let code = "";

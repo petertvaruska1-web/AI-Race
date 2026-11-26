@@ -1306,4 +1306,368 @@
       flex-direction: column;
     }
   }
+  /* The lab door (C62): the worlds rack, the new-world bench and the join keypad. */
+  .door-frame {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(330px, 380px) minmax(290px, 330px);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 16px 18px;
+    padding: 18px 22px 22px;
+    overflow: hidden;
+  }
+  .door-strip {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    padding: 12px 22px;
+  }
+  .door-rack {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .rack {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    align-content: start;
+    gap: 22px 16px;
+    margin: 0;
+    padding: 10px 4px 8px;
+    list-style: none;
+  }
+  .rack-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    padding: 16px 16px 14px;
+    border-radius: 8px;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.16),
+      inset 0 -2px 0 rgb(0 0 0 / 0.35),
+      0 2px 0 rgb(0 0 0 / 0.3),
+      0 16px 26px -16px rgb(0 0 0 / 0.7);
+  }
+  /* The clip each panel hangs from. */
+  .rack-panel::before {
+    content: "";
+    position: absolute;
+    top: -7px;
+    left: 50%;
+    width: 46px;
+    height: 9px;
+    margin-left: -23px;
+    border-radius: 3px;
+    background: linear-gradient(180deg, #6a7079, #2a2d33);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.25),
+      0 2px 3px rgb(0 0 0 / 0.5);
+  }
+  .rack-panel--running {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.16),
+      inset 0 -2px 0 rgb(0 0 0 / 0.35),
+      0 0 0 1px rgb(var(--lamp-rgb) / 0.75),
+      0 0 30px -8px rgb(var(--lamp-rgb) / 0.9),
+      0 16px 26px -16px rgb(0 0 0 / 0.7);
+  }
+  .rack-panel--setup {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.16),
+      inset 0 -2px 0 rgb(0 0 0 / 0.35),
+      0 0 0 1px rgb(250 204 21 / 0.45),
+      0 16px 26px -16px rgb(0 0 0 / 0.7);
+  }
+  .rack-panel--running::after,
+  .rack-panel--setup::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgb(var(--lamp-rgb) / 0.2), transparent 48%);
+  }
+  .rack-panel--setup::after {
+    background: linear-gradient(180deg, rgb(250 204 21 / 0.1), transparent 40%);
+  }
+  .rack-panel--outdated {
+    opacity: 0.55;
+    filter: saturate(0.3);
+  }
+  .rack-panel__head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+  }
+  .rack-panel__name {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 17px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rack-panel__day {
+    padding: 7px 10px;
+  }
+  .rack-panel__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .rack-panel__players,
+  .rack-panel__note {
+    margin: 0;
+    font-size: 13px;
+    color: var(--ink-2);
+  }
+  .door-side {
+    display: contents;
+  }
+  .door-side > .module {
+    align-self: start;
+    max-height: 100%;
+    overflow-y: auto;
+  }
+  .new-world {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .new-world > .push {
+    align-self: flex-start;
+  }
+  .door-plate {
+    padding: 12px 14px 10px;
+    font-family: var(--font-dot);
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: var(--lamp);
+    text-shadow: 0 0 12px rgb(var(--lamp-rgb) / 0.7);
+  }
+  .door-plate::placeholder {
+    color: rgb(231 237 244 / 0.18);
+    text-shadow: none;
+  }
+  .new-world__fair {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  /* A notice engraved on a plate (Fair mode). */
+  .notice-plate {
+    margin: 0;
+    padding: 10px 12px;
+    border-left: 3px solid var(--lamp);
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--ink);
+    background: var(--brush), linear-gradient(180deg, rgb(255 255 255 / 0.05), rgb(0 0 0 / 0.16));
+    box-shadow:
+      inset 0 0 0 1px rgb(0 0 0 / 0.3),
+      inset 0 1px 0 rgb(255 255 255 / 0.12);
+  }
+  .goal-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .goal-picker .rotary__mark {
+    font-size: 13px;
+  }
+  .goal-picker__settings {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .goal-picker__field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .goal-picker__target {
+    font-family: var(--font-dot);
+    font-weight: 800;
+    color: var(--lamp);
+  }
+  .join-pad {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .join-pad > .push {
+    align-self: flex-start;
+  }
+
+  /* The ID badge printer and the join bench: one module in the middle of the glass. */
+  .door-frame--welcome,
+  .door-frame--join {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    place-items: center;
+    overflow-y: auto;
+  }
+  .welcome {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    width: min(460px, 100%);
+  }
+  .welcome__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 54px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .welcome__intro {
+    margin: 8px 0 0;
+    font-size: 16px;
+    color: var(--ink-2);
+  }
+  .printer {
+    padding-bottom: 0;
+  }
+  .printer__form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .printer__form > .push {
+    align-self: flex-start;
+  }
+  .printer__field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .printer__display {
+    padding: 12px 14px 10px;
+    font-family: var(--font-dot);
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: var(--lamp);
+    text-shadow: 0 0 12px rgb(var(--lamp-rgb) / 0.7);
+  }
+  /* The slot the badge prints out of: the badge hides above its lip until it slides out. */
+  .printer__slot {
+    position: relative;
+    min-height: 26px;
+    margin: 16px -22px 0;
+    padding: 9px 0 0;
+    overflow: hidden;
+  }
+  .printer__slot::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 16%;
+    right: 16%;
+    z-index: 1;
+    height: 9px;
+    border-radius: 5px;
+    background: #050608;
+    box-shadow:
+      inset 0 2px 4px rgb(0 0 0 / 0.95),
+      0 1px 0 rgb(255 255 255 / 0.14);
+  }
+  .id-badge {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 64%;
+    margin: 0 auto 20px;
+    padding-bottom: 12px;
+    overflow: hidden;
+    border-radius: 0 0 10px 10px;
+    color: #0b0e15;
+    background: linear-gradient(180deg, #f7f8fa, #dde1e7);
+    box-shadow:
+      inset 0 -1px 0 rgb(0 0 0 / 0.2),
+      0 12px 22px -10px rgb(0 0 0 / 0.75);
+  }
+  .id-badge__band {
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 12px;
+    background: var(--lamp);
+  }
+  .id-badge__band .engrave {
+    color: rgb(0 0 0 / 0.68);
+    text-shadow: none;
+  }
+  .id-badge__name {
+    padding: 4px 12px 0;
+    font-size: 26px;
+    color: #0b0e15;
+    text-shadow: none;
+    overflow-wrap: anywhere;
+  }
+  .id-badge__code {
+    height: 16px;
+    margin: 0 12px;
+    background: repeating-linear-gradient(
+      90deg,
+      #15181d 0 2px,
+      transparent 2px 4px,
+      #15181d 4px 5px,
+      transparent 5px 8px,
+      #15181d 8px 11px,
+      transparent 11px 13px
+    );
+    opacity: 0.8;
+  }
+  .join-bench {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: min(520px, 100%);
+  }
+  .join-bench__world {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Narrower windows: the bench and the keypad share one column; narrow or short ones scroll. */
+  @media (max-width: 1199px) {
+    .door-frame {
+      grid-template-columns: minmax(0, 1fr) minmax(330px, 400px);
+    }
+    .door-side {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 0;
+      overflow-y: auto;
+    }
+    .door-side > .module {
+      max-height: none;
+      overflow: visible;
+    }
+  }
+  @media (max-width: 899px), (max-height: 639px) {
+    .door-frame {
+      position: static;
+      display: flex;
+      flex-direction: column;
+      overflow: visible;
+    }
+    .door-side {
+      overflow: visible;
+    }
+  }
 }

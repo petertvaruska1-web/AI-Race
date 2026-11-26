@@ -95,4 +95,25 @@ describe("the join link", () => {
     expect(await screen.findByText("That invite code doesn't match a world.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Join" })).toBeNull();
   });
+
+  it("lands on the keypad with the code filled in, and looks up a code typed there", async () => {
+    const calls = mockFetch({
+      "/api/worlds/invite/ZZZZZZ": [404, { error: "That invite code doesn't match a world." }],
+      "/api/worlds/invite/ABC234": [200, { ...FAIR_WORLD, fairMode: false }],
+      "/api/worlds/join": [200, { worldId: "w1" }],
+    });
+    const onJoined = vi.fn();
+    render(<Join code="ZZZZZZ" me={ME} onSignedIn={vi.fn()} onJoined={onJoined} />);
+    expect(await screen.findByText("That invite code doesn't match a world.")).toBeTruthy();
+    const pad = screen.getByLabelText("Invite code") as HTMLInputElement;
+    expect(pad.value).toBe("ZZZZZZ");
+    fireEvent.change(pad, { target: { value: "abc23" } });
+    expect(screen.queryByRole("button", { name: "Join" })).toBeNull();
+    fireEvent.change(pad, { target: { value: "abc234" } });
+    expect(await screen.findByText("Friday night")).toBeTruthy();
+    expect(screen.queryByText("That invite code doesn't match a world.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+    await waitFor(() => expect(onJoined).toHaveBeenCalledWith("w1"));
+    expect(calls.at(-1)).toEqual({ path: "/api/worlds/join", body: { code: "ABC234" } });
+  });
 });

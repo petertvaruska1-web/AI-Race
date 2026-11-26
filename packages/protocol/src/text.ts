@@ -39,6 +39,13 @@ export const TEXT_LIMITS = {
   chatMessage: [1, 500],
 } as const;
 
+/**
+ * Invite codes (Stage 2): six characters friends read aloud and type, so no 0/O or 1/I/L. The
+ * server draws them; the lab door's keypad shows these keys.
+ */
+export const INVITE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+export const INVITE_LENGTH = 6;
+
 /** Names every plain object already has (`__proto__`, `constructor`, …). */
 const BUILT_IN_NAMES = new Set(Object.getOwnPropertyNames(Object.prototype));
 
