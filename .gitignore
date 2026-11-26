@@ -40,3 +40,6 @@ ml/runs/
 # TypeScript / Playwright
 playwright-report/
 test-results/
+
+# Brainstorm mockups and plan working copies (the approved mockups are copied into docs/)
+/.superpowers/
