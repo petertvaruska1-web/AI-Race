@@ -27,5 +27,5 @@ export function Field({
   );
 }
 
-export const INPUT =
-  "w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-text outline-none focus:border-brand";
+/** A text field, select or number box: a display you type into (bench.css). */
+export const INPUT = "display-input";

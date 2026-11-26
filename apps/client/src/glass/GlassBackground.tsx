@@ -60,11 +60,11 @@ function painter(canvas: HTMLCanvasElement): Painter | null {
     mouse: u("uMouse"),
     power: u("uPower"),
   };
-  // Half the device's pixels: the tiles hide it, and the card stays free for training.
-  let scale = 0.5;
+  // At most 1.25 pixels a CSS pixel: crisp tiles at a small cost (the shader is cheap).
+  let scale = 1;
   return {
     resize() {
-      scale = Math.max(0.5, (window.devicePixelRatio || 1) * 0.5);
+      scale = Math.min(1.25, window.devicePixelRatio || 1);
       canvas.width = Math.max(1, Math.round(window.innerWidth * scale));
       canvas.height = Math.max(1, Math.round(window.innerHeight * scale));
       gl.viewport(0, 0, canvas.width, canvas.height);

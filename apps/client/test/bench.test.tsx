@@ -1,9 +1,14 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 import { Display } from "../src/bench/Display.tsx";
+import { KeyRow } from "../src/bench/KeyRow.tsx";
 import { Lamp } from "../src/bench/Lamp.tsx";
 import { Module } from "../src/bench/Module.tsx";
+import { PushButton } from "../src/bench/PushButton.tsx";
 import { Readout } from "../src/bench/Readout.tsx";
+import { RotarySelector } from "../src/bench/RotarySelector.tsx";
+import { ToggleSwitch } from "../src/bench/ToggleSwitch.tsx";
 import { Panel } from "../src/components/Panel.tsx";
 import { Stat } from "../src/components/Stat.tsx";
 
@@ -48,5 +53,67 @@ describe("bench surfaces", () => {
   it("shows a stat's value in a display, keeping its test id", () => {
     render(<Stat label="Cash" value={1200} format={(n) => `$${n}`} testId="cash" />);
     expect(screen.getByTestId("cash").closest(".display")).not.toBeNull();
+  });
+});
+
+describe("bench controls", () => {
+  it("presses a primary button and keeps a disabled reason", async () => {
+    const onClick = vi.fn();
+    render(
+      <>
+        <PushButton onClick={onClick}>Train</PushButton>
+        <PushButton disabled title="Train it first">
+          Launch
+        </PushButton>
+      </>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Train" }));
+    expect(onClick).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Launch" }).getAttribute("title")).toBe(
+      "Train it first",
+    );
+  });
+
+  it("flips a switch", async () => {
+    const onChange = vi.fn();
+    render(<ToggleSwitch label="Fair mode" checked={false} onChange={onChange} />);
+    await userEvent.click(screen.getByRole("switch", { name: "Fair mode" }));
+    expect(onChange).toHaveBeenCalledWith(true);
+  });
+
+  it("picks a key in a key row", async () => {
+    const onChange = vi.fn();
+    render(
+      <KeyRow
+        legend="Difficulty"
+        options={[
+          { label: "Easy", value: "easy" },
+          { label: "Hard", value: "hard" },
+        ]}
+        value="easy"
+        onChange={onChange}
+      />,
+    );
+    await userEvent.click(screen.getByRole("radio", { name: "Hard" }));
+    expect(onChange).toHaveBeenCalledWith("hard");
+  });
+
+  it("turns a rotary selector with the arrow keys", async () => {
+    const onChange = vi.fn();
+    render(
+      <RotarySelector
+        legend="Step"
+        options={[
+          { label: "Data", value: "data" },
+          { label: "Prepare", value: "prepare" },
+        ]}
+        value="data"
+        onChange={onChange}
+      />,
+    );
+    screen.getByRole("radio", { name: "Data" }).focus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(onChange).toHaveBeenCalledWith("prepare");
+    expect(screen.getByRole("radiogroup", { name: "Step" })).toBeTruthy();
   });
 });
