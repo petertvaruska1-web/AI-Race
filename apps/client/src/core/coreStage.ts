@@ -75,6 +75,9 @@ function byShare(colors: string[], shares: number[]): string {
 
 const MOTES = 220;
 
+/** The farthest any part of the core can reach: the 12th ring around the largest crystal. */
+const MAX_REACH = 5.1;
+
 export type CoreStage = Stage3D & {
   setParams(p: OrbParams): void;
   setStill(still: boolean): void;
@@ -86,7 +89,9 @@ export function makeCoreStage(params: OrbParams, o: { still: boolean }): CoreSta
   let still = o.still;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
-  camera.position.set(0, 0, 9.2);
+  // The camera stays where the largest possible instrument fits (12 rings around the biggest
+  // crystal), so a stronger AI shows as a bigger one (R5) and nothing jumps as rings fade in.
+  camera.position.set(0, 0, (MAX_REACH * 1.12) / Math.tan(THREE.MathUtils.degToRad(15)));
   const key = new THREE.DirectionalLight(0xffffff, 2.2);
   key.position.set(-3, 4, 5);
   scene.add(key, new THREE.AmbientLight(0xffffff, 0.25));
@@ -154,7 +159,11 @@ export function makeCoreStage(params: OrbParams, o: { still: boolean }): CoreSta
   /** The rings sit close around the crystal, so even ten of them stay a compact instrument. */
   const ringRadius = (i: number) => crystalRadius() * (1.42 + 0.17 * i);
 
-  function build(): void {
+  let fade: THREE.MeshStandardMaterial | null = null;
+  let shape = "";
+
+  /** The rings' geometry: rebuilt only when their number, detail or size changes. */
+  function buildRings(): void {
     for (const r of rings) {
       rig.remove(r.tilt);
       r.mesh.geometry.dispose();
@@ -162,19 +171,17 @@ export function makeCoreStage(params: OrbParams, o: { still: boolean }): CoreSta
     for (const m of ringMaterials) m.dispose();
     ringMaterials.length = 0;
     rings = [];
+    fade = null;
     const count = Math.ceil(p.rings);
-    const fraction = p.rings - Math.floor(p.rings);
     for (let i = 0; i < count; i++) {
-      const last = i === count - 1 && fraction > 0;
-      const material = last
-        ? (() => {
-            const m = metal().clone();
-            m.transparent = true;
-            m.opacity = fraction;
-            ringMaterials.push(m);
-            return m;
-          })()
-        : metal();
+      let material: THREE.Material = metal();
+      if (i === count - 1) {
+        // The newest ring fades in as its skill nears its mark.
+        fade = metal().clone();
+        fade.transparent = true;
+        ringMaterials.push(fade);
+        material = fade;
+      }
       const mesh = new THREE.Mesh(
         gearRing({
           radius: ringRadius(i),
@@ -190,19 +197,19 @@ export function makeCoreStage(params: OrbParams, o: { still: boolean }): CoreSta
       tilt.rotation.set(1.05 + 0.62 * i, 0, 0.5 * i + 0.3);
       tilt.add(mesh);
       rig.add(tilt);
-      rings.push({
-        mesh,
-        tilt,
-        speed: (0.32 + 0.1 * i) * (0.3 + p.swirl) * (i % 2 === 0 ? 1 : -1),
-        phase: i * 1.7,
-      });
+      rings.push({ mesh, tilt, speed: 0, phase: i * 1.7 });
     }
+  }
+
+  /** Everything else follows the measurements in place: colors, glow, speeds, the fade. */
+  function tune(): void {
     const radius = crystalRadius();
     crystal.scale.setScalar(radius);
-    // Frame the whole instrument: the outermost ring (or the crystal's halo) fits with a margin.
-    const reach = Math.max(radius * 2.2, count > 0 ? ringRadius(count - 1) + 0.12 : 0);
-    camera.position.z = (reach * 1.18) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    camera.updateProjectionMatrix();
+    const fraction = p.rings - Math.floor(p.rings);
+    if (fade) fade.opacity = fraction > 0 ? fraction : 1;
+    rings.forEach((r, i) => {
+      r.speed = (0.32 + 0.1 * i) * (0.3 + p.swirl) * (i % 2 === 0 ? 1 : -1);
+    });
     U.uMain.value.set(p.colors[0] ?? "#ffffff");
     U.uSecond.value.set(p.colors.at(-1) ?? "#ffffff");
     U.uHeart.value = 0.45 + 0.75 * p.brightness;
@@ -213,6 +220,15 @@ export function makeCoreStage(params: OrbParams, o: { still: boolean }): CoreSta
     halo.material.color.set(p.colors[0] ?? "#ffffff");
     halo.material.opacity = 0.25 + 0.45 * p.brightness;
     halo.scale.setScalar(radius * (3.2 + 2.6 * p.glowSoftness));
+  }
+
+  function build(): void {
+    const next = `${Math.ceil(p.rings)}|${p.ringDetail.toFixed(3)}|${crystalRadius().toFixed(3)}`;
+    if (next !== shape) {
+      shape = next;
+      buildRings();
+    }
+    tune();
   }
   build();
 

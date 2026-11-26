@@ -32,4 +32,24 @@ describe("the AI core in 3D", () => {
     stage.setParams(orbParams(SCORED));
     expect(stage.scene.getObjectByName("ring-0")).toBeDefined();
   });
+
+  it("changes in place when only the day's new customers change", () => {
+    const stage = makeCoreStage(orbParams(SCORED), { still: true });
+    const ring = stage.scene.getObjectByName("ring-0") as unknown as { geometry: object };
+    stage.setParams(
+      orbParams({ ...SCORED, arrivals: { rate: 0.5, colors: ["#ffffff"], shares: [1] } }),
+    );
+    const after = stage.scene.getObjectByName("ring-0") as unknown as { geometry: object };
+    expect(after.geometry).toBe(ring.geometry);
+  });
+
+  it("keeps the camera still as the AI grows, so a stronger AI looks bigger", () => {
+    const weak = makeCoreStage(orbParams({ ...SCORED, overall: 20 }), { still: true });
+    const strong = makeCoreStage(orbParams({ ...SCORED, overall: 80 }), { still: true });
+    const spark = makeCoreStage(orbParams(NONE), { still: true });
+    expect(strong.camera.position.z).toBe(weak.camera.position.z);
+    expect(spark.camera.position.z).toBe(weak.camera.position.z);
+    const size = (s: typeof weak) => s.scene.getObjectByName("crystal")?.scale.x ?? 0;
+    expect(size(strong)).toBeGreaterThan(size(weak));
+  });
 });
