@@ -338,6 +338,11 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
   await take.getByRole("button", { name: "License it" }).click();
   await expect(take).toHaveCount(0);
   await page.getByRole("link", { name: "Company" }).click();
+  // The licenses live in the Company drawer (look redesign, design A2): open it first.
+  await page
+    .getByRole("group", { name: "Company drawer" })
+    .getByText("Licenses", { exact: true })
+    .click();
   await expect(
     page.getByRole("region", { name: "Licenses" }).getByText(/ powers .+ for students$/),
   ).toBeVisible();

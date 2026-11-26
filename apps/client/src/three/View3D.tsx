@@ -1,4 +1,5 @@
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
+import { createDragGuard } from "./dragGuard.ts";
 import { attachView, markInteracting, type Stage3D } from "./engine.ts";
 import { webglAvailable } from "./support.ts";
 
@@ -54,14 +55,17 @@ export function View3D({
       typeof ResizeObserver === "undefined" ? null : new ResizeObserver(handle.markDirty);
     sized?.observe(el);
     let down: { x: number; y: number } | null = null;
+    const guard = createDragGuard();
     const onDown = (e: PointerEvent) => {
       down = { x: e.clientX, y: e.clientY };
+      guard.down(e.clientX, e.clientY);
       el.setPointerCapture?.(e.pointerId);
       markInteracting();
       stage.pointer?.({ type: "down", dx: 0, dy: 0 });
     };
     const onMove = (e: PointerEvent) => {
       if (!down) return;
+      guard.move(e.clientX, e.clientY);
       const dx = e.clientX - down.x;
       const dy = e.clientY - down.y;
       down = { x: e.clientX, y: e.clientY };
@@ -72,14 +76,23 @@ export function View3D({
     const onUp = () => {
       if (!down) return;
       down = null;
+      guard.up();
       stage.pointer?.({ type: "up", dx: 0, dy: 0 });
       handle.markDirty();
     };
+    // Turning the object must not click what it sits in (the core opens its AI's window).
+    const onClick = (e: MouseEvent) => {
+      if (!guard.takeClick()) return;
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    el.addEventListener("click", onClick, true);
     el.addEventListener("pointerdown", onDown);
     el.addEventListener("pointermove", onMove);
     el.addEventListener("pointerup", onUp);
     el.addEventListener("pointercancel", onUp);
     return () => {
+      el.removeEventListener("click", onClick, true);
       el.removeEventListener("pointerdown", onDown);
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerup", onUp);
