@@ -6,7 +6,7 @@ import { useSocket } from "../store/session.ts";
 import { useFollowVotes } from "../store/votes.ts";
 import { useWorld } from "../store/world.ts";
 import { Victory } from "../surprises/Goals.tsx";
-import { applyCompanyTheme } from "../theme/palette.ts";
+import { applyBenchTheme } from "../theme/glass.ts";
 import { Arena } from "./Arena.tsx";
 import { Benchmarks } from "./Benchmarks.tsx";
 import { Company } from "./Company.tsx";
@@ -39,8 +39,8 @@ export function WorldScreen({ route }: { route: WorldRoute }) {
 
   const palette = view?.companies.find((c) => c.id === view.me.company?.id)?.palette ?? null;
   useEffect(() => {
-    applyCompanyTheme(palette);
-    return () => applyCompanyTheme(null);
+    applyBenchTheme(palette);
+    return () => applyBenchTheme(null);
   }, [palette]);
 
   if (!view || view.world.id !== worldId) {

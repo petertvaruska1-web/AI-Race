@@ -1,29 +1,86 @@
 @import "tailwindcss";
 
-/* Base theme (C5): a neutral dark frame. A company's palette sets the --brand
-   colors (see palette.ts), so every screen takes the player's colors. */
+/* The Instrument bench (look redesign, C60). The glass behind every screen follows the company's
+   main color (C57): `data-glass` on <html> says which glass, light or dark, and the company's
+   palette sets the --brand, --lamp and --accent colors (theme/glass.ts). */
 :root {
-  --bg: #0f1320;
-  --surface: #171c2c;
-  --surface-2: #1f2538;
-  --text: #e8ebf5;
-  --muted: #9aa3c2;
-  --border: #2a3150;
-  --danger: #ff6b6b;
   --brand: #8b93b8;
   --brand-2: #c2c8e0;
   --on-brand: #000000;
   --brand-soft: #22273a;
-  --good: #4ade80;
-  /* The futuristic layer (game-layer design §3): glass panels lit by the company's color. */
-  --glass: color-mix(in srgb, var(--surface) 74%, transparent);
-  --glow: 0 0 24px color-mix(in srgb, var(--brand) 35%, transparent);
+  --lamp: #8b93b8;
+  --lamp-rgb: 139 147 184;
+  --p-rgb: 139 147 184;
+  --s-rgb: 194 200 224;
+  --accent: #8b93b8;
+  --glow: 0 0 22px color-mix(in srgb, var(--lamp) 35%, transparent);
   --line: color-mix(in srgb, var(--brand) 65%, transparent);
   --grid: color-mix(in srgb, var(--brand) 7%, transparent);
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  /* Displays are always dark, on either glass. */
+  --display: #06080b;
+  --display-ink: #e7edf4;
+  --display-ink-2: rgb(231 237 244 / 0.6);
+  --display-hair: rgb(255 255 255 / 0.08);
+}
+
+:root,
+:root[data-glass="dark"] {
+  --bg: #0b0e15;
+  --surface: #1b1f26;
+  --surface-2: #23272f;
+  --text: #eef1f8;
+  --ink: #eef1f8;
+  --muted: rgb(232 238 250 / 0.64);
+  --ink-2: rgb(232 238 250 / 0.64);
+  --ink-3: rgb(232 238 250 / 0.34);
+  --border: rgb(255 255 255 / 0.1);
+  --hair: rgb(255 255 255 / 0.1);
+  --good: #4ade80;
+  --warn: #facc15;
+  --danger: #ff6b6b;
+  --metal: linear-gradient(180deg, #33373f, #1c1f25);
+  --brush: repeating-linear-gradient(90deg, rgb(255 255 255 / 0.022) 0 1px, transparent 1px 3px);
+  --screw: #a3a9b2;
+  --screw-lo: #3a3e45;
+  --engrave: 255 255 255;
+  --engrave-a: 0.52;
+  --engrave-shadow: 0 -1px 0 rgb(0 0 0 / 0.7);
+  --plate-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18), inset 0 -2px 0 rgb(0 0 0 / 0.4),
+    0 2px 0 rgb(0 0 0 / 0.35), 0 24px 36px -18px rgb(0 0 0 / 0.75);
+  --key: linear-gradient(180deg, #484d57, #2a2d33);
+  --key-ink: #e9edf2;
   color-scheme: dark;
+}
+
+:root[data-glass="light"] {
+  --bg: #f2f3f6;
+  --surface: #e4e6ea;
+  --surface-2: #d6d9de;
+  --text: #10131b;
+  --ink: #10131b;
+  --muted: rgb(16 19 27 / 0.62);
+  --ink-2: rgb(16 19 27 / 0.62);
+  --ink-3: rgb(16 19 27 / 0.36);
+  --border: rgb(0 0 0 / 0.12);
+  --hair: rgb(0 0 0 / 0.12);
+  --good: #15803d;
+  --warn: #a16207;
+  --danger: #be123c;
+  --metal: linear-gradient(180deg, #f0f1f4, #cdd1d7);
+  --brush: repeating-linear-gradient(90deg, rgb(255 255 255 / 0.45) 0 1px, transparent 1px 3px);
+  --screw: #8d939c;
+  --screw-lo: #f7f8fa;
+  --engrave: 0 0 0;
+  --engrave-a: 0.55;
+  --engrave-shadow: 0 1px 0 rgb(255 255 255 / 0.85);
+  --plate-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 -2px 0 rgb(0 0 0 / 0.12),
+    0 2px 0 rgb(0 0 0 / 0.12), 0 22px 34px -18px rgb(0 0 0 / 0.35);
+  color-scheme: light;
 }
 
 @theme inline {
@@ -39,37 +96,32 @@
   --color-on-brand: var(--on-brand);
   --color-brand-soft: var(--brand-soft);
   --color-good: var(--good);
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-warn: var(--warn);
+  --color-lamp: var(--lamp);
+  --color-accent: var(--accent);
+  --font-display: "Barlow Semi Condensed", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Barlow Semi Condensed", ui-sans-serif, system-ui, sans-serif;
+  --font-dot: "Doto", ui-monospace, monospace;
 }
 
-html,
-body {
+/* The glass (glass/GlassBackground.tsx) paints behind everything; until it does, the page is
+   the glass's own color. */
+html {
   background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  min-height: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  background: transparent;
   color: var(--text);
   font-family: var(--font-sans);
   margin: 0;
   min-height: 100%;
 }
 
-/* A soft wash of the company's colors behind everything. */
-body {
-  background:
-    radial-gradient(
-      1100px 600px at 8% -12%,
-      color-mix(in srgb, var(--brand) 16%, transparent),
-      transparent 62%
-    ),
-    radial-gradient(
-      900px 520px at 108% 8%,
-      color-mix(in srgb, var(--brand-2) 11%, transparent),
-      transparent 60%
-    ),
-    var(--bg);
-  background-attachment: fixed;
-}
-
-/* A faint blueprint grid for the game area. */
+/* A faint blueprint grid (kept for the screens that still use it). */
 .grid-bg {
   background-image:
     linear-gradient(var(--grid) 1px, transparent 1px),
@@ -77,19 +129,37 @@ body {
   background-size: 48px 48px;
 }
 
-/* Glass panels with a luminous top edge; they glow softly on hover. */
+/* A plate of the bench for markup that still asks for a panel directly. */
 .panel {
-  background: var(--glass);
-  border: 1px solid var(--border);
-  border-top-color: var(--line);
+  background:
+    radial-gradient(
+      circle at 10px 10px,
+      var(--screw) 0 1.7px,
+      var(--screw-lo) 2.6px,
+      transparent 3.2px
+    ),
+    radial-gradient(
+      circle at calc(100% - 10px) 10px,
+      var(--screw) 0 1.7px,
+      var(--screw-lo) 2.6px,
+      transparent 3.2px
+    ),
+    radial-gradient(
+      circle at 10px calc(100% - 10px),
+      var(--screw) 0 1.7px,
+      var(--screw-lo) 2.6px,
+      transparent 3.2px
+    ),
+    radial-gradient(
+      circle at calc(100% - 10px) calc(100% - 10px),
+      var(--screw) 0 1.7px,
+      var(--screw-lo) 2.6px,
+      transparent 3.2px
+    ),
+    var(--brush), var(--metal);
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(14px);
-  transition:
-    box-shadow 200ms ease,
-    border-color 200ms ease;
-}
-.panel:hover {
-  box-shadow: var(--glow);
+  box-shadow: var(--plate-shadow);
+  transition: box-shadow 200ms ease;
 }
 
 .tabular {
@@ -100,7 +170,7 @@ h1,
 h2,
 h3 {
   font-family: var(--font-display);
-  letter-spacing: -0.01em;
+  letter-spacing: 0.005em;
 }
 
 /* Model output and player text are shown as text, line breaks kept (spec §11). */
@@ -109,15 +179,33 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-/* Windows (immersion design): nearly solid glass, lit by the company's color. */
+/* A heavy plate for windows and dialogs. */
 .window {
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  border: 1px solid var(--border);
-  border-top-color: var(--line);
+  background:
+    radial-gradient(circle at 12px 12px, var(--screw) 0 2px, var(--screw-lo) 3px, transparent 3.6px),
+    radial-gradient(
+      circle at calc(100% - 12px) 12px,
+      var(--screw) 0 2px,
+      var(--screw-lo) 3px,
+      transparent 3.6px
+    ),
+    radial-gradient(
+      circle at 12px calc(100% - 12px),
+      var(--screw) 0 2px,
+      var(--screw-lo) 3px,
+      transparent 3.6px
+    ),
+    radial-gradient(
+      circle at calc(100% - 12px) calc(100% - 12px),
+      var(--screw) 0 2px,
+      var(--screw-lo) 3px,
+      transparent 3.6px
+    ),
+    var(--brush), var(--metal);
   border-radius: var(--radius-lg);
   box-shadow:
-    0 30px 80px rgb(0 0 0 / 0.5),
-    var(--glow);
+    var(--plate-shadow),
+    0 40px 90px rgb(0 0 0 / 0.55);
 }
 .icon-btn {
   display: grid;
@@ -125,62 +213,70 @@ h3 {
   place-items: center;
   width: 2.25rem;
   height: 2.25rem;
-  border-radius: 9999px;
-  background: var(--surface-2);
-  color: var(--muted);
+  border-radius: 7px;
+  background: var(--key);
+  color: var(--key-ink, #e9edf2);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    0 3px 0 #0f1013;
   transition:
-    color 150ms ease,
-    background 150ms ease;
+    transform 120ms ease,
+    box-shadow 120ms ease;
 }
-.icon-btn:hover {
-  color: var(--text);
-  background: var(--brand-soft);
+.icon-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 1px 0 #0f1013;
 }
 .row-btn {
   display: flex;
   width: 100%;
   align-items: center;
   gap: 0.75rem;
-  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 1px 0 rgb(0 0 0 / 0.3);
   padding: 0.5rem 0.75rem;
   text-align: left;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   transition:
-    border-color 150ms ease,
     box-shadow 150ms ease,
     transform 150ms ease;
 }
 .row-btn:hover {
-  border-color: var(--line);
-  box-shadow: var(--glow);
-  transform: translateY(-1px);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--lamp) 55%, transparent),
+    var(--glow);
+}
+.row-btn:active {
+  transform: translateY(1px);
 }
 .chip {
-  border: 1px solid var(--border);
-  border-radius: 9999px;
+  border-radius: 6px;
   background: var(--surface-2);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35);
   padding: 0.125rem 0.625rem;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
 }
 
-/* Anything that opens something lifts and glows under the pointer. */
+/* Anything that opens something lights up under the pointer. */
 .lift {
   cursor: pointer;
   transition:
-    transform 180ms ease,
     box-shadow 180ms ease,
-    border-color 180ms ease;
+    filter 180ms ease;
 }
 .lift:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--glow);
-  border-color: var(--line);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--lamp) 50%, transparent),
+    var(--glow);
 }
 .lift-row:hover,
 .lift-bar:hover {
-  background: color-mix(in srgb, var(--brand) 9%, transparent);
+  background: color-mix(in srgb, var(--lamp) 12%, transparent);
 }
 
 /* Things grow in when shown. "backwards" leaves no transform behind afterwards. */
@@ -241,7 +337,7 @@ h3 {
 }
 .day-bar {
   transform-origin: left;
-  background: linear-gradient(90deg, var(--brand), var(--brand-2));
+  background: linear-gradient(90deg, var(--lamp), var(--brand-2));
   box-shadow: var(--glow);
   animation: day-fill linear backwards;
 }
@@ -330,7 +426,7 @@ h3 {
   transition: stroke-dashoffset 800ms ease;
 }
 
-/* A screen slides in, its parts one after another. */
+/* A screen slides in, its parts one after another (replaced by the bench slide in the frame). */
 .screen-in > * > * {
   animation: rise 480ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
