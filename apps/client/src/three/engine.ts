@@ -14,8 +14,8 @@ export interface Stage3D {
   camera: THREE.PerspectiveCamera;
   /** Advances the object by `dt` seconds (`t` since it started); true while it is still moving. */
   update(t: number, dt: number): boolean;
-  /** Drags on the object's canvas, in CSS pixels. */
-  pointer?(e: { type: "down" | "move" | "up"; dx: number; dy: number }): void;
+  /** Drags on the object's canvas, in CSS pixels; `button` says which button began it. */
+  pointer?(e: { type: "down" | "move" | "up"; dx: number; dy: number; button?: number }): void;
   dispose(): void;
 }
 

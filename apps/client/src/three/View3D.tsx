@@ -61,7 +61,7 @@ export function View3D({
       guard.down(e.clientX, e.clientY);
       el.setPointerCapture?.(e.pointerId);
       markInteracting();
-      stage.pointer?.({ type: "down", dx: 0, dy: 0 });
+      stage.pointer?.({ type: "down", dx: 0, dy: 0, button: e.button });
     };
     const onMove = (e: PointerEvent) => {
       if (!down) return;
