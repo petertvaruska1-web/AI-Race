@@ -14,16 +14,19 @@ export function Core({
   input,
   size = 280,
   label,
+  still: held = false,
 }: {
   input: OrbInput;
   size?: number;
   label?: string;
+  /** Always still, drawn once (small cores in a rack). */
+  still?: boolean;
 }) {
   const key = JSON.stringify(input);
   // biome-ignore lint/correctness/useExhaustiveDependencies: the input is compared by value (key)
   const params = useMemo(() => orbParams(input), [key]);
   const lighter = useGraphics((s) => s.lighter);
-  const still = reducedMotion() || lighter;
+  const still = held || reducedMotion() || lighter;
   const handle = useRef<ViewHandle | null>(null);
   const first = useRef({ params, still });
 

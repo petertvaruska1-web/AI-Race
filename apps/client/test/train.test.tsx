@@ -1,5 +1,5 @@
 import { BALANCE_TEST } from "@airace/sim";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { TrainStep } from "../src/screens/lab/TrainStep.tsx";
@@ -124,6 +124,19 @@ describe("live training view", () => {
     render(<TrainStep view={viewOf(s)} />);
     expect(screen.getByText("Finishing up")).toBeTruthy();
     expect(screen.getByText("The lab computers are still working.")).toBeTruthy();
+  });
+
+  it("shows a run in the training chamber with its status lamp and progress", () => {
+    let s = training();
+    s = apply(s, { kind: "system", event: { type: "computeStarted", runId: "r1" } });
+    s = apply(s, { kind: "tick" });
+    render(<TrainStep view={viewOf(s)} />);
+    const chamber = screen.getByRole("region", { name: "Training chamber" });
+    const lamp = within(chamber).getByRole("img", { name: "Training" });
+    expect(lamp.getAttribute("data-state")).toBe("on");
+    const time = within(chamber).getByRole("progressbar", { name: "Game time" });
+    expect(Number(time.getAttribute("value"))).toBeGreaterThan(0);
+    expect(screen.getByRole("region", { name: "What it says" })).toBeTruthy();
   });
 
   it("shows the AI's words as text, markup included", async () => {

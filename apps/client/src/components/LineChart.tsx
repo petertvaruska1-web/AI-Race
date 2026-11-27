@@ -44,9 +44,19 @@ export function LineChart({
         height,
         legend: { show: lines.length > 1 },
         cursor: { drag: { x: false, y: false } },
+        // Training steps along the bottom, not dates; the display's own grid shows behind.
+        scales: { x: { time: false } },
         axes: [
-          { stroke: "#9aa3c2", grid: { stroke: "#2a3150" }, ticks: { stroke: "#2a3150" } },
-          { stroke: "#9aa3c2", grid: { stroke: "#2a3150" }, ticks: { stroke: "#2a3150" } },
+          {
+            stroke: "#8b939e",
+            grid: { show: false },
+            ticks: { stroke: "rgb(255 255 255 / 0.14)" },
+          },
+          {
+            stroke: "#8b939e",
+            grid: { show: false },
+            ticks: { stroke: "rgb(255 255 255 / 0.14)" },
+          },
         ],
         series: [
           { label: "Step" },

@@ -10,8 +10,9 @@ import { Lab } from "../src/screens/lab/LabLayout.tsx";
 import { useCatalog } from "../src/store/catalog.ts";
 import { usePlan } from "../src/store/plan.ts";
 import { useSession } from "../src/store/session.ts";
+import { useWindows } from "../src/store/windows.ts";
 import { liveGame } from "./mockSocket.ts";
-import { runningWorld, viewOf } from "./views.ts";
+import { runningWorld, trainedWorld, viewOf } from "./views.ts";
 
 const CATALOG: Catalog = sampleCatalog as Catalog;
 
@@ -212,6 +213,28 @@ describe("AI Lab planning", () => {
         expect(text, `${s} mentions ${jargon}`).not.toContain(jargon);
       }
     }
+  });
+});
+
+describe("the versions rack", () => {
+  it("racks every version as a cartridge that opens its AI", async () => {
+    useWindows.getState().closeAll();
+    const view = viewOf(trainedWorld());
+    const company = view.me.company;
+    const first = company?.versions[0];
+    if (!company || !first) throw new Error("no version");
+    company.versions = Array.from({ length: 20 }, (_, i) => ({
+      ...first,
+      id: `ver-${i + 1}`,
+      label: `v${i + 1}`,
+    }));
+    render(<Lab view={view} />);
+    step("5 Versions");
+    const rack = screen.getByRole("region", { name: "Your versions" });
+    expect(rack.className).toContain("display--scroll");
+    expect(within(rack).getAllByTestId(/^version-v/)).toHaveLength(20);
+    fireEvent.click(within(rack).getByRole("button", { name: "Open v3" }));
+    expect(useWindows.getState().stack.at(-1)?.spec).toEqual({ kind: "ai", versionId: "ver-3" });
   });
 });
 

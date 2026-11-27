@@ -2869,4 +2869,137 @@
   .lab-extras__learn {
     margin-top: 14px;
   }
+
+  /* The training chamber: the live core with its streams, the stage lamp and the game time; its
+     words beside; the two learning curves as oscilloscope displays. */
+  .lab-train {
+    display: grid;
+    grid-template-columns: 380px minmax(0, 1fr);
+    align-items: start;
+    gap: 14px;
+  }
+  .lab-train__left,
+  .lab-train__charts {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+  }
+  .lab-chamber__core {
+    display: grid;
+    place-items: center;
+    margin: 4px 0 10px;
+  }
+  .lab-status {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .lab-status .lamp {
+    margin-top: 8px;
+  }
+  .lab-chamber__time {
+    margin-top: 12px;
+  }
+  .lab-gauge {
+    display: block;
+    width: 100%;
+    height: 10px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 5px;
+    background: #07090c;
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.9);
+    appearance: none;
+  }
+  .lab-gauge::-webkit-progress-bar {
+    border-radius: 5px;
+    background: #07090c;
+  }
+  .lab-gauge::-webkit-progress-value {
+    border-radius: 5px;
+    background: var(--lamp);
+    box-shadow: 0 0 8px var(--lamp);
+  }
+  .lab-gauge::-moz-progress-bar {
+    border-radius: 5px;
+    background: var(--lamp);
+  }
+  .lab-says {
+    min-height: 120px;
+    max-height: 250px;
+    margin-top: 10px;
+  }
+  .lab-scope {
+    margin-top: 10px;
+    padding: 8px;
+    background:
+      linear-gradient(rgb(var(--lamp-rgb) / 0.13) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--lamp-rgb) / 0.13) 1px, transparent 1px),
+      radial-gradient(120% 90% at 50% 0%, #0e1318, var(--display));
+    background-position:
+      0 8px,
+      8px 0,
+      0 0;
+    background-size:
+      28px 28px,
+      28px 28px,
+      auto;
+  }
+  /* The versions rack: cartridges in a dark rack, each with its small still core. */
+  .lab-rack {
+    max-height: calc(100vh - 230px);
+    min-height: 220px;
+    padding: 12px;
+  }
+  .lab-rack__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .lab-cartridge {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 6px;
+    background: rgb(255 255 255 / 0.04);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.07),
+      inset 0 1px 0 rgb(255 255 255 / 0.06);
+  }
+  .lab-cartridge__head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .lab-cartridge__core {
+    flex: none;
+    border-radius: 50%;
+  }
+  .lab-cartridge__core:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 2px;
+  }
+  .lab-cartridge__id {
+    min-width: 0;
+  }
+  .lab-cartridge__meta {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--display-ink-2);
+  }
+  .lab-cartridge__keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  @media (max-width: 1279px) {
+    .lab-train {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
 }

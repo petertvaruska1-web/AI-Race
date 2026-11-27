@@ -1,8 +1,11 @@
 import type { RunView, WorldView } from "@airace/protocol";
 import { motion } from "motion/react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Display } from "../../bench/Display.tsx";
+import { Lamp, type LampState } from "../../bench/Lamp.tsx";
+import { Module } from "../../bench/Module.tsx";
+import { PushButton } from "../../bench/PushButton.tsx";
 import { type Line, LineChart } from "../../components/LineChart.tsx";
-import { Panel } from "../../components/Panel.tsx";
 import { type SampleEvent, SampleFeed } from "../../components/SampleFeed.tsx";
 import { Core } from "../../core/Core.tsx";
 import { percent } from "../../format.ts";
@@ -150,40 +153,53 @@ function RunPanel({ view, run }: { view: WorldView; run: RunView }) {
   const lossDrop = first && latest !== undefined ? Math.max(0, (first - latest) / first) : 0;
 
   return (
-    <div className="space-y-4">
-      <Panel className="flex flex-wrap items-center gap-6">
-        {palette && (
-          <Core
-            size={180}
-            label={base ? `Your AI ${base.label}` : "Your new AI"}
-            input={{
-              overall: base?.overall ?? null,
-              scores: base?.scores ?? null,
-              traits: base?.traits ?? null,
-              trainedTokens: base?.trainedTokens ?? 0,
-              palette,
-              training: training ? { progress: run.progress, lossDrop, mix: run.plan.mix } : null,
-            }}
-          />
-        )}
-        <div className="min-w-0 flex-1">
+    <div className="lab-train">
+      <div className="lab-train__left">
+        <Module
+          label="Training chamber"
+          aria-label="Training chamber"
+          weight="heavy"
+          className="lab-chamber"
+        >
+          {palette && (
+            <div className="lab-chamber__core">
+              <Core
+                size={200}
+                label={base ? `Your AI ${base.label}` : "Your new AI"}
+                input={{
+                  overall: base?.overall ?? null,
+                  scores: base?.scores ?? null,
+                  traits: base?.traits ?? null,
+                  trainedTokens: base?.trainedTokens ?? 0,
+                  palette,
+                  training: training
+                    ? { progress: run.progress, lossDrop, mix: run.plan.mix }
+                    : null,
+                }}
+              />
+            </div>
+          )}
           <Status run={run} label={version?.label} />
           {training && (
-            <div className="mt-3">
-              <progress
-                className="h-2 w-full accent-[var(--brand)]"
-                aria-label="Game time"
-                value={run.progress}
-                max={1}
-              />
-              <p className="mt-1 text-xs text-muted">
+            <div className="lab-chamber__time">
+              <progress className="lab-gauge" aria-label="Game time" value={run.progress} max={1} />
+              <p className="lab-note">
                 {percent(run.progress)} of its {run.endDay - run.startDay} game days
               </p>
             </div>
           )}
-        </div>
-      </Panel>
-      <div className="grid gap-4 lg:grid-cols-2">
+        </Module>
+        <Module
+          label="What it says"
+          aria-label="What it says"
+          hint="Its own words while it trains, including your test question."
+        >
+          <Display scroll label="Its words" className="lab-says">
+            <SampleFeed samples={samples} totalSteps={totalSteps} />
+          </Display>
+        </Module>
+      </div>
+      <div className="lab-train__charts">
         <ChartPanel
           title="How wrong its guesses are"
           hint="It reads by guessing the next word. Falling means it is learning."
@@ -213,12 +229,6 @@ function RunPanel({ view, run }: { view: WorldView; run: RunView }) {
           )}
         </ChartPanel>
       </div>
-      <Panel
-        title="What it says"
-        hint="Its own words while it trains, including your test question."
-      >
-        <SampleFeed samples={samples} totalSteps={totalSteps} />
-      </Panel>
     </div>
   );
 }
@@ -235,35 +245,50 @@ function ChartPanel({
 }) {
   const [big, setBig] = useState(false);
   return (
-    <motion.div
-      layout
-      className={big ? "lg:col-span-2" : ""}
-      transition={{ type: "spring", stiffness: 300, damping: 32 }}
-    >
-      <Panel
-        title={title}
+    <motion.div layout transition={{ type: "spring", stiffness: 300, damping: 32 }}>
+      <Module
+        label={title}
         hint={hint}
         aria-label={title}
         data-expanded={big}
         actions={
-          <button
-            type="button"
+          <PushButton
+            variant="quiet"
             aria-label={`${big ? "Shrink" : "Expand"} ${title}`}
             title={big ? "Make it smaller" : "Make it bigger"}
             onClick={() => setBig(!big)}
-            className="icon-btn"
           >
-            {big ? "⤡" : "⤢"}
-          </button>
+            {big ? "Shrink" : "Expand"}
+          </PushButton>
         }
       >
-        {children(big ? 440 : 220)}
-      </Panel>
+        <div className="display lab-scope">{children(big ? 440 : 210)}</div>
+      </Module>
     </motion.div>
   );
 }
 
+/** The run's stage, its lamp lit to match: on while training, amber waiting, green done, red failed. */
 function Status({ run, label }: { run: RunView; label: string | undefined }) {
+  const [state, name]: [LampState, string] =
+    run.status === "failed"
+      ? ["problem", "Failed"]
+      : run.status === "completed"
+        ? ["ready", "Done"]
+        : run.status === "finalizing"
+          ? ["wait", "Finishing up"]
+          : !run.computeStarted
+            ? ["wait", "Waiting for compute"]
+            : ["on", "Training"];
+  return (
+    <div className="lab-status">
+      <Lamp state={state} label={name} blink={state === "problem"} />
+      <StatusText run={run} label={label} />
+    </div>
+  );
+}
+
+function StatusText({ run, label }: { run: RunView; label: string | undefined }) {
   if (run.status === "failed") {
     return (
       <div role="status">
