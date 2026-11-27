@@ -281,7 +281,7 @@ export function makeMapStage(first: MapLook, o: { still: boolean; lighter: boole
 
   function campaign(color: string): THREE.Mesh {
     const ring = new THREE.Mesh(
-      markGeometry(new THREE.RingGeometry(0.07, 0.082, 48)),
+      markGeometry(new THREE.RingGeometry(0.08, 0.095, 48)),
       markMaterial(
         new THREE.MeshBasicMaterial({
           color: new THREE.Color(color),
@@ -299,14 +299,14 @@ export function makeMapStage(first: MapLook, o: { still: boolean; lighter: boole
   function sponsor(text: string, color: string): THREE.Group {
     const g = new THREE.Group();
     const stick = new THREE.Mesh(
-      markGeometry(new THREE.CylinderGeometry(0.004, 0.004, 0.08, 8)),
+      markGeometry(new THREE.CylinderGeometry(0.005, 0.005, 0.1, 8)),
       markMaterial(
         new THREE.MeshStandardMaterial({ color: 0xb7bdc6, metalness: 0.9, roughness: 0.3 }),
       ),
     );
-    stick.position.y = 0.04;
+    stick.position.y = 0.05;
     const head = new THREE.Mesh(
-      markGeometry(new THREE.SphereGeometry(0.012, 16, 12)),
+      markGeometry(new THREE.SphereGeometry(0.017, 16, 12)),
       markMaterial(
         new THREE.MeshStandardMaterial({
           color: 0x111111,
@@ -315,7 +315,7 @@ export function makeMapStage(first: MapLook, o: { still: boolean; lighter: boole
         }),
       ),
     );
-    head.position.y = 0.085;
+    head.position.y = 0.105;
     g.add(stick, head);
     const canvas = typeof document === "undefined" ? null : document.createElement("canvas");
     const ctx = canvas?.getContext("2d");
@@ -330,8 +330,8 @@ export function makeMapStage(first: MapLook, o: { still: boolean; lighter: boole
       texture.colorSpace = THREE.SRGBColorSpace;
       markTextures.push(texture);
       const flag = new THREE.Sprite(markMaterial(new THREE.SpriteMaterial({ map: texture })));
-      flag.scale.setScalar(0.06);
-      flag.position.y = 0.125;
+      flag.scale.setScalar(0.09);
+      flag.position.y = 0.16;
       g.add(flag);
     }
     return g;

@@ -1914,11 +1914,19 @@
     flex-direction: column;
     gap: 8px;
   }
+  /* On a small plate, as it stands on the glass between modules (readable on either glass). */
   .market-groups__note {
+    align-self: flex-start;
     margin: 0;
-    font-size: 12.5px;
+    padding: 3px 10px;
+    border-radius: 5px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--ink-2);
+    background: var(--brush), var(--metal);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      0 1px 0 rgb(0 0 0 / 0.3);
   }
   .market-groups__row {
     display: grid;
