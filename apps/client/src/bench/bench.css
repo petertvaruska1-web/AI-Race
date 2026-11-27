@@ -1715,6 +1715,8 @@
     position: relative;
     min-height: 300px;
     height: 100%;
+    /* The drawn map fills the chamber edge to edge, so the pointer picks what it is over. */
+    padding: 0;
     overflow: hidden;
     border-radius: 8px;
     cursor: grab;
@@ -1760,6 +1762,14 @@
     height: 30px;
     padding: 0 12px;
     font-size: 11.5px;
+  }
+  /* On a small map the readout is compact, so it can stand clear of the pointer. */
+  .region-map__view--small .region-map__readout {
+    min-width: 0;
+    max-width: calc(100% - 12px);
+    padding: 5px 8px;
+    font-size: 11.5px;
+    line-height: 1.3;
   }
   .region-map__view--small .region-map__reset {
     top: 6px;
@@ -1869,23 +1879,22 @@
     font-size: 12.5px;
     color: var(--ink-2);
   }
-  /* The side column takes the map's height (it adds none of its own); its lists scroll. */
+  /* The side column stands beside the map at the map's height; its two lists share what is
+     left and scroll, each keeping room for at least one campaign or event. */
   .market-side {
     display: flex;
     flex-direction: column;
     gap: 14px;
-    height: 0;
-    min-height: 100%;
+    min-height: 0;
   }
   .market-side__module {
     display: flex;
-    flex: 1;
+    flex: 1 1 0;
     flex-direction: column;
-    min-height: 0;
   }
   .market-list {
-    flex: 1;
-    min-height: 0;
+    flex: 1 1 0;
+    min-height: 66px;
     padding: 10px 12px;
   }
   .market-side__module > .m-0 {
@@ -2008,6 +2017,15 @@
   @media (max-width: 1279px) {
     .market-middle {
       grid-template-columns: minmax(0, 1fr);
+    }
+    /* Under the map, ads and sponsorships stand side by side in a row of their own. */
+    .market-side {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .market-list {
+      flex: 1 1 auto;
+      max-height: 200px;
     }
     .market-groups__row {
       grid-template-columns: repeat(3, minmax(0, 1fr));

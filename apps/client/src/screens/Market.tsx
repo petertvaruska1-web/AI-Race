@@ -209,7 +209,7 @@ function Campaigns({ view }: { view: WorldView }) {
     <Module
       label="Ad campaigns"
       aria-label="Ad campaigns"
-      hint="Ads make more people aware of you in a region or group. Up to five at once."
+      hint="Ads make people aware of you. Up to five at once."
       className="market-side__module"
     >
       {campaigns.length === 0 ? (

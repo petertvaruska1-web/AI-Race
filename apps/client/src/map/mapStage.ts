@@ -29,6 +29,8 @@ export const MAP_LIMITS = {
 
 export type MapStage = Stage3D & {
   setLook(look: MapLook): void;
+  /** Reduced motion and lighter graphics, switched while the map is showing. */
+  setMode(mode: { still: boolean; lighter: boolean }): void;
   setHover(region: RegionId | null): void;
   /** The region under a point of the canvas, in normalized device coordinates (y up). */
   pick(x: number, y: number): RegionId | null;
@@ -95,6 +97,8 @@ export function makeMapStage(first: MapLook, o: { still: boolean; lighter: boole
   const cy = (minY + maxY) / 2;
   const scale = WIDTH / (maxX - minX);
   const deep = (maxY - minY) * scale;
+  let still = o.still;
+  let lighter = o.lighter;
   const toMap = ([x, y]: [number, number]) => new THREE.Vector2(x - cx, -(y - cy));
   /** A height (0..1) as the prism's depth in map units. */
   const depthOf = (h: number) => (BASE + RISE * h) / scale;
@@ -127,6 +131,7 @@ export function makeMapStage(first: MapLook, o: { still: boolean; lighter: boole
       new THREE.MeshStandardMaterial({ color: 0x23272e, metalness: 0.85, roughness: 0.42 }),
     ),
   );
+  plinth.name = "plinth";
   plinth.position.y = -0.026;
   scene.add(plinth);
 
@@ -164,8 +169,10 @@ export function makeMapStage(first: MapLook, o: { still: boolean; lighter: boole
     const group = new THREE.Group();
     group.name = `region:${s.region}`;
     group.add(prism);
+    // The state lines are built either way and shown without lighter graphics, so the switch
+    // can change while the map is showing.
     let borders: THREE.LineSegments | null = null;
-    if (!o.lighter && s.borders.length > 0) {
+    if (s.borders.length > 0) {
       const points: THREE.Vector3[] = [];
       for (const line of s.borders)
         for (let i = 1; i < line.length; i++) {
@@ -178,6 +185,7 @@ export function makeMapStage(first: MapLook, o: { still: boolean; lighter: boole
         lines,
       );
       borders.name = `borders:${s.region}`;
+      borders.visible = !lighter;
       group.add(borders);
     }
     table.add(group);
@@ -371,22 +379,99 @@ export function makeMapStage(first: MapLook, o: { still: boolean; lighter: boole
   let mode: "turn" | "tilt" | null = null;
   let hover: RegionId | null = null;
   let focus: RegionId | null = first.focus;
-  const target = new THREE.Vector3(0, 0.08, 0);
 
-  /** Frames the whole map at zoom 1, whatever the canvas's shape. */
-  function placeCamera(): void {
-    const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
-    const aspect = camera.aspect || 1;
-    const across = (WIDTH / 2 + 0.14) / (t * aspect);
-    const along = ((deep * Math.sin(tilt) + (BASE + RISE) * Math.cos(tilt)) / 2 + 0.1) / t;
-    const d = Math.max(across, along) / zoom;
-    camera.position.set(
-      target.x + d * Math.cos(tilt) * Math.sin(yaw),
-      target.y + d * Math.sin(tilt),
-      target.z + d * Math.cos(tilt) * Math.cos(yaw),
+  // Framing: the camera finds the nearest distance at which the model's corners (the plinth, and
+  // above it the tallest a region and its marks stand) all fit the canvas, and aims so they sit
+  // centered on it, for every turn, tilt and canvas shape; zoom then moves it from there.
+  const LOW = -0.052;
+  const HIGH = BASE + RISE + 0.1;
+  const halfW = WIDTH / 2 + 0.12;
+  const halfD = deep / 2 + 0.12;
+  const corners = [-1, 1].flatMap((sx) =>
+    [-1, 1].flatMap((sz) => [LOW, HIGH].map((y) => new THREE.Vector3(sx * halfW, y, sz * halfD))),
+  );
+  /** The share of the frame the model fills on its tighter side. */
+  const FILL = 0.94;
+  const probe = new THREE.PerspectiveCamera(FOV, 1, 0.05, 80);
+  const fits = new Map<string, { distance: number; aim: THREE.Vector3 }>();
+  const seen = new THREE.Vector3();
+
+  /** Puts `cam` `distance` away from `aim` at the current turn and tilt, looking at it. */
+  function place(cam: THREE.PerspectiveCamera, aim: THREE.Vector3, distance: number): void {
+    cam.position.set(
+      aim.x + distance * Math.cos(tilt) * Math.sin(yaw),
+      aim.y + distance * Math.sin(tilt),
+      aim.z + distance * Math.cos(tilt) * Math.cos(yaw),
     );
-    camera.lookAt(target);
-    camera.updateMatrixWorld();
+    cam.lookAt(aim);
+    cam.updateMatrixWorld();
+  }
+
+  /** Where the corners land on the probe's screen; null when one is behind it. */
+  function extent(aim: THREE.Vector3, distance: number) {
+    place(probe, aim, distance);
+    let x0 = Number.POSITIVE_INFINITY;
+    let x1 = Number.NEGATIVE_INFINITY;
+    let y0 = Number.POSITIVE_INFINITY;
+    let y1 = Number.NEGATIVE_INFINITY;
+    for (const c of corners) {
+      seen.copy(c).applyMatrix4(probe.matrixWorldInverse);
+      if (seen.z > -probe.near) return null;
+      seen.applyMatrix4(probe.projectionMatrix);
+      x0 = Math.min(x0, seen.x);
+      x1 = Math.max(x1, seen.x);
+      y0 = Math.min(y0, seen.y);
+      y1 = Math.max(y1, seen.y);
+    }
+    return { x0, x1, y0, y1 };
+  }
+
+  /** The nearest distance from `aim` at which every corner is inside the frame. */
+  function nearest(aim: THREE.Vector3): number {
+    let lo = 0.3;
+    let hi = 60;
+    for (let i = 0; i < 32; i++) {
+      const mid = (lo + hi) / 2;
+      const e = extent(aim, mid);
+      if (e && Math.max(-e.x0, e.x1, -e.y0, e.y1) <= FILL) hi = mid;
+      else lo = mid;
+    }
+    return hi;
+  }
+
+  /** The framing at zoom 1 for a canvas shape and the current turn and tilt (remembered). */
+  function fit(aspect: number): { distance: number; aim: THREE.Vector3 } {
+    const key = `${aspect.toFixed(3)} ${yaw.toFixed(4)} ${tilt.toFixed(4)}`;
+    const known = fits.get(key);
+    if (known) return known;
+    probe.aspect = aspect;
+    probe.updateProjectionMatrix();
+    const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
+    const toward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    const aim = new THREE.Vector3(0, (LOW + HIGH) / 2, 0);
+    let distance = nearest(aim);
+    // Perspective draws the near half larger: slide the aim until the model sits centered.
+    for (let round = 0; round < 4; round++) {
+      const e = extent(aim, distance);
+      if (!e) break;
+      const midX = (e.x0 + e.x1) / 2;
+      const midY = (e.y0 + e.y1) / 2;
+      if (Math.abs(midX) < 0.005 && Math.abs(midY) < 0.005) break;
+      aim.addScaledVector(toward, (-midY * distance * t) / Math.max(0.2, Math.sin(tilt)));
+      aim.addScaledVector(right, midX * distance * t * aspect);
+      distance = nearest(aim);
+    }
+    if (fits.size > 256) fits.clear();
+    const framing = { distance, aim };
+    fits.set(key, framing);
+    return framing;
+  }
+
+  /** Frames the whole map at zoom 1, whatever the canvas's shape, turn and tilt. */
+  function placeCamera(): void {
+    const { distance, aim } = fit(camera.aspect || 1);
+    place(camera, aim, distance / zoom);
   }
 
   function shade(): void {
@@ -412,16 +497,22 @@ export function makeMapStage(first: MapLook, o: { still: boolean; lighter: boole
       m.object.position.copy(anchor(m.region)).add(m.offset);
       if (m.pulse) {
         const mesh = m.object as THREE.Mesh;
-        mesh.scale.setScalar(o.still ? 1.1 : 0.7 + 0.9 * phase);
-        (mesh.material as THREE.MeshBasicMaterial).opacity = o.still ? 0.7 : 0.85 * (1 - phase);
+        mesh.scale.setScalar(still ? 1.1 : 0.7 + 0.9 * phase);
+        (mesh.material as THREE.MeshBasicMaterial).opacity = still ? 0.7 : 0.85 * (1 - phase);
       }
     }
   }
 
+  /** The marks last built, so a new look rebuilds them only when they change (not every day). */
+  let builtMarks = "";
   function setLook(look: MapLook): void {
     for (const r of regions) setTop(r, look.tops[r.id]);
     focus = look.focus;
-    buildMarks(look.marks, look.markColor);
+    const wanted = JSON.stringify([look.marks, look.markColor]);
+    if (wanted !== builtMarks) {
+      builtMarks = wanted;
+      buildMarks(look.marks, look.markColor);
+    }
     shade();
   }
 
@@ -443,7 +534,7 @@ export function makeMapStage(first: MapLook, o: { still: boolean; lighter: boole
       let moving = false;
       for (const r of regions) {
         if (r.height === r.target) continue;
-        if (o.still || dt <= 0) r.height = r.target;
+        if (still || dt <= 0) r.height = r.target;
         else {
           const step = dt / EASE;
           r.height += clamp(r.target - r.height, -step, step);
@@ -451,19 +542,25 @@ export function makeMapStage(first: MapLook, o: { still: boolean; lighter: boole
         }
         placeHeight(r);
       }
-      const pulsing = !o.still && marks.some((m) => m.pulse);
+      const pulsing = !still && marks.some((m) => m.pulse);
       placeMarks(pulsing ? (t % PULSE) / PULSE : 0);
       return moving || pulsing;
     },
     pointer(e) {
       if (e.type === "down") mode = e.button === 2 ? "tilt" : "turn";
       else if (e.type === "up") mode = null;
-      else if (mode === "turn") yaw = clamp(yaw + e.dx * 0.006, -MAP_LIMITS.yaw, MAP_LIMITS.yaw);
+      // The near edge follows the pointer, as the core and the emblem turn with a drag.
+      else if (mode === "turn") yaw = clamp(yaw - e.dx * 0.006, -MAP_LIMITS.yaw, MAP_LIMITS.yaw);
       else if (mode === "tilt")
-        tilt = clamp(tilt - e.dy * 0.005, MAP_LIMITS.tiltMin, MAP_LIMITS.tiltMax);
+        tilt = clamp(tilt + e.dy * 0.005, MAP_LIMITS.tiltMin, MAP_LIMITS.tiltMax);
       placeCamera();
     },
     setLook,
+    setMode(next) {
+      still = next.still;
+      lighter = next.lighter;
+      for (const r of regions) if (r.borders) r.borders.visible = !lighter;
+    },
     setHover(region) {
       hover = region;
       shade();

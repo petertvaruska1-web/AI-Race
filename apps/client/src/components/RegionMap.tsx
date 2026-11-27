@@ -4,12 +4,14 @@ import {
   type MouseEvent,
   type ReactNode,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
 import { PushButton } from "../bench/PushButton.tsx";
 import { createWheel } from "../bench/wheel.ts";
 import { type MapLook, type MapStage, makeMapStage } from "../map/mapStage.ts";
+import { readoutSpot } from "../map/readoutSpot.ts";
 import { TileMap } from "../map/TileMap.tsx";
 import { reducedMotion } from "../motion.ts";
 import { REGION_CENTERS, type RegionMarks, type RegionTop } from "../regions.ts";
@@ -51,10 +53,15 @@ export function RegionMap({
   const [three, setThree] = useState(false);
   const handle = useRef<ViewHandle | null>(null);
   const view = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
   const look: MapLook = { tops, marks, focus, markColor };
-  const first = useRef({ look, still, lighter });
+  const first = useRef(look);
+  const mode = useRef({ still, lighter });
+  mode.current = { still, lighter };
   const key = JSON.stringify(look);
   const stage = () => handle.current?.stage as MapStage | undefined;
+  /** The drawn map (the canvas inside the chamber); the chamber itself before it exists. */
+  const drawn = () => view.current?.querySelector("canvas") ?? view.current;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the look is compared by value (key)
   useEffect(() => {
@@ -67,6 +74,28 @@ export function RegionMap({
     stage()?.setHover(hover);
     handle.current?.markDirty();
   }, [hover]);
+
+  // Lighter graphics (which the game can switch on by itself) and reduced motion reach a map
+  // that is already showing.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `stage` reads a ref
+  useEffect(() => {
+    stage()?.setMode({ still, lighter });
+    handle.current?.markDirty();
+  }, [still, lighter]);
+
+  // The readout stands beside the pointer, whole inside the chamber (measured before it shows).
+  useLayoutEffect(() => {
+    const el = box.current;
+    const chamber = view.current;
+    if (!el || !chamber || !three || !at) return;
+    const spot = readoutSpot(
+      at,
+      { w: chamber.clientWidth, h: chamber.clientHeight },
+      { w: el.offsetWidth, h: el.offsetHeight },
+    );
+    el.style.left = `${spot.left}px`;
+    el.style.top = `${spot.top}px`;
+  });
 
   // The wheel zooms only a map the player has picked, so scrolling the page past it changes nothing.
   useEffect(() => {
@@ -86,47 +115,49 @@ export function RegionMap({
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-  /** The region under the pointer in the 3D view, and where the pointer is in it. */
+  /**
+   * The region under the pointer in the 3D view (picked on the drawn map, which may sit inside
+   * the chamber's frame), and where the pointer is in the chamber.
+   */
   const under = (e: MouseEvent<HTMLDivElement>) => {
     const s = stage();
-    const el = view.current;
-    if (!s || !el) return { region: null, x: 0, y: 0 };
-    const r = el.getBoundingClientRect();
-    const x = e.clientX - r.left;
-    const y = e.clientY - r.top;
-    const nx = r.width > 0 ? (x / r.width) * 2 - 1 : 0;
-    const ny = r.height > 0 ? -((y / r.height) * 2 - 1) : 0;
-    return { region: s.pick(nx, ny), x, y };
+    const chamber = view.current;
+    const map = drawn();
+    if (!s || !chamber || !map) return { region: null, x: 0, y: 0 };
+    const c = chamber.getBoundingClientRect();
+    const r = map.getBoundingClientRect();
+    const nx = r.width > 0 ? ((e.clientX - r.left) / r.width) * 2 - 1 : 0;
+    const ny = r.height > 0 ? -(((e.clientY - r.top) / r.height) * 2 - 1) : 0;
+    return { region: s.pick(nx, ny), x: e.clientX - c.left, y: e.clientY - c.top };
   };
 
   /** A key's region lights, its readout over the region. */
   const showKey = (region: RegionId) => {
     setHover(region);
     const s = stage();
-    const el = view.current;
-    if (!s || !el) {
+    const chamber = view.current;
+    const map = drawn();
+    if (!s || !chamber || !map) {
       setAt(null);
       return;
     }
     const p = s.anchor(region).project(s.camera);
-    const r = el.getBoundingClientRect();
-    setAt({ x: ((p.x + 1) / 2) * r.width, y: ((1 - p.y) / 2) * r.height });
+    const c = chamber.getBoundingClientRect();
+    const r = map.getBoundingClientRect();
+    setAt({
+      x: r.left - c.left + ((p.x + 1) / 2) * r.width,
+      y: r.top - c.top + ((1 - p.y) / 2) * r.height,
+    });
   };
   const hide = () => {
     setHover(null);
     setAt(null);
   };
 
+  // In 3D the readout is placed by the layout effect above; the tile map places it by its tiles.
   let place: CSSProperties | null = null;
-  if (hover && three && at) {
-    const w = view.current?.clientWidth ?? 0;
-    const h = view.current?.clientHeight ?? 0;
-    place = {
-      left: at.x + 14,
-      top: at.y + 14,
-      transform: `translate(${at.x > w - 240 ? "calc(-100% - 28px)" : "0"}, ${at.y > h - 110 ? "calc(-100% - 28px)" : "0"})`,
-    };
-  } else if (hover) {
+  if (hover && three && at) place = {};
+  else if (hover && !three) {
     const c = REGION_CENTERS[hover];
     place = {
       left: `${((c.x + 0.3) / 12.6) * 100}%`,
@@ -163,12 +194,7 @@ export function RegionMap({
         }}
       >
         <View3D
-          make={() =>
-            makeMapStage(first.current.look, {
-              still: first.current.still,
-              lighter: first.current.lighter,
-            })
-          }
+          make={() => makeMapStage(first.current, mode.current)}
           label={label}
           className="block h-full w-full"
           onReady={(h) => {
@@ -189,7 +215,7 @@ export function RegionMap({
           }
         />
         {hover && readout && place && (
-          <div className="display region-map__readout" style={place}>
+          <div ref={box} className="display region-map__readout" style={place}>
             <p className="m-0 mb-1 font-semibold">{REGION_NAMES[hover]}</p>
             {readout(hover)}
           </div>

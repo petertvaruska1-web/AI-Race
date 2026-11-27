@@ -21,7 +21,9 @@ describe("who leads each region (the map's tops, the same for everybody)", () =>
     const view = viewOf(s);
     for (const r of REGION_IDS) {
       const lead = [...view.companies].sort(
-        (a, b) => b.customersByRegion[r] - a.customersByRegion[r] || a.id.localeCompare(b.id),
+        (a, b) =>
+          b.customersByRegion[r] - a.customersByRegion[r] ||
+          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
       )[0];
       expect(tops[r].leaderId, r).toBe(lead && lead.customersByRegion[r] > 0 ? lead.id : null);
       if (lead && tops[r].leaderId)
@@ -31,6 +33,18 @@ describe("who leads each region (the map's tops, the same for everybody)", () =>
     expect(led.length).toBeGreaterThan(0);
     expect(Math.max(...led)).toBe(1);
     expect(Math.min(...led)).toBeGreaterThanOrEqual(0.25);
+  });
+
+  it("breaks a tie the same way for every player, whatever their language", () => {
+    const view = viewOf(launchedWorld());
+    const [first, ...rest] = view.companies;
+    if (!first) throw new Error("no company");
+    const twin = { ...first, id: "B-twin", palette: { primary: "#ff9f1c", secondary: "#4f8cff" } };
+    view.companies = [{ ...first, id: "a-first" }, twin, ...rest];
+    const tied = REGION_IDS.filter((r) => first.customersByRegion[r] > 0);
+    expect(tied.length).toBeGreaterThan(0);
+    // By character code, "B" comes before "a" in every language; by most languages' rules it doesn't.
+    for (const r of tied) expect(leaderTops(view)[r].leaderId, r).toBe("B-twin");
   });
 
   it("lifts a very dark leader's color so its top shows in the dark map", () => {

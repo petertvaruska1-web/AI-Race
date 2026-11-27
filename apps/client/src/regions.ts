@@ -47,7 +47,9 @@ export function leaderTops(view: WorldView): Record<RegionId, RegionTop> {
   for (const r of REGION_IDS) {
     const people = view.world.market.regions[r].adoptable;
     const top = [...view.companies].sort(
-      (a, b) => b.customersByRegion[r] - a.customersByRegion[r] || a.id.localeCompare(b.id),
+      // Ties go by character code, not by the player's language, so everybody sees one leader.
+      (a, b) =>
+        b.customersByRegion[r] - a.customersByRegion[r] || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     )[0];
     const n = top?.customersByRegion[r] ?? 0;
     holders[r] =

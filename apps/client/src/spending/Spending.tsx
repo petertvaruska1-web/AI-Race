@@ -375,7 +375,7 @@ export function SponsorPanel({ view }: { view: WorldView }) {
     <Module
       label="Sponsorships"
       aria-label="Sponsorships"
-      hint="Your name on a big event: its crowd hears of you every day it runs."
+      hint="Your name on a big event, every day it runs."
       className="market-side__module"
     >
       {running.length === 0 ? (
