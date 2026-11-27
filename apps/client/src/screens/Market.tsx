@@ -11,16 +11,17 @@ import { useState } from "react";
 import { Button } from "../components/Button.tsx";
 import { Face } from "../components/Face.tsx";
 import { Panel } from "../components/Panel.tsx";
-import { RegionMap, type RegionMarks } from "../components/RegionMap.tsx";
+import { RegionMap } from "../components/RegionMap.tsx";
 import { Stat } from "../components/Stat.tsx";
 import { Toggle } from "../components/Toggle.tsx";
 import { formatCount, formatMoney } from "../format.ts";
 import { GROUPS, groupColors } from "../groups.ts";
 import { aboutPeople, caresAbout, groupCustomers, groupSatisfaction } from "../people.ts";
-import { regionCustomers, shareByRegion } from "../regions.ts";
+import { leaderTops, type RegionMarks, regionCustomers, shareByRegion } from "../regions.ts";
 import { SPONSOR_WORDS, SponsorPanel } from "../spending/Spending.tsx";
 import { useSocket } from "../store/session.ts";
 import { useWindows } from "../store/windows.ts";
+import { NEUTRAL_PALETTE } from "../theme/palette.ts";
 
 const PLAN_NAMES = { free: "Free", personal: "Personal", business: "Business" } as const;
 
@@ -76,26 +77,21 @@ function Crowd({ people, step, color }: { people: number; step: number; color: s
  * The market (game-layer design §5, national in Phase 1): who could buy, who
  * does, and why. Each group's customers show as a crowd; a card opens its group.
  */
-/** Each region's leader (most customers; ties to the lower id) and its tint by share. */
+/** Who leads each region, for the map's leaders view. */
 function leaders(view: WorldView): {
   colors: Record<RegionId, string>;
   values: Record<RegionId, number>;
 } {
-  const colors = {} as Record<RegionId, string>;
-  const shares = {} as Record<RegionId, number>;
-  for (const r of REGION_IDS) {
-    const top = [...view.companies].sort(
-      (a, b) => b.customersByRegion[r] - a.customersByRegion[r] || a.id.localeCompare(b.id),
-    )[0];
-    colors[r] = top?.palette.primary ?? "#888888";
-    const people = view.world.market.regions[r].adoptable;
-    shares[r] = top && people > 0 ? top.customersByRegion[r] / people : 0;
-  }
-  const most = Math.max(...Object.values(shares));
-  const values = Object.fromEntries(
-    REGION_IDS.map((r) => [r, most > 0 ? 0.25 + (0.75 * shares[r]) / most : 0]),
-  ) as Record<RegionId, number>;
-  return { colors, values };
+  const tops = leaderTops(view);
+  return {
+    colors: Object.fromEntries(
+      REGION_IDS.map((r) => [r, tops[r].color ?? NEUTRAL_PALETTE.primary]),
+    ) as Record<RegionId, string>,
+    values: Object.fromEntries(REGION_IDS.map((r) => [r, tops[r].height])) as Record<
+      RegionId,
+      number
+    >,
+  };
 }
 
 export function Market({ view }: { view: WorldView }) {

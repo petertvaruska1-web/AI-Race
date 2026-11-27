@@ -1,10 +1,6 @@
 import { REGION_IDS, REGION_NAMES, type RegionId } from "@airace/protocol";
 import { type ReactNode, useState } from "react";
-import { REGION_CENTERS, STATE_TILES } from "../regions.ts";
-
-export type RegionMarks = Partial<
-  Record<RegionId, { campaign?: boolean; dataCenter?: "building" | "open"; sponsor?: string }>
->;
+import { REGION_CENTERS, type RegionMarks, STATE_TILES } from "../regions.ts";
 
 const GAP = 0.12;
 

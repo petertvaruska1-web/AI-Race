@@ -1,5 +1,77 @@
 import { REGION_IDS, type RegionId, type WorldView } from "@airace/protocol";
 import { getBalance } from "@airace/sim";
+import { readableOn } from "./theme/glass.ts";
+
+/** A region's top on the map: its color (null: plain glass), its height (0..1) and whose it is. */
+export type RegionTop = { color: string | null; height: number; leaderId: string | null };
+
+/** The player's own marks on the map (R2: only their own campaigns, data centers and events). */
+export type RegionMarks = Partial<
+  Record<RegionId, { campaign?: boolean; dataCenter?: "building" | "open"; sponsor?: string }>
+>;
+
+const PLAIN: RegionTop = { color: null, height: 0, leaderId: null };
+
+type Holder = { share: number; color: string; id: string };
+
+/**
+ * Tops from each region's holder: raised 0.25..1 by its share of the region's willing people
+ * against the largest such share, in its color made readable in the map's dark display (the map
+ * sits in one on either glass, so it looks the same for everybody); plain glass where nobody is.
+ */
+function topsOf(holders: Record<RegionId, Holder | null>): Record<RegionId, RegionTop> {
+  const most = Math.max(0, ...REGION_IDS.map((r) => holders[r]?.share ?? 0));
+  return Object.fromEntries(
+    REGION_IDS.map((r) => {
+      const h = holders[r];
+      if (!h || most <= 0) return [r, { ...PLAIN }];
+      return [
+        r,
+        {
+          color: readableOn(h.color, "dark"),
+          height: 0.25 + (0.75 * h.share) / most,
+          leaderId: h.id,
+        },
+      ];
+    }),
+  ) as Record<RegionId, RegionTop>;
+}
+
+/**
+ * Who leads each region (design §8.3): the company with the most customers there (ties to the
+ * lower id), from public data only, so every player sees the same map. Nobody leads a region
+ * without customers.
+ */
+export function leaderTops(view: WorldView): Record<RegionId, RegionTop> {
+  const holders = {} as Record<RegionId, Holder | null>;
+  for (const r of REGION_IDS) {
+    const people = view.world.market.regions[r].adoptable;
+    const top = [...view.companies].sort(
+      (a, b) => b.customersByRegion[r] - a.customersByRegion[r] || a.id.localeCompare(b.id),
+    )[0];
+    const n = top?.customersByRegion[r] ?? 0;
+    holders[r] =
+      top && n > 0 && people > 0
+        ? { share: n / people, color: top.palette.primary, id: top.id }
+        : null;
+  }
+  return topsOf(holders);
+}
+
+/** One company's own regions (its window's map): plain glass where it has no customers. */
+export function companyTops(view: WorldView, companyId: string): Record<RegionId, RegionTop> {
+  const company = view.companies.find((c) => c.id === companyId);
+  const holders = {} as Record<RegionId, Holder | null>;
+  for (const r of REGION_IDS) {
+    const people = view.world.market.regions[r].adoptable;
+    const n = company?.customersByRegion[r] ?? 0;
+    holders[r] =
+      company && n > 0 && people > 0
+        ? { share: n / people, color: company.palette.primary, id: company.id }
+        : null;
+  }
+  return topsOf(holders);
+}
 
 /**
  * The 50 states and DC as tiles on a 12 x 8 grid (a tile-grid map of the US),
