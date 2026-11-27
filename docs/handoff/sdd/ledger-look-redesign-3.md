@@ -1,0 +1,63 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-11-26-look-redesign-3-map-and-market.md
+Spec: docs/superpowers/specs/2026-11-26-look-redesign-design.md (§8.0, §8.3, §7.1, §10 Market, §11); ADR docs/decisions/0011-look-redesign.md §1, §4. Executor: inline (executing-plans), as plans 1 and 2; the owner approved plan 2 ("Yes, carry on") on 2026-11-26.
+Pre-flight: T1→T3: regionShapes()/MAP_FRAME produced as T3 consumes them — consistent.
+Pre-flight: T2→T3/T4: RegionTop {color, height, leaderId} and RegionMarks (moved to regions.ts) — consistent across T3's MapLook and T4's RegionMap props.
+Pre-flight: T3→T4: makeMapStage/MapStage (pick, zoom(-1|1), setHover, resetView, view, anchor) as T4's component and its mocked stage use them; createWheel() returns -1|0|1 and T4 calls zoom only for ±1 — consistent.
+Pre-flight: T2 vs T4: T2 moves the Market to leaderTops while RegionMap still has its old props (values/colors) until T4. Ruling: in T2 the Market feeds leaderTops into the old props (heights as values, top colors as colors, plain regions in the neutral glass gray) and keeps its "Color the map by" switch until T4 removes it — the smallest step that keeps every task shippable — cost if wrong: none (T4 replaces it).
+Pre-flight: T4→T5: RegionMap and RegionReadout as T5's Market uses them — consistent.
+Task 1: note: the first full run failed one server timing test (join.test.ts, "the host away…", condition not met in time under full load); it passes alone (7/7) and is unrelated (Task 1 changed only client files); rerun.
+Task 1: complete (commits 52e3af0..1036c6f, tests: npm test →    Duration  185.47s (tests 83%, import 8%, setup 4%, environment 4%, transform 1%))
+Task 2: complete (commits 1036c6f..b1f20e0, tests: npm test →    Duration  175.63s (tests 82%, import 8%, setup 4%, environment 4%, transform 1%))
+Task 3: complete (commits b1f20e0..50d39ce, tests: npm test →    Duration  171.12s (tests 81%, import 8%, setup 5%, environment 5%, transform 1%))
+Task 4: Ruling: the map's region heights are lower than first written (plain glass 0.03, the most-led region 0.03 + 0.13 world units on a map 2 wide) — in the check game the first values read as a thick slab, not a tabletop model — cost if wrong: a number to tune.
+Task 4: Ruling: the rival and region windows' maps open a region's window on a click or key too (the old rival map had keys that did nothing) — cost if wrong: none.
+Task 4: Ruling: the readout leads with "Led by <name>" in the leader's map color as one line, so it reads (and tests) as one phrase — cost if wrong: none.
+Task 4: checked in the check game (1440×900, dark glass, a world with rivals after 60 game days): the 3D Market map (real states, Alaska and Hawaii insets, state lines, Flux Works's mint on every region), hover readout ("Great Plains, Led by Flux Works, 0 customers of yours"), drag to turn, "Reset view" (opens nothing behind it), a click opening the Great Plains window with its small map focused on the region, the Company station's small map.
+Task 4: complete (commits 50d39ce..42e3c29, tests: npm test →    Duration  172.28s (tests 82%, import 8%, setup 5%, environment 4%, transform 1%))
+Task 5: Ruling: the compact group modules show the count, the mood, the crowd and the spotlight customer (one line of bio); "Cares about" and the plans' breakdown stay in the group window, which already shows both — cost if wrong: one click to see them.
+Task 5: Ruling: a crowd's lit dots land in a fixed scattered order (i × 37 mod 120), so the display reads as a crowd, not a progress bar, and the same people stay lit — cost if wrong: none.
+Task 5: Ruling: the ads and sponsorships column takes the map's height (it adds none of its own) and its lists scroll in their displays; their push buttons sit under the lists so the hints span the module — cost if wrong: layout only.
+Task 5: checked in the check game: at 1440×900 the Market fits exactly (bench 771 of 771 px), at 1280×720 the bench scrolls 96 px (the spec allows it at 720 high) with nothing cut off sideways; dark glass (Ember).
+Task 5: complete (commits 42e3c29..3916446, tests: npm test →    Duration  173.37s (tests 82%, import 8%, setup 5%, environment 4%, transform 1%))
+Task 6: check game, step 1: a fresh light-glass world (Deep Map) shows plain glass everywhere on the dark map chamber; a rival world (Map Works, Ember, dark glass) after a first AI was trained (about a minute on the RTX 3050) and launched: 13,430 customers, lit crowd displays, a campaign ring over the Pacific and a festival pin on the Great Plains, toasts as slips; the rival window's map (Where Flux Works's customers are); lighter graphics (the game turned it on by itself in the hidden pane): a still map without state lines.
+Task 6: Ruling: the "Each dot is N people" note stands on a small metal plate — on the bare glass it was hard to read on light glass — cost if wrong: none.
+Task 6: Ruling: the campaign ring, the event pin and its flag are a little larger (ring 0.08–0.095, pin 0.1 high, flag 0.09) — at full size the pin's mark was a few pixels — cost if wrong: a number to tune.
+Task 6: note: a data center (being built and open) was not placed in the check game (it costs more than the test company had); its marks are covered by "stands the player's marks on their regions" in mapStage.test.ts.
+Task 6: npm run e2e → 3 passed (10.8m): friends Fair off, Fair on, solo (at 6c5c8e4).
+Task 6: the final reviewer (fresh opus, a87f5dd) stopped at the account's 5-hour usage limit; resumed at 18:14 after the reset.
+Task 6: the owner tried their own game (npm run dev, their worlds) and approved the map and the Market: "Looks good, carry on" (2026-11-27).
+Final review: fresh opus reviewer (a87f5dd) over 52e3af0..6c5c8e4: no Critical, 6 Important, 15 Minor; "Ready to merge: with fixes".
+Final: fixed I1 the hover readout cut off on the small maps (Company, region and rival windows) — the readout now stands beside the pointer, measured and kept whole inside the chamber (compact on small maps); readoutSpot.test.ts RED (no module) → GREEN; seen in the check game (Company map, 264×150 chamber, readout 264..479 × 457..516 inside 258..522 × 382..532).
+Final: fixed I2 the Market's side column (collapsed under 1280 wide, cramped above) — it takes its own height again, stands as a row of two under the map when narrow, each list keeps at least 66 px; measured in the check game, RED at 1200×800 (column 0 px, modules 32 px with 133 px spilling over the groups) → GREEN (row 149 px, no overlap); 1440×900 fits (771/771, 145 px per list); 1280×720 115 px per list, no spill (layout cannot be seen by the unit tests).
+Final: fixed I3 lighter graphics and reduced motion switched while a map shows — the stage's setMode and RegionMap's effect; "follows lighter graphics and stillness switched while the map is showing" and "passes lighter graphics switched on while the map shows to the 3D map" RED → GREEN; seen in the check game (state lines off, then back).
+Final: fixed I4 picking measured from the chamber's frame, not the drawn map — picks from the canvas, the chamber has no padding; "points at the region under the pointer on the drawn map, not on its frame" RED (-0.893) → GREEN (-1); check game: canvas = chamber (264×150).
+Final: fixed I5 the camera cropping the plinth and the south at low tilt — the camera fits the model's corners (bisection on distance) and slides its aim until they sit centered, remembered per canvas shape, turn and tilt; "frames the whole map, plinth and all, at every turn, tilt and canvas shape" RED (1.117 out of frame) → GREEN.
+Final: fixed I6 tests that could not fail — "frees everything it made" now spies on every geometry, material and texture the scene holds; new tests for easing and the still jump, marks taken away and kept, the runtime switch, and the picked coordinates.
+Final: re-graded Minor 1 to Important (every game day rebuilt every mark and freed its shaders, a hitch each day on the map's own station, enough to trip the automatic lighter graphics) — marks rebuild only when they change; "takes away marks that are gone, and keeps the ones that stay as they are" RED → GREEN.
+Final: re-graded Minor 2 to Important (the map's main interaction ran opposite to the core and the emblem) — the near edge follows the drag, a drag down tips toward overhead; "turns the map the way the pointer drags, and tips it toward overhead on a drag down" RED → GREEN.
+Final: re-graded Minor 5 to Important (B5: the map must look the same for everybody; locale-based ties could differ by language) — ties by character code; "breaks a tie the same way for every player, whatever their language" RED → GREEN.
+Final: Ruling: the Market's side hints are shorter ("Ads make people aware of you. Up to five at once." / "Your name on a big event, every day it runs.") so the lists keep their room — cost if wrong: copy only.
+Final: Ruling: at 1280×720 the Market's bench scrolls 98 px inside its frame (the page and the strip stay put) — spec §7.1 lets the bench area scroll at about 720 high; "holds from 1280×720" read as holds without breaking — cost if wrong: plan 6 tightens the Market at 720 high.
+Final: Ruling: View3D builds the stage before attaching it, so a renderer that fails leaves one stage unfreed — plan 1 code, ordinary memory once on a machine without working 3D, the flat stand-in shows — cost if wrong: a little memory.
+Final: Ruling: the emblem badge has no runtime still switch (plan 2) — a small badge keeps its motion after lighter graphics turns on; plan 6 gives it the map's setMode pattern — cost if wrong: a small extra drawing cost under lighter graphics.
+Final: Ruling: a double-click opens two windows — as before this plan (map and keys); Back closes the second — cost if wrong: one extra click.
+Final: Ruling: the hidden keys of small maps show no focus ring — the focused key lights its region and shows its readout, which stands in — cost if wrong: keyboard players see the region lit, not a ring.
+Final: Ruling: no keyboard turning, tilting or zooming — §8.3 asks for real region keys, which every region has; the shared view is the same for everybody — cost if wrong: keyboard players keep the shared view.
+Final: Ruling: height is measured against the most-led region — the plan's formula, as on the old Market; the readout gives each region's share — cost if wrong: heights compare regions, not absolute shares.
+Final: Ruling: clicking a mark picks the region under it — a mark stands on its own region, so the right region opens — cost if wrong: none.
+Final: Ruling: every bench child rises in on arrival — plan 1's frame; plan 6's generic-design hunt reviews the motion — cost if wrong: a stock entrance until plan 6.
+Final: Ruling: a lost 3D context (a graphics driver reset) is not handled — the 3D objects stay blank until a reload; noted for plan 6 — cost if wrong: a reload after a driver reset.
+Final: minor (deferred): the wheel zoom is hard to discover — nothing shows that the map is picked (a hint plate or lamp while it holds focus); plan 6.
+Final: minor (deferred): zoom goes to the centre and there is no pan, so at 1.8 the north and south can't be reached; plan 6.
+Final: minor (deferred): the flat stand-in's readout is placed by the full chamber width (letterboxed tile map) and shows the grab cursor; plan 6.
+Final: minor (deferred): dead code (shareByRegion, MAP_FRAME) and the plan's crowdDots() helper left inline; plan 6.
+Final: minor (deferred): declare topojson-specification (geometry.ts's types) as a dev dependency; plan 6.
+Final: minor (deferred): the region window's map opens a second window of its own region; plan 6.
+Final: minor (deferred): lit tops go through tone mapping (a saturated leader shifts against its lamp), and a near-black leader's lifted grey sits close to plain glass; plan 6.
+Final: minor (deferred): the browser menu may show after a right-drag that ends outside the map (check in Edge); plan 6.
+Final: minor (deferred): speed: each mount re-triangulates the regions, pick tests the state lines, RegionReadout recomputes leaderTops on every pointer move; plan 6.
+Final: minor (deferred): the readout stays up during a drag (clear the hover on pointer-down); plan 6.
+Final: minor (deferred): the readout is visual only (screen readers hear "Open Pacific"); plan 6.
+Final: minor (deferred): windows open from the chamber's centre, not the clicked region (C30); plan 6.
+Final: suite npm test 968/968 (125 files), npm run check clean, after the fix pass (commit 88875ae).
+Task 6: complete (commits 3916446..88875ae, tests: npm test →    Duration  173.81s (tests 81%, import 8%, setup 5%, environment 5%, transform 1%))
