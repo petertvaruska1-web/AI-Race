@@ -9,7 +9,7 @@ import { useSession } from "../src/store/session.ts";
 import { useWindows } from "../src/store/windows.ts";
 import { WindowHost } from "../src/windows/WindowHost.tsx";
 import { liveGame } from "./mockSocket.ts";
-import { launchedWorld, SCORES, ticks, trainedWorld, viewOf } from "./views.ts";
+import { launchedWorld, runningWorld, SCORES, ticks, trainedWorld, viewOf } from "./views.ts";
 
 let game: Awaited<ReturnType<typeof liveGame>>;
 
@@ -66,18 +66,55 @@ describe("money screen", () => {
     expect(change?.className).toContain(up ? "text-danger" : "text-good");
   });
 
-  it("sets a price within its bounds and refuses one outside them", async () => {
+  it("sets a price with its knob, within its bounds", async () => {
     render(<Money view={viewOf(launchedWorld())} />);
-    const price = screen.getByLabelText("Personal price");
-    const set = screen.getByRole("button", { name: "Set the personal price" });
-    fireEvent.change(price, { target: { value: "500" } });
-    fireEvent.click(set);
-    expect(screen.getByRole("alert").textContent).toMatch(/\$1–\$200/);
-    expect(commands()).toHaveLength(0);
-    fireEvent.change(price, { target: { value: "15" } });
-    fireEvent.click(set);
+    const knob = screen.getByRole("slider", { name: "Personal price" });
+    const before = Number(knob.getAttribute("aria-valuenow"));
+    fireEvent.keyDown(knob, { key: "ArrowUp" });
+    fireEvent.click(screen.getByRole("button", { name: "Set the personal price" }));
     await waitFor(() => expect(commands()).toHaveLength(1));
-    expect(commands()[0]?.cmd).toEqual({ type: "setPrice", plan: "personal", price: 15 });
+    expect(commands()[0]?.cmd).toEqual({ type: "setPrice", plan: "personal", price: before + 1 });
+    fireEvent.keyDown(knob, { key: "End" });
+    expect(knob.getAttribute("aria-valuenow")).toBe("200");
+    fireEvent.keyDown(knob, { key: "ArrowUp" });
+    expect(knob.getAttribute("aria-valuenow")).toBe("200");
+  });
+
+  it("picks each plan's AI on keys, Closed among them", async () => {
+    render(<Money view={viewOf(launchedWorld())} />);
+    const keys = screen.getByRole("group", { name: "AI for the business plan" });
+    await userEvent.click(within(keys).getByRole("radio", { name: "Spark" }));
+    await waitFor(() => expect(commands()).toHaveLength(1));
+    expect(commands()[0]?.cmd).toMatchObject({ type: "setPlan", plan: "business" });
+    expect(within(keys).getByRole("radio", { name: "Closed" })).toBeTruthy();
+  });
+
+  it("shows a new company's Money bench with every module and its empty states", () => {
+    render(<Money view={viewOf(runningWorld())} />);
+    for (const name of ["Coming in", "Going out", "Report cards", "Computers", "Investment fund"])
+      expect(screen.getByRole("region", { name })).toBeTruthy();
+    for (const name of ["Profit by month", "Your AIs on sale", "Plans and prices"])
+      expect(screen.getByRole("heading", { name })).toBeTruthy();
+    expect(screen.getByText("Nothing on sale yet. Launch an AI to get customers.")).toBeTruthy();
+    expect(
+      screen.getByText("Your first report card comes at the end of the month after you launch."),
+    ).toBeTruthy();
+  });
+
+  it("racks a year of report cards inside their own display", () => {
+    const view = viewOf(ticks(launchedWorld(), 70));
+    const company = view.me.company;
+    const first = company?.reports[0];
+    if (!company || !first) throw new Error("no report card");
+    company.reports = Array.from({ length: 12 }, (_, i) => ({
+      ...first,
+      month: `2028-${String(i + 1).padStart(2, "0")}`,
+    }));
+    render(<Money view={view} />);
+    const rack = screen.getByRole("region", { name: "Report cards, newest first" });
+    expect(rack.className).toContain("display--scroll");
+    expect(within(rack).getAllByRole("button")).toHaveLength(12);
+    expect(within(rack).getByRole("button", { name: `${monthName("2028-12")}: ${first.grade}` }));
   });
 
   it("shows the server's reason when an AI that powers a plan is retired", async () => {
@@ -117,7 +154,7 @@ describe("money screen clicks", () => {
     for (const [button, dialog] of [
       ["Open Serving customers", "Serving customers"],
       ["Open Personal plans", "Personal plans"],
-      ["Open money", "Money"],
+      ["Cash day by day", "Money"],
     ] as const) {
       await userEvent.click(screen.getByRole("button", { name: "Close all windows" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

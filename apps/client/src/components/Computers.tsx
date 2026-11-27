@@ -35,8 +35,8 @@ function Answered({ served }: { served: number }) {
   const around = 2 * Math.PI * r;
   const color = served >= 1 ? "var(--good)" : served >= 0.9 ? "var(--brand-2)" : "var(--danger)";
   return (
-    <div className="relative h-24 w-24 shrink-0">
-      <svg viewBox="0 0 80 80" className="h-24 w-24 -rotate-90" aria-hidden="true">
+    <div className="relative h-[68px] w-[68px] shrink-0">
+      <svg viewBox="0 0 80 80" className="h-[68px] w-[68px] -rotate-90" aria-hidden="true">
         <circle cx={40} cy={40} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={7} />
         <circle
           cx={40}
@@ -51,7 +51,7 @@ function Answered({ served }: { served: number }) {
           className="gauge"
         />
       </svg>
-      <span className="absolute inset-0 grid place-items-center font-display text-xl font-bold">
+      <span className="absolute inset-0 grid place-items-center font-display text-base font-bold">
         {`${Math.round(served * 100)}%`}
       </span>
     </div>
@@ -88,9 +88,9 @@ export function Computers({ view }: { view: WorldView }) {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-5">
+      <div className="flex items-center gap-3.5">
         <Answered served={c.served} />
-        <div className="min-w-48 flex-1">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">of questions answered</p>
           <p className="text-xs text-muted">
             {c.served >= 1
@@ -113,7 +113,7 @@ export function Computers({ view }: { view: WorldView }) {
         </div>
       </div>
 
-      <label className="mt-5 block">
+      <label className="mt-3.5 block">
         <span className="flex justify-between text-sm">
           <span className="font-semibold">Share for training</span>
           <span className="tabular text-muted">{share}%</span>
@@ -137,11 +137,9 @@ export function Computers({ view }: { view: WorldView }) {
         </span>
       </label>
 
-      <div className="mt-5">
+      <div className="mt-3.5">
         <div className="mb-2 flex items-center justify-between gap-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
-            Data centers
-          </h3>
+          <h3 className="engrave">Data centers</h3>
           <Button
             variant="secondary"
             onClick={(ev) => open({ kind: "dataCenter" }, ev.currentTarget)}
@@ -152,7 +150,7 @@ export function Computers({ view }: { view: WorldView }) {
         {company.dataCenters.length === 0 ? (
           <p className="text-sm text-muted">None yet: everything runs on rented cloud.</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="computers__centers space-y-2">
             {company.dataCenters.map((d) => {
               const total = Math.max(1, d.openDay - d.startDay);
               const left = Math.max(0, d.openDay - view.world.day);

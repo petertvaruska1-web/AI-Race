@@ -49,12 +49,12 @@ export function NeedleGauge({
       aria-valuemax={max}
       aria-valuenow={measured ? Math.round(value) : undefined}
       aria-valuetext={measured ? undefined : "Not measured"}
-      className={`display gauge ${measured ? "" : "gauge--idle"}`}
+      className={`display needle-gauge ${measured ? "" : "needle-gauge--idle"}`}
       data-testid={testId}
     >
-      <svg viewBox="0 0 120 70" aria-hidden="true" className="gauge__face">
-        <path d={arc(-SWEEP, SWEEP)} className="gauge__track" />
-        {measured && v > 0 && <path d={arc(-SWEEP, angle)} className="gauge__lit" />}
+      <svg viewBox="0 0 120 70" aria-hidden="true" className="needle-gauge__face">
+        <path d={arc(-SWEEP, SWEEP)} className="needle-gauge__track" />
+        {measured && v > 0 && <path d={arc(-SWEEP, angle)} className="needle-gauge__lit" />}
         {Array.from({ length: 11 }, (_, i) => {
           const deg = -SWEEP + (2 * SWEEP * i) / 10;
           const [x0, y0] = at(deg, i % 5 === 0 ? R - 11 : R - 7);
@@ -67,24 +67,24 @@ export function NeedleGauge({
               y1={y0}
               x2={x1}
               y2={y1}
-              className={i % 5 === 0 ? "gauge__tick gauge__tick--major" : "gauge__tick"}
+              className={i % 5 === 0 ? "needle-gauge__tick needle-gauge__tick--major" : "needle-gauge__tick"}
             />
           );
         })}
         <g data-needle transform={`rotate(${angle.toFixed(2)} ${CX} ${CY})`}>
-          <line x1={CX} y1={CY + 5} x2={CX} y2={CY - R + 8} className="gauge__needle" />
+          <line x1={CX} y1={CY + 5} x2={CX} y2={CY - R + 8} className="needle-gauge__needle" />
         </g>
-        <circle cx={CX} cy={CY} r={4.5} className="gauge__hub" />
+        <circle cx={CX} cy={CY} r={4.5} className="needle-gauge__hub" />
       </svg>
-      <div className="gauge__reading">
+      <div className="needle-gauge__reading">
         {measured ? (
           <span className="dotface dotface--md">{Math.round(value)}</span>
         ) : (
-          <span className="gauge__none">Not measured</span>
+          <span className="needle-gauge__none">Not measured</span>
         )}
         {delta !== 0 && (
           <span
-            className={`gauge__change ${delta > 0 ? "gauge__change--up" : "gauge__change--down"}`}
+            className={`needle-gauge__change ${delta > 0 ? "needle-gauge__change--up" : "needle-gauge__change--down"}`}
           >
             {delta > 0 ? `+${delta}` : `−${-delta}`}
           </span>

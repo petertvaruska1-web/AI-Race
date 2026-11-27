@@ -17,13 +17,16 @@ export type BarRow = {
 export function Bars({
   rows,
   format = formatMoney,
+  bare = false,
 }: {
   rows: BarRow[];
   format?: (n: number) => string;
+  /** Rows only, for a ledger already inside a display. */
+  bare?: boolean;
 }) {
   const top = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
   return (
-    <ul className="display ledger">
+    <ul className={`${bare ? "" : "display "}ledger`}>
       {rows.map((r) => (
         <li key={r.label} className={`ledger__row ${r.onOpen ? "ledger__row--key" : ""}`}>
           <span className="ledger__label">{r.label}</span>

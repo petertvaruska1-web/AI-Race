@@ -2191,40 +2191,40 @@
   }
 
   /* A needle gauge in its dark dial. */
-  .gauge {
+  .needle-gauge {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 2px;
     padding: 8px 10px 10px;
   }
-  .gauge__face {
+  .needle-gauge__face {
     display: block;
     width: 100%;
     max-width: 170px;
   }
-  .gauge__track {
+  .needle-gauge__track {
     fill: none;
     stroke: rgb(255 255 255 / 0.08);
     stroke-width: 5;
     stroke-linecap: round;
   }
-  .gauge__lit {
+  .needle-gauge__lit {
     fill: none;
     stroke: var(--lamp);
     stroke-width: 5;
     stroke-linecap: round;
     filter: drop-shadow(0 0 3px var(--lamp));
   }
-  .gauge__tick {
+  .needle-gauge__tick {
     stroke: rgb(231 237 244 / 0.28);
     stroke-width: 1;
   }
-  .gauge__tick--major {
+  .needle-gauge__tick--major {
     stroke: rgb(231 237 244 / 0.55);
     stroke-width: 1.6;
   }
-  .gauge__needle {
+  .needle-gauge__needle {
     stroke: #f4f6f8;
     stroke-width: 2.2;
     stroke-linecap: round;
@@ -2233,35 +2233,35 @@
   [data-needle] {
     transition: transform 700ms cubic-bezier(0.3, 1.35, 0.5, 1);
   }
-  .gauge--idle .gauge__needle {
+  .needle-gauge--idle .needle-gauge__needle {
     stroke: rgb(231 237 244 / 0.35);
     filter: none;
   }
-  .gauge__hub {
+  .needle-gauge__hub {
     fill: #2a2e35;
     stroke: #6b717b;
     stroke-width: 1;
   }
-  .gauge__reading {
+  .needle-gauge__reading {
     display: flex;
     align-items: baseline;
     gap: 8px;
     min-height: 26px;
   }
-  .gauge__none {
+  .needle-gauge__none {
     font-size: 12.5px;
     color: var(--display-ink-2);
   }
-  .gauge__change {
+  .needle-gauge__change {
     font-family: var(--font-dot);
     font-size: 13px;
     font-weight: 800;
   }
-  .gauge__change--up {
+  .needle-gauge__change--up {
     color: #4ade80;
     text-shadow: 0 0 8px rgb(74 222 128 / 0.6);
   }
-  .gauge__change--down {
+  .needle-gauge__change--down {
     color: #ff6b6b;
     text-shadow: 0 0 8px rgb(255 107 107 / 0.6);
   }
@@ -2332,5 +2332,234 @@
     font-weight: 700;
     letter-spacing: 0.04em;
     color: #4b4a45;
+  }
+
+  /* Every station's bench fills the frame's height (and scrolls inside it when the window is short). */
+  .station-bench__inner {
+    height: 100%;
+  }
+
+  /* The Money station (design §10): Coming in, Going out and the months above; what is on sale,
+     the plans and prices, the computers and the fund below. Fits 1440 × 900. */
+  .money-bench {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 14px;
+    height: 100%;
+    min-height: 700px;
+  }
+  .money-bench {
+    position: relative;
+  }
+  /* A refused command's reason, on a plate over the bench's foot until the next command. */
+  .money-bench__alert {
+    position: absolute;
+    left: 50%;
+    bottom: 10px;
+    z-index: 3;
+    max-width: 560px;
+    margin: 0;
+    padding: 10px 14px;
+    font-size: 13px;
+    transform: translateX(-50%);
+  }
+  .money-col {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+    min-height: 0;
+  }
+  /* Only the modules whose lists scroll give way; the rest keep their height, so a short window
+     scrolls the bench inside the frame rather than spill a module. */
+  .money-col > .money-fill {
+    min-height: 0;
+  }
+  .money-fill {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+  }
+  .money-ledger {
+    flex: 1 1 0;
+    min-height: 90px;
+    margin-top: 10px;
+    padding: 6px 4px;
+  }
+  .money-ledger > .ledger {
+    padding: 0 4px;
+  }
+  .money-ledger__head {
+    margin: 8px 10px 2px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--display-ink-2);
+  }
+  .money-ledger__head:first-child {
+    margin-top: 4px;
+  }
+  .money-note {
+    margin: 10px 0 0;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--ink-2);
+  }
+  .money-months {
+    margin-top: 10px;
+    padding: 10px 10px 6px;
+  }
+  /* Up to a year of months in a narrow display: thin columns, short names. */
+  .money-months fieldset,
+  .money-months [role="img"] {
+    gap: 3px;
+  }
+  .money-months fieldset > *,
+  .money-months [role="img"] > * {
+    min-width: 0;
+  }
+  .money-months fieldset .text-\[11px\],
+  .money-months [role="img"] .text-\[11px\] {
+    font-size: 10px;
+  }
+  .money-months .bar-up,
+  .money-months .bar-down {
+    box-shadow: 0 0 8px currentColor;
+  }
+  .money-rack {
+    max-height: 196px;
+    margin-top: 10px;
+    padding: 10px;
+  }
+  .money-rack > ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .money-products {
+    flex: 1 1 0;
+    min-height: 52px;
+    max-height: 150px;
+    margin-top: 10px;
+    padding: 6px 8px;
+  }
+  /* Data centers: a list that scrolls in place once there are several. */
+  .computers__centers {
+    max-height: 124px;
+    margin: 0;
+    padding: 0 2px 0 0;
+    overflow-y: auto;
+    list-style: none;
+    scrollbar-width: thin;
+  }
+  .money-products > ul {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .product-plate {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 6px 6px 8px;
+    border-radius: 4px;
+  }
+  .product-plate--retired {
+    opacity: 0.5;
+  }
+  .product-plate__open {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    text-align: left;
+    border-radius: 4px;
+  }
+  .product-plate__open:hover .product-plate__name {
+    color: var(--lamp);
+  }
+  .product-plate__open:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 2px;
+  }
+  .product-plate__name {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--display-ink);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .product-plate__meta {
+    font-size: 11.5px;
+    color: var(--display-ink-2);
+  }
+  .plan-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 6px;
+  }
+  .plan-row {
+    display: grid;
+    grid-template-columns: 66px minmax(0, 1fr);
+    align-items: center;
+    gap: 5px 10px;
+  }
+  .plan-row__what {
+    grid-column: 2;
+    margin: 0;
+    font-size: 11.5px;
+    line-height: 1.3;
+    color: var(--ink-2);
+  }
+  .plan-row__price {
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+  }
+  .plan-row__price .knob {
+    flex-direction: row;
+    gap: 8px;
+  }
+  .plan-row__per {
+    font-size: 11px;
+    line-height: 1.25;
+    color: var(--ink-2);
+  }
+  .keyrow--names .keycap {
+    text-transform: none;
+    letter-spacing: 0.01em;
+  }
+  @media (max-width: 1279px) {
+    .money-bench {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: none;
+      height: auto;
+      min-height: 0;
+    }
+    /* Stacked, every module takes its own height; the ledgers keep a fixed one and scroll. */
+    .money-col > .money-fill {
+      min-height: auto;
+    }
+    .money-fill,
+    .money-rack,
+    .money-products {
+      flex: none;
+    }
+    .money-ledger {
+      flex: none;
+      height: 300px;
+    }
   }
 }
