@@ -67,7 +67,9 @@ export function NeedleGauge({
               y1={y0}
               x2={x1}
               y2={y1}
-              className={i % 5 === 0 ? "needle-gauge__tick needle-gauge__tick--major" : "needle-gauge__tick"}
+              className={
+                i % 5 === 0 ? "needle-gauge__tick needle-gauge__tick--major" : "needle-gauge__tick"
+              }
             />
           );
         })}
