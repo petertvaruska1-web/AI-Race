@@ -16,6 +16,7 @@ import { RotarySelector } from "../src/bench/RotarySelector.tsx";
 import { Slider } from "../src/bench/Slider.tsx";
 import { ToggleSwitch } from "../src/bench/ToggleSwitch.tsx";
 import { Trace } from "../src/bench/Trace.tsx";
+import { createWheel } from "../src/bench/wheel.ts";
 import { Panel } from "../src/components/Panel.tsx";
 import { Stat } from "../src/components/Stat.tsx";
 
@@ -185,6 +186,13 @@ describe("controls for setting things", () => {
     dial.focus();
     dial.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true }));
     expect(onChange).toHaveBeenLastCalledWith(109);
+  });
+
+  it("counts one notch per mouse-wheel event and sums a trackpad's small steps", () => {
+    const notch = createWheel();
+    expect(notch(new WheelEvent("wheel", { deltaY: -100 }))).toBe(1);
+    expect(notch(new WheelEvent("wheel", { deltaY: 20 }))).toBe(0);
+    expect(notch(new WheelEvent("wheel", { deltaY: 40 }))).toBe(-1);
   });
 
   it("slides a slider", () => {

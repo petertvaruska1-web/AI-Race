@@ -1700,4 +1700,118 @@
       overflow: visible;
     }
   }
+  /* The US map (design §8.3): the dark chamber it stands in, its readout, its reset key and the
+     region keys. */
+  .region-map {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .region-map__view {
+    position: relative;
+    min-height: 300px;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 8px;
+    cursor: grab;
+    outline: none;
+  }
+  .region-map__view:active {
+    cursor: grabbing;
+  }
+  .region-map__view::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(70% 60% at 50% 55%, rgb(var(--lamp-rgb) / 0.12), transparent 70%);
+  }
+  .region-map__view:focus-visible {
+    box-shadow:
+      inset 0 2px 12px rgb(0 0 0 / 0.9),
+      0 0 0 2px var(--lamp);
+  }
+  .region-map__view--small {
+    min-height: 150px;
+    height: 150px;
+  }
+  .region-map__readout {
+    position: absolute;
+    z-index: 2;
+    min-width: 190px;
+    max-width: 260px;
+    padding: 8px 10px;
+    font-size: 12.5px;
+    line-height: 1.35;
+    pointer-events: none;
+    box-shadow:
+      0 10px 24px -8px rgb(0 0 0 / 0.8),
+      inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  }
+  .region-map__reset {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    height: 30px;
+    padding: 0 12px;
+    font-size: 11.5px;
+  }
+  .region-map__view--small .region-map__reset {
+    top: 6px;
+    right: 6px;
+    height: 24px;
+    padding: 0 8px;
+    font-size: 10.5px;
+  }
+  .region-keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .region-key {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 28px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 5px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #c3cad3;
+    background: linear-gradient(180deg, #43474f, #26292e);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      0 2px 0 #0f1013;
+    cursor: pointer;
+  }
+  .region-key:hover,
+  .region-key--on {
+    color: #fff;
+  }
+  .region-key:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1);
+  }
+  .region-key:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 2px;
+  }
+  .region-key__lamp {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #2a2d33;
+    box-shadow: 0 0 6px rgb(0 0 0 / 0.4);
+  }
 }

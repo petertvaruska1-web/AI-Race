@@ -8,6 +8,7 @@ import { STATE_TILES } from "../src/regions.ts";
 import { Market } from "../src/screens/Market.tsx";
 import { useSession } from "../src/store/session.ts";
 import { useWindows } from "../src/store/windows.ts";
+import { readableOn } from "../src/theme/glass.ts";
 import { WindowHost } from "../src/windows/WindowHost.tsx";
 import { liveGame } from "./mockSocket.ts";
 import { rivalWorld, ticks, viewOf } from "./views.ts";
@@ -22,17 +23,20 @@ const news = (id: string, companyId: string, topic: NewsView["topic"], headline:
   ({ kind: "news", id, day: 30, companyId, sentiment: 0, topic, headline }) as NewsView;
 
 describe("the map's leaders", () => {
-  it("tints each region in the color of the company with the most customers there", async () => {
+  it("tints each region in the color of the company with the most customers there", () => {
     const view = viewOf(ticks(rivalWorld(), 30));
     render(<Market view={view} />);
-    await userEvent.click(screen.getByRole("radio", { name: "Leaders" }));
+    expect(screen.queryByRole("radio", { name: "Leaders" })).toBeNull();
     for (const region of REGION_IDS) {
       const leader = [...view.companies].sort(
-        (a, b) => b.customersByRegion[region] - a.customersByRegion[region],
+        (a, b) =>
+          b.customersByRegion[region] - a.customersByRegion[region] || a.id.localeCompare(b.id),
       )[0];
       const state = STATE_TILES.find((t) => t.region === region)?.state;
       const tile = document.querySelector(`[data-state="${state}"]`);
-      expect(tile?.getAttribute("fill"), region).toBe(leader?.palette.primary);
+      if (leader && leader.customersByRegion[region] > 0)
+        expect(tile?.getAttribute("fill"), region).toBe(readableOn(leader.palette.primary, "dark"));
+      else expect(tile?.getAttribute("data-plain"), region).toBe("true");
     }
   });
 });

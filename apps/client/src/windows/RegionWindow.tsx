@@ -3,13 +3,17 @@ import { getBalance } from "@airace/sim";
 import { Bars } from "../components/Bars.tsx";
 import { Button } from "../components/Button.tsx";
 import { DayChart } from "../components/charts/DayChart.tsx";
+import { RegionMap } from "../components/RegionMap.tsx";
+import { RegionReadout } from "../components/RegionReadout.tsx";
 import { Stat } from "../components/Stat.tsx";
 import { dayLabel, formatCount, formatMoney } from "../format.ts";
 import { GROUPS, groupColors } from "../groups.ts";
 import { daysOf } from "../history.ts";
 import { aboutPeople } from "../people.ts";
-import { closenessWords, regionCustomers } from "../regions.ts";
+import { closenessWords, leaderTops, regionCustomers } from "../regions.ts";
+import { regionMarks } from "../screens/Market.tsx";
 import { useWindows } from "../store/windows.ts";
+import { lampColor } from "../theme/glass.ts";
 import { GoneWindow, Section, WindowFrame, type WindowProps } from "./WindowFrame.tsx";
 
 /** One region: its people, your customers there by group, its revenue, speed and plans. */
@@ -61,6 +65,18 @@ export function RegionWindow({ entry, view, region }: WindowProps & { region: Re
         />
         {closenessWords(view, region)}
       </p>
+      <div className="mt-4">
+        <RegionMap
+          small
+          label={`${REGION_NAMES[region]} on the map`}
+          tops={leaderTops(view)}
+          marks={regionMarks(view)}
+          focus={region}
+          markColor={lampColor(pub.palette)}
+          onOpen={(r, el) => open({ kind: "region", region: r }, el)}
+          readout={(r) => <RegionReadout view={view} region={r} />}
+        />
+      </div>
       <div className="mt-5">
         <DayChart
           label={`Customers in ${REGION_PLACES[region]} by day`}

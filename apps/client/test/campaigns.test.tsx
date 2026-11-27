@@ -87,7 +87,7 @@ describe("ad campaigns on screen", () => {
 
   it("open from a region's window, aimed at that region", async () => {
     market();
-    const map = screen.getByRole("group", { name: "Your customers by region" });
+    const map = screen.getByRole("group", { name: "Who leads each region" });
     await userEvent.click(within(map).getByRole("button", { name: "Open Mountain West" }));
     const region = await screen.findByRole("dialog", { name: "Mountain West" });
     await userEvent.click(within(region).getByRole("button", { name: "Advertise here" }));

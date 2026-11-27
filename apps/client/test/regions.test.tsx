@@ -1,10 +1,11 @@
-import { GROUP_IDS, REGION_IDS, REGION_NAMES } from "@airace/protocol";
+import { GROUP_IDS, REGION_IDS, REGION_NAMES, type RegionId } from "@airace/protocol";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RegionMap } from "../src/components/RegionMap.tsx";
+import { RegionReadout } from "../src/components/RegionReadout.tsx";
 import { formatCount, formatMoney } from "../src/format.ts";
-import { STATE_TILES } from "../src/regions.ts";
+import { leaderTops, type RegionTop, regionCustomers, STATE_TILES } from "../src/regions.ts";
 import { Company } from "../src/screens/Company.tsx";
 import { Market } from "../src/screens/Market.tsx";
 import { useSession } from "../src/store/session.ts";
@@ -18,8 +19,9 @@ beforeEach(async () => {
   useWindows.getState().closeAll();
 });
 
-const flat = (v: number) =>
-  Object.fromEntries(REGION_IDS.map((r) => [r, v])) as Record<(typeof REGION_IDS)[number], number>;
+const PLAIN = Object.fromEntries(
+  REGION_IDS.map((r) => [r, { color: null, height: 0, leaderId: null }]),
+) as Record<RegionId, RegionTop>;
 
 describe("region map", () => {
   it("lays out the 50 states and DC as tiles, each in one of the nine regions", () => {
@@ -31,24 +33,49 @@ describe("region map", () => {
     expect(STATE_TILES.find((t) => t.state === "TX")?.region).toBe("southCentral");
   });
 
-  it("tints each region by its value and opens a region from its button", async () => {
-    const onOpen = vi.fn();
+  it("draws each region in its top's color and height, plain glass where nobody leads", () => {
+    const tops = { ...PLAIN, pacific: { color: "#ff9f1c", height: 1, leaderId: "c1" } };
     const { container } = render(
-      <RegionMap
-        label="Your customers by region"
-        values={{ ...flat(0), pacific: 1 }}
-        color="#4f8cff"
-        onOpen={onOpen}
-      />,
+      <RegionMap label="Who leads each region" tops={tops} markColor="#ff9f1c" />,
     );
     const tile = (state: string) => container.querySelector(`[data-state="${state}"]`);
+    expect(tile("CA")?.getAttribute("fill")).toBe("#ff9f1c");
+    expect(tile("CA")?.getAttribute("data-plain")).toBeNull();
+    expect(tile("NY")?.getAttribute("data-plain")).toBe("true");
     expect(Number(tile("CA")?.getAttribute("fill-opacity"))).toBeGreaterThan(
       Number(tile("NY")?.getAttribute("fill-opacity")),
     );
-    const buttons = screen.getAllByRole("button", { name: /^Open / });
-    expect(buttons).toHaveLength(9);
+    expect(screen.getAllByRole("button", { name: /^Open / })).toHaveLength(9);
+  });
+
+  it("opens a region from its key", async () => {
+    const onOpen = vi.fn();
+    render(
+      <RegionMap label="Who leads each region" tops={PLAIN} markColor="#4f8cff" onOpen={onOpen} />,
+    );
     await userEvent.click(screen.getByRole("button", { name: "Open Pacific" }));
     expect(onOpen).toHaveBeenCalledWith("pacific", expect.anything());
+  });
+
+  it("lights a region and shows its readout while its key has focus", async () => {
+    render(
+      <RegionMap
+        label="Who leads each region"
+        tops={PLAIN}
+        markColor="#4f8cff"
+        readout={(r) => <p>{`readout ${r}`}</p>}
+      />,
+    );
+    screen.getByRole("button", { name: "Open Pacific" }).focus();
+    expect(await screen.findByText("readout pacific")).toBeTruthy();
+  });
+
+  it("says who leads a region and what you have there", () => {
+    const view = viewOf(launchedWorld());
+    render(<RegionReadout view={view} region="pacific" />);
+    const lead = view.companies.find((c) => c.id === leaderTops(view).pacific.leaderId);
+    expect(screen.getByText(lead ? `Led by ${lead.name}` : "Nobody leads it yet")).toBeTruthy();
+    expect(screen.getByText(formatCount(regionCustomers(view, "pacific")))).toBeTruthy();
   });
 });
 
@@ -62,7 +89,7 @@ describe("region window", () => {
         <WindowHost view={view} />
       </>,
     );
-    const map = screen.getByRole("group", { name: "Your customers by region" });
+    const map = screen.getByRole("group", { name: "Who leads each region" });
     await userEvent.click(within(map).getByRole("button", { name: "Open Pacific" }));
     const w = await screen.findByRole("dialog", { name: REGION_NAMES.pacific });
     const byGroup = company?.customers.byRegion.pacific;
@@ -83,7 +110,7 @@ describe("region window", () => {
         <WindowHost view={view} />
       </>,
     );
-    const map = screen.getByRole("group", { name: "Customers by region" });
+    const map = screen.getByRole("group", { name: "Who leads each region" });
     await userEvent.click(within(map).getByRole("button", { name: "Open New England" }));
     expect(await screen.findByRole("dialog", { name: "New England" })).toBeTruthy();
   });

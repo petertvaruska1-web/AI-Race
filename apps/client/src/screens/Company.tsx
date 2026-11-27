@@ -12,6 +12,7 @@ import { FloatDelta } from "../components/FloatDelta.tsx";
 import { Logo } from "../components/Logo.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { RegionMap } from "../components/RegionMap.tsx";
+import { RegionReadout } from "../components/RegionReadout.tsx";
 import { Stat } from "../components/Stat.tsx";
 import { monthProfit } from "../components/TopBar.tsx";
 import { Core } from "../core/Core.tsx";
@@ -20,7 +21,7 @@ import { GROUPS, groupColors } from "../groups.ts";
 import { daysOf } from "../history.ts";
 import { profitOf, total } from "../money.ts";
 import { arrivalsFrom } from "../orb/params.ts";
-import { regionCustomers, shareByRegion } from "../regions.ts";
+import { leaderTops } from "../regions.ts";
 import { go } from "../route.ts";
 import { LicensesPanel } from "../spending/Licensing.tsx";
 import { AppsPanel, OrbFrame } from "../spending/Spending.tsx";
@@ -28,7 +29,7 @@ import { TeamPanel } from "../spending/Team.tsx";
 import { useWindows } from "../store/windows.ts";
 import { GoalProgress } from "../surprises/Goals.tsx";
 import { TrophyShelf } from "../surprises/Trophies.tsx";
-import { useReadable } from "../theme/glass.ts";
+import { lampColor, useReadable } from "../theme/glass.ts";
 import { gradeColor } from "../windows/ReportWindow.tsx";
 import { LaunchDialog, launchBlocked } from "./LaunchDialog.tsx";
 import { regionMarks } from "./Market.tsx";
@@ -91,24 +92,17 @@ export function Company({ view }: { view: WorldView }) {
             />
           </div>
           <GroupBar groups={byGroup} palette={pub.palette} />
-          <Display className="mt-3 px-2 py-2">
+          <div className="mt-3">
             <RegionMap
               small
-              label="Customers by region"
-              values={shareByRegion(view)}
-              color={pub.palette.primary}
+              label="Who leads each region"
+              tops={leaderTops(view)}
               marks={regionMarks(view)}
+              markColor={lampColor(pub.palette)}
               onOpen={(region, el) => open({ kind: "region", region }, el)}
-              readout={(r) => (
-                <p className="text-muted">
-                  <span className="tabular font-semibold text-text">
-                    {formatCount(regionCustomers(view, r))}
-                  </span>{" "}
-                  customers
-                </p>
-              )}
+              readout={(r) => <RegionReadout view={view} region={r} />}
             />
-          </Display>
+          </div>
         </Panel>
         <Panel title="Money">
           <div className="lift relative -m-1.5 rounded-lg p-1.5">

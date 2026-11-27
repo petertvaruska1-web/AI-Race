@@ -130,7 +130,7 @@ test("a player founds a company, trains an AI, survives a reload and a restart, 
 
   // 14. Phase 2: customers spread over the regions on the map; each region opens its window.
   await page.getByRole("link", { name: "Market" }).click();
-  const map = page.getByRole("group", { name: "Your customers by region" });
+  const map = page.getByRole("group", { name: "Who leads each region" });
   const regionCustomers = async (name: string) => {
     await map.getByRole("button", { name: `Open ${name}` }).click();
     const n = Number(

@@ -1,4 +1,5 @@
 import { type KeyboardEvent, type PointerEvent, type ReactNode, useEffect, useRef } from "react";
+import { createWheel } from "./wheel.ts";
 
 /**
  * A knob of the bench (design §5.4): turn it by dragging up or down, with the arrow keys (Page
@@ -52,19 +53,13 @@ export function Knob({
   useEffect(() => {
     const el = control.current;
     if (!el) return;
-    let small = 0;
+    const notches = createWheel();
     // A native listener, so the page's own scroll can be stopped while a picked knob turns.
     const onWheel = (e: WheelEvent) => {
       if (document.activeElement !== el || e.deltaY === 0) return;
       e.preventDefault();
-      let by = Math.sign(-e.deltaY);
-      if (e.deltaMode === 0 && Math.abs(e.deltaY) < 50) {
-        // A trackpad's small steps add up to a notch.
-        small += e.deltaY;
-        if (Math.abs(small) < 50) return;
-        by = Math.sign(-small);
-      }
-      small = 0;
+      const by = notches(e);
+      if (by === 0) return;
       const now = latest.current;
       now.set(now.value + by * now.notch);
     };

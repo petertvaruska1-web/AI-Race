@@ -41,8 +41,8 @@ export type MapStage = Stage3D & {
 
 /** The map's width in world units; the heights of plain glass and of the most-led region. */
 const WIDTH = 2;
-const BASE = 0.035;
-const RISE = 0.3;
+const BASE = 0.03;
+const RISE = 0.13;
 /** Seconds a region takes to rise or sink to a new height. */
 const EASE = 0.6;
 /** Seconds of one campaign pulse. */

@@ -1,17 +1,13 @@
-import {
-  ARCHETYPE_WORDS,
-  BENCH_CATEGORIES,
-  REGION_IDS,
-  type RegionId,
-  STYLE_WORDS,
-} from "@airace/protocol";
+import { ARCHETYPE_WORDS, BENCH_CATEGORIES, STYLE_WORDS } from "@airace/protocol";
 import { Bars } from "../components/Bars.tsx";
 import { Logo } from "../components/Logo.tsx";
 import { RegionMap } from "../components/RegionMap.tsx";
 import { formatCount } from "../format.ts";
+import { companyTops } from "../regions.ts";
 import { shareOfWilling } from "../rivals.ts";
 import { tryRival } from "../screens/Rivals.tsx";
-import { useReadable } from "../theme/glass.ts";
+import { useWindows } from "../store/windows.ts";
+import { lampColor, useReadable } from "../theme/glass.ts";
 import { GoneWindow, Section, WindowFrame, type WindowProps } from "./WindowFrame.tsx";
 
 const best = (scores: (number | null | undefined)[]) => {
@@ -22,15 +18,12 @@ const best = (scores: (number | null | undefined)[]) => {
 /** One rival's public profile: its AIs, their skills against yours, its customers and its news. */
 export function RivalWindow({ entry, view, companyId }: WindowProps & { companyId: string }) {
   const readable = useReadable();
+  const open = useWindows((s) => s.open);
   const rival = view.companies.find((c) => c.id === companyId);
   const me = view.companies.find((c) => c.id === view.me.company?.id);
   if (!rival?.rival || !me) return <GoneWindow entry={entry} />;
   const theirs = rival.products.filter((p) => p.status === "live" && p.version);
   const mine = me.products.filter((p) => p.status === "live" && p.version);
-  const top = Math.max(1, ...REGION_IDS.map((r) => rival.customersByRegion[r]));
-  const values = Object.fromEntries(
-    REGION_IDS.map((r) => [r, rival.customersByRegion[r] / top]),
-  ) as Record<RegionId, number>;
   const news = view.feed.filter((f) => f.kind === "news" && f.companyId === rival.id).slice(-6);
   const arch = rival.rival.archetype;
   return (
@@ -67,10 +60,19 @@ export function RivalWindow({ entry, view, companyId }: WindowProps & { companyI
       </Section>
       <Section title="Where its customers are">
         <RegionMap
-          label={`Where ${rival.name}'s customers are`}
-          values={values}
-          color={readable(rival.palette.primary)}
           small
+          label={`Where ${rival.name}'s customers are`}
+          tops={companyTops(view, rival.id)}
+          markColor={lampColor(me.palette)}
+          onOpen={(region, el) => open({ kind: "region", region }, el)}
+          readout={(r) => (
+            <p className="m-0 text-muted">
+              <span className="tabular font-semibold text-text">
+                {formatCount(rival.customersByRegion[r])}
+              </span>
+              {" of its customers"}
+            </p>
+          )}
         />
       </Section>
       <Section title="Its AIs">
