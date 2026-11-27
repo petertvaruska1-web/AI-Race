@@ -66,10 +66,12 @@ describe("your computer", () => {
     cardsAre([card({})], { maxBrain: "small", tokensPerSecond: 450_000 });
     render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
     fireEvent.click(screen.getByRole("button", { name: "3 Design" }));
-    const medium = screen.getByRole("button", { name: /^Medium/ }) as HTMLButtonElement;
+    const medium = screen.getByRole("radio", { name: /^Medium/ }) as HTMLInputElement;
     expect(medium.disabled).toBe(true);
-    expect(medium.textContent).toContain("Your graphics card can train up to the Small brain.");
-    expect((screen.getByRole("button", { name: /^Small/ }) as HTMLButtonElement).disabled).toBe(
+    expect(medium.closest("label")?.textContent).toContain(
+      "Your graphics card can train up to the Small brain.",
+    );
+    expect((screen.getByRole("radio", { name: /^Small/ }) as HTMLInputElement).disabled).toBe(
       false,
     );
     expect(screen.getByTestId("real-minutes").textContent).toMatch(
