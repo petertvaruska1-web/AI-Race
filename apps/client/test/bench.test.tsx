@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { Cartridge } from "../src/bench/Cartridge.tsx";
 import { Display } from "../src/bench/Display.tsx";
+import { Fader } from "../src/bench/Fader.tsx";
 import { HueDial } from "../src/bench/HueDial.tsx";
 import { Keypad } from "../src/bench/Keypad.tsx";
 import { KeyRow } from "../src/bench/KeyRow.tsx";
@@ -10,13 +11,17 @@ import { Knob } from "../src/bench/Knob.tsx";
 import { Lamp } from "../src/bench/Lamp.tsx";
 import { Lever } from "../src/bench/Lever.tsx";
 import { Module } from "../src/bench/Module.tsx";
+import { NeedleGauge } from "../src/bench/NeedleGauge.tsx";
 import { PushButton } from "../src/bench/PushButton.tsx";
 import { Readout } from "../src/bench/Readout.tsx";
 import { RotarySelector } from "../src/bench/RotarySelector.tsx";
 import { Slider } from "../src/bench/Slider.tsx";
+import { StampCard } from "../src/bench/StampCard.tsx";
+import { StepDial } from "../src/bench/StepDial.tsx";
 import { ToggleSwitch } from "../src/bench/ToggleSwitch.tsx";
 import { Trace } from "../src/bench/Trace.tsx";
 import { createWheel } from "../src/bench/wheel.ts";
+import { Bars } from "../src/components/Bars.tsx";
 import { Panel } from "../src/components/Panel.tsx";
 import { Stat } from "../src/components/Stat.tsx";
 
@@ -266,5 +271,94 @@ describe("controls for setting things", () => {
       target: { value: " ab c2 " },
     });
     expect(onChange).toHaveBeenLastCalledWith("ABC2");
+  });
+});
+
+describe("bench parts for the stations", () => {
+  it("a ledger row opens its window and shows its amount in the display", async () => {
+    const onOpen = vi.fn();
+    render(
+      <Bars rows={[{ label: "Personal plans", value: 1234, testId: "income-personal", onOpen }]} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Open Personal plans" }));
+    expect(onOpen).toHaveBeenCalled();
+    const amount = screen.getByTestId("income-personal");
+    expect(amount.textContent).toBe("$1,234");
+    expect(amount.closest(".display")).not.toBeNull();
+  });
+
+  it("a fader moves with the arrow keys and shows its level", () => {
+    const onChange = vi.fn();
+    render(
+      <Fader
+        label="Books share"
+        value={30}
+        min={0}
+        max={100}
+        onChange={onChange}
+        level={0.25}
+        readout="25%"
+        testId="books"
+      />,
+    );
+    const fader = screen.getByRole("slider", { name: "Books share" });
+    expect(fader.getAttribute("aria-orientation")).toBe("vertical");
+    fireEvent.keyDown(fader, { key: "ArrowUp" });
+    expect(onChange).toHaveBeenLastCalledWith(31);
+    fireEvent.keyDown(fader, { key: "End" });
+    expect(onChange).toHaveBeenLastCalledWith(100);
+    const level = screen.getByTestId("books").querySelector<HTMLElement>(".fader__level > span");
+    expect(level?.style.height).toBe("25%");
+    expect(screen.getByText("25%")).toBeDefined();
+  });
+
+  it("a needle gauge says when nothing is measured, and points at a score", () => {
+    const { rerender } = render(<NeedleGauge label="Knowledge" value={null} />);
+    const gauge = screen.getByRole("meter", { name: "Knowledge" });
+    expect(gauge.getAttribute("aria-valuenow")).toBeNull();
+    expect(screen.getByText("Not measured")).toBeDefined();
+    rerender(<NeedleGauge label="Knowledge" value={0} />);
+    const needle = () => gauge.querySelector("[data-needle]")?.getAttribute("transform");
+    const atZero = needle();
+    rerender(<NeedleGauge label="Knowledge" value={62} change={4} />);
+    expect(gauge.getAttribute("aria-valuenow")).toBe("62");
+    expect(needle()).not.toBe(atZero);
+    expect(screen.getByText("62")).toBeDefined();
+    expect(screen.getByText("+4")).toBeDefined();
+  });
+
+  it("a step dial marks the current step and moves with the arrows", async () => {
+    const onChange = vi.fn();
+    render(
+      <StepDial
+        legend="Lab steps"
+        steps={[
+          { value: "data", label: "1 Data" },
+          { value: "prepare", label: "2 Prepare" },
+          { value: "design", label: "3 Design" },
+        ]}
+        value="prepare"
+        onChange={onChange}
+      />,
+    );
+    const now = screen.getByRole("button", { name: "2 Prepare" });
+    expect(now.getAttribute("aria-current")).toBe("step");
+    expect(screen.getByRole("button", { name: "1 Data" }).getAttribute("aria-current")).toBeNull();
+    fireEvent.keyDown(now, { key: "ArrowRight" });
+    expect(onChange).toHaveBeenLastCalledWith("design");
+    await userEvent.click(screen.getByRole("button", { name: "1 Data" }));
+    expect(onChange).toHaveBeenLastCalledWith("data");
+    expect(screen.getByRole("navigation", { name: "Lab steps" })).toBeDefined();
+  });
+
+  it("a stamped card opens with its name", async () => {
+    const onClick = vi.fn();
+    render(
+      <StampCard grade="A" caption="Mar" color="#4ade80" label="March 2027: A" onClick={onClick} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "March 2027: A" }));
+    expect(onClick).toHaveBeenCalled();
+    expect(screen.getByText("A")).toBeDefined();
+    expect(screen.getByText("Mar")).toBeDefined();
   });
 });

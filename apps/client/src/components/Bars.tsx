@@ -5,11 +5,15 @@ export type BarRow = {
   value: number;
   color?: string;
   testId?: string;
-  /** Makes the row a button that opens its story. */
+  /** Makes the row a key that opens its story. */
   onOpen?: (el: HTMLElement) => void;
 };
 
-/** Labelled bars, each as long as its share of the largest, growing in when shown. */
+/**
+ * Ledger rows in a dark display (design §10, Money): each row its name, its amount in the dot
+ * face and a lit level strip as long as its share of the largest; a row that opens its story is a
+ * key (a button named "Open <name>").
+ */
 export function Bars({
   rows,
   format = formatMoney,
@@ -19,29 +23,27 @@ export function Bars({
 }) {
   const top = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
   return (
-    <ul className="space-y-2 text-sm">
+    <ul className="display ledger">
       {rows.map((r) => (
-        <li key={r.label} className={`relative ${r.onOpen ? "lift-row rounded-md" : ""}`}>
-          <div className="flex justify-between gap-3">
-            <span className="text-muted">{r.label}</span>
-            <span className="tabular font-semibold" data-testid={r.testId}>
-              {format(r.value)}
-            </span>
-          </div>
-          <div className="mt-1 h-1.5 rounded-full bg-surface-2">
-            <div
-              className="bar-x h-1.5 rounded-full"
+        <li key={r.label} className={`ledger__row ${r.onOpen ? "ledger__row--key" : ""}`}>
+          <span className="ledger__label">{r.label}</span>
+          <span className="dotface dotface--xs ledger__amount" data-testid={r.testId}>
+            {format(r.value)}
+          </span>
+          <span className="ledger__level" aria-hidden="true">
+            <span
+              className="bar-x"
               style={{
                 width: `${(100 * Math.abs(r.value)) / top}%`,
-                background: r.color ?? "var(--brand)",
+                background: r.color ?? "var(--lamp)",
               }}
             />
-          </div>
+          </span>
           {r.onOpen && (
             <button
               type="button"
               aria-label={`Open ${r.label}`}
-              className="absolute inset-0 rounded-md"
+              className="ledger__key"
               onClick={(e) => r.onOpen?.(e.currentTarget)}
             />
           )}

@@ -2031,4 +2031,306 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
+
+  /* Bench parts for the stations (plan 4). */
+  .dotface--xs {
+    font-size: 13.5px;
+  }
+
+  /* Ledger rows: names, amounts in the dot face and lit level strips, in one dark display. */
+  .ledger {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 6px 8px;
+    list-style: none;
+  }
+  .ledger__row {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 4px;
+    padding: 5px 6px 6px;
+    border-radius: 4px;
+  }
+  .ledger__label {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 12.5px;
+    color: var(--display-ink-2);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ledger__amount {
+    justify-self: end;
+  }
+  .ledger__level {
+    grid-column: 1 / -1;
+    height: 3px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: rgb(255 255 255 / 0.06);
+  }
+  .ledger__level > span {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    box-shadow: 0 0 6px currentColor;
+  }
+  .ledger__row--key:hover,
+  .ledger__row--key:has(.ledger__key:focus-visible) {
+    background: rgb(var(--lamp-rgb) / 0.1);
+  }
+  .ledger__row--key:hover .ledger__label {
+    color: var(--display-ink);
+  }
+  .ledger__key {
+    position: absolute;
+    inset: 0;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .ledger__key:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 1px;
+  }
+
+  /* A fader: a vertical slider with a machined cap, its level meter and its reading. */
+  .fader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-height: 0;
+  }
+  .fader__readout {
+    min-width: 54px;
+    padding: 4px 6px;
+    text-align: center;
+  }
+  .fader__body {
+    display: flex;
+    flex: 1;
+    align-items: stretch;
+    gap: 7px;
+    min-height: 110px;
+  }
+  .fader__input {
+    width: 26px;
+    margin: 0;
+    writing-mode: vertical-lr;
+    direction: rtl;
+    background: transparent;
+    cursor: ns-resize;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .fader__input::-webkit-slider-runnable-track {
+    width: 6px;
+    border-radius: 3px;
+    background: linear-gradient(0deg, var(--lamp) var(--filled, 0%), #07090c var(--filled, 0%));
+    box-shadow:
+      inset 0 1px 3px rgb(0 0 0 / 0.9),
+      0 1px 0 rgb(255 255 255 / 0.12);
+  }
+  .fader__input::-moz-range-track {
+    width: 6px;
+    border-radius: 3px;
+    background: #07090c;
+  }
+  .fader__input::-moz-range-progress {
+    width: 6px;
+    border-radius: 3px;
+    background: var(--lamp);
+  }
+  .fader__input::-webkit-slider-thumb {
+    width: 26px;
+    height: 16px;
+    margin-left: -10px;
+    border-radius: 3px;
+    background:
+      linear-gradient(180deg, transparent 45%, rgb(0 0 0 / 0.55) 45% 55%, transparent 55%),
+      linear-gradient(180deg, #d9dde3, #8d939c 55%, #5c6169);
+    box-shadow:
+      0 2px 4px rgb(0 0 0 / 0.6),
+      inset 0 1px 0 rgb(255 255 255 / 0.6);
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .fader__input::-moz-range-thumb {
+    width: 26px;
+    height: 16px;
+    border: 0;
+    border-radius: 3px;
+    background: linear-gradient(180deg, #d9dde3, #8d939c 55%, #5c6169);
+  }
+  .fader__input:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 4px;
+  }
+  .fader__level {
+    display: flex;
+    align-items: flex-end;
+    width: 7px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: #07090c;
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.9);
+  }
+  .fader__level > span {
+    display: block;
+    width: 100%;
+    background: var(--lamp);
+    box-shadow: 0 0 8px var(--lamp);
+    -webkit-mask: repeating-linear-gradient(0deg, #000 0 3px, transparent 3px 5px);
+    mask: repeating-linear-gradient(0deg, #000 0 3px, transparent 3px 5px);
+    transition: height 400ms ease;
+  }
+
+  /* A needle gauge in its dark dial. */
+  .gauge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 10px 10px;
+  }
+  .gauge__face {
+    display: block;
+    width: 100%;
+    max-width: 170px;
+  }
+  .gauge__track {
+    fill: none;
+    stroke: rgb(255 255 255 / 0.08);
+    stroke-width: 5;
+    stroke-linecap: round;
+  }
+  .gauge__lit {
+    fill: none;
+    stroke: var(--lamp);
+    stroke-width: 5;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 3px var(--lamp));
+  }
+  .gauge__tick {
+    stroke: rgb(231 237 244 / 0.28);
+    stroke-width: 1;
+  }
+  .gauge__tick--major {
+    stroke: rgb(231 237 244 / 0.55);
+    stroke-width: 1.6;
+  }
+  .gauge__needle {
+    stroke: #f4f6f8;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 2px rgb(var(--lamp-rgb) / 0.9));
+  }
+  [data-needle] {
+    transition: transform 700ms cubic-bezier(0.3, 1.35, 0.5, 1);
+  }
+  .gauge--idle .gauge__needle {
+    stroke: rgb(231 237 244 / 0.35);
+    filter: none;
+  }
+  .gauge__hub {
+    fill: #2a2e35;
+    stroke: #6b717b;
+    stroke-width: 1;
+  }
+  .gauge__reading {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-height: 26px;
+  }
+  .gauge__none {
+    font-size: 12.5px;
+    color: var(--display-ink-2);
+  }
+  .gauge__change {
+    font-family: var(--font-dot);
+    font-size: 13px;
+    font-weight: 800;
+  }
+  .gauge__change--up {
+    color: #4ade80;
+    text-shadow: 0 0 8px rgb(74 222 128 / 0.6);
+  }
+  .gauge__change--down {
+    color: #ff6b6b;
+    text-shadow: 0 0 8px rgb(255 107 107 / 0.6);
+  }
+
+  /* A step dial: the knob turns to the step on screen; one lit key per step. */
+  .step-dial {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .step-dial__knob {
+    width: 46px;
+    height: 46px;
+  }
+  .step-dial__keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .step-dial__key:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 2px;
+  }
+
+  /* A stamped card: the grade stamped on a small plate. */
+  .stamp-card {
+    display: grid;
+    flex: none;
+    place-items: center;
+    gap: 3px;
+    width: 64px;
+    height: 76px;
+    padding: 6px 4px 5px;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #e9e4d6, #d6cfbd);
+    box-shadow:
+      0 3px 8px -2px rgb(0 0 0 / 0.6),
+      inset 0 1px 0 rgb(255 255 255 / 0.7);
+    cursor: pointer;
+    transition: transform 150ms ease;
+  }
+  .stamp-card:hover {
+    transform: translateY(-2px) rotate(-1.5deg);
+  }
+  .stamp-card:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 3px;
+  }
+  .stamp-card__grade {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: 2.5px solid;
+    border-radius: 50%;
+    font-family: var(--font-dot);
+    font-size: 21px;
+    font-weight: 800;
+    transform: rotate(-12deg);
+    filter: saturate(1.2) brightness(0.8);
+    mix-blend-mode: multiply;
+  }
+  .stamp-card__caption {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #4b4a45;
+  }
 }
