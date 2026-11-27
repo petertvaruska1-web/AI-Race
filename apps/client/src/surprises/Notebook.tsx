@@ -1,5 +1,7 @@
 import type { WorldView } from "@airace/protocol";
 import { useEffect, useState } from "react";
+import { Fader } from "../bench/Fader.tsx";
+import { PushButton } from "../bench/PushButton.tsx";
 import { Button } from "../components/Button.tsx";
 import { INPUT } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
@@ -18,6 +20,49 @@ export const PARROT_WARNING =
 const wordsIn = (text: string) => text.split(/\s+/).filter(Boolean).length;
 
 /** The ninth card of the Data step: the player's own notebook. */
+/**
+ * Your notebook as one more channel of the mixing desk (design §10): its share on a fader (off
+ * until something is written), its words, and a key to write it.
+ */
+export function NotebookChannel({ view, total }: { view: WorldView; total: number }) {
+  const open = useWindows((s) => s.open);
+  const plan = usePlan((s) => s.plan);
+  const setWeight = usePlan((s) => s.setWeight);
+  const words = view.me.company?.notebook?.words ?? 0;
+  const weight = plan?.mix.notebook ?? 0;
+  const share = total > 0 ? weight / total : 0;
+  return (
+    <div className="lab-channel lab-channel--notebook" data-testid="dataset-notebook">
+      <Fader
+        label="Your notebook share"
+        value={weight}
+        min={0}
+        max={100}
+        onChange={(v) => setWeight("notebook", v)}
+        level={share}
+        readout={percent(share)}
+        disabled={words === 0}
+      />
+      <h3 className="engrave lab-channel__title">Your notebook</h3>
+      <p className="lab-channel__size" data-testid="notebook-words">
+        {`${formatCount(words)} / ${formatCount(MAX_NOTEBOOK_WORDS)} words`}
+      </p>
+      <PushButton
+        variant="secondary"
+        className="lab-channel__key"
+        title="Write your own text for your AI to read: facts, stories, the way you want it to talk. Only your company's AI reads it."
+        onClick={(e) => open({ kind: "notebook" }, e.currentTarget)}
+      >
+        Write
+      </PushButton>
+      {words === 0 && <p className="lab-channel__note">Write something first to train on it.</p>}
+      {share > BIG_SHARE && words > 0 && (
+        <p className="lab-channel__note text-danger">{PARROT_WARNING}</p>
+      )}
+    </div>
+  );
+}
+
 export function NotebookCard({ view, total }: { view: WorldView; total: number }) {
   const open = useWindows((s) => s.open);
   const plan = usePlan((s) => s.plan);

@@ -4,7 +4,6 @@ import { Display } from "../bench/Display.tsx";
 import { PushButton } from "../bench/PushButton.tsx";
 import { useSocket } from "../store/session.ts";
 import { readableOn } from "../theme/glass.ts";
-import { ABOVE_BOTTOM_BAR } from "./bottomBar.ts";
 
 type Line = { name: string; companyId: string | null; text: string; at: number };
 const KEPT = 200;
@@ -70,10 +69,7 @@ export function WorldChat({ view }: { view: WorldView }) {
   }
 
   return (
-    <div
-      className="fixed left-[26px] z-30 max-w-[calc(100vw-2rem)]"
-      style={{ bottom: ABOVE_BOTTOM_BAR }}
-    >
+    <div className="fixed bottom-4 left-[26px] z-30 max-w-[calc(100vw-2rem)]">
       {open && (
         <div className="module module--heavy mb-2 flex max-h-96 w-80 max-w-full flex-col">
           <Display scroll label="World chat" className="mb-2 min-h-24 flex-1">

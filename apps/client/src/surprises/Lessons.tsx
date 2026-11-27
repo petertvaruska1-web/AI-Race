@@ -1,9 +1,11 @@
 import type { WorldView } from "@airace/protocol";
 import { LESSONS_MIN } from "@airace/sim";
 import { useCallback, useEffect, useState } from "react";
+import { Module } from "../bench/Module.tsx";
+import { PushButton } from "../bench/PushButton.tsx";
+import { ToggleSwitch } from "../bench/ToggleSwitch.tsx";
 import { Button } from "../components/Button.tsx";
 import { INPUT } from "../components/Field.tsx";
-import { Panel } from "../components/Panel.tsx";
 import { usePlan } from "../store/plan.ts";
 import { useSocket } from "../store/session.ts";
 import { useWindows } from "../store/windows.ts";
@@ -107,40 +109,36 @@ export function LessonsCard({ view }: { view: WorldView }) {
   const n = view.me.company?.lessons ?? 0;
   const locked = n < LESSONS_MIN;
   return (
-    <Panel
-      title="Your coaching"
+    <Module
+      label="Your coaching"
       hint="Like your AI's good answers in the Playground, or write better ones. It learns from them."
+      className="lab-coaching"
     >
-      <p className="mb-2 text-sm">
-        {`${n} ${n === 1 ? "lesson" : "lessons"}`}
+      <div className="lab-coaching__count">
+        <div className="display">
+          <span className="dotface dotface--xs">{`${n} ${n === 1 ? "lesson" : "lessons"}`}</span>
+        </div>
         {n > 0 && (
-          <button
-            type="button"
-            className="ml-3 text-brand underline"
+          <PushButton
+            variant="secondary"
             onClick={(e) => open({ kind: "lessons" }, e.currentTarget)}
           >
             See your lessons
-          </button>
+          </PushButton>
         )}
-      </p>
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          aria-label="Train on your lessons"
-          checked={!locked && (plan?.coaching ?? false)}
-          disabled={locked}
-          onChange={(e) => update({ coaching: e.target.checked })}
-        />
-        <span>
-          <span className="font-semibold">Train on your lessons</span>
-          <span className="block text-xs text-muted">
-            {locked
-              ? `Your AI needs at least ${LESSONS_MIN} lessons first. You have ${n}.`
-              : "Your lessons become 5% of the run's reading. Free."}
-          </span>
-        </span>
-      </label>
-    </Panel>
+      </div>
+      <ToggleSwitch
+        label="Train on your lessons"
+        checked={!locked && (plan?.coaching ?? false)}
+        disabled={locked}
+        onChange={(on) => update({ coaching: on })}
+        hint={
+          locked
+            ? `Your AI needs at least ${LESSONS_MIN} lessons first. You have ${n}.`
+            : "Your lessons become 5% of the run's reading. Free."
+        }
+      />
+    </Module>
   );
 }
 

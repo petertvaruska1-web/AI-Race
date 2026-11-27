@@ -1,9 +1,9 @@
 import type { WorldView } from "@airace/protocol";
 import { getBalance, previewPlan } from "@airace/sim";
 import { useEffect, useState } from "react";
+import { PushButton } from "../../bench/PushButton.tsx";
+import { StepDial } from "../../bench/StepDial.tsx";
 import { labLimit, NO_CARD, realMinutes } from "../../cards/Cards.tsx";
-import { Button } from "../../components/Button.tsx";
-import { useBottomBar } from "../../components/bottomBar.ts";
 import { lentToTraining } from "../../components/Computers.tsx";
 import { formatMoney, gameDays } from "../../format.ts";
 import { useCards } from "../../store/cards.ts";
@@ -18,12 +18,12 @@ import { VersionsStep } from "./VersionsStep.tsx";
 
 export type LabStep = "data" | "prepare" | "design" | "train" | "versions";
 
-const STEPS: { id: LabStep; label: string }[] = [
-  { id: "data", label: "1 Data" },
-  { id: "prepare", label: "2 Prepare" },
-  { id: "design", label: "3 Design" },
-  { id: "train", label: "4 Train" },
-  { id: "versions", label: "5 Versions" },
+const STEPS: { value: LabStep; label: string }[] = [
+  { value: "data", label: "1 Data" },
+  { value: "prepare", label: "2 Prepare" },
+  { value: "design", label: "3 Design" },
+  { value: "train", label: "4 Train" },
+  { value: "versions", label: "5 Versions" },
 ];
 
 /** The AI Lab: plan a run step by step, with the cost always in view, then watch it train. */
@@ -50,20 +50,14 @@ export function Lab({ view }: { view: WorldView }) {
   const planning = step === "data" || step === "prepare" || step === "design";
 
   return (
-    <div className="space-y-6">
-      <nav className="flex flex-wrap gap-2" aria-label="Lab steps">
-        {STEPS.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            aria-current={step === s.id ? "step" : undefined}
-            onClick={() => setStep(s.id)}
-            className={`rounded-full px-4 py-1.5 text-sm ${step === s.id ? "bg-brand text-on-brand" : "bg-surface text-muted hover:text-text"}`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </nav>
+    <div className="lab-bench">
+      <StepDial
+        legend="Lab steps"
+        steps={STEPS}
+        value={step}
+        onChange={setStep}
+        className="lab-bench__steps"
+      />
       {planning && !catalog && (
         <p className="text-muted">{error ?? "Loading the training data…"}</p>
       )}
@@ -97,8 +91,6 @@ function SummaryBar({ view, onStarted }: { view: WorldView; onStarted: () => voi
   const plan = usePlan((s) => s.plan);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [bar, setBar] = useState<HTMLDivElement | null>(null);
-  useBottomBar(bar);
   const company = view.me.company;
   if (!plan || !company) return null;
   const parent = company.versions.find((v) => v.id === plan.parentVersionId)?.shape ?? null;
@@ -148,39 +140,36 @@ function SummaryBar({ view, onStarted }: { view: WorldView; onStarted: () => voi
   }
 
   return (
-    <div
-      ref={setBar}
-      className="sticky bottom-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-brand bg-surface p-4 shadow-lg"
-    >
-      <div>
-        {preview.ok ? (
-          <p data-testid="plan-cost" className="text-lg font-semibold">
-            {formatMoney(preview.preview.cost)}{" "}
-            <span className="text-sm font-normal text-muted">
-              · {gameDays(preview.preview.durationDays)}
-            </span>
-          </p>
-        ) : null}
+    <div className="module module--plate lab-summary">
+      {preview.ok && (
+        <div className="display lab-summary__cost">
+          <span data-testid="plan-cost" className="dotface dotface--md">
+            {formatMoney(preview.preview.cost)}
+          </span>
+          <span className="lab-summary__days">{gameDays(preview.preview.durationDays)}</span>
+        </div>
+      )}
+      <div className="lab-summary__notes">
         {minutes !== null && (
-          <p data-testid="real-minutes" className="text-xs text-muted">
+          <p data-testid="real-minutes" className="lab-summary__note">
             {`About ${minutes} ${minutes === 1 ? "minute" : "minutes"} ${limits.where}.`}
           </p>
         )}
         {saved && (saved.days > 0 || saved.dollars > 0) && (
-          <p className="text-xs text-good">
+          <p className="lab-summary__note text-good">
             Your data centers make this run {gameDays(saved.days)} faster and{" "}
             {formatMoney(saved.dollars)} cheaper.
           </p>
         )}
         {(blocked ?? error) && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="lab-summary__note text-danger">
             {blocked ?? error}
           </p>
         )}
       </div>
-      <Button onClick={start} disabled={busy || blocked !== null} title={blocked ?? undefined}>
+      <PushButton onClick={start} disabled={busy || blocked !== null} title={blocked ?? undefined}>
         Start training
-      </Button>
+      </PushButton>
     </div>
   );
 }

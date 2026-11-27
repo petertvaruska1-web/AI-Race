@@ -1,11 +1,18 @@
 import { MIX_IDS, type PublicCatalog, type TrainingPlan, type WorldView } from "@airace/protocol";
-import { Panel } from "../../components/Panel.tsx";
+import { useState } from "react";
+import { Display } from "../../bench/Display.tsx";
+import { Fader } from "../../bench/Fader.tsx";
+import { Module } from "../../bench/Module.tsx";
 import { percent, words } from "../../format.ts";
 import { usePlan } from "../../store/plan.ts";
 import { LessonsCard } from "../../surprises/Lessons.tsx";
-import { NotebookCard } from "../../surprises/Notebook.tsx";
+import { NotebookChannel } from "../../surprises/Notebook.tsx";
 
-/** What the AI reads: one card per dataset, with a slider for its share of the reading. */
+/**
+ * What the AI reads (design §10, the AI Lab): a mixing desk with one fader per dataset, each with
+ * its share in a display above it and a level meter beside it, your notebook as one more channel,
+ * and one display under the desk showing the chosen channel's examples as text.
+ */
 export function DataStep({
   plan,
   catalog,
@@ -17,51 +24,65 @@ export function DataStep({
 }) {
   const setWeight = usePlan((s) => s.setWeight);
   const total = MIX_IDS.reduce((sum, id) => sum + plan.mix[id], 0);
+  const [shown, setShown] = useState(catalog.datasets[0]?.id ?? null);
+  const example = catalog.datasets.find((d) => d.id === shown) ?? null;
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted">
-        Choose what your AI reads. It learns the patterns in whatever you give it, so the mix shapes
-        what it becomes good at.
-      </p>
-      <div className="grid gap-4 md:grid-cols-2">
-        {catalog.datasets.map((d) => {
-          const weight = plan.mix[d.id];
-          return (
-            <Panel key={d.id} data-testid={`dataset-${d.id}`}>
-              <div className="mb-2 flex items-baseline justify-between gap-2">
-                <h3 className="text-lg font-semibold">{d.title}</h3>
-                <span className="text-sm font-semibold text-brand">
-                  {total > 0 ? percent(weight / total) : "0%"}
-                </span>
-              </div>
-              <p className="text-sm text-muted">{d.blurb}</p>
-              <p className="mt-1 text-xs text-muted">{words(d.tokens)}</p>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
-                value={weight}
-                aria-label={`${d.title} share`}
-                onChange={(e) => setWeight(d.id, Number(e.target.value))}
-                className="mt-3 w-full accent-[var(--brand)]"
-              />
-              <details className="mt-2 text-sm">
-                <summary className="cursor-pointer text-muted hover:text-text">
+    <div className="lab-data">
+      <Module
+        label="What your AI reads"
+        weight="heavy"
+        hint="It learns the patterns in whatever you give it, so the mix shapes what it becomes good at."
+        className="lab-desk"
+      >
+        <div className="lab-desk__channels">
+          {catalog.datasets.map((d) => {
+            const share = total > 0 ? plan.mix[d.id] / total : 0;
+            return (
+              <div key={d.id} className="lab-channel" data-testid={`dataset-${d.id}`}>
+                <Fader
+                  label={`${d.title} share`}
+                  value={plan.mix[d.id]}
+                  min={0}
+                  max={100}
+                  onChange={(v) => setWeight(d.id, v)}
+                  level={share}
+                  readout={total > 0 ? percent(share) : "0%"}
+                />
+                <h3 className="engrave lab-channel__title">{d.title}</h3>
+                <p className="lab-channel__size">{words(d.tokens)}</p>
+                <button
+                  type="button"
+                  aria-pressed={shown === d.id}
+                  className={`keycap lab-channel__key ${shown === d.id ? "keycap--on" : ""}`}
+                  onClick={() => setShown(d.id)}
+                >
+                  <span className="keycap__lamp" aria-hidden="true" />
                   See examples
-                </summary>
-                <ul className="mt-2 space-y-2">
-                  {d.samples.map((sample) => (
-                    <li key={sample} className="player-text rounded-lg bg-surface-2 p-3 text-xs">
-                      {sample}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            </Panel>
-          );
-        })}
-        {view && <NotebookCard view={view} total={total} />}
+                </button>
+              </div>
+            );
+          })}
+          {view && <NotebookChannel view={view} total={total} />}
+        </div>
+      </Module>
+      <div className="lab-data__below">
+        <Module
+          label={example ? `${example.title}: examples` : "Examples"}
+          className="lab-examples"
+        >
+          {example && (
+            <Display scroll label="Examples" className="lab-examples__display">
+              <p className="lab-examples__blurb">{example.blurb}</p>
+              <ul>
+                {example.samples.map((sample) => (
+                  <li key={sample} className="player-text lab-examples__sample">
+                    {sample}
+                  </li>
+                ))}
+              </ul>
+            </Display>
+          )}
+        </Module>
         {view && <LessonsCard view={view} />}
       </div>
     </div>

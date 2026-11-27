@@ -1,6 +1,6 @@
 import { type Catalog, prepKey } from "@airace/protocol";
 import { BALANCE_V2, formatMoney, previewPlan, previewTraining } from "@airace/sim";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import sampleCatalog from "../../../packages/protocol/fixtures/catalog.sample.json";
 import { Toasts } from "../src/components/Toasts.tsx";
@@ -71,12 +71,54 @@ describe("AI Lab planning", () => {
   });
 
   it("shows each dataset with its samples as text", () => {
-    const { container } = render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
+    render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
     for (const d of CATALOG.datasets) {
       expect(screen.getByText(d.title)).toBeTruthy();
+      fireEvent.click(
+        within(screen.getByTestId(`dataset-${d.id}`)).getByRole("button", {
+          name: /see examples/i,
+        }),
+      );
       // Samples keep their line breaks (pre-wrap), so compare the raw text.
-      for (const sample of d.samples) expect(container.textContent).toContain(sample);
+      const shown = screen.getByRole("region", { name: "Examples" });
+      for (const sample of d.samples) expect(shown.textContent).toContain(sample);
     }
+  });
+
+  it("mixes the reading on a desk of faders, one per dataset", () => {
+    render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
+    for (const d of CATALOG.datasets) {
+      const fader = within(screen.getByTestId(`dataset-${d.id}`)).getByRole("slider", {
+        name: `${d.title} share`,
+      });
+      expect(fader.getAttribute("aria-orientation")).toBe("vertical");
+    }
+    const first = CATALOG.datasets[0];
+    if (!first) throw new Error("no dataset");
+    const before = usePlan.getState().plan?.mix[first.id] ?? 0;
+    fireEvent.keyDown(screen.getByRole("slider", { name: `${first.title} share` }), {
+      key: "ArrowUp",
+    });
+    expect(usePlan.getState().plan?.mix[first.id]).toBe(before + 1);
+    expect(screen.getByTestId("dataset-notebook")).toBeTruthy();
+  });
+
+  it("turns the step dial to the step on screen, its five keys named as before", () => {
+    render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
+    const dial = screen.getByRole("navigation", { name: "Lab steps" });
+    expect(
+      within(dial)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["1 Data", "2 Prepare", "3 Design", "4 Train", "5 Versions"]);
+    step("5 Versions");
+    expect(screen.getByRole("button", { name: "5 Versions" }).getAttribute("aria-current")).toBe(
+      "step",
+    );
+    fireEvent.keyDown(screen.getByRole("button", { name: "5 Versions" }), { key: "ArrowLeft" });
+    expect(screen.getByRole("button", { name: "4 Train" }).getAttribute("aria-current")).toBe(
+      "step",
+    );
   });
 
   it("shows what thorough cleaning removes and what is left", () => {
@@ -130,20 +172,20 @@ describe("AI Lab planning", () => {
   });
 });
 
-describe("the Lab's bottom bar and the corners", () => {
-  it("reserves its height while shown, so the world chat sits above it (notifications print at the top)", async () => {
+describe("the Lab's summary plate and the corners", () => {
+  it("keeps its plate on the bench, so the world chat stays at the foot of the station column (notifications print at the top)", async () => {
     const root = document.documentElement;
-    const { unmount } = render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
+    render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
     step("1 Data");
     await screen.findByRole("button", { name: "Start training" });
-    expect(root.style.getPropertyValue("--bottom-bar")).toMatch(/^\d+px$/);
-    unmount();
     expect(root.style.getPropertyValue("--bottom-bar")).toBe("");
     const { container: toasts } = render(<Toasts view={viewOf(runningWorld("balance-v2"))} />);
     const slips = toasts.firstElementChild as HTMLElement;
     expect(slips.style.bottom).toBe("");
     expect(slips.className).toContain("top-[100px]");
     const { container: chat } = render(<WorldChat view={viewOf(runningWorld("balance-v2"))} />);
-    expect((chat.firstElementChild as HTMLElement).style.bottom).toContain("--bottom-bar");
+    const intercom = chat.firstElementChild as HTMLElement;
+    expect(intercom.style.bottom).toBe("");
+    expect(intercom.className).toContain("bottom-4");
   });
 });

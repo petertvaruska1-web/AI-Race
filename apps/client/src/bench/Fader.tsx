@@ -16,6 +16,7 @@ export function Fader({
   level,
   readout,
   testId,
+  disabled = false,
 }: {
   label: string;
   value: number;
@@ -28,6 +29,7 @@ export function Fader({
   /** The fader's reading, shown in the display above it. */
   readout: string;
   testId?: string;
+  disabled?: boolean;
 }) {
   const set = (v: number) => {
     const next = Math.min(max, Math.max(min, Math.round((v - min) / step) * step + min));
@@ -66,6 +68,7 @@ export function Fader({
           value={value}
           aria-label={label}
           aria-orientation="vertical"
+          disabled={disabled}
           style={{ "--filled": `${filled}%` } as CSSProperties}
           onChange={(e) => set(Number(e.target.value))}
           onKeyDown={onKey}
