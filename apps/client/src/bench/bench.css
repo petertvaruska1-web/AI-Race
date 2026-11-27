@@ -1771,7 +1771,7 @@
   .region-keys {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 5px;
     margin: 0;
     padding: 0;
     list-style: none;
@@ -1779,15 +1779,15 @@
   .region-key {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    height: 28px;
-    padding: 0 10px;
+    gap: 6px;
+    height: 26px;
+    padding: 0 8px;
     border: 0;
     border-radius: 5px;
     font-family: var(--font-sans);
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 700;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
     color: #c3cad3;
     background: linear-gradient(180deg, #43474f, #26292e);
     box-shadow:
@@ -1813,5 +1813,196 @@
     border-radius: 50%;
     background: #2a2d33;
     box-shadow: 0 0 6px rgb(0 0 0 / 0.4);
+  }
+  /* The Market station (design §10): readouts above, the map at the middle with ads and
+     sponsorships beside it, the six groups of customers below. Fits 1440 × 900. */
+  .market-bench {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+  }
+  .market-readouts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .market-readout {
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+    min-width: 0;
+  }
+  .market-readout .readout {
+    flex: none;
+  }
+  .market-readout__note {
+    margin: 0 0 6px;
+    font-size: 12px;
+    line-height: 1.3;
+    color: var(--ink-2);
+  }
+  .market-readout__trace {
+    flex: 1;
+    min-width: 0;
+    height: 40px;
+  }
+  .market-middle {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 330px;
+    gap: 14px;
+    min-height: 0;
+  }
+  .market-map {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+  .market-map .region-map__view {
+    /* The map takes what the bench has left at the window's height. */
+    height: clamp(220px, calc(100vh - 620px), 560px);
+    min-height: 0;
+  }
+  .market-map__note {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--ink-2);
+  }
+  /* The side column takes the map's height (it adds none of its own); its lists scroll. */
+  .market-side {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    height: 0;
+    min-height: 100%;
+  }
+  .market-side__module {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .market-list {
+    flex: 1;
+    min-height: 0;
+    padding: 10px 12px;
+  }
+  .market-side__module > .m-0 {
+    flex: 1;
+  }
+  .market-side__action {
+    align-self: flex-start;
+    margin-top: 10px;
+  }
+  .market-list__bar {
+    height: 4px;
+    margin-top: 6px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: rgb(255 255 255 / 0.08);
+  }
+  .market-list__bar > div {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--lamp);
+    box-shadow: 0 0 8px var(--lamp);
+    transition: width 700ms ease;
+  }
+  .market-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .market-groups__note {
+    margin: 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-2);
+  }
+  .market-groups__row {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .market-group {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .market-group__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    min-width: 0;
+  }
+  .market-group__mood {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .market-group__display {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+  }
+  .market-crowd {
+    position: relative;
+  }
+  .market-crowd svg {
+    display: block;
+    width: 100%;
+  }
+  .market-crowd__on {
+    filter: drop-shadow(0 0 1.5px currentColor);
+    animation: crowd-on 520ms ease-out backwards;
+  }
+  .market-crowd__off {
+    fill: rgb(255 255 255 / 0.07);
+  }
+  @keyframes crowd-on {
+    0% {
+      opacity: 0;
+    }
+    40% {
+      opacity: 1;
+      filter: drop-shadow(0 0 4px currentColor);
+    }
+  }
+  .market-crowd__empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    font-size: 11.5px;
+    color: var(--ink-2);
+  }
+  .market-group__person {
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .market-group__bio {
+    display: -webkit-box;
+    margin: 2px 0 0;
+    overflow: hidden;
+    color: var(--ink-2);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+  @media (max-width: 1279px) {
+    .market-middle {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .market-groups__row {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
   }
 }

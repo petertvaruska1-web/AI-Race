@@ -72,6 +72,19 @@ describe("market crowd", () => {
     ).toBeTruthy();
   });
 
+  it("lights one dot of a crowd display per step of people, the rest of its 120 stay dark", () => {
+    const view = viewOf(launchedWorld());
+    render(<Market view={view} />);
+    const step = crowdStep(Math.max(...GROUP_IDS.map((g) => groupCustomers(view, g))));
+    for (const g of GROUP_IDS) {
+      const card = screen.getByRole("region", { name: GROUPS[g].many });
+      const n = groupCustomers(view, g);
+      const lit = card.querySelectorAll("[data-dot]").length;
+      expect(lit, g).toBe(n > 0 ? Math.max(1, Math.round(n / step)) : 0);
+      expect(lit + card.querySelectorAll("[data-off]").length, g).toBe(120);
+    }
+  });
+
   it("picks a round step of people that keeps the biggest crowd within 120 dots", () => {
     expect(crowdStep(0)).toBe(1);
     expect(crowdStep(120)).toBe(1);

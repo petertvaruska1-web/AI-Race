@@ -1,24 +1,33 @@
-import { GROUP_IDS, PLAN_IDS, REGION_IDS, REGION_NAMES, type WorldView } from "@airace/protocol";
+import {
+  GROUP_IDS,
+  type GroupId,
+  REGION_IDS,
+  REGION_NAMES,
+  type WorldView,
+} from "@airace/protocol";
 import { AnimatePresence, motion } from "motion/react";
-import { Button } from "../components/Button.tsx";
+import { Display } from "../bench/Display.tsx";
+import { Module } from "../bench/Module.tsx";
+import { PushButton } from "../bench/PushButton.tsx";
+import { Readout } from "../bench/Readout.tsx";
+import { Trace } from "../bench/Trace.tsx";
 import { Face } from "../components/Face.tsx";
-import { Panel } from "../components/Panel.tsx";
 import { RegionMap } from "../components/RegionMap.tsx";
 import { RegionReadout } from "../components/RegionReadout.tsx";
-import { Stat } from "../components/Stat.tsx";
 import { formatCount, formatMoney } from "../format.ts";
 import { GROUPS, groupColors } from "../groups.ts";
-import { aboutPeople, caresAbout, groupCustomers, groupSatisfaction } from "../people.ts";
+import { aboutPeople, groupCustomers, groupSatisfaction } from "../people.ts";
 import { leaderTops, type RegionMarks } from "../regions.ts";
 import { SPONSOR_WORDS, SponsorPanel } from "../spending/Spending.tsx";
 import { useSocket } from "../store/session.ts";
 import { useWindows } from "../store/windows.ts";
 import { lampColor } from "../theme/glass.ts";
 
-const PLAN_NAMES = { free: "Free", personal: "Personal", business: "Business" } as const;
-
-/** The most dots a group's crowd draws. */
+/** The dots of a group's crowd display: a 20 × 6 dot matrix. */
+const CROWD_COLUMNS = 20;
 const CROWD_MOST = 120;
+/** Where each next person lights up on the matrix: scattered, the same every time. */
+const CROWD_ORDER = Array.from({ length: CROWD_MOST }, (_, i) => (i * 37) % CROWD_MOST);
 
 /** People per dot (1, 2 or 5 times a power of ten), so the biggest crowd stays within `CROWD_MOST` dots. */
 export function crowdStep(most: number): number {
@@ -27,47 +36,97 @@ export function crowdStep(most: number): number {
   }
 }
 
-/** A group's customers as a crowd of dots in a sunflower spiral; new ones pop in. */
-function Crowd({ people, step, color }: { people: number; step: number; color: string }) {
-  const dots = people > 0 ? Math.max(1, Math.round(people / step)) : 0;
-  const w = 220;
-  const h = 96;
+/**
+ * A group's customers on a dot-matrix display (design §10 Market): one lit dot per step of people,
+ * the rest of the 120 dark; a new one lights up where it lands.
+ */
+function CrowdDots({ people, step, color }: { people: number; step: number; color: string }) {
+  const lit = people > 0 ? Math.min(CROWD_MOST, Math.max(1, Math.round(people / step))) : 0;
+  const on = new Set(CROWD_ORDER.slice(0, lit));
+  const rows = CROWD_MOST / CROWD_COLUMNS;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="mt-3 h-24 w-full" aria-hidden="true">
-      {Array.from({ length: dots }, (_, i) => {
-        const r = 4 * Math.sqrt(i + 0.5);
-        const a = i * 2.399963;
-        return (
-          <circle
-            // biome-ignore lint/suspicious/noArrayIndexKey: dots are alike; each keeps its place in the spiral
-            key={i}
-            data-dot
-            className="dot"
-            cx={w / 2 + r * Math.cos(a) * 1.9}
-            cy={h / 2 + r * Math.sin(a) * 0.95}
-            r={3.2}
-            fill={color}
-            style={{ animationDelay: `${(i % 16) * 35}ms, ${(i * 211) % 3400}ms` }}
-          />
-        );
-      })}
-      {dots === 0 && (
-        <text
-          x={w / 2}
-          y={h / 2 + 4}
-          textAnchor="middle"
-          className="fill-[var(--muted)] text-[11px]"
-        >
-          No customers here yet
-        </text>
+    <div className="market-crowd">
+      <svg viewBox={`0 0 ${CROWD_COLUMNS * 7} ${rows * 7}`} aria-hidden="true">
+        {Array.from({ length: CROWD_MOST }, (_, i) => {
+          const x = (i % CROWD_COLUMNS) * 7 + 3.5;
+          const y = Math.floor(i / CROWD_COLUMNS) * 7 + 3.5;
+          return on.has(i) ? (
+            <circle
+              // biome-ignore lint/suspicious/noArrayIndexKey: each dot keeps its place on the matrix
+              key={i}
+              data-dot
+              className="market-crowd__on"
+              cx={x}
+              cy={y}
+              r={2.7}
+              fill={color}
+              style={{ color }}
+            />
+          ) : (
+            // biome-ignore lint/suspicious/noArrayIndexKey: each dot keeps its place on the matrix
+            <circle key={i} data-off className="market-crowd__off" cx={x} cy={y} r={2.2} />
+          );
+        })}
+      </svg>
+      {lit === 0 && <p className="market-crowd__empty">No customers here yet</p>}
+    </div>
+  );
+}
+
+/** One group of customers (a module named by the group): how many, their mood, their crowd. */
+function GroupModule({
+  view,
+  group,
+  step,
+  color,
+}: {
+  view: WorldView;
+  group: GroupId;
+  step: number;
+  color: string;
+}) {
+  const open = useWindows((s) => s.open);
+  const person = view.spotlights.find((p) => p.group === group);
+  const sat = groupSatisfaction(view, group);
+  const people = groupCustomers(view, group);
+  return (
+    <Module aria-label={GROUPS[group].many} weight="thin" className="market-group">
+      <div className="market-group__head">
+        <span className="engrave">{GROUPS[group].many}</span>
+        {sat !== null && (
+          <span className="market-group__mood">
+            <Face sat={sat} size={18} />
+            <span>{`${Math.round(sat * 100)}%`}</span>
+          </span>
+        )}
+      </div>
+      <Display className="market-group__display">
+        <span className="dotface dotface--sm">{formatCount(people)}</span>
+        <CrowdDots people={people} step={step} color={color} />
+      </Display>
+      {person && (
+        <div className="market-group__person">
+          <p className="player-text m-0 truncate">
+            <span className="font-semibold">{person.name}</span>{" "}
+            <span className="text-muted">{person.handle}</span>
+          </p>
+          <p className="player-text market-group__bio">{person.bio}</p>
+        </div>
       )}
-    </svg>
+      <button
+        type="button"
+        aria-label={`Open ${GROUPS[group].many}`}
+        className="absolute inset-0 rounded-[inherit]"
+        onClick={(e) => open({ kind: "group", group }, e.currentTarget)}
+      />
+    </Module>
   );
 }
 
 /**
- * The market (game-layer design §5, national in Phase 1): who could buy, who
- * does, and why. Each group's customers show as a crowd; a card opens its group.
+ * The Market station (design §10): who could buy, who does, and where. The 3D map stands at its
+ * middle; readouts for the country above it; ads and sponsorships beside it; the six groups of
+ * customers, each with its crowd on a dot-matrix display, below.
  */
 export function Market({ view }: { view: WorldView }) {
   const open = useWindows((s) => s.open);
@@ -80,37 +139,35 @@ export function Market({ view }: { view: WorldView }) {
   const colors = groupColors(pub.palette);
   const step = crowdStep(Math.max(0, ...GROUP_IDS.map((g) => groupCustomers(view, g))));
   return (
-    <div className="space-y-5">
-      <Panel title="Across the country" aria-label="Across the country">
-        <div className="grid gap-5 sm:grid-cols-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted">
-              People willing to use an AI
-            </p>
-            <p className="font-display text-3xl font-bold">{aboutPeople(adoptable)}</p>
-            <p className="text-sm text-muted">
-              {Math.round(adoption * 100)}% of everyone, and growing
-            </p>
-          </div>
-          <div className="lift relative -m-2 rounded-xl p-2">
-            <Stat label="Your customers" value={yours} format={formatCount} />
-            <Growth values={history} />
-            <button
-              type="button"
-              aria-label="Open customers"
-              className="absolute inset-0 rounded-xl"
-              onClick={(e) => open({ kind: "customers" }, e.currentTarget)}
-            />
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted">Your share</p>
-            <p className="font-display text-3xl font-bold">
-              {adoptable > 0 ? `${((100 * yours) / adoptable).toFixed(2)}%` : "0%"}
-            </p>
-            <p className="text-sm text-muted">of everyone willing</p>
-          </div>
-        </div>
-        <div className="mt-5">
+    <div className="market-bench">
+      <section aria-label="Across the country" className="market-readouts">
+        <Module weight="thin" className="market-readout">
+          <Readout label="People willing to use an AI" value={aboutPeople(adoptable)} size="sm" />
+          <p className="market-readout__note">{`${Math.round(adoption * 100)}% of everyone, and growing`}</p>
+        </Module>
+        <Module weight="thin" className="market-readout lift relative">
+          <Readout label="Your customers" value={formatCount(yours)} />
+          {history.length > 1 && (
+            <Trace values={history} label="Customers by month" className="market-readout__trace" />
+          )}
+          <button
+            type="button"
+            aria-label="Open customers"
+            className="absolute inset-0 rounded-[inherit]"
+            onClick={(e) => open({ kind: "customers" }, e.currentTarget)}
+          />
+        </Module>
+        <Module weight="thin" className="market-readout">
+          <Readout
+            label="Your share"
+            value={adoptable > 0 ? `${((100 * yours) / adoptable).toFixed(2)}%` : "0%"}
+          />
+          <p className="market-readout__note">of everyone willing</p>
+        </Module>
+      </section>
+
+      <div className="market-middle">
+        <Module weight="heavy" label="Who leads each region" className="market-map">
           <RegionMap
             label="Who leads each region"
             tops={leaderTops(view)}
@@ -119,68 +176,26 @@ export function Market({ view }: { view: WorldView }) {
             onOpen={(region, el) => open({ kind: "region", region }, el)}
             readout={(r) => <RegionReadout view={view} region={r} />}
           />
+          <p className="market-map__note">
+            A region's height shows how many of its willing people use its leader's AI.
+          </p>
+        </Module>
+        <div className="market-side">
+          <Campaigns view={view} />
+          <SponsorPanel view={view} />
         </div>
-        <p className="mt-3 text-xs text-muted">
-          <span className="font-semibold text-text">
-            {`Each dot is ${step === 1 ? "1 person" : `${formatCount(step)} people`}`}
-          </span>{" "}
-          in the crowds below. A region's height shows how many of its willing people use its
-          leader's AI.
-        </p>
-      </Panel>
-
-      <Campaigns view={view} />
-      <SponsorPanel view={view} />
-
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {GROUP_IDS.map((g) => {
-          const person = view.spotlights.find((p) => p.group === g);
-          const sat = groupSatisfaction(view, g);
-          const byPlan = company.customers.byGroup[g];
-          return (
-            <Panel
-              key={g}
-              title={GROUPS[g].many}
-              aria-label={GROUPS[g].many}
-              className="lift relative"
-            >
-              <p className="text-xs text-muted">Cares about: {caresAbout(view, g).join(", ")}</p>
-              <div className="mt-4 flex items-end justify-between gap-3">
-                <div>
-                  <p className="font-display text-2xl font-bold">
-                    {formatCount(groupCustomers(view, g))}
-                  </p>
-                  <p className="text-xs text-muted">
-                    {PLAN_IDS.map((p) => `${PLAN_NAMES[p]} ${formatCount(byPlan[p])}`).join(" · ")}
-                  </p>
-                </div>
-                {sat !== null && (
-                  <div className="flex items-center gap-2">
-                    <Face sat={sat} />
-                    <span className="font-semibold">{Math.round(sat * 100)}%</span>
-                  </div>
-                )}
-              </div>
-              <Crowd people={groupCustomers(view, g)} step={step} color={colors[g]} />
-              {person && (
-                <div className="mt-3 rounded-xl border border-border bg-surface-2/60 p-3 text-sm">
-                  <p>
-                    <span className="player-text font-semibold">{person.name}</span>{" "}
-                    <span className="player-text text-xs text-muted">{person.handle}</span>
-                  </p>
-                  <p className="player-text text-xs text-muted">{person.bio}</p>
-                </div>
-              )}
-              <button
-                type="button"
-                aria-label={`Open ${GROUPS[g].many}`}
-                className="absolute inset-0 rounded-[inherit]"
-                onClick={(e) => open({ kind: "group", group: g }, e.currentTarget)}
-              />
-            </Panel>
-          );
-        })}
       </div>
+
+      <section aria-label="Your customers by group" className="market-groups">
+        <p className="market-groups__note">
+          {`Each dot is ${step === 1 ? "1 person" : `${formatCount(step)} people`}`}
+        </p>
+        <div className="market-groups__row">
+          {GROUP_IDS.map((g) => (
+            <GroupModule key={g} view={view} group={g} step={step} color={colors[g]} />
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
@@ -191,66 +206,69 @@ function Campaigns({ view }: { view: WorldView }) {
   const socket = useSocket();
   const campaigns = view.me.company?.campaigns ?? [];
   return (
-    <Panel
-      title="Ad campaigns"
+    <Module
+      label="Ad campaigns"
       aria-label="Ad campaigns"
       hint="Ads make more people aware of you in a region or group. Up to five at once."
-      actions={
-        <Button onClick={(e) => open({ kind: "campaign" }, e.currentTarget)}>
-          New ad campaign
-        </Button>
-      }
+      className="market-side__module"
     >
       {campaigns.length === 0 ? (
-        <p className="text-sm text-muted">No campaigns running. Word of mouth does the work.</p>
+        <p className="m-0 text-sm text-muted">No campaigns running. Word of mouth does the work.</p>
       ) : (
-        <ul className="space-y-3">
-          <AnimatePresence initial={false}>
-            {campaigns.map((k) => {
-              const where = k.region === "all" ? "Everywhere" : REGION_NAMES[k.region];
-              const who = k.group === "all" ? "everyone" : GROUPS[k.group].many.toLowerCase();
-              const left = Math.max(0, k.endDay - view.world.day);
-              const done = (view.world.day - k.startDay) / Math.max(1, k.endDay - k.startDay);
-              return (
-                <motion.li
-                  key={k.id}
-                  layout
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: 30 }}
-                  className="rounded-xl border border-border bg-surface-2/50 p-3"
-                >
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                    <span className="font-semibold">{`${where} · ${who}`}</span>
-                    <span className="text-muted">{`${formatMoney(k.budgetPerDay)} a day`}</span>
-                    <span className="text-muted">{`${formatMoney(k.spent)} spent`}</span>
-                    <span className="ml-auto text-muted">{`${left} ${left === 1 ? "day" : "days"} left`}</span>
-                    <Button
-                      variant="ghost"
-                      aria-label={`Stop the ${k.region === "all" ? "nationwide" : REGION_NAMES[k.region]} campaign`}
-                      onClick={() =>
-                        void socket.command(view.world.id, {
-                          type: "stopCampaign",
-                          campaignId: k.id,
-                        })
-                      }
-                    >
-                      Stop
-                    </Button>
-                  </div>
-                  <div className="mt-2 h-1.5 rounded-full bg-surface">
-                    <div
-                      className="h-1.5 rounded-full bg-brand transition-[width] duration-700"
-                      style={{ width: `${Math.min(100, 100 * done)}%` }}
-                    />
-                  </div>
-                </motion.li>
-              );
-            })}
-          </AnimatePresence>
-        </ul>
+        <Display scroll label="Running ad campaigns" className="market-list">
+          <ul className="m-0 list-none space-y-3 p-0">
+            <AnimatePresence initial={false}>
+              {campaigns.map((k) => {
+                const where = k.region === "all" ? "Everywhere" : REGION_NAMES[k.region];
+                const who = k.group === "all" ? "everyone" : GROUPS[k.group].many.toLowerCase();
+                const left = Math.max(0, k.endDay - view.world.day);
+                const done = (view.world.day - k.startDay) / Math.max(1, k.endDay - k.startDay);
+                return (
+                  <motion.li
+                    key={k.id}
+                    layout
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: 30 }}
+                  >
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                      <span className="font-semibold">{`${where} · ${who}`}</span>
+                      <span className="ml-auto text-muted">{`${left} ${left === 1 ? "day" : "days"} left`}</span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-muted">
+                      <span>{`${formatMoney(k.budgetPerDay)} a day`}</span>
+                      <span>{`${formatMoney(k.spent)} spent`}</span>
+                      <PushButton
+                        variant="quiet"
+                        className="ml-auto"
+                        aria-label={`Stop the ${k.region === "all" ? "nationwide" : REGION_NAMES[k.region]} campaign`}
+                        onClick={() =>
+                          void socket.command(view.world.id, {
+                            type: "stopCampaign",
+                            campaignId: k.id,
+                          })
+                        }
+                      >
+                        Stop
+                      </PushButton>
+                    </div>
+                    <div className="market-list__bar">
+                      <div style={{ width: `${Math.min(100, 100 * done)}%` }} />
+                    </div>
+                  </motion.li>
+                );
+              })}
+            </AnimatePresence>
+          </ul>
+        </Display>
       )}
-    </Panel>
+      <PushButton
+        className="market-side__action"
+        onClick={(e) => open({ kind: "campaign" }, e.currentTarget)}
+      >
+        New ad campaign
+      </PushButton>
+    </Module>
   );
 }
 
@@ -274,32 +292,4 @@ export function regionMarks(view: WorldView): RegionMarks {
     };
   }
   return marks;
-}
-
-/** Customers at each month's end, then today, as a small line drawn in when shown. */
-function Growth({ values }: { values: number[] }) {
-  if (values.length < 2) return null;
-  const w = 160;
-  const h = 32;
-  const top = Math.max(1, ...values);
-  const points = values
-    .map((v, i) => `${(i / (values.length - 1)) * w},${h - (v / top) * (h - 2) - 1}`)
-    .join(" ");
-  return (
-    <svg
-      viewBox={`0 0 ${w} ${h}`}
-      className="mt-2 h-8 w-40"
-      role="img"
-      aria-label="Customers by month"
-    >
-      <polyline
-        points={points}
-        fill="none"
-        stroke="var(--brand)"
-        strokeWidth={2}
-        pathLength={1}
-        className="chart-draw"
-      />
-    </svg>
-  );
 }

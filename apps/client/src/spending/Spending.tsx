@@ -17,6 +17,9 @@ import {
 import { formatMoney } from "@airace/sim";
 import { motion } from "motion/react";
 import { type ReactNode, useState } from "react";
+import { Display } from "../bench/Display.tsx";
+import { Module } from "../bench/Module.tsx";
+import { PushButton } from "../bench/PushButton.tsx";
 import { Button } from "../components/Button.tsx";
 import { INPUT } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
@@ -369,28 +372,32 @@ export function SponsorPanel({ view }: { view: WorldView }) {
   const open = useWindows((s) => s.open);
   const running = (view.me.company?.sponsorships ?? []).filter((x) => view.world.day < x.endDay);
   return (
-    <Panel
-      title="Sponsorships"
+    <Module
+      label="Sponsorships"
       aria-label="Sponsorships"
       hint="Your name on a big event: its crowd hears of you every day it runs."
-      actions={
-        <Button onClick={(e) => open({ kind: "sponsor" }, e.currentTarget)}>
-          Sponsor an event
-        </Button>
-      }
+      className="market-side__module"
     >
       {running.length === 0 ? (
-        <p className="text-sm text-muted">No sponsorships running.</p>
+        <p className="m-0 text-sm text-muted">No sponsorships running.</p>
       ) : (
-        <ul className="space-y-2 text-sm">
-          {running.map((x) => (
-            <li
-              key={x.id}
-            >{`${SPONSOR_WORDS[x.kind].icon} ${SPONSOR_WORDS[x.kind].name} in the ${REGION_NAMES[x.region]} · until ${dayLabel(x.endDay)}`}</li>
-          ))}
-        </ul>
+        <Display scroll label="Running sponsorships" className="market-list">
+          <ul className="m-0 list-none space-y-2 p-0 text-sm">
+            {running.map((x) => (
+              <li
+                key={x.id}
+              >{`${SPONSOR_WORDS[x.kind].icon} ${SPONSOR_WORDS[x.kind].name} in the ${REGION_NAMES[x.region]} · until ${dayLabel(x.endDay)}`}</li>
+            ))}
+          </ul>
+        </Display>
       )}
-    </Panel>
+      <PushButton
+        className="market-side__action"
+        onClick={(e) => open({ kind: "sponsor" }, e.currentTarget)}
+      >
+        Sponsor an event
+      </PushButton>
+    </Module>
   );
 }
 
