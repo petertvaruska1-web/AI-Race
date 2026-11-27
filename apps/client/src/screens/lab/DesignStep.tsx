@@ -1,42 +1,17 @@
 import { TEXT_LIMITS, type TrainingPlan, type VersionView } from "@airace/protocol";
 import { type Balance, paramCount, previewPlan } from "@airace/sim";
-import { Field, INPUT } from "../../components/Field.tsx";
-import { Panel } from "../../components/Panel.tsx";
+import { KeyRow } from "../../bench/KeyRow.tsx";
+import { Module } from "../../bench/Module.tsx";
+import { Slider } from "../../bench/Slider.tsx";
 import { capitalize, formatMoney, gameDays, percent, words } from "../../format.ts";
 import { TrainingExtras } from "../../spending/Spending.tsx";
 import { usePlan } from "../../store/plan.ts";
 
-function Choice({
-  selected,
-  disabled,
-  onClick,
-  title,
-  detail,
-  note,
-}: {
-  selected: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  title: string;
-  detail: string;
-  note?: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      disabled={disabled}
-      onClick={onClick}
-      className={`rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-40 ${selected ? "border-brand bg-brand-soft" : "border-border hover:border-brand"}`}
-    >
-      <span className="block font-semibold">{title}</span>
-      <span className="block text-xs text-muted">{detail}</span>
-      {note && <span className="mt-1 block text-xs text-danger">{note}</span>}
-    </button>
-  );
-}
-
-/** The AI's design: how big its brain is, how much it reads at once, how long and how it learns. */
+/**
+ * The AI's design (design §10, the AI Lab): what it grows from, how big its brain is, how much it
+ * keeps in mind, how long and how it learns, as lit keys and sliders with their plain
+ * explanations; the paid extras and the test question beside them.
+ */
 export function DesignStep({
   plan,
   balance,
@@ -61,168 +36,163 @@ export function DesignStep({
   const update = usePlan((s) => s.update);
   const parent = versions.find((v) => v.id === plan.parentVersionId) ?? null;
   const [, maxPrompt] = TEXT_LIMITS.probePrompt;
-
+  const shortest = Math.min(...balance.attentionSpans);
+  const longest = Math.max(...balance.attentionSpans);
   return (
-    <div className="space-y-4">
-      {versions.length > 0 && (
-        <Panel
-          title="Grow from"
-          hint="A new version keeps everything the earlier one learned and builds on it."
-        >
-          <select
-            className={INPUT}
-            aria-label="Grow from"
-            value={plan.parentVersionId ?? ""}
-            onChange={(e) =>
-              update({
-                parentVersionId: e.target.value || null,
-                ...(e.target.value ? {} : { review: 0 }),
-              })
-            }
+    <div className="lab-design">
+      <div className="lab-design__col">
+        {versions.length > 0 && (
+          <Module
+            label="Grow from"
+            hint="A new version keeps everything the earlier one learned and builds on it."
           >
-            {versions.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.label}
-              </option>
-            ))}
-            <option value="">Start a brand-new AI</option>
-          </select>
-        </Panel>
-      )}
-
-      <Panel
-        title="Brain size"
-        hint="A bigger brain can learn more, but costs more and takes longer to train, and costs more to run for every customer."
-      >
-        <div className="grid gap-3 sm:grid-cols-3">
-          {balance.brainSizes.map((b) => {
-            const shrinks =
-              parent !== null && (b.nLayer < parent.shape.nLayer || b.dModel < parent.shape.dModel);
-            const p = previewPlan(
-              balance,
-              parent?.shape ?? null,
-              { ...plan, brainSize: b.id },
-              lent,
-            );
-            const tooBig = maxParams !== null && paramCount(b.nLayer, b.dModel) > maxParams;
-            return (
-              <Choice
-                key={b.id}
-                selected={plan.brainSize === b.id}
-                disabled={shrinks || tooBig}
-                onClick={() => update({ brainSize: b.id })}
-                title={capitalize(b.id)}
-                detail={
-                  p.ok ? `${formatMoney(p.preview.cost)} · ${gameDays(p.preview.durationDays)}` : ""
-                }
-                {...(shrinks
+            <select
+              className="display-input lab-select"
+              aria-label="Grow from"
+              value={plan.parentVersionId ?? ""}
+              onChange={(e) =>
+                update({
+                  parentVersionId: e.target.value || null,
+                  ...(e.target.value ? {} : { review: 0 }),
+                })
+              }
+            >
+              {versions.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.label}
+                </option>
+              ))}
+              <option value="">Start a brand-new AI</option>
+            </select>
+          </Module>
+        )}
+        <Module
+          label="Brain size"
+          weight="heavy"
+          hint="A bigger brain can learn more, but costs more and takes longer to train, and costs more to run for every customer."
+        >
+          <KeyRow
+            legend="Brain size"
+            className="keyrow--cards"
+            options={balance.brainSizes.map((b) => {
+              const shrinks =
+                parent !== null &&
+                (b.nLayer < parent.shape.nLayer || b.dModel < parent.shape.dModel);
+              const p = previewPlan(
+                balance,
+                parent?.shape ?? null,
+                { ...plan, brainSize: b.id },
+                lent,
+              );
+              const tooBig = maxParams !== null && paramCount(b.nLayer, b.dModel) > maxParams;
+              return {
+                label: capitalize(b.id),
+                value: b.id,
+                disabled: shrinks || tooBig,
+                ...(p.ok
+                  ? {
+                      detail: `${formatMoney(p.preview.cost)} · ${gameDays(p.preview.durationDays)}`,
+                    }
+                  : {}),
+                ...(shrinks
                   ? { note: "Your AI can only grow" }
                   : tooBig && limitNote
                     ? { note: limitNote }
-                    : {})}
-              />
-            );
-          })}
-        </div>
-      </Panel>
-
-      <Panel
-        title="Attention span"
-        hint="How much text it keeps in mind at once while reading and answering."
-      >
-        <div className="grid gap-3 sm:grid-cols-3">
-          {balance.attentionSpans.map((span) => (
-            <Choice
-              key={span}
-              selected={plan.attentionSpan === span}
-              onClick={() => update({ attentionSpan: span })}
-              title={`${span} words`}
-              detail={
-                span === Math.min(...balance.attentionSpans)
-                  ? "Short"
-                  : span === Math.max(...balance.attentionSpans)
-                    ? "Long"
-                    : "Medium"
-              }
-            />
-          ))}
-        </div>
-      </Panel>
-
-      <Panel
-        title="Training length"
-        hint="How much it reads in this run. Longer costs more and takes more game days."
-      >
-        <div className="grid gap-3 sm:grid-cols-3">
-          {balance.lengths.map((l) => (
-            <Choice
-              key={l.id}
-              selected={plan.length === l.id}
-              onClick={() => update({ length: l.id })}
-              title={capitalize(l.id)}
-              detail={words(l.tokens)}
-            />
-          ))}
-        </div>
-      </Panel>
-
-      <Panel
-        title="Learning style"
-        hint="Bold learns faster but can stumble; careful is slow and steady."
-      >
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-muted">Careful</span>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            aria-label="Learning style"
-            value={plan.learningStyle}
-            onChange={(e) => update({ learningStyle: Number(e.target.value) })}
-            className="w-full accent-[var(--brand)]"
+                    : {}),
+              };
+            })}
+            value={plan.brainSize}
+            onChange={(brainSize) => update({ brainSize })}
           />
-          <span className="text-muted">Bold</span>
-        </div>
-      </Panel>
-
-      <Panel
-        title={`Review what it knows: ${percent(plan.review)}`}
-        hint={
-          parent
-            ? "Part of the reading repeats what it read before, so it doesn't forget old skills."
-            : "Needs an earlier AI to review."
-        }
-      >
-        <input
-          type="range"
-          min={0}
-          max={0.5}
-          step={0.05}
-          aria-label="Review what it knows"
-          disabled={!parent}
-          value={plan.review}
-          onChange={(e) => update({ review: Number(e.target.value) })}
-          className="w-full accent-[var(--brand)] disabled:opacity-40"
-        />
-      </Panel>
-
-      <TrainingExtras plan={plan} loved={loved} />
-
-      <Panel>
-        <Field
+        </Module>
+        <Module
+          label="Attention span"
+          hint="How much text it keeps in mind at once while reading and answering."
+        >
+          <KeyRow
+            legend="Attention span"
+            className="keyrow--cards"
+            options={balance.attentionSpans.map((span) => ({
+              label: `${span} words`,
+              value: String(span),
+              detail: span === shortest ? "Short" : span === longest ? "Long" : "Medium",
+            }))}
+            value={String(plan.attentionSpan)}
+            onChange={(span) => update({ attentionSpan: Number(span) })}
+          />
+        </Module>
+      </div>
+      <div className="lab-design__col">
+        <Module
+          label="Training length"
+          hint="How much it reads in this run. Longer costs more and takes more game days."
+        >
+          <KeyRow
+            legend="Training length"
+            className="keyrow--cards"
+            options={balance.lengths.map((l) => ({
+              label: capitalize(l.id),
+              value: l.id,
+              detail: words(l.tokens),
+            }))}
+            value={plan.length}
+            onChange={(length) => update({ length })}
+          />
+        </Module>
+        <Module
+          label="Learning style"
+          hint="Bold learns faster but can stumble; careful is slow and steady."
+        >
+          <div className="lab-ends">
+            <span>Careful</span>
+            <Slider
+              label="Learning style"
+              value={plan.learningStyle}
+              min={0}
+              max={1}
+              step={0.05}
+              onChange={(learningStyle) => update({ learningStyle })}
+              showLabel={false}
+            />
+            <span>Bold</span>
+          </div>
+        </Module>
+        <Module
+          label={`Review what it knows: ${percent(plan.review)}`}
+          hint={
+            parent
+              ? "Part of the reading repeats what it read before, so it doesn't forget old skills."
+              : "Needs an earlier AI to review."
+          }
+        >
+          <Slider
+            label="Review what it knows"
+            value={plan.review}
+            min={0}
+            max={0.5}
+            step={0.05}
+            disabled={!parent}
+            onChange={(review) => update({ review })}
+            showLabel={false}
+          />
+        </Module>
+      </div>
+      <div className="lab-design__col">
+        <TrainingExtras plan={plan} loved={loved} />
+        <Module
           label="Your test question (optional)"
           hint="We ask your AI this while it trains, so you can watch its answer improve."
         >
           <input
-            className={INPUT}
+            className="display-input"
+            aria-label="Your test question (optional)"
             maxLength={maxPrompt}
             value={plan.probePrompt}
             placeholder="What is the sun?"
             onChange={(e) => update({ probePrompt: e.target.value })}
           />
-        </Field>
-      </Panel>
+        </Module>
+      </div>
     </div>
   );
 }

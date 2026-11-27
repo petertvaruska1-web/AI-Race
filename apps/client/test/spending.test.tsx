@@ -86,12 +86,18 @@ describe("things to buy", () => {
   it("training extras: tutoring packs and Learn from customers (only with enough loved answers)", async () => {
     usePlan.setState({ plan: { ...BALANCE_TEST.defaultPlan } } as never);
     const { rerender } = render(<TrainingExtras plan={current()} loved={3} />);
-    expect(screen.getByRole("checkbox")).toHaveProperty("disabled", true);
+    expect(screen.getByRole("switch", { name: "Learn from customers" })).toHaveProperty(
+      "disabled",
+      true,
+    );
     expect(screen.getByText(/Customers have loved 3/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Tutoring packs"), { target: { value: "2" } });
     expect(usePlan.getState().plan?.tutoring).toEqual({ dataset: "code", packs: 2 });
     rerender(<TrainingExtras plan={current()} loved={40} />);
-    expect(screen.getByRole("checkbox")).toHaveProperty("disabled", false);
+    expect(screen.getByRole("switch", { name: "Learn from customers" })).toHaveProperty(
+      "disabled",
+      false,
+    );
   });
 
   it("a launch can book a keynote with a live demo question", async () => {

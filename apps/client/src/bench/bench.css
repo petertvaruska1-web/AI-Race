@@ -2663,7 +2663,8 @@
   .lab-coaching__count > .display {
     padding: 6px 10px;
   }
-  /* The summary plate: the run's price, its game time and real minutes, and the start button. */
+  /* The summary plate: the run's price, its game time and real minutes, and the start button.
+     It stands at the bench's foot, however short the step above it. */
   .lab-summary {
     position: sticky;
     bottom: 0;
@@ -2672,6 +2673,7 @@
     flex: none;
     align-items: center;
     gap: 16px;
+    margin-top: auto;
   }
   .lab-summary__cost {
     display: flex;
@@ -2707,5 +2709,164 @@
     .lab-data__below {
       grid-template-columns: minmax(0, 1fr);
     }
+  }
+
+  /* The AI Lab's Prepare and Design steps (design §10). */
+  .lab-note {
+    margin: 8px 0 0;
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--ink-2);
+  }
+  .lab-prepare {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 14px;
+  }
+  .lab-prepare__cleaning,
+  .lab-prepare__options {
+    min-width: 0;
+  }
+  .lab-prepare__keys {
+    margin-top: 10px;
+  }
+  .lab-removed {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 210px;
+    margin: 10px 0 0;
+    padding: 8px 10px;
+    overflow-y: auto;
+    list-style: none;
+    scrollbar-width: thin;
+  }
+  .lab-removed__item {
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--display-ink-2);
+    text-decoration: line-through;
+    text-decoration-color: rgb(255 107 107 / 0.6);
+    background: rgb(255 255 255 / 0.03);
+  }
+  .lab-prepare__pool {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin: 12px 0 0;
+    font-size: 13px;
+  }
+  .lab-prepare__options {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .lab-option {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .lab-option .lab-removed {
+    max-height: 120px;
+    margin-top: 0;
+  }
+  .lab-design {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    gap: 14px;
+  }
+  .lab-design__col {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+  }
+  .lab-select {
+    width: 100%;
+    margin-top: 10px;
+  }
+  .lab-ends {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+  .lab-ends .bench-slider {
+    flex: 1;
+  }
+  /* Keys with a second line: a price and game days, a size, or why the key is off. */
+  .keyrow--cards {
+    margin-top: 10px;
+  }
+  .keyrow--cards .keycap {
+    align-items: flex-start;
+    min-height: 46px;
+    padding: 7px 10px;
+  }
+  .keyrow--cards .keycap__lamp {
+    margin-top: 4px;
+  }
+  .keycap__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .keycap__detail {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    color: #9aa3ad;
+  }
+  .keycap--on .keycap__detail {
+    color: #d9dee5;
+  }
+  .keycap__note {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: #ff8a8a;
+  }
+  @media (max-width: 1279px) {
+    .lab-prepare,
+    .lab-design {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* Extra practice on the Design bench: tutoring packs and learning from customers. */
+  .lab-extras__title {
+    margin: 10px 0 0;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .lab-extras__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .lab-extras__select {
+    width: auto;
+    min-width: 0;
+  }
+  .lab-extras__row .bench-slider {
+    flex: 1;
+    min-width: 60px;
+  }
+  .lab-extras__count {
+    flex: none;
+    padding: 5px 8px;
+  }
+  .lab-extras__learn {
+    margin-top: 14px;
   }
 }

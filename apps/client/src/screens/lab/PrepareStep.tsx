@@ -1,7 +1,9 @@
 import { type PublicCatalog, prepKey, type TrainingPlan } from "@airace/protocol";
 import type { Balance } from "@airace/sim";
 import type { ReactNode } from "react";
-import { Panel } from "../../components/Panel.tsx";
+import { KeyRow } from "../../bench/KeyRow.tsx";
+import { Module } from "../../bench/Module.tsx";
+import { ToggleSwitch } from "../../bench/ToggleSwitch.tsx";
 import { formatMoney, words } from "../../format.ts";
 import { usePlan } from "../../store/plan.ts";
 
@@ -24,14 +26,11 @@ function examples(
 }
 
 function Removed({ items }: { items: string[] }) {
-  if (items.length === 0) return <p className="text-xs text-muted">Nothing in your mix.</p>;
+  if (items.length === 0) return <p className="lab-note">Nothing in your mix.</p>;
   return (
-    <ul className="space-y-2" aria-label="What this removes">
+    <ul className="display lab-removed" aria-label="What this removes">
       {items.map((t) => (
-        <li
-          key={t}
-          className="player-text rounded-lg border border-border bg-surface-2 p-3 text-xs line-through decoration-danger/60"
-        >
+        <li key={t} className="player-text lab-removed__item">
           {t}
         </li>
       ))}
@@ -39,7 +38,8 @@ function Removed({ items }: { items: string[] }) {
   );
 }
 
-function Toggle({
+/** One option of the preparing: a switch with its lamp, and what it removes while on. */
+function Option({
   label,
   hint,
   checked,
@@ -53,21 +53,10 @@ function Toggle({
   children?: ReactNode;
 }) {
   return (
-    <Panel>
-      <label className="flex items-start gap-3">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-          className="mt-1 size-4 accent-[var(--brand)]"
-        />
-        <span>
-          <span className="block font-semibold">{label}</span>
-          <span className="block text-sm text-muted">{hint}</span>
-        </span>
-      </label>
-      {children && <div className="mt-3">{children}</div>}
-    </Panel>
+    <div className="lab-option">
+      <ToggleSwitch label={label} hint={hint} checked={checked} onChange={onChange} />
+      {children}
+    </div>
   );
 }
 
@@ -88,71 +77,67 @@ export function PrepareStep({
     .reduce((sum, d) => sum + (d.pools[key]?.tokens ?? 0), 0);
 
   return (
-    <div className="space-y-4">
-      <Panel title="Cleaning" hint="How picky to be about what your AI reads.">
-        <fieldset
-          className="m-0 mb-3 inline-flex rounded-lg border border-border p-1"
-          aria-label="Cleaning"
-        >
-          {CLEANING.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              aria-pressed={plan.cleaning === c.id}
-              onClick={() => update({ cleaning: c.id })}
-              className={`rounded-md px-4 py-1.5 text-sm ${plan.cleaning === c.id ? "bg-brand text-on-brand" : "text-muted hover:text-text"}`}
-            >
-              {c.label}
-            </button>
-          ))}
-        </fieldset>
-        <p className="mb-3 text-sm text-muted">
-          {CLEANING.find((c) => c.id === plan.cleaning)?.hint}
-        </p>
+    <div className="lab-prepare">
+      <Module
+        label="Cleaning"
+        weight="heavy"
+        hint="How picky to be about what your AI reads."
+        className="lab-prepare__cleaning"
+      >
+        <KeyRow
+          legend="Cleaning"
+          options={CLEANING.map((c) => ({ label: c.label, value: c.id }))}
+          value={plan.cleaning}
+          onChange={(cleaning) => update({ cleaning })}
+          className="lab-prepare__keys"
+        />
+        <p className="lab-note">{CLEANING.find((c) => c.id === plan.cleaning)?.hint}</p>
         <Removed
           items={examples(catalog, plan, (d) => d.removedExamples.cleaning[plan.cleaning])}
         />
-      </Panel>
-      <Toggle
-        label="Remove duplicates"
-        hint="Reads each text once, instead of memorizing what appears many times."
-        checked={plan.removeDuplicates}
-        onChange={(removeDuplicates) => update({ removeDuplicates })}
-      >
-        {plan.removeDuplicates && (
-          <Removed items={examples(catalog, plan, (d) => d.removedExamples.duplicates)} />
-        )}
-      </Toggle>
-      <Toggle
-        label={`Fact-checking (${formatMoney(balance.factCheckCost)})`}
-        hint="Pays checkers to take out statements that are false."
-        checked={plan.factCheck}
-        onChange={(factCheck) => update({ factCheck })}
-      >
-        {plan.factCheck && (
-          <Removed items={examples(catalog, plan, (d) => d.removedExamples.factCheck)} />
-        )}
-      </Toggle>
-      <Toggle
-        label={`Fact-check plus ($${balance.economy.expertCheckPerThousand} per thousand words)`}
-        hint="Experts keep only the cleanest text, without duplicates or false statements."
-        checked={plan.cleaning === "expert"}
-        onChange={(on) => update({ cleaning: on ? "expert" : "thorough" })}
-      >
-        {plan.cleaning === "expert" && (
-          <Removed items={examples(catalog, plan, (d) => d.removedExamples.cleaning.expert)} />
-        )}
-      </Toggle>
-      <Toggle
-        label="Balance the topics"
-        hint="Reads about every topic evenly, instead of mostly what the data has most of."
-        checked={plan.variety === "balanced"}
-        onChange={(on) => update({ variety: on ? "balanced" : "natural" })}
-      />
-      <p data-testid="pool" className="text-sm">
-        After preparing: <span className="font-semibold text-brand">{words(pool)}</span> left to
-        learn from.
-      </p>
+        <p data-testid="pool" className="display lab-prepare__pool">
+          After preparing: <span className="dotface dotface--sm">{words(pool)}</span> left to learn
+          from.
+        </p>
+      </Module>
+      <Module label="Before your AI reads it" className="lab-prepare__options">
+        <Option
+          label="Remove duplicates"
+          hint="Reads each text once, instead of memorizing what appears many times."
+          checked={plan.removeDuplicates}
+          onChange={(removeDuplicates) => update({ removeDuplicates })}
+        >
+          {plan.removeDuplicates && (
+            <Removed items={examples(catalog, plan, (d) => d.removedExamples.duplicates)} />
+          )}
+        </Option>
+        <Option
+          label={`Fact-checking (${formatMoney(balance.factCheckCost)})`}
+          hint="Pays checkers to take out statements that are false."
+          checked={plan.factCheck}
+          onChange={(factCheck) => update({ factCheck })}
+        >
+          {plan.factCheck && (
+            <Removed items={examples(catalog, plan, (d) => d.removedExamples.factCheck)} />
+          )}
+        </Option>
+        <Option
+          label={`Fact-check plus ($${balance.economy.expertCheckPerThousand} per thousand words)`}
+          hint="Experts keep only the cleanest text, without duplicates or false statements."
+          checked={plan.cleaning === "expert"}
+          onChange={(on) => update({ cleaning: on ? "expert" : "thorough" })}
+        >
+          {plan.cleaning === "expert" && (
+            <Removed items={examples(catalog, plan, (d) => d.removedExamples.cleaning.expert)} />
+          )}
+        </Option>
+        <Option
+          label="Balance the topics"
+          hint="Reads about every topic evenly, instead of mostly what the data has most of."
+          checked={plan.variety === "balanced"}
+          onChange={(on) => update({ variety: on ? "balanced" : "natural" })}
+        />
+      </Module>
     </div>
   );
 }

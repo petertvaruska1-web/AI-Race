@@ -20,6 +20,8 @@ import { type ReactNode, useState } from "react";
 import { Display } from "../bench/Display.tsx";
 import { Module } from "../bench/Module.tsx";
 import { PushButton } from "../bench/PushButton.tsx";
+import { Slider } from "../bench/Slider.tsx";
+import { ToggleSwitch } from "../bench/ToggleSwitch.tsx";
 import { Button } from "../components/Button.tsx";
 import { INPUT } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
@@ -500,67 +502,63 @@ export function TrainingExtras({ plan, loved }: { plan: TrainingPlan; loved: num
   const update = usePlan((s) => s.update);
   const packs = plan.tutoring?.packs ?? 0;
   return (
-    <Panel title="Extra practice" hint="Paid extras that change what your AI really reads.">
-      <div className="space-y-4">
-        <div>
-          <p className="text-sm font-semibold">Tutoring packs</p>
-          <p className="text-xs text-muted">
-            Each pack adds 10% more reading from one dataset, on top of the length.
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <select
-              aria-label="Tutoring dataset"
-              className={`${INPUT} w-auto`}
-              value={plan.tutoring?.dataset ?? "code"}
-              onChange={(e) =>
-                update({
-                  tutoring: packs > 0 ? { dataset: e.target.value as DatasetId, packs } : null,
-                })
-              }
-            >
-              {DATASET_IDS.map((d) => (
-                <option key={d} value={d}>
-                  {DATASET_TITLES[d]}
-                </option>
-              ))}
-            </select>
-            <input
-              type="range"
-              min={0}
-              max={5}
-              step={1}
-              aria-label="Tutoring packs"
-              value={packs}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                update({
-                  tutoring: n > 0 ? { dataset: plan.tutoring?.dataset ?? "code", packs: n } : null,
-                });
-              }}
-              className="accent-[var(--brand)]"
-            />
-            <span className="text-sm">
-              {packs === 0 ? "None" : `${packs} pack${packs > 1 ? "s" : ""}`}
-            </span>
-          </div>
-        </div>
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={plan.learnFromCustomers}
-            disabled={loved < 10}
-            onChange={(e) => update({ learnFromCustomers: e.target.checked })}
-          />
-          <span>
-            <span className="font-semibold">Learn from customers</span>
-            <span className="block text-xs text-muted">
-              {loved < 10
-                ? `Customers have loved ${loved} of your AI's answers. It needs 10 to learn from them.`
-                : `Read the ${loved} conversations customers loved most, as 5% of the run.`}
-            </span>
+    <Module
+      label="Extra practice"
+      hint="Paid extras that change what your AI really reads."
+      className="lab-extras"
+    >
+      <p className="lab-extras__title">Tutoring packs</p>
+      <p className="lab-note">
+        Each pack adds 10% more reading from one dataset, on top of the length.
+      </p>
+      <div className="lab-extras__row">
+        <select
+          aria-label="Tutoring dataset"
+          className="display-input lab-extras__select"
+          value={plan.tutoring?.dataset ?? "code"}
+          onChange={(e) =>
+            update({
+              tutoring: packs > 0 ? { dataset: e.target.value as DatasetId, packs } : null,
+            })
+          }
+        >
+          {DATASET_IDS.map((d) => (
+            <option key={d} value={d}>
+              {DATASET_TITLES[d]}
+            </option>
+          ))}
+        </select>
+        <Slider
+          label="Tutoring packs"
+          value={packs}
+          min={0}
+          max={5}
+          step={1}
+          showLabel={false}
+          onChange={(n) =>
+            update({
+              tutoring: n > 0 ? { dataset: plan.tutoring?.dataset ?? "code", packs: n } : null,
+            })
+          }
+        />
+        <span className="display lab-extras__count">
+          <span className="dotface dotface--xs">
+            {packs === 0 ? "None" : `${packs} pack${packs > 1 ? "s" : ""}`}
           </span>
-        </label>
+        </span>
       </div>
-    </Panel>
+      <ToggleSwitch
+        label="Learn from customers"
+        checked={plan.learnFromCustomers}
+        disabled={loved < 10}
+        onChange={(on) => update({ learnFromCustomers: on })}
+        hint={
+          loved < 10
+            ? `Customers have loved ${loved} of your AI's answers. It needs 10 to learn from them.`
+            : `Read the ${loved} conversations customers loved most, as 5% of the run.`
+        }
+        className="lab-extras__learn"
+      />
+    </Module>
   );
 }

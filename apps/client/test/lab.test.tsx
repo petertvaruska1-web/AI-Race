@@ -32,7 +32,7 @@ describe("AI Lab planning", () => {
     step("3 Design");
     const cost = await screen.findByTestId("plan-cost");
     expect(cost.textContent).toContain("$41,596");
-    fireEvent.click(screen.getByRole("button", { name: /^Small/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /^Small/ }));
     const plan = usePlan.getState().plan;
     if (!plan) throw new Error("no plan");
     const small = previewPlan(BALANCE_V2, null, plan);
@@ -48,7 +48,7 @@ describe("AI Lab planning", () => {
     company.departments.research = { budget: 200_000, staffed: 200_000 };
     render(<Lab view={viewOf(s)} />);
     step("2 Prepare");
-    fireEvent.click(screen.getByRole("checkbox", { name: /^Fact-checking/ }));
+    fireEvent.click(screen.getByRole("switch", { name: /^Fact-checking/ }));
     const plan = usePlan.getState().plan;
     if (!plan?.factCheck) throw new Error("no fact-checked plan");
     const server = previewTraining(s, "c1", plan);
@@ -124,7 +124,7 @@ describe("AI Lab planning", () => {
   it("shows what thorough cleaning removes and what is left", () => {
     render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
     step("2 Prepare");
-    fireEvent.click(screen.getByRole("button", { name: "Thorough" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Thorough" }));
     const removed = CATALOG.datasets[0]?.removedExamples.cleaning.thorough[0] ?? "";
     expect(screen.getAllByText(removed).length).toBeGreaterThan(0);
     const left = CATALOG.datasets.reduce(
@@ -137,7 +137,7 @@ describe("AI Lab planning", () => {
   it("starts training with exactly the plan on screen", async () => {
     render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
     step("3 Design");
-    fireEvent.click(screen.getByRole("button", { name: /^Long/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /^Long/ }));
     fireEvent.change(screen.getByPlaceholderText("What is the sun?"), {
       target: { value: "Who are you?" },
     });
@@ -150,6 +150,49 @@ describe("AI Lab planning", () => {
       parentVersionId: null,
     });
     expect(game.ws.sentOf("command")[0]?.cmd).toEqual({ type: "startTraining", plan });
+  });
+
+  it("sets the cleaning on lit keys and each option on a switch with its lamp", () => {
+    render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
+    step("2 Prepare");
+    const cleaning = screen.getByRole("group", { name: "Cleaning" });
+    expect(
+      within(cleaning)
+        .getAllByRole("radio")
+        .map((r) => r.closest("label")?.textContent),
+    ).toEqual(["Light", "Standard", "Thorough"]);
+    for (const name of [
+      "Remove duplicates",
+      /^Fact-checking/,
+      /^Fact-check plus/,
+      "Balance the topics",
+    ])
+      expect(screen.getByRole("switch", { name })).toBeTruthy();
+    fireEvent.click(screen.getByRole("switch", { name: "Balance the topics" }));
+    expect(usePlan.getState().plan?.variety).toBe("balanced");
+  });
+
+  it("designs the brain on lit keys, each size with its price and game days", () => {
+    render(<Lab view={viewOf(runningWorld("balance-v2"))} />);
+    step("3 Design");
+    const sizes = screen.getByRole("group", { name: "Brain size" });
+    const plan = usePlan.getState().plan;
+    if (!plan) throw new Error("no plan");
+    const small = previewPlan(BALANCE_V2, null, { ...plan, brainSize: "small" });
+    if (!small.ok) throw new Error(small.reason);
+    const key = within(sizes).getByRole("radio", { name: /^Small/ });
+    expect(key.closest("label")?.textContent).toContain(formatMoney(small.preview.cost));
+    fireEvent.click(key);
+    expect(usePlan.getState().plan?.brainSize).toBe("small");
+    for (const name of ["Attention span", "Training length"])
+      expect(screen.getByRole("group", { name })).toBeTruthy();
+    fireEvent.click(
+      within(screen.getByRole("group", { name: "Attention span" })).getByRole("radio", {
+        name: /^512 words/,
+      }),
+    );
+    expect(usePlan.getState().plan?.attentionSpan).toBe(512);
+    expect(screen.getByRole("slider", { name: "Learning style" })).toBeTruthy();
   });
 
   it("keeps plain words on every control", () => {

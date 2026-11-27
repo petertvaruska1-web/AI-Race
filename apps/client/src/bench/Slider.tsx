@@ -10,6 +10,7 @@ export function Slider({
   step = 1,
   onChange,
   showLabel = true,
+  disabled = false,
 }: {
   label: string;
   value: number;
@@ -18,6 +19,7 @@ export function Slider({
   step?: number;
   onChange: (value: number) => void;
   showLabel?: boolean;
+  disabled?: boolean;
 }) {
   const filled = ((value - min) / (max - min || 1)) * 100;
   return (
@@ -30,6 +32,7 @@ export function Slider({
         max={max}
         step={step}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
         className="bench-slider__input"
         style={{ ["--filled" as string]: `${filled}%` }}

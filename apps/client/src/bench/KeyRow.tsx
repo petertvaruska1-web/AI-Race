@@ -5,6 +5,10 @@ export type KeyOption<T extends string> = {
   value: T;
   disabled?: boolean;
   title?: string;
+  /** A second line under the label (a price, a size). */
+  detail?: string;
+  /** Why the key is off, under the label. */
+  note?: string;
 };
 
 /**
@@ -45,7 +49,15 @@ export function KeyRow<T extends string>({
             onChange={() => onChange(o.value)}
           />
           <span className="keycap__lamp" aria-hidden="true" />
-          {o.label}
+          {o.detail || o.note ? (
+            <span className="keycap__text">
+              <span>{o.label}</span>
+              {o.detail && <span className="keycap__detail"> {o.detail}</span>}
+              {o.note && <span className="keycap__note"> {o.note}</span>}
+            </span>
+          ) : (
+            o.label
+          )}
         </label>
       ))}
     </fieldset>
