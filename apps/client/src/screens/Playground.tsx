@@ -1,9 +1,9 @@
 import { TEXT_LIMITS, type VersionView, type WorldView } from "@airace/protocol";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { Button } from "../components/Button.tsx";
+import { Display } from "../bench/Display.tsx";
+import { Module } from "../bench/Module.tsx";
+import { PushButton } from "../bench/PushButton.tsx";
 import { ChatLog, type ChatMessage } from "../components/ChatLog.tsx";
-import { INPUT } from "../components/Field.tsx";
-import { Panel } from "../components/Panel.tsx";
 import { Toggle } from "../components/Toggle.tsx";
 import { sharedAis } from "../friends.ts";
 import { Games } from "../games/Games.tsx";
@@ -163,7 +163,7 @@ export function Playground({ view }: { view: WorldView }) {
   );
   if (mode === "interview") {
     return (
-      <div className="space-y-3">
+      <div className="play-bench">
         {modes}
         <InterviewMode view={view} />
       </div>
@@ -171,7 +171,7 @@ export function Playground({ view }: { view: WorldView }) {
   }
   if (mode === "games" && player) {
     return (
-      <div className="space-y-3">
+      <div className="play-bench">
         {modes}
         <p className="text-xs text-muted">
           {`Playing with ${player.label}. Customer posts are paused while you're here, so your AI answers you faster.`}
@@ -181,123 +181,159 @@ export function Playground({ view }: { view: WorldView }) {
     );
   }
 
+  // The picker's order, as its list shows it: your AIs newest first, then friends', then rivals'.
+  const order = [
+    ...[...versions].reverse().map((v) => v.id),
+    ...friends.map((f) => f.versionId),
+    ...rivals.map((r) => r.versionId),
+  ];
+  const at = order.indexOf(version.id);
+  const talkTo = (id: string) => {
+    setVersion(id);
+    setThreadId(null);
+    setMessages([]);
+  };
   return (
-    <div className="space-y-3">
+    <div className="play-bench">
       {modes}
-      <div className="grid gap-4 md:grid-cols-[220px_1fr]">
-        <aside className="space-y-3">
-          <label className="block text-sm">
-            <span className="mb-1 block font-semibold">Talk to</span>
-            <select
-              className={INPUT}
-              value={version.id}
-              onChange={(e) => {
-                setVersion(e.target.value);
+      <div className="play-chat">
+        <aside className="play-side">
+          <Module label="Talk to" className="play-who">
+            <div className="play-picker">
+              <PushButton
+                variant="quiet"
+                aria-label="Previous AI"
+                disabled={at <= 0}
+                onClick={() => talkTo(order[at - 1] ?? version.id)}
+              >
+                ‹
+              </PushButton>
+              <select
+                className="display-input play-picker__select"
+                aria-label="Talk to"
+                value={version.id}
+                onChange={(e) => talkTo(e.target.value)}
+              >
+                <optgroup label="Your AIs">
+                  {[...versions].reverse().map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.label}
+                    </option>
+                  ))}
+                </optgroup>
+                {friends.length > 0 && (
+                  <optgroup label="Friends' AIs">
+                    {friends.map((f) => (
+                      <option key={f.versionId} value={f.versionId}>
+                        {`${f.company.name}'s ${f.label}`}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {rivals.length > 0 && (
+                  <optgroup label="Rivals' AIs">
+                    {rivals.map((r) => (
+                      <option key={r.versionId} value={r.versionId}>
+                        {`${r.companyName}'s ${r.productName}`}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+              <PushButton
+                variant="quiet"
+                aria-label="Next AI"
+                disabled={at < 0 || at >= order.length - 1}
+                onClick={() => talkTo(order[at + 1] ?? version.id)}
+              >
+                ›
+              </PushButton>
+            </div>
+            <PushButton
+              variant="secondary"
+              className="play-new"
+              onClick={() => {
                 setThreadId(null);
                 setMessages([]);
+                setStreaming(null);
               }}
             >
-              <optgroup label="Your AIs">
-                {[...versions].reverse().map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.label}
-                  </option>
-                ))}
-              </optgroup>
-              {friends.length > 0 && (
-                <optgroup label="Friends' AIs">
-                  {friends.map((f) => (
-                    <option key={f.versionId} value={f.versionId}>
-                      {`${f.company.name}'s ${f.label}`}
-                    </option>
+              New conversation
+            </PushButton>
+          </Module>
+          <Module label="Conversations" className="play-threads">
+            {mine.length === 0 ? (
+              <p className="play-note">Your conversations with this AI stay here.</p>
+            ) : (
+              <Display scroll label="Your conversations" className="play-threads__list">
+                <ul>
+                  {mine.map((t, i) => (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        onClick={() => openThread(t)}
+                        aria-current={t.id === threadId ? "true" : undefined}
+                        className="play-thread"
+                      >
+                        Conversation {i + 1}
+                      </button>
+                    </li>
                   ))}
-                </optgroup>
-              )}
-              {rivals.length > 0 && (
-                <optgroup label="Rivals' AIs">
-                  {rivals.map((r) => (
-                    <option key={r.versionId} value={r.versionId}>
-                      {`${r.companyName}'s ${r.productName}`}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-          </label>
-          <Button
-            variant="secondary"
-            className="w-full"
-            onClick={() => {
-              setThreadId(null);
-              setMessages([]);
-              setStreaming(null);
-            }}
-          >
-            New conversation
-          </Button>
-          <ul className="space-y-1 text-sm">
-            {mine.map((t, i) => (
-              <li key={t.id}>
-                <button
-                  type="button"
-                  onClick={() => openThread(t)}
-                  aria-current={t.id === threadId ? "true" : undefined}
-                  className={`w-full rounded-lg px-3 py-1.5 text-left ${t.id === threadId ? "bg-brand-soft text-text" : "text-muted hover:text-text"}`}
-                >
-                  Conversation {i + 1}
-                </button>
-              </li>
-            ))}
-          </ul>
+                </ul>
+              </Display>
+            )}
+          </Module>
         </aside>
-        <Panel>
-          <p className="mb-3 text-xs text-muted">
-            Customer posts are paused while you're here, so your AI answers you faster.
-          </p>
-          {friend && (
-            <p className="mb-3 text-xs text-muted">Its maker's computer answers your messages.</p>
-          )}
+        <Module
+          label={`Talking to ${version.label}`}
+          weight="heavy"
+          hint="Customer posts are paused while you're here, so your AI answers you faster."
+          className="play-terminal"
+        >
+          {friend && <p className="play-note">Its maker's computer answers your messages.</p>}
           {own && neverSawConversation(view, own) && (
-            <p className="mb-3 rounded-lg bg-brand-soft p-3 text-sm">
+            <p className="play-warn">
               This AI never saw a conversation, so it may just continue your text.
             </p>
           )}
-          {messages.length === 0 && streaming === null && (
-            <p className="mb-3 text-sm text-muted">
-              Say something to {version.label}. It answers in its own words.
-            </p>
-          )}
-          <ChatLog
-            messages={messages}
-            streaming={streaming}
-            aiName={version.label}
-            {...(own && threadId
-              ? {
-                  coach: (idx: number) => (
-                    <CoachButtons worldId={worldId} threadId={threadId} idx={idx} />
-                  ),
-                }
-              : {})}
-          />
-          {messages.length >= 6 && (
-            <p className="mt-3 text-xs text-muted">
-              A long conversation is a lot for a small AI to follow. Start a new conversation for
-              its best answers.
-            </p>
-          )}
+          <Display scroll label="Conversation" className="play-terminal__display">
+            {messages.length === 0 && streaming === null && (
+              <p className="play-terminal__hint">
+                Say something to {version.label}. It answers in its own words.
+              </p>
+            )}
+            <ChatLog
+              messages={messages}
+              streaming={streaming}
+              aiName={version.label}
+              {...(own && threadId
+                ? {
+                    coach: (idx: number) => (
+                      <CoachButtons worldId={worldId} threadId={threadId} idx={idx} />
+                    ),
+                  }
+                : {})}
+            />
+            {messages.length >= 6 && (
+              <p className="play-terminal__hint">
+                A long conversation is a lot for a small AI to follow. Start a new conversation for
+                its best answers.
+              </p>
+            )}
+          </Display>
           {failure && (
-            <div role="alert" className="mt-3 flex items-center gap-3 text-sm text-danger">
+            <div role="alert" className="play-failure">
               {failure}
               {lastSent && (
-                <Button variant="secondary" onClick={() => void send(lastSent)}>
+                <PushButton variant="secondary" onClick={() => void send(lastSent)}>
                   Try again
-                </Button>
+                </PushButton>
               )}
             </div>
           )}
-          <form onSubmit={submit} className="mt-4 space-y-2">
+          <form onSubmit={submit} className="play-type">
             <textarea
-              className={`${INPUT} min-h-20`}
+              className="display-input play-type__input"
               aria-label="Your message"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -308,15 +344,15 @@ export function Playground({ view }: { view: WorldView }) {
                 }
               }}
             />
-            {tooLong && <p className="text-xs text-danger">{TOO_LONG}</p>}
-            <Button
+            <PushButton
               type="submit"
               disabled={streaming !== null || tooLong || draft.trim().length === 0}
             >
               Send
-            </Button>
+            </PushButton>
           </form>
-        </Panel>
+          {tooLong && <p className="play-failure">{TOO_LONG}</p>}
+        </Module>
       </div>
     </div>
   );

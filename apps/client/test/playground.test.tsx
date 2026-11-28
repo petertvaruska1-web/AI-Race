@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Playground, TOO_LONG } from "../src/screens/Playground.tsx";
 import { usePlayground } from "../src/store/playground.ts";
@@ -46,6 +46,32 @@ describe("playground", () => {
         { v: 1, type: "inPlayground", worldId: "w1" },
       ]),
     );
+  });
+
+  it("talks in a terminal display, your lines and its replies as text", async () => {
+    render(<Playground view={viewOf(trainedWorld())} />);
+    const terminal = screen.getByRole("region", { name: "Conversation" });
+    expect(terminal.className).toContain("display--scroll");
+    expect(within(terminal).getByTestId("chat-log")).toBeTruthy();
+    await sendAndAck("Hello there");
+    stream({ kind: "done", text: "<b>Hi</b> there" });
+    expect(await within(terminal).findByText("<b>Hi</b> there")).toBeTruthy();
+    expect(within(terminal).getByText("Hello there")).toBeTruthy();
+  });
+
+  it("steps through the AIs with keys beside the picker", () => {
+    const view = viewOf(trainedWorld());
+    const company = view.me.company;
+    const first = company?.versions[0];
+    if (!company || !first) throw new Error("no version");
+    company.versions = [first, { ...first, id: "v2", label: "v2" }];
+    render(<Playground view={view} />);
+    expect(
+      (screen.getByRole("button", { name: "Previous AI" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Next AI" }));
+    expect(usePlayground.getState().versionId).toBe("v1");
+    expect((screen.getByLabelText("Talk to") as HTMLSelectElement).value).toBe("v1");
   });
 
   it("sends a message and shows the reply as it streams in", async () => {
