@@ -1,6 +1,6 @@
 # The look redesign ("Instrument bench") — design
 
-**Date:** 2026-11-26 · **Owner decisions:** C57–C62 (§0) · **Applies to:** the web client `apps/client` (every screen, window and object), plus the small protocol, sim and server changes it needs (§13) · **Before:** the ultimate game document (`docs/handoff/next-steps.md`), whose screenshots must show this look.
+**Date:** 2026-11-26 · **Owner decisions:** C57–C66 (§0) · **Applies to:** the web client `apps/client` (every screen, window and object), plus the small protocol, sim and server changes it needs (§13) · **Before:** the ultimate game document (`docs/handoff/next-steps.md`), whose screenshots must show this look.
 
 ## 0. Owner decisions (2026-11-26)
 
@@ -25,6 +25,16 @@ Answered in the interview (multiple-choice questions and three live mockups, all
 | C61 | **Founding happens on one bench, exactly as in the mockup** (`founding.html`): a dot-matrix name plate, two color dials with brightness sliders and twelve quick-color cartridges, the emblem press with the 3D badge, the knobs, symbol keys, sliders and switches, the players and invite modules, and a lever you pull down to found the company. No guide light and no step-by-step. |
 | C62 | **The lab door:** you sign in by typing your name onto a lab ID badge that prints; your worlds hang as lit panels on a wall rack; a new world is set up on a small bench (name plate, goal knob, Fair mode switch); joining a friend uses a keypad for the code. |
 | C63 | **New pictures in the lab style replace every emoji** (about 90: the Story Dice faces, the pattern puzzles' animals, the trophy marks, the game and sponsor marks), in one consistent style: engraved on the 3D dice and trophies, lit on the displays. |
+
+Added by the owner on 2026-11-28, while plan 4 was being built ("keep this in mind and have it fixed by the time the redesign is done"):
+
+| # | Decision |
+|---|---|
+| C64 | **Benchmarks become one global graph:** everyone's AIs recorded and compared at the same time, and the player toggles what they see: hide a company's AIs, or look at one category only (coding, for example). It replaces the per-version gauges of §10. |
+| C65 | **The cosmetics get a proper redesign and look much cooler** (the Customize window: orb styles and logo motions, what you buy and how you try it on). |
+| C66 | **The investment fund gets a graph** of the portfolio growing or shrinking. |
+
+Claude's reading of C64 (the owner can veto it): the graph's line for each company runs through its AIs by the day each was made, at each AI's measured score (overall, or the chosen category). Other companies' AIs appear once they are released or shared, and stay on the graph after they are retired (a public record); your own AIs all appear, released or not. Unreleased AIs of others never appear (R2).
 
 Earlier decisions that still bind: **C5** (the company palette themes the player's screens; now it themes the glass, the aurora, the lamps and the displays), **C7** (a playful tycoon with a clean, smart, futuristic feel), **C30** (immersion first: motion, windows that open from what you clicked, things to click), **C46** (the tutorial orb guide, when it is built, is the AI core of §8.1), **C47** (music and sound: the owner leads; this redesign adds no sound).
 
@@ -195,6 +205,7 @@ One shared 3D engine (three.js) draws every object; each object appears in its o
 - **The data center** (its window): a 3D building model that lights up floor by floor as it is built.
 - **Graphics cards** (the computers and cards windows): each card as a 3D card with its fans turning while it works.
 - **Challenge boards:** see §10.
+- **Looks (C65):** the orb styles are worn by the 3D core itself (its rings, light and aura), tried on live in a showroom before buying; the logo motions move the 3D badge.
 
 ### 8.5 Pictures (C63)
 
@@ -234,7 +245,7 @@ Each station keeps all its content and controls; this section says how they are 
 
 - **Company:** the AI core in its cradle at the center, with its name and score display, "Train", "Chat" and "Launch" push buttons and "Customize your look"; Customers module (count display, this month's change, a group meter and its group keys that open each group); Money module (cash and profit displays, a trace display of profit by month, the latest report card as a stamped card); the feed as a ticker display; the small 3D map; the lineup of products as plates; the arch-rival plate; the drawer bay with Team, Licenses, Partner apps, Goal and Trophies (A2).
 - **Market:** the large 3D map at the center; displays for people willing to use an AI, your customers and your share; the crowd as a dot-matrix display where each dot is a person; the growth trace; the ad campaigns module with its push button.
-- **Money:** Coming in and Going out as two ledgers in displays, each category a key that opens its window; loans and investors; report cards as a rack of stamped cards; computers; profit by month as a bar display; cash day by day as a trace; your AIs on sale as plates; plans and prices with switches and sliders.
+- **Money:** Coming in and Going out as two ledgers in displays, each category a key that opens its window; loans and investors; the investment fund with a trace of the portfolio growing or shrinking (C66); report cards as a rack of stamped cards; computers; profit by month as a bar display; cash day by day as a trace; your AIs on sale as plates; plans and prices with switches and sliders.
 - **AI Lab:** the five steps (Data, Prepare, Design, Train, Versions) on a five-position rotary selector; the summary bar (cost, game days, real minutes, "Start training") as a long plate at the bottom.
   - Data: a mixing desk with one vertical fader per dataset and a level meter, the share in a display above each, "See examples" keys opening the example display.
   - Prepare: the cleaning options as toggle switches with lamps, and the before-and-after examples in displays.
@@ -242,7 +253,7 @@ Each station keeps all its content and controls; this section says how they are 
   - Train: the training chamber with the live 3D core and its data streams, the loss trace on an oscilloscope display, "What it's learning" and "What it says" displays, a progress gauge, the run status lamp.
   - Versions: a rack of version cartridges (label, small core, scores), each opening its AI window.
 - **Playground:** the chat as a terminal display (your messages and the AI's real replies, coaching thumbs as small keys under each reply), the games as a challenge selector leading into the challenge chamber (§10.1), and the interview mode.
-- **Benchmarks:** one needle gauge per category with the change since the last version, plus the overall score display.
+- **Benchmarks (C64):** one global graph of every company's AIs over time, with a key per company to hide or show its AIs and a selector for the overall score or one category; your chosen AI's own scores read beside it (the overall score display and its change since the AI it grew from).
 - **Rivals:** one plate per rival (emblem, name, AI, public scores, customers), "Try" push buttons, each opening its window.
 - **Arena:** the league tables as a scoreboard display with a rotary selector for the table; Battles as a list display with "Start a battle"; the battle itself in the challenge chamber.
 - **AI Directory:** Shared by players, License offers, Ask a player and Rivals' AIs on sale as catalog displays with push buttons.
@@ -276,7 +287,8 @@ The last phase, after everything is built and working:
 ## 13. Changes outside the client
 
 - **Protocol:** the emblem (§9.3) as the logo type, accepting old logos; the palette rule of C57 (no readability refusal for new companies).
-- **Sim:** the contrast helpers the glass rule and §5.3 use (shared with the client); no rule or balance change.
+- **Sim:** the contrast helpers the glass rule and §5.3 use (shared with the client); the fund's balance in each day's sample for the portfolio trace (C66); no rule or balance change.
+- **Server and protocol (C64):** a public record of every company's released or shared AIs (day made, scores), kept after retirement, for the global graph; an older world's day samples without the fund read as no history yet.
 - **Server:** validation of the new emblem fields; old logos and rival packs' logos display through the mapping.
 - **Docs:** this design, an ADR for the technical choices (3D engine, fonts, map data, pacing), the progress log, and a note in `docs/handoff/next-steps.md` that the redesign comes before the game document.
 
