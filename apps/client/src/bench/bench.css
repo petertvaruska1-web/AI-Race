@@ -3194,4 +3194,164 @@
       grid-template-columns: minmax(0, 1fr);
     }
   }
+  /* Rivals: one plate per rival, the arch-rival's wide across the top (design §10). */
+  .rivals-bench {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+    grid-template-rows: auto;
+    gap: 14px;
+    height: 100%;
+    min-height: 560px;
+  }
+  .rival-plate {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  .rival-plate--arch {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(250px, 0.8fr) minmax(0, 1.5fr);
+    grid-auto-flow: row dense;
+    column-gap: 24px;
+    row-gap: 12px;
+    align-items: start;
+  }
+  .rival-plate__head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+  }
+  .rival-plate__badge {
+    flex: none;
+    border-radius: 14px;
+    transition: transform 0.15s ease;
+  }
+  .rival-plate__badge:hover {
+    transform: scale(1.04);
+  }
+  .rival-plate__badge:focus-visible {
+    outline: 2px solid var(--lamp);
+    outline-offset: 3px;
+  }
+  .rival-plate__name {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 21px;
+    font-weight: 700;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+  .rival-plate--arch .rival-plate__name {
+    font-size: 26px;
+  }
+  .rival-plate__kind {
+    margin: 3px 0 0;
+    font-size: 13px;
+    line-height: 1.3;
+    color: var(--ink-2);
+  }
+  .rival-plate__stats {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.85fr) minmax(0, 1.2fr);
+    gap: 10px;
+    margin: 0;
+    padding: 8px 12px;
+  }
+  .rival-plate__stats dt {
+    margin-bottom: 4px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ink-2);
+  }
+  .rival-plate__stats dd {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rival-plate__products {
+    margin: 0;
+    padding: 4px 12px;
+    list-style: none;
+    max-height: 196px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  .rival-plate__product {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 10px;
+    padding: 8px 0;
+  }
+  .rival-plate__product + .rival-plate__product {
+    border-top: 1px solid var(--hair);
+  }
+  .rival-plate__ai {
+    min-width: 0;
+    font-size: 13.5px;
+    line-height: 1.3;
+  }
+  .rival-plate__ai-name {
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .rival-plate__ai-what {
+    color: var(--ink-2);
+  }
+  .rival-plate__keys {
+    display: flex;
+    gap: 6px;
+  }
+  .rival-plate__offers {
+    padding-top: 10px;
+    box-shadow: inset 0 1px 0 rgb(0 0 0 / 0.22);
+  }
+  .rival-plate__note {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--ink-2);
+  }
+  .rival-plate__news {
+    margin: 0;
+    padding: 10px 0 0;
+    list-style: none;
+    display: grid;
+    gap: 4px;
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--ink-2);
+    box-shadow: inset 0 1px 0 rgb(0 0 0 / 0.22);
+  }
+  .rivals-empty {
+    max-width: 560px;
+  }
+  .rival-plate--arch > .rival-plate__head,
+  .rival-plate--arch > .rival-plate__note,
+  .rival-plate--arch > .rival-plate__news {
+    grid-column: 1;
+  }
+  .rival-plate--arch > .rival-plate__stats,
+  .rival-plate--arch > .rival-plate__products,
+  .rival-plate--arch > .rival-plate__offers {
+    grid-column: 2;
+  }
+  @media (width < 1280px) {
+    .rivals-bench {
+      grid-auto-rows: auto;
+      height: auto;
+    }
+    .rival-plate--arch {
+      display: flex;
+    }
+  }
 }

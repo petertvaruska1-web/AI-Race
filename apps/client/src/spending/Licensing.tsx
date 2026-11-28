@@ -363,7 +363,16 @@ export function ProposalWindow({ entry, view, proposalId }: WindowProps & { prop
 }
 
 /** Offers anyone can take: each with "License it" (yours with "Withdraw"). */
-export function OffersList({ view, offers }: { view: WorldView; offers: LicenseOfferView[] }) {
+/** The offers on sale; `compact` (on a rival's own plate) keeps each to its terms. */
+export function OffersList({
+  view,
+  offers,
+  compact = false,
+}: {
+  view: WorldView;
+  offers: LicenseOfferView[];
+  compact?: boolean;
+}) {
   const open = useWindows((s) => s.open);
   const mine = view.me.company?.id;
   const { run, error, busy } = useCommand(view);
@@ -375,7 +384,9 @@ export function OffersList({ view, offers }: { view: WorldView; offers: LicenseO
             <p className="mr-auto text-sm">
               <span className="font-semibold">{o.aiName}</span>{" "}
               <span className="text-muted">
-                {`${nameOf(view, o.licensorId)} · ${termsLabel(o)} · ${groupList(o.groups)}${o.exclusive ? " · only one licensee" : ""}`}
+                {compact
+                  ? `${termsLabel(o)}${o.exclusive ? " · only one licensee" : ""}`
+                  : `${nameOf(view, o.licensorId)} · ${termsLabel(o)} · ${groupList(o.groups)}${o.exclusive ? " · only one licensee" : ""}`}
               </span>
             </p>
             {o.licensorId === mine ? (

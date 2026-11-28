@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../src/net/api.ts";
 import { Playground } from "../src/screens/Playground.tsx";
 import { Rivals } from "../src/screens/Rivals.tsx";
+import { termsLabel } from "../src/spending/Licensing.tsx";
 import { usePlayground } from "../src/store/playground.ts";
 import { useSession } from "../src/store/session.ts";
 import { useWindows } from "../src/store/windows.ts";
@@ -55,6 +56,30 @@ describe("the Rivals screen", () => {
     } finally {
       useLook.setState({ palette: null });
     }
+  });
+
+  it("stands each rival on a plate, the arch-rival's first and widest with its badge", () => {
+    const view = viewOf(rivalWorld());
+    render(<Rivals view={view} />);
+    const plates = screen.getAllByRole("article");
+    expect(plates[0]?.className).toContain("rival-plate--arch");
+    expect(within(plates[0] as HTMLElement).getByRole("img", { name: /emblem/ })).toBeTruthy();
+    for (const plate of plates) expect(plate.className).toContain("rival-plate");
+    for (const plate of plates.slice(1)) expect(plate.className).not.toContain("rival-plate--arch");
+  });
+
+  it("keeps a rival's license offer to its terms on the plate", () => {
+    const view = viewOf(rivalWorld(10));
+    const offer = view.licenseOffers[0];
+    if (!offer) throw new Error("no offer");
+    const company = view.companies.find((c) => c.id === offer.licensorId);
+    render(<Rivals view={view} />);
+    const plate = screen.getByRole("article", { name: company?.name ?? "?" });
+    const key = within(plate).getByRole("button", { name: `License ${offer.aiName}` });
+    const line = (key.closest("li") as HTMLElement).textContent ?? "";
+    expect(line).toContain(termsLabel(offer));
+    expect(line).not.toContain(company?.name ?? "?");
+    expect(line).not.toContain("students");
   });
 
   it("shows each rival's public facts from the view", () => {
