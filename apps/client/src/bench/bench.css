@@ -3569,4 +3569,59 @@
       max-height: 280px;
     }
   }
+  /* The Company bench: one screen at 1440 × 900 (customers and the drawer bay, the core, the
+     feed, money, goal and trophies); stacked below 1280. */
+  .company-bench {
+    display: grid;
+    gap: 14px;
+  }
+  .company-bench__col {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+  }
+  .company-feed__display {
+    max-height: 56vh;
+  }
+  @media (width >= 1280px) {
+    .company-bench {
+      grid-template-columns: 300px minmax(0, 1fr) 340px;
+      height: 100%;
+      min-height: 700px;
+    }
+    .company-bench__col,
+    .company-core {
+      min-height: 0;
+    }
+    .company-core {
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+    .company-drawer {
+      display: flex;
+      flex: 1 1 0;
+      flex-direction: column;
+      min-height: 220px;
+    }
+    .company-drawer__body {
+      flex: 1 1 0;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      border-radius: var(--radius-lg);
+    }
+    .company-feed {
+      display: flex;
+      flex: 1 1 0;
+      flex-direction: column;
+      min-height: 180px;
+    }
+    .company-feed__display {
+      flex: 1 1 0;
+      min-height: 0;
+      max-height: none;
+    }
+  }
 }

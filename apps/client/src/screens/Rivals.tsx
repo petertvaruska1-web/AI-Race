@@ -78,39 +78,43 @@ function RivalCard({ view, company }: { view: WorldView; company: PublicCompany 
           <dd className="dotface dotface--xs">{`${company.followers.toLocaleString("en-US")} followers`}</dd>
         </div>
       </dl>
-      <ul className="display rival-plate__products">
-        {company.products.map((p) => (
-          <li key={p.id} className="rival-plate__product">
-            <span className="rival-plate__ai">
-              <span className="rival-plate__ai-name">{p.name}</span>{" "}
-              <span className="rival-plate__ai-what">
-                {p.status === "live"
-                  ? `overall ${Math.round(p.version?.overall ?? 0)}${p.version?.personalityWords.length ? ` · ${p.version.personalityWords.join(", ")}` : ""}`
-                  : "coming soon"}
+      {company.products.length === 0 ? (
+        <p className="rival-plate__note">No AI on sale yet.</p>
+      ) : (
+        <ul className="display rival-plate__products">
+          {company.products.map((p) => (
+            <li key={p.id} className="rival-plate__product">
+              <span className="rival-plate__ai">
+                <span className="rival-plate__ai-name">{p.name}</span>{" "}
+                <span className="rival-plate__ai-what">
+                  {p.status === "live"
+                    ? `overall ${Math.round(p.version?.overall ?? 0)}${p.version?.personalityWords.length ? ` · ${p.version.personalityWords.join(", ")}` : ""}`
+                    : "coming soon"}
+                </span>
               </span>
-            </span>
-            {p.status === "live" && p.version && (
-              <span className="rival-plate__keys">
-                <PushButton
-                  variant="secondary"
-                  aria-label={`Try ${p.name}`}
-                  onClick={() => tryRival(view, p.version?.id ?? "")}
-                >
-                  Try it
-                </PushButton>
-                <PushButton
-                  aria-label={`Battle ${p.name}`}
-                  onClick={(e) =>
-                    open({ kind: "newBattle", rivalProductId: p.id }, e.currentTarget)
-                  }
-                >
-                  Battle
-                </PushButton>
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
+              {p.status === "live" && p.version && (
+                <span className="rival-plate__keys">
+                  <PushButton
+                    variant="secondary"
+                    aria-label={`Try ${p.name}`}
+                    onClick={() => tryRival(view, p.version?.id ?? "")}
+                  >
+                    Try it
+                  </PushButton>
+                  <PushButton
+                    aria-label={`Battle ${p.name}`}
+                    onClick={(e) =>
+                      open({ kind: "newBattle", rivalProductId: p.id }, e.currentTarget)
+                    }
+                  >
+                    Battle
+                  </PushButton>
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
       {offers.length > 0 && (
         <div className="rival-plate__offers">
           <OffersList view={view} offers={offers} compact />

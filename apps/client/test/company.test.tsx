@@ -32,6 +32,17 @@ describe("company screen", () => {
     expect(screen.getByText(formatMoney(company?.cash ?? -1))).toBeTruthy();
   });
 
+  it("keeps the company on one bench: the drawer under Customers, Money beside the feed", () => {
+    render(<Company view={viewOf(launchedWorld())} />);
+    const drawer = screen.getByRole("group", { name: "Company drawer" });
+    const left = drawer.closest(".company-bench__col") as HTMLElement;
+    expect(within(left).getByRole("heading", { name: "Customers" })).toBeTruthy();
+    const feed = screen.getByRole("region", { name: "What people are saying" });
+    const right = feed.closest(".company-bench__col") as HTMLElement;
+    expect(within(right).getByRole("heading", { name: "Money" })).toBeTruthy();
+    expect(left.parentElement?.className).toContain("company-bench");
+  });
+
   it("keeps the team, licenses and partner apps in one drawer", async () => {
     render(<Company view={viewOf(launchedWorld())} />);
     const drawer = screen.getByRole("group", { name: "Company drawer" });

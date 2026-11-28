@@ -36,7 +36,8 @@ import { regionMarks } from "./Market.tsx";
 
 /**
  * The Company station (design §10): the AI core in its cradle at the center, customers and money
- * on the left, what people are saying on the right, the team and the rest in a drawer below.
+ * on the left with the team and the rest in a drawer under them, what people are saying and the
+ * money on the right: one screen at 1440 × 900.
  * Everything opens its window; new customers stream into the core.
  */
 export function Company({ view }: { view: WorldView }) {
@@ -71,8 +72,8 @@ export function Company({ view }: { view: WorldView }) {
   );
 
   return (
-    <div className="grid gap-3.5 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
-      <div className="flex min-w-0 flex-col gap-3.5">
+    <div className="company-bench">
+      <div className="company-bench__col">
         <Panel title="Customers">
           <div className="lift relative -m-1.5 rounded-lg p-1.5">
             <Stat
@@ -104,65 +105,13 @@ export function Company({ view }: { view: WorldView }) {
             />
           </div>
         </Panel>
-        <Panel title="Money">
-          <div className="lift relative -m-1.5 rounded-lg p-1.5">
-            <div className="grid grid-cols-2 gap-3">
-              <Readout label="Cash" value={formatMoney(company.cash)} size="sm" />
-              <Readout
-                label="Profit this month"
-                value={formatMoney(monthProfit(view))}
-                size="sm"
-                tone={monthProfit(view) < 0 ? "danger" : monthProfit(view) > 0 ? "good" : "lamp"}
-              />
-            </div>
-            {profits.length < 2 ? (
-              <p className="mt-3 text-xs text-muted">
-                Your profit line starts after your first month.
-              </p>
-            ) : (
-              <Display className="mt-3 px-2 py-1.5">
-                <Trace values={profits} label="Profit by month" zeroLine />
-              </Display>
-            )}
-            <button
-              type="button"
-              aria-label="Open money"
-              className="absolute inset-0 rounded-lg"
-              onClick={(e) => open({ kind: "money" }, e.currentTarget)}
-            />
-          </div>
-          {pub.ownership < 1 && (
-            <p className="chip mt-3 inline-block">{`You own ${Math.round(pub.ownership * 100)}%`}</p>
-          )}
-          {lastCard && (
-            <button
-              type="button"
-              aria-label={`Last report card: ${lastCard.grade}`}
-              onClick={(e) => open({ kind: "report", month: lastCard.month }, e.currentTarget)}
-              className="row-btn mt-3"
-            >
-              <span
-                className="grid h-9 w-9 place-items-center rounded-md border-2 font-dot text-lg font-extrabold"
-                style={{
-                  color: gradeColor(lastCard.grade),
-                  borderColor: gradeColor(lastCard.grade),
-                }}
-              >
-                {lastCard.grade}
-              </span>
-              <span>
-                <span className="block font-semibold">Report card</span>
-                <span className="block text-xs text-muted">{monthName(lastCard.month)}</span>
-              </span>
-              <span aria-hidden="true" className="ml-auto text-muted">
-                ›
-              </span>
-            </button>
-          )}
-        </Panel>
+        <DrawerBay view={view} />
       </div>
 
-      <Module weight="heavy" className="flex min-w-0 flex-col items-center gap-3 text-center">
+      <Module
+        weight="heavy"
+        className="company-core flex min-w-0 flex-col items-center gap-3 text-center"
+      >
         <div className="core-cradle">
           <OrbFrame look={company.looks.orb} color={pub.palette.primary}>
             {latest ? (
@@ -226,17 +175,72 @@ export function Company({ view }: { view: WorldView }) {
         <ArchStrip view={view} />
       </Module>
 
-      <div className="flex min-w-0 flex-col gap-3.5">
-        <Panel title="What people are saying" className="flex min-h-0 flex-col">
-          <Display scroll label="What people are saying" className="max-h-[56vh] p-2">
+      <div className="company-bench__col">
+        <Panel title="What people are saying" className="company-feed">
+          <Display scroll label="What people are saying" className="company-feed__display p-2">
             <Feed items={view.feed} companyId={company.id} companies={view.companies} />
           </Display>
+        </Panel>
+        <Panel title="Money">
+          <div className="lift relative -m-1.5 rounded-lg p-1.5">
+            <div className="grid grid-cols-2 gap-3">
+              <Readout label="Cash" value={formatMoney(company.cash)} size="sm" />
+              <Readout
+                label="Profit this month"
+                value={formatMoney(monthProfit(view))}
+                size="sm"
+                tone={monthProfit(view) < 0 ? "danger" : monthProfit(view) > 0 ? "good" : "lamp"}
+              />
+            </div>
+            {profits.length < 2 ? (
+              <p className="mt-3 text-xs text-muted">
+                Your profit line starts after your first month.
+              </p>
+            ) : (
+              <Display className="mt-3 px-2 py-1.5">
+                <Trace values={profits} label="Profit by month" zeroLine />
+              </Display>
+            )}
+            <button
+              type="button"
+              aria-label="Open money"
+              className="absolute inset-0 rounded-lg"
+              onClick={(e) => open({ kind: "money" }, e.currentTarget)}
+            />
+          </div>
+          {pub.ownership < 1 && (
+            <p className="chip mt-3 inline-block">{`You own ${Math.round(pub.ownership * 100)}%`}</p>
+          )}
+          {lastCard && (
+            <button
+              type="button"
+              aria-label={`Last report card: ${lastCard.grade}`}
+              onClick={(e) => open({ kind: "report", month: lastCard.month }, e.currentTarget)}
+              className="row-btn mt-3"
+            >
+              <span
+                className="grid h-9 w-9 place-items-center rounded-md border-2 font-dot text-lg font-extrabold"
+                style={{
+                  color: gradeColor(lastCard.grade),
+                  borderColor: gradeColor(lastCard.grade),
+                }}
+              >
+                {lastCard.grade}
+              </span>
+              <span>
+                <span className="block font-semibold">Report card</span>
+                <span className="block text-xs text-muted">{monthName(lastCard.month)}</span>
+              </span>
+              <span aria-hidden="true" className="ml-auto text-muted">
+                ›
+              </span>
+            </button>
+          )}
         </Panel>
         <GoalProgress view={view} />
         <TrophyShelf view={view} />
       </div>
 
-      <DrawerBay view={view} />
       {launching && <LaunchDialog view={view} onClose={() => setLaunching(false)} />}
     </div>
   );
@@ -257,7 +261,7 @@ const DRAWERS: { label: string; value: Drawer }[] = [
 function DrawerBay({ view }: { view: WorldView }) {
   const [shown, setShown] = useState<Drawer>("team");
   return (
-    <div className="min-w-0 xl:col-span-3">
+    <div className="company-drawer">
       <KeyRow
         legend="Company drawer"
         options={DRAWERS}
@@ -265,9 +269,11 @@ function DrawerBay({ view }: { view: WorldView }) {
         onChange={setShown}
         className="mb-2.5"
       />
-      {shown === "team" && <TeamPanel view={view} />}
-      {shown === "licenses" && <LicensesPanel view={view} />}
-      {shown === "apps" && <AppsPanel view={view} />}
+      <div className="company-drawer__body">
+        {shown === "team" && <TeamPanel view={view} />}
+        {shown === "licenses" && <LicensesPanel view={view} />}
+        {shown === "apps" && <AppsPanel view={view} />}
+      </div>
     </div>
   );
 }

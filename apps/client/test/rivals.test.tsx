@@ -82,6 +82,17 @@ describe("the Rivals screen", () => {
     expect(line).not.toContain("students");
   });
 
+  it("says when a rival has no AI on sale yet, with no empty display", () => {
+    const view = viewOf(rivalWorld());
+    const rival = view.companies.find((c) => c.rival);
+    if (!rival) throw new Error("no rival");
+    rival.products = [];
+    render(<Rivals view={view} />);
+    const plate = screen.getByRole("article", { name: rival.name });
+    expect(within(plate).getByText("No AI on sale yet.")).toBeTruthy();
+    expect(plate.querySelector(".rival-plate__products")).toBeNull();
+  });
+
   it("shows each rival's public facts from the view", () => {
     const view = viewOf(rivalWorld());
     render(<Rivals view={view} />);
