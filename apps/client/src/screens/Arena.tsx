@@ -6,9 +6,12 @@ import {
   type WorldView,
 } from "@airace/protocol";
 import { useState } from "react";
-import { Button } from "../components/Button.tsx";
+import { Display } from "../bench/Display.tsx";
+import { KeyRow } from "../bench/KeyRow.tsx";
+import { Module } from "../bench/Module.tsx";
+import { PushButton } from "../bench/PushButton.tsx";
+import { RotarySelector } from "../bench/RotarySelector.tsx";
 import { Logo } from "../components/Logo.tsx";
-import { Panel } from "../components/Panel.tsx";
 import { dayLabel, formatCount, formatMoney } from "../format.ts";
 import { useWindows } from "../store/windows.ts";
 
@@ -35,6 +38,7 @@ function valueText(table: LeagueTable, value: number | null): string {
   return String(Math.round(value));
 }
 
+/** One league table on the scoreboard: rank and value in the dot face, the company between. */
 function Rows({
   view,
   label,
@@ -47,12 +51,12 @@ function Rows({
   const open = useWindows((s) => s.open);
   const me = view.me.company?.id;
   return (
-    <table aria-label={label} className="w-full text-sm">
+    <table aria-label={label} className="scoreboard">
       <thead>
-        <tr className="text-left text-xs uppercase tracking-wider text-muted">
-          <th className="py-1">#</th>
+        <tr>
+          <th className="scoreboard__rank">#</th>
           <th>Company</th>
-          <th className="text-right">{label.split(":")[0]}</th>
+          <th className="scoreboard__value">{label.split(":")[0]}</th>
         </tr>
       </thead>
       <tbody>
@@ -61,24 +65,27 @@ function Rows({
           if (!c) return null;
           const mine = r.companyId === me;
           return (
-            <tr
-              key={r.companyId}
-              data-mine={mine}
-              className={`border-t border-border ${mine ? "bg-brand-soft" : ""}`}
-            >
-              <td className="py-2 font-semibold">{r.rank}</td>
+            <tr key={r.companyId} data-mine={mine} className="scoreboard__row">
+              <td className="scoreboard__rank">
+                <span className={`dotface dotface--sm ${r.rank === 1 ? "" : "dotface--plain"}`}>
+                  {r.rank}
+                </span>
+              </td>
               <td>
                 <button
                   type="button"
                   disabled={!c.rival}
                   onClick={(e) => open({ kind: "rival", companyId: c.id }, e.currentTarget)}
-                  className="flex items-center gap-2 text-left disabled:cursor-default"
+                  className="scoreboard__company"
                 >
                   <Logo logo={c.logo} palette={c.palette} size={24} />
-                  <span style={mine ? { color: c.palette.primary } : undefined}>{c.name}</span>
+                  <span>{c.name}</span>
+                  {mine && <span className="scoreboard__you">you</span>}
                 </button>
               </td>
-              <td className="text-right font-mono">{r.text}</td>
+              <td className="scoreboard__value">
+                <span className="dotface dotface--xs">{r.text}</span>
+              </td>
             </tr>
           );
         })}
@@ -87,7 +94,7 @@ function Rows({
   );
 }
 
-/** Battles and league tables (game-layer design §3). */
+/** Battles and league tables (game-layer design §3), on the Arena bench. */
 export function Arena({ view }: { view: WorldView }) {
   const open = useWindows((s) => s.open);
   const [tab, setTab] = useState<Tab>("customers");
@@ -95,105 +102,112 @@ export function Arena({ view }: { view: WorldView }) {
   const battles = [...(view.me.company?.battles ?? [])].reverse();
   const league = view.world.league;
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-      <Panel title="League tables" hint="Every company, ranked by what was measured.">
-        <div role="tablist" aria-label="Tables" className="mb-4 flex flex-wrap gap-1">
-          {TABS.map((t) => (
-            <button
-              key={t}
-              type="button"
-              role="tab"
-              aria-selected={tab === t}
-              onClick={() => setTab(t)}
-              className={`rounded-full px-3 py-1 text-xs ${tab === t ? "bg-brand text-on-brand" : "bg-surface-2 text-muted hover:text-text"}`}
-            >
-              {t === "points" ? "Ranking points" : TABLE_NAMES[t]}
-            </button>
-          ))}
-        </div>
-        {tab === "points" ? (
-          <>
-            <div className="mb-3 flex flex-wrap gap-1">
-              {BATTLE_SKILLS.map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  aria-pressed={skill === k}
-                  onClick={() => setSkill(k)}
-                  className={`rounded-full px-2 py-0.5 text-xs ${skill === k ? "bg-surface-2 text-text" : "text-muted"}`}
-                >
-                  {k}
-                </button>
-              ))}
-            </div>
-            {league.points[skill].length === 0 ? (
-              <p className="text-sm text-muted">No battles in {skill} yet.</p>
+    <div className="arena-bench">
+      <Module
+        label="League tables"
+        hint="Every company, ranked by what was measured."
+        weight="heavy"
+        className="arena-league"
+      >
+        <div className="arena-league__body">
+          <div className="arena-league__dials">
+            <RotarySelector
+              legend="Tables"
+              options={TABS.map((t) => ({
+                value: t,
+                label: t === "points" ? "Ranking points" : TABLE_NAMES[t],
+              }))}
+              value={tab}
+              onChange={setTab}
+              size={58}
+            />
+            {tab === "points" && (
+              <KeyRow
+                legend="Battle skill"
+                className="arena-skills"
+                options={BATTLE_SKILLS.map((k) => ({ value: k, label: TABLE_NAMES[k] }))}
+                value={skill}
+                onChange={setSkill}
+              />
+            )}
+          </div>
+          <div className="display display--scroll arena-board">
+            {tab === "points" ? (
+              league.points[skill].length === 0 ? (
+                <p className="arena-board__empty">
+                  No battles in {TABLE_NAMES[skill].toLowerCase()} yet.
+                </p>
+              ) : (
+                <Rows
+                  view={view}
+                  label={`Ranking points: ${skill}`}
+                  rows={league.points[skill].map((r) => ({
+                    companyId: r.companyId,
+                    rank: r.rank,
+                    text: String(r.points),
+                  }))}
+                />
+              )
             ) : (
               <Rows
                 view={view}
-                label={`Ranking points: ${skill}`}
-                rows={league.points[skill].map((r) => ({
+                label={TABLE_NAMES[tab]}
+                rows={league.tables[tab].map((r) => ({
                   companyId: r.companyId,
                   rank: r.rank,
-                  text: String(r.points),
+                  text: valueText(tab, r.value),
                 }))}
               />
             )}
-          </>
-        ) : (
-          <Rows
-            view={view}
-            label={TABLE_NAMES[tab]}
-            rows={league.tables[tab].map((r) => ({
-              companyId: r.companyId,
-              rank: r.rank,
-              text: valueText(tab, r.value),
-            }))}
-          />
-        )}
-      </Panel>
-      <Panel
-        title="Battles"
+          </div>
+        </div>
+      </Module>
+      <Module
+        label="Battles"
         hint="Your AI and a rival's answer the same fresh questions. Real answers decide."
-        actions={
-          <Button onClick={(e) => open({ kind: "newBattle" }, e.currentTarget)}>
-            Start a battle
-          </Button>
-        }
+        className="arena-battles"
       >
+        <PushButton
+          className="arena-battles__start"
+          onClick={(e) => open({ kind: "newBattle" }, e.currentTarget)}
+        >
+          Start a battle
+        </PushButton>
         {battles.length === 0 ? (
-          <p className="text-sm text-muted">No battles yet.</p>
+          <p className="arena-board__empty">No battles yet.</p>
         ) : (
-          <ul className="space-y-2 text-sm">
-            {battles.map((b) => {
-              const rival = view.companies.find((c) => c.id === b.rivalId);
-              return (
-                <li key={b.id}>
-                  <button
-                    type="button"
-                    aria-label={`Open the ${b.skill} battle against ${rival?.name ?? "a rival"} on ${dayLabel(b.day)}`}
-                    onClick={(e) => open({ kind: "battle", battleId: b.id }, e.currentTarget)}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-surface-2"
-                  >
-                    <span>
-                      {b.defending
-                        ? `${b.skill}: ${rival?.name ?? "a player"} challenged you`
-                        : `${b.skill} vs ${rival?.name ?? "a rival"}`}
-                    </span>
-                    <span className="text-muted">
-                      {b.status === "running"
-                        ? "on now"
-                        : b.status === "calledOff"
-                          ? "called off"
-                          : b.outcome}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <Display scroll label="Your battles" className="arena-battles__list">
+            <ul>
+              {battles.map((b) => {
+                const rival = view.companies.find((c) => c.id === b.rivalId);
+                return (
+                  <li key={b.id}>
+                    <button
+                      type="button"
+                      aria-label={`Open the ${b.skill} battle against ${rival?.name ?? "a rival"} on ${dayLabel(b.day)}`}
+                      onClick={(e) => open({ kind: "battle", battleId: b.id }, e.currentTarget)}
+                      className="arena-battle"
+                    >
+                      <span>
+                        {b.defending
+                          ? `${b.skill}: ${rival?.name ?? "a player"} challenged you`
+                          : `${b.skill} vs ${rival?.name ?? "a rival"}`}
+                      </span>
+                      <span className="arena-battle__state">
+                        {b.status === "running"
+                          ? "on now"
+                          : b.status === "calledOff"
+                            ? "called off"
+                            : b.outcome}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </Display>
         )}
-      </Panel>
+      </Module>
     </div>
   );
 }

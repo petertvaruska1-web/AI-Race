@@ -118,7 +118,7 @@ describe("the Arena", () => {
   it("ranks every company and hides other companies' revenue", async () => {
     const view = battleWorld(true);
     arena(view);
-    await userEvent.click(screen.getByRole("tab", { name: "Revenue" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Revenue" }));
     const table = screen.getByRole("table", { name: "Revenue" });
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(view.companies.length);
@@ -127,7 +127,24 @@ describe("the Arena", () => {
       const cell = within(row).getAllByRole("cell").at(-1);
       if (!mine) expect(cell?.textContent).toBe("—");
     }
-    await userEvent.click(screen.getByRole("tab", { name: "Ranking points" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Ranking points" }));
     expect(screen.getByRole("table", { name: "Ranking points: knowledge" })).toBeTruthy();
+    await userEvent.click(
+      within(screen.getByRole("group", { name: "Battle skill" })).getByRole("radio", {
+        name: "Coding",
+      }),
+    );
+    expect(screen.getByText("No battles in coding yet.")).toBeTruthy();
+  });
+
+  it("shows a league table on a scoreboard chosen by a rotary selector", async () => {
+    arena(battleWorld(true));
+    const tables = screen.getByRole("radiogroup", { name: "Tables" });
+    expect(within(tables).getAllByRole("radio")).toHaveLength(12);
+    await userEvent.click(within(tables).getByRole("radio", { name: "Overall" }));
+    const board = screen.getByRole("table", { name: "Overall" });
+    expect(board.closest(".display")).toBeTruthy();
+    const ranks = within(board).getAllByRole("row").slice(1);
+    expect(ranks[0]?.querySelector(".dotface")?.textContent).toBe("1");
   });
 });

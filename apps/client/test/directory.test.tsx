@@ -57,6 +57,22 @@ function withFriend(): WorldState {
 }
 
 describe("the AI Directory", () => {
+  it("lists each catalog in its own module and display", () => {
+    render(<Directory view={viewOf(withFriend())} />);
+    for (const name of [
+      "Shared by players",
+      "License offers",
+      "Ask a player",
+      "Rivals' AIs on sale",
+    ]) {
+      expect(screen.getByRole("region", { name })).toBeTruthy();
+    }
+    const shared = screen.getByRole("region", { name: "Shared by players" });
+    const item = within(shared).getByText("Nova 1").closest("li") as HTMLElement;
+    expect(item.closest(".display")).toBeTruthy();
+    expect(within(item).getByRole("button", { name: "Try it" })).toBeTruthy();
+  });
+
   it("lists a friend's shared AI, and Try it opens the Playground on it", () => {
     render(<Directory view={viewOf(withFriend())} />);
     const row = within(screen.getByText("Nova 1").closest("li") as HTMLElement);

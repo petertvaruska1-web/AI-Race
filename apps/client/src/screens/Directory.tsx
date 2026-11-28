@@ -1,7 +1,9 @@
 import type { WorldView } from "@airace/protocol";
-import { Button } from "../components/Button.tsx";
+import type { ReactNode } from "react";
+import { Display } from "../bench/Display.tsx";
+import { Module } from "../bench/Module.tsx";
+import { PushButton } from "../bench/PushButton.tsx";
 import { Logo } from "../components/Logo.tsx";
-import { Panel } from "../components/Panel.tsx";
 import { makerOnline, sharedAis } from "../friends.ts";
 import { rivalAis } from "../rivals.ts";
 import { go } from "../route.ts";
@@ -12,9 +14,36 @@ import { useWindows } from "../store/windows.ts";
 
 export const MAKER_OFFLINE = "Its maker's computer is offline";
 
+/** One catalog of the Directory: a module with its list in a display, or a line when empty. */
+function Catalog({
+  title,
+  list,
+  hint,
+  empty,
+  children,
+}: {
+  title: string;
+  list: string;
+  hint: string;
+  empty: string | null;
+  children: ReactNode;
+}) {
+  return (
+    <Module label={title} hint={hint} aria-label={title} className="catalog">
+      {empty !== null ? (
+        <p className="catalog__empty">{empty}</p>
+      ) : (
+        <Display scroll label={list} className="catalog__list">
+          {children}
+        </Display>
+      )}
+    </Module>
+  );
+}
+
 /**
- * The AI Directory (Stage 2): the AIs other players share with friends, and the rivals' AIs on
- * sale, each with "Try it" (a private chat in the Playground).
+ * The AI Directory (Stage 2): the AIs other players share with friends, the license offers, the
+ * players' AIs you can ask to license, and the rivals' AIs on sale, each a catalog on the bench.
  */
 export function Directory({ view }: { view: WorldView }) {
   const cards = useCards((s) => s.cards);
@@ -37,99 +66,99 @@ export function Directory({ view }: { view: WorldView }) {
         .map((p) => ({ company: c, product: p, versionId: p.version?.id ?? "" })),
     );
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold">AI Directory</h1>
-        <p className="text-muted">
-          AIs other players share with friends, and the rivals' AIs on sale. Your chats with them
-          are private.
-        </p>
-      </header>
-      <Panel title="Shared by players">
-        {shared.length === 0 ? (
-          <p className="text-muted">
-            No one shares an AI yet. Share yours from the AI Lab's Versions.
-          </p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {shared.map((ai) => {
-              const online = makerOnline(view, cards, ai.makerUserId);
-              return (
-                <li key={ai.versionId} className="flex flex-wrap items-center gap-4 py-3">
-                  <Logo logo={ai.company.logo} palette={ai.company.palette} size={40} />
-                  <div className="mr-auto">
-                    <p className="font-semibold">{ai.label}</p>
-                    <p className="text-sm text-muted">
-                      <span className="player-text">{ai.company.name}</span>
-                      {" · "}
-                      {ai.version.overall === null
-                        ? "Not scored yet"
-                        : `Overall score ${Math.round(ai.version.overall)}`}
-                      {ai.version.personalityWords.length > 0 &&
-                        ` · ${ai.version.personalityWords.join(", ")}`}
-                    </p>
-                    {!online && <p className="text-sm text-danger">{MAKER_OFFLINE}</p>}
-                  </div>
-                  <Button disabled={!online} onClick={() => tryIt(ai.versionId)}>
-                    Try it
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Panel>
-      <Panel
-        title="License offers"
-        aria-label="License offers"
-        hint="AIs other companies rent out: one answers your customers in the groups you pick, for a price per customer a month."
+    <div className="directory-bench">
+      <Catalog
+        title="Shared by players"
+        list="Shared AIs"
+        hint="AIs other players share with friends. Your chats with them are private."
+        empty={
+          shared.length === 0
+            ? "No one shares an AI yet. Share yours from the AI Lab's Versions."
+            : null
+        }
       >
-        {offers.length === 0 ? (
-          <p className="text-muted">No one offers an AI for license yet.</p>
-        ) : (
-          <OffersList view={view} offers={offers} />
-        )}
-      </Panel>
-      {playersOnSale.length > 0 && (
-        <Panel title="Ask a player">
-          <ul className="divide-y divide-border">
-            {playersOnSale.map((x) => (
-              <li key={x.product.id} className="flex flex-wrap items-center gap-4 py-3">
-                <p className="mr-auto">
-                  <span className="font-semibold">{x.product.name}</span>{" "}
-                  <span className="player-text text-sm text-muted">{x.company.name}</span>
-                </p>
-                <Button
-                  variant="secondary"
-                  aria-label={`Ask to license ${x.product.name}`}
-                  onClick={(e) =>
-                    open({ kind: "propose", versionId: x.versionId }, e.currentTarget)
-                  }
-                >
-                  Ask to license
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      )}
-      {rivals.length > 0 && (
-        <Panel title="Rivals' AIs on sale">
-          <ul className="divide-y divide-border">
-            {rivals.map((r) => (
-              <li key={r.versionId} className="flex items-center gap-4 py-3">
-                <p className="mr-auto">
-                  <span className="font-semibold">{r.productName}</span>{" "}
-                  <span className="text-sm text-muted">{r.companyName}</span>
-                </p>
-                <Button variant="secondary" onClick={() => tryIt(r.versionId)}>
+        <ul>
+          {shared.map((ai) => {
+            const online = makerOnline(view, cards, ai.makerUserId);
+            return (
+              <li key={ai.versionId} className="catalog__item">
+                <Logo logo={ai.company.logo} palette={ai.company.palette} size={36} />
+                <div className="catalog__what">
+                  <p className="catalog__name">{ai.label}</p>
+                  <p className="catalog__detail">
+                    <span className="player-text">{ai.company.name}</span>
+                    {" · "}
+                    {ai.version.overall === null
+                      ? "Not scored yet"
+                      : `Overall score ${Math.round(ai.version.overall)}`}
+                    {ai.version.personalityWords.length > 0 &&
+                      ` · ${ai.version.personalityWords.join(", ")}`}
+                  </p>
+                  {!online && <p className="catalog__warn">{MAKER_OFFLINE}</p>}
+                </div>
+                <PushButton disabled={!online} onClick={() => tryIt(ai.versionId)}>
                   Try it
-                </Button>
+                </PushButton>
               </li>
-            ))}
-          </ul>
-        </Panel>
-      )}
+            );
+          })}
+        </ul>
+      </Catalog>
+      <Catalog
+        title="License offers"
+        list="Offers"
+        hint="AIs other companies rent out: one answers your customers in the groups you pick, for a price per customer a month."
+        empty={offers.length === 0 ? "No one offers an AI for license yet." : null}
+      >
+        <OffersList view={view} offers={offers} />
+      </Catalog>
+      <Catalog
+        title="Ask a player"
+        list="Players' AIs"
+        hint="Other players' AIs on sale. Ask to license one and its maker decides."
+        empty={playersOnSale.length === 0 ? "No other player has an AI on sale yet." : null}
+      >
+        <ul>
+          {playersOnSale.map((x) => (
+            <li key={x.product.id} className="catalog__item">
+              <Logo logo={x.company.logo} palette={x.company.palette} size={36} />
+              <div className="catalog__what">
+                <p className="catalog__name">{x.product.name}</p>
+                <p className="catalog__detail">
+                  <span className="player-text">{x.company.name}</span>
+                </p>
+              </div>
+              <PushButton
+                variant="secondary"
+                aria-label={`Ask to license ${x.product.name}`}
+                onClick={(e) => open({ kind: "propose", versionId: x.versionId }, e.currentTarget)}
+              >
+                Ask to license
+              </PushButton>
+            </li>
+          ))}
+        </ul>
+      </Catalog>
+      <Catalog
+        title="Rivals' AIs on sale"
+        list="Rivals' AIs"
+        hint="Try a rival's AI in the Playground before you battle it."
+        empty={rivals.length === 0 ? "No rival has an AI on sale yet." : null}
+      >
+        <ul>
+          {rivals.map((r) => (
+            <li key={r.versionId} className="catalog__item">
+              <div className="catalog__what">
+                <p className="catalog__name">{r.productName}</p>
+                <p className="catalog__detail">{r.companyName}</p>
+              </div>
+              <PushButton variant="secondary" onClick={() => tryIt(r.versionId)}>
+                Try it
+              </PushButton>
+            </li>
+          ))}
+        </ul>
+      </Catalog>
     </div>
   );
 }
