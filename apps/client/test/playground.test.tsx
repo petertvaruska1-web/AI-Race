@@ -59,6 +59,24 @@ describe("playground", () => {
     expect(within(terminal).getByText("Hello there")).toBeTruthy();
   });
 
+  it("follows the conversation to its newest line", async () => {
+    const seen: Element[] = [];
+    const before = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      seen.push(this);
+    };
+    try {
+      render(<Playground view={viewOf(trainedWorld())} />);
+      const terminal = screen.getByRole("region", { name: "Conversation" });
+      await sendAndAck("Hello there");
+      stream({ kind: "chunk", text: "Hi" });
+      await within(terminal).findByText("Hi");
+      expect(seen.some((el) => terminal.contains(el))).toBe(true);
+    } finally {
+      Element.prototype.scrollIntoView = before;
+    }
+  });
+
   it("steps through the AIs with keys beside the picker", () => {
     const view = viewOf(trainedWorld());
     const company = view.me.company;

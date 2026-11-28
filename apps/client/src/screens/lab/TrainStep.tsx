@@ -1,4 +1,4 @@
-import type { RunView, WorldView } from "@airace/protocol";
+import type { Palette, RunView, WorldView } from "@airace/protocol";
 import { motion } from "motion/react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Display } from "../../bench/Display.tsx";
@@ -10,6 +10,7 @@ import { type SampleEvent, SampleFeed } from "../../components/SampleFeed.tsx";
 import { Core } from "../../core/Core.tsx";
 import { percent } from "../../format.ts";
 import { useSocket } from "../../store/session.ts";
+import { lampColor, readableOn } from "../../theme/glass.ts";
 import { mix } from "../../theme/palette.ts";
 
 type TrainEvent =
@@ -90,6 +91,24 @@ function useTelemetry(worldId: string, runId: string) {
   return { events, totalSteps };
 }
 
+/**
+ * The scopes' trace colors: the company's lamp for how wrong, and its palette family from main to
+ * second color for each kind of reading, each lifted until it reads on the dark display.
+ */
+export function scopeColors(
+  palette: Palette | undefined,
+  count: number,
+): { loss: string; learning: string[] } {
+  const primary = palette?.primary ?? "#8b93b8";
+  const secondary = palette?.secondary ?? "#c2c8e0";
+  return {
+    loss: palette ? lampColor(palette) : primary,
+    learning: Array.from({ length: count }, (_, i) =>
+      readableOn(mix(secondary, primary, count > 1 ? i / (count - 1) : 0), "dark"),
+    ),
+  };
+}
+
 export function TrainStep({ view }: { view: WorldView }) {
   const company = view.me.company;
   const run = company?.runs.at(-1);
@@ -116,7 +135,7 @@ function RunPanel({ view, run }: { view: WorldView; run: RunView }) {
     }
     return {
       steps,
-      lines: [{ label: "How wrong", values, color: palette?.primary ?? "#8b93b8" }] as Line[],
+      lines: [{ label: "How wrong", values, color: scopeColors(palette, 0).loss }] as Line[],
     };
   }, [events, palette]);
 
@@ -125,15 +144,13 @@ function RunPanel({ view, run }: { view: WorldView; run: RunView }) {
       (e): e is Extract<TrainEvent, { type: "heldouteval" }> => e.type === "heldouteval",
     );
     const names = [...new Set(evals.flatMap((e) => Object.keys(e.losses)))].sort();
-    const primary = palette?.primary ?? "#8b93b8";
-    const secondary = palette?.secondary ?? "#c2c8e0";
+    const colors = scopeColors(palette, names.length).learning;
     return {
       steps: evals.map((e) => e.step),
       lines: names.map((name, i) => ({
         label: DATASET_NAMES[name] ?? name,
         values: evals.map((e) => e.losses[name] ?? null),
-        // The company's palette family, from its main to its second color.
-        color: mix(secondary, primary, names.length > 1 ? i / (names.length - 1) : 0),
+        color: colors[i] ?? "#c2c8e0",
       })),
     };
   }, [events, palette]);

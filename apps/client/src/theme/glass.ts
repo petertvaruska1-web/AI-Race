@@ -56,6 +56,8 @@ export function benchVars(p: Palette | null): Record<string, string> {
     "--lamp-rgb": rgbOf(lamp),
     "--p-rgb": rgbOf(palette.primary),
     "--s-rgb": rgbOf(palette.secondary),
+    // The second color as a mark inside a dark display, lifted until it reads there.
+    "--lamp-2": readableOn(palette.secondary, "dark"),
     "--accent": palette.primary,
   };
 }

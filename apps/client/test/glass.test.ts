@@ -43,6 +43,12 @@ describe("the glass follows the main color (C57)", () => {
   });
 
   it("softens the selected tint toward the company's own glass", () => {
+    expect(
+      contrastRatio(
+        benchVars({ primary: "#1e3a8a", secondary: "#14532d" })["--lamp-2"] ?? "",
+        "#0b0e15",
+      ),
+    ).toBeGreaterThanOrEqual(3);
     expect(benchVars({ primary: "#7f1d3a", secondary: "#f59e0b" })["--brand-soft"]).toBe(
       mix("#7f1d3a", "#ffffff", 0.16),
     );

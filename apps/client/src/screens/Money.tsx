@@ -72,9 +72,12 @@ export function Money({ view }: { view: WorldView }) {
   return (
     <div className="money-bench">
       {error && (
-        <p role="alert" className="display money-bench__alert text-danger">
-          {error}
-        </p>
+        <div role="alert" className="display money-bench__alert">
+          <span className="money-bench__alert-text">{error}</span>
+          <PushButton variant="quiet" onClick={() => setError(null)}>
+            Close the warning
+          </PushButton>
+        </div>
       )}
 
       <div className="money-col">
@@ -98,7 +101,7 @@ export function Money({ view }: { view: WorldView }) {
               rows={PLAN_INCOME.map((c) => ({
                 label: INCOME_NAMES[c],
                 value: now.income[c],
-                color: c === "business" ? "var(--brand-2)" : undefined,
+                color: c === "business" ? "var(--lamp-2)" : undefined,
                 testId: `income-${c}`,
                 onOpen: (el) => open({ kind: "income", category: c }, el),
               }))}
@@ -132,7 +135,7 @@ export function Money({ view }: { view: WorldView }) {
               rows={REGION_IDS.map((r) => ({
                 label: REGION_NAMES[r],
                 value: now.revenueByRegion[r],
-                color: "var(--brand-2)",
+                color: "var(--lamp-2)",
                 onOpen: (el) => open({ kind: "region", region: r }, el),
               }))}
             />
@@ -250,6 +253,7 @@ export function Money({ view }: { view: WorldView }) {
               format={formatMoney}
               onOpen={(month, el) => open({ kind: "month", month }, el)}
               height={84}
+              compact
             />
           </Display>
           <p className="money-note">Money in, less out. Each month opens its report.</p>
@@ -331,6 +335,7 @@ export function Money({ view }: { view: WorldView }) {
         <Module
           label="Plans and prices"
           hint="Which AI each plan sells, and what it costs customers."
+          className="money-plans"
         >
           <div className="plan-rows">
             {PLAN_IDS.map((plan) => (

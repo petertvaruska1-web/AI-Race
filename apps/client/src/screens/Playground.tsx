@@ -1,5 +1,5 @@
 import { TEXT_LIMITS, type VersionView, type WorldView } from "@airace/protocol";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Display } from "../bench/Display.tsx";
 import { Module } from "../bench/Module.tsx";
 import { PushButton } from "../bench/PushButton.tsx";
@@ -64,6 +64,12 @@ export function Playground({ view }: { view: WorldView }) {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState<string | null>(null);
+  const end = useRef<HTMLDivElement>(null);
+  // The terminal follows its newest line: each message, and each piece of a reply as it streams.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: follow on each new line or piece
+  useEffect(() => {
+    end.current?.scrollIntoView?.({ block: "nearest" });
+  }, [messages.length, streaming]);
   const [failure, setFailure] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [lastSent, setLastSent] = useState("");
@@ -320,6 +326,7 @@ export function Playground({ view }: { view: WorldView }) {
                 its best answers.
               </p>
             )}
+            <div ref={end} aria-hidden="true" />
           </Display>
           {failure && (
             <div role="alert" className="play-failure">

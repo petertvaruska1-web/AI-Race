@@ -1,8 +1,8 @@
-import { BALANCE_TEST } from "@airace/sim";
+import { BALANCE_TEST, contrastRatio } from "@airace/sim";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { TrainStep } from "../src/screens/lab/TrainStep.tsx";
+import { scopeColors, TrainStep } from "../src/screens/lab/TrainStep.tsx";
 import { useSession } from "../src/store/session.ts";
 import { liveGame, type MockWs } from "./mockSocket.ts";
 import { apply, command, runningWorld, viewOf } from "./views.ts";
@@ -157,5 +157,14 @@ describe("training charts", () => {
     expect(panel().getAttribute("data-expanded")).toBe("true");
     await userEvent.click(screen.getByRole("button", { name: "Shrink How wrong its guesses are" }));
     expect(panel().getAttribute("data-expanded")).toBe("false");
+  });
+
+  it("draws the scopes' traces in colors that read on the dark display", () => {
+    const deep = { primary: "#1e3a8a", secondary: "#14532d" };
+    const colors = scopeColors(deep, 4);
+    for (const c of [colors.loss, ...colors.learning]) {
+      expect(contrastRatio(c, "#0b0e15")).toBeGreaterThanOrEqual(3);
+    }
+    expect(colors.learning).toHaveLength(4);
   });
 });

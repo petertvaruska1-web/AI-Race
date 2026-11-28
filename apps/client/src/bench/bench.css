@@ -2358,11 +2358,17 @@
     left: 50%;
     bottom: 10px;
     z-index: 3;
-    max-width: 560px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    max-width: 620px;
     margin: 0;
-    padding: 10px 14px;
+    padding: 8px 10px 8px 14px;
     font-size: 13px;
     transform: translateX(-50%);
+  }
+  .money-bench__alert-text {
+    color: var(--danger);
   }
   .money-col {
     display: flex;
@@ -2409,19 +2415,6 @@
   .money-months {
     margin-top: 10px;
     padding: 10px 10px 6px;
-  }
-  /* Up to a year of months in a narrow display: thin columns, short names. */
-  .money-months fieldset,
-  .money-months [role="img"] {
-    gap: 3px;
-  }
-  .money-months fieldset > *,
-  .money-months [role="img"] > * {
-    min-width: 0;
-  }
-  .money-months fieldset .text-\[11px\],
-  .money-months [role="img"] .text-\[11px\] {
-    font-size: 10px;
   }
   .money-months .bar-up,
   .money-months .bar-down {
@@ -3622,6 +3615,16 @@
       flex: 1 1 0;
       min-height: 0;
       max-height: none;
+    }
+  }
+  /* Money's Plans and prices: gives way inside its column when several AIs are on sale. */
+  @media (width >= 1280px) {
+    .money-plans {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
     }
   }
 }

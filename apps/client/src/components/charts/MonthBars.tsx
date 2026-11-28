@@ -13,6 +13,7 @@ export function MonthBars({
   onOpen,
   color = (v) => (v >= 0 ? "var(--good)" : "var(--danger)"),
   height = 160,
+  compact = false,
 }: {
   label: string;
   bars: MonthBar[];
@@ -20,7 +21,10 @@ export function MonthBars({
   onOpen?: (month: string, el: HTMLElement) => void;
   color?: (value: number) => string;
   height?: number;
+  /** Thin columns, small gaps and short names, for up to a year in a narrow display. */
+  compact?: boolean;
 }) {
+  const width = compact ? "min-w-0" : "min-w-8";
   const top = Math.max(1, ...bars.map((b) => Math.abs(b.value)));
   const anyBelow = bars.some((b) => b.value < 0);
   const columns = bars.map((b) => {
@@ -47,7 +51,9 @@ export function MonthBars({
             )}
           </span>
         )}
-        <span className="mt-1 block text-[11px] text-muted">{monthName(b.month, true)}</span>
+        <span className={`mt-1 block ${compact ? "text-[10px]" : "text-[11px]"} text-muted`}>
+          {monthName(b.month, true)}
+        </span>
       </>
     );
     return onOpen ? (
@@ -57,17 +63,17 @@ export function MonthBars({
         aria-label={name}
         title={name}
         onClick={(e) => onOpen(b.month, e.currentTarget)}
-        className="lift-bar flex min-w-8 flex-1 flex-col items-center rounded-md px-0.5"
+        className={`lift-bar flex ${width} flex-1 flex-col items-center rounded-md px-0.5`}
       >
         {body}
       </button>
     ) : (
-      <span key={b.month} title={name} className="flex min-w-8 flex-1 flex-col items-center">
+      <span key={b.month} title={name} className={`flex ${width} flex-1 flex-col items-center`}>
         {body}
       </span>
     );
   });
-  const box = "flex items-stretch gap-2";
+  const box = `flex items-stretch ${compact ? "gap-[3px]" : "gap-2"}`;
   return onOpen ? (
     <fieldset className={`${box} m-0 min-w-0 border-0 p-0`} style={{ height }} aria-label={label}>
       {columns}

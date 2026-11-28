@@ -20,6 +20,19 @@ beforeEach(async () => {
 
 const commands = () => game.ws.sentOf("command");
 
+describe("the Money bench's warning", () => {
+  it("can be closed so it never hides the controls under it", async () => {
+    render(<Money view={viewOf(launchedWorld())} />);
+    fireEvent.click(screen.getByRole("button", { name: "Retire Spark" }));
+    await waitFor(() => expect(commands()).toHaveLength(1));
+    const cid = commands()[0]?.cid;
+    game.ws.receive({ v: 1, type: "reject", cid, reason: "Move its plans to another AI first." });
+    expect((await screen.findByRole("alert")).textContent).toContain("Move its plans");
+    fireEvent.click(screen.getByRole("button", { name: "Close the warning" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
 describe("launch dialog", () => {
   it("sends the chosen AI, name, plans and countdown", async () => {
     render(<LaunchDialog view={viewOf(trainedWorld(SCORES))} onClose={() => {}} />);

@@ -72,4 +72,20 @@ describe("month bars", () => {
       screen.getByRole("button", { name: `January 2027: ${formatMoney(-1200)}` }),
     ).toBeTruthy();
   });
+
+  it("packs a year of months into a narrow display when compact", () => {
+    const bars = Array.from({ length: 13 }, (_, i) => ({
+      month: `2027-${String((i % 12) + 1).padStart(2, "0")}`,
+      value: i * 1000 - 4000,
+    }));
+    render(
+      <MonthBars label="Compact months" bars={bars} format={String} onOpen={() => {}} compact />,
+    );
+    const box = screen.getByRole("group", { name: "Compact months" });
+    expect(box.className).toContain("gap-[3px]");
+    for (const column of box.querySelectorAll("button")) {
+      expect(column.className).toContain("min-w-0");
+      expect(column.className).not.toContain("min-w-8");
+    }
+  });
 });
